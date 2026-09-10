@@ -66,9 +66,90 @@ fn test_dispatch_completion() {
 }
 
 fn test_every_help_has_examples() {
-	for cmd in ['version', 'doctor', 'shell', 'appearance', 'config', 'completion'] {
+	for cmd in ['version', 'doctor', 'shell', 'shell preset', 'appearance', 'appearance theme',
+		'appearance scheme', 'scheme', 'config', 'completion'] {
 		h := command_help(cmd)
 		assert h.contains('Examples:')
 	}
 	assert root_help().contains('Examples:')
+}
+
+fn test_dispatch_nested_help_exit_zero() {
+	assert dispatch(['horneroctl', 'appearance', 'theme', '--help']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'scheme', '--help']) == 0
+	assert dispatch(['horneroctl', 'shell', 'preset', '--help']) == 0
+	assert dispatch(['horneroctl', 'scheme', '--help']) == 0
+	assert dispatch(['horneroctl', 'help', 'scheme']) == 0
+}
+
+// Phase-2 dispatch fixtures reuse the /tmp tree the core tests build;
+// each test sets the overrides it needs and unsets them afterwards.
+fn p2_dispatch_setup() {
+	os.mkdir_all('/tmp/hx-phase2-dtest/themes/alpha') or { assert false }
+	os.write_file('/tmp/hx-phase2-dtest/themes/alpha/theme.json', '{"schemaVersion":1,"id":"alpha","name":"Alpha","defaultWallpaper":"a.jpg","wallpaperDir":"alpha"}') or {
+		assert false
+	}
+	os.mkdir_all('/tmp/hx-phase2-dtest/presets') or { assert false }
+	os.write_file('/tmp/hx-phase2-dtest/presets/alpha.json', '{"_name":"Alpha"}') or {
+		assert false
+	}
+	os.mkdir_all('/tmp/hx-phase2-dtest/config/hornero') or { assert false }
+	os.write_file('/tmp/hx-phase2-dtest/config/hornero/shell.json', '{"bar":{"position":"left"}}') or {
+		assert false
+	}
+	os.setenv('HORNERO_THEMES_DIR', '/tmp/hx-phase2-dtest/themes', true)
+	os.setenv('HORNERO_PRESETS_DIR', '/tmp/hx-phase2-dtest/presets', true)
+	os.setenv('HORNERO_PRESET_STATE_FILE', '/tmp/hx-phase2-dtest/preset-missing', true)
+	os.setenv('XDG_CONFIG_HOME', '/tmp/hx-phase2-dtest/config', true)
+	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
+}
+
+fn p2_dispatch_teardown() {
+	os.unsetenv('HORNERO_THEMES_DIR')
+	os.unsetenv('HORNERO_PRESETS_DIR')
+	os.unsetenv('HORNERO_PRESET_STATE_FILE')
+	os.unsetenv('XDG_CONFIG_HOME')
+	os.unsetenv('HORNERO_DOTS_APPEARANCE_BIN')
+}
+
+fn test_dispatch_appearance_theme() {
+	p2_dispatch_setup()
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'list']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'show', 'alpha']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'show', 'missing']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'show']) == 2
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'apply', 'alpha', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'apply', 'alpha']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'bogus']) == 2
+	p2_dispatch_teardown()
+}
+
+fn test_dispatch_appearance_scheme_and_alias() {
+	p2_dispatch_setup()
+	assert dispatch(['horneroctl', 'appearance', 'scheme', 'status']) == 0
+	assert dispatch(['horneroctl', 'scheme', 'status']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'scheme', 'set-mode', 'dark', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'scheme', 'set-mode', 'dark', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'scheme', 'set-mode', 'dim', '--dry-run']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'scheme', 'set-mode', 'dark']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'scheme', 'bogus']) == 2
+	p2_dispatch_teardown()
+}
+
+fn test_dispatch_shell_preset() {
+	p2_dispatch_setup()
+	assert dispatch(['horneroctl', 'shell', 'preset', 'list']) == 0
+	assert dispatch(['horneroctl', 'shell', 'preset', 'current']) == 0
+	assert dispatch(['horneroctl', 'shell', 'preset', 'apply', 'alpha']) == 2
+	assert dispatch(['horneroctl', 'shell', 'preset', 'list', '--bogus']) == 2
+	p2_dispatch_teardown()
+}
+
+fn test_dispatch_config_show() {
+	p2_dispatch_setup()
+	assert dispatch(['horneroctl', 'config', 'show']) == 0
+	assert dispatch(['horneroctl', 'config', 'show', 'bar.position']) == 0
+	assert dispatch(['horneroctl', 'config', 'show', 'bar.nope']) == 1
+	assert dispatch(['horneroctl', 'config', 'show', 'a', 'b']) == 2
+	p2_dispatch_teardown()
 }

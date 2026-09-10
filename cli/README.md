@@ -25,18 +25,29 @@ horneroctl version [--json]
 horneroctl doctor [--json]
 horneroctl shell status
 horneroctl shell ipc [--dry-run] -- <qs-args...>
+horneroctl shell preset <list|current>
 horneroctl appearance status
 horneroctl appearance sync [--dry-run|--yes]
 horneroctl appearance call [--dry-run] -- <backend-args...>
-horneroctl config <paths|validate|show>
+horneroctl appearance theme <list|show <id>|apply <id> [--wallpaper <path>]> [--dry-run|--yes]
+horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>> [--dry-run|--yes]
+horneroctl scheme ...                       # alias of appearance scheme
+horneroctl config <paths|validate|show [key]>
 horneroctl completion <bash|zsh|fish>
 ```
 
 Delegation (no reinvention): shell IPC passes through to `qs`
-(`HORNERO_QS_BIN` override); appearance delegates to the
+(`HORNERO_QS_BIN` override); appearance status/sync delegate to the
 HorneroOS/config backend (`HORNERO_APPEARANCE_BIN` override,
-default `~/.local/bin/dots-gtk-theme`); config reads the XDG contract
-(`$XDG_CONFIG_HOME/hornero/shell.json`).
+default `~/.local/bin/dots-gtk-theme`); theme apply and scheme setters
+delegate to `dots-appearance` (`HORNERO_DOTS_APPEARANCE_BIN` override,
+default `~/.local/bin/dots-appearance`); theme list/show read the
+installed `theme.json` packs (`HORNERO_THEMES_DIR` override, else XDG
+data `dots/themes`); scheme status reads the materialized scheme files
+under XDG state/cache; preset list/current read the installed presets
+(`HORNERO_PRESETS_DIR` override, else XDG data `dots/shell-presets`)
+and the state pointer; config show reads the materialized
+`$XDG_CONFIG_HOME/hornero/shell.json` (system default as fallback).
 
 ## Build / test
 
@@ -71,9 +82,19 @@ cli/
 ## Status
 
 v0.1: framework + version/doctor/shell/appearance/config/completion.
+v0.2 (phase 2, backend-grounded): appearance theme list/show/apply,
+appearance scheme status/set-mode/set-variant (+ `scheme` alias),
+config show values, shell preset list/current.
 The broader command surface is tracked in `../docs/cli-architecture.md`
 (HorneroOS/hornero#1); appearance verbs stay a thin delegation layer until
 native backends land (HorneroOS/shell#2).
+
+## Roadmap (later phases, no verified backend yet)
+
+- `shell preset apply` (needs a pinned preset-merge backend).
+- `device ...` (brightness/monitors/hardware: no pinned IPC path yet).
+- `system`, `package`, `backup` groups; `setup` is installer-owned.
+See `../docs/cli-architecture.md` section 7.
 
 ## License
 
