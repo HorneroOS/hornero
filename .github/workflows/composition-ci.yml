@@ -1,0 +1,40 @@
+name: composition-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'manifests/**'
+      - 'profiles/**'
+      - 'releases/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'docs/RELEASE_PROCESS.md'
+      - '.github/workflows/composition-ci.yml'
+  pull_request:
+    paths:
+      - 'manifests/**'
+      - 'profiles/**'
+      - 'releases/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'docs/RELEASE_PROCESS.md'
+      - '.github/workflows/composition-ci.yml'
+
+jobs:
+  composition:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install checker dependencies
+        run: pip install pyyaml jsonschema pytest
+      - name: Validate composition
+        run: python3 scripts/check-manifests.py
+      - name: Run composition tests
+        run: python3 -m pytest tests/ -q
+      - name: Lint composition docs
+        run: npx --yes markdownlint-cli manifests/README.md profiles/README.md releases/v0.1.0-draft-checklist.md docs/RELEASE_PROCESS.md
