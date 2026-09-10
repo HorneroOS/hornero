@@ -4,6 +4,7 @@
 // Optional: ./make.vsh build-cli && ./build/horneroctl version
 
 import build
+import os
 
 const mods = ['hornero_core', 'hornero_cli']
 
@@ -32,12 +33,13 @@ fn vcmd(args string) int {
 fn flag_value(name string) string {
 	long := '--${name}'
 	eq := '${long}='
-	for i, a in args {
+	argv := os.args
+	for i, a in argv {
 		if a.starts_with(eq) {
 			return a.all_after('=')
 		}
-		if a == long && i + 1 < args.len && !args[i + 1].starts_with('-') {
-			return args[i + 1]
+		if a == long && i + 1 < argv.len && !argv[i + 1].starts_with('-') {
+			return argv[i + 1]
 		}
 	}
 	return ''
