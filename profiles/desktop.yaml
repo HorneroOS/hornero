@@ -1,0 +1,21 @@
+# Hornero OS edition profile: desktop
+
+apiVersion: hornero.os/v1
+kind: EditionProfile
+name: desktop
+manifest: hornero-0.1.0-draft
+description: >-
+  Full desktop edition for daily use on hardware. Extends base with
+  the complete desktop defaults; same pinned components.
+target: hardware
+extends: base
+components:
+  - name: shell
+    role: Desktop shell UX as pinned by the manifest.
+  - name: config
+    role: Full desktop defaults (themes, hypr, applications) as pinned by the manifest.
+  - name: horneroctl
+    role: System CLI built from this repository.
+notes: >-
+  Installer and iso slots stay future: this edition is defined but
+  not installable or imageable yet.

@@ -1,0 +1,20 @@
+# Hornero OS edition profile: base
+
+apiVersion: hornero.os/v1
+kind: EditionProfile
+name: base
+manifest: hornero-0.1.0-draft
+description: >-
+  Minimal composed system for VM smoke tests: shell, config defaults,
+  and horneroctl. No developer tooling, no installer integration.
+target: vm
+components:
+  - name: shell
+    role: Desktop shell UX as pinned by the manifest.
+  - name: config
+    role: Base desktop and system defaults as pinned by the manifest.
+  - name: horneroctl
+    role: System CLI built from this repository.
+notes: >-
+  Reference edition. desktop and developer extend this profile and
+  must keep its component set working.
