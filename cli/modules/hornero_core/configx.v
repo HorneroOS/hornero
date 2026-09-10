@@ -1,7 +1,7 @@
 module hornero_core
 
 import os
-import json2
+import x.json2
 
 // config_paths_report prints the resolved XDG path contract.
 pub fn config_paths_report() CommandResult {
@@ -20,7 +20,8 @@ pub fn config_paths_report() CommandResult {
 	})
 }
 
-struct ThemeManifest {
+pub struct ThemeManifest {
+pub mut:
 	id   string
 	name string
 }

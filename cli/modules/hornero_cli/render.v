@@ -1,7 +1,7 @@
 module hornero_cli
 
 import hornero_core
-import json2
+import x.json2
 
 // render writes a CommandResult to stdout per mode and returns the exit code.
 pub fn render(result hornero_core.CommandResult, mode hornero_core.RenderMode) int {
@@ -38,7 +38,9 @@ pub fn render_error(err hornero_core.DomainError, mode hornero_core.RenderMode) 
 				'ok':      'false'
 				'code':    err.code
 				'message': err.message
-			}, escape_unicode: true))
+			},
+				escape_unicode: true
+			))
 		}
 		.human {
 			eprintln(err.message)

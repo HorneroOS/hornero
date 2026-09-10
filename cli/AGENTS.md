@@ -30,8 +30,8 @@
 - `v fmt -w` before commit; `fmt-check`, `vet`, `test` must all pass.
 - Completions/help strings containing `$` MUST escape as `\$` (V
   interpolates `${}`/`$ident` in strings).
-- Prefer `x.json2`-free std `json` for simple envelopes unless a deprecation
-  forces migration.
+- JSON via `x.json2` (`encode(v, escape_unicode: true)`,
+  `decode[T](s)`); std `json` is deprecated upstream — do not use it.
 
 ## Testing
 
