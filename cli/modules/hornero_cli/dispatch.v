@@ -2,7 +2,14 @@ module hornero_cli
 
 import hornero_core
 
-const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'completion', 'help']
+// Deferred groups (locked in docs/cli-architecture.md, no verified backend yet,
+// so no leaves here): device (brightness/monitors/hardware needs a pinned IPC
+// path first), system, package, backup, and setup (installer-owned namespace).
+// Each future leaf needs the same treatment as below: a verified backend,
+// core result + dispatch + help with Examples + unit tests, and
+// --json/--quiet/--dry-run semantics per cli/AGENTS.md.
+const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'completion',
+	'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -61,6 +68,14 @@ pub fn dispatch(args []string) int {
 		'appearance' {
 			run_appearance(rest[1..], mode)
 		}
+		'scheme' {
+			// Compat shortcut: top-level `scheme` is `appearance scheme`.
+			if wants_help(rest) {
+				print(command_help('scheme'))
+				return 0
+			}
+			run_appearance_scheme(rest[1..], mode)
+		}
 		'config' {
 			run_config(rest[1..], mode)
 		}
@@ -79,6 +94,13 @@ pub fn dispatch(args []string) int {
 }
 
 fn run_shell(args []string, mode hornero_core.RenderMode) int {
+	if args.len > 0 && args[0] == 'preset' {
+		if wants_help(args) {
+			print(command_help('shell preset'))
+			return 0
+		}
+		return run_shell_preset(args[1..], mode)
+	}
 	opts := parse_shell_cmd(args) or {
 		return render_error(hornero_core.err_usage('shell.usage', err.msg()), mode)
 	}
@@ -91,7 +113,27 @@ fn run_shell(args []string, mode hornero_core.RenderMode) int {
 	}), mode)
 }
 
+fn run_shell_preset(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_shell_preset(args) or {
+		return render_error(hornero_core.err_usage('shell.preset.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'current' {
+		return render(hornero_core.preset_current_report(), mode)
+	}
+	return render(hornero_core.preset_list_report(), mode)
+}
+
 fn run_appearance(args []string, mode hornero_core.RenderMode) int {
+	if args.len > 0 && args[0] in ['theme', 'scheme'] {
+		if wants_help(args) {
+			print(command_help('appearance ' + args[0]))
+			return 0
+		}
+		if args[0] == 'theme' {
+			return run_appearance_theme(args[1..], mode)
+		}
+		return run_appearance_scheme(args[1..], mode)
+	}
 	opts := parse_appearance_cmd(args) or {
 		return render_error(hornero_core.err_usage('appearance.usage', err.msg()), mode)
 	}
@@ -103,14 +145,62 @@ fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 	}), mode)
 }
 
+fn run_appearance_theme(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_appearance_theme(args) or {
+		return render_error(hornero_core.err_usage('appearance.theme.usage', err.msg()),
+			mode)
+	}
+	if opts.leaf == 'list' {
+		return render(hornero_core.themes_list_report(), mode)
+	}
+	if opts.leaf == 'show' {
+		return render(hornero_core.theme_show_report(opts.id), mode)
+	}
+	return render(hornero_core.theme_apply_report(hornero_core.ThemeApplyOptions{
+		id:        opts.id
+		wallpaper: opts.wallpaper
+		dry_run:   opts.dry_run
+		yes:       opts.yes
+	}), mode)
+}
+
+fn run_appearance_scheme(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_appearance_scheme(args) or {
+		return render_error(hornero_core.err_usage('appearance.scheme.usage', err.msg()),
+			mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.scheme_status_report(), mode)
+	}
+	kind := if opts.leaf == 'set-mode' { 'mode' } else { 'variant' }
+	return render(hornero_core.scheme_set_report(hornero_core.SchemeSetOptions{
+		kind:    kind
+		value:   opts.value
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
 fn run_config(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('config.usage', 'missing subcommand.\nExample: horneroctl config validate'),
 			mode)
 	}
 	match args[0] {
-		'paths', 'show' {
+		'paths' {
 			return render(hornero_core.config_paths_report(), mode)
+		}
+		'show' {
+			if args.len > 2 {
+				return render_error(hornero_core.err_usage('config.usage', 'too many arguments.\nExample: horneroctl config show bar.position'),
+					mode)
+			}
+			if args.len == 2 && args[1].starts_with('-') {
+				return render_error(hornero_core.err_usage('config.usage', 'unknown flag: ${args[1]}.\nExample: horneroctl config show bar.position'),
+					mode)
+			}
+			key := if args.len == 2 { args[1] } else { '' }
+			return render(hornero_core.config_show_report(key), mode)
 		}
 		'validate' {
 			return render(hornero_core.config_validate_report(), mode)
