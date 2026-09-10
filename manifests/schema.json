@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/HorneroOS/hornero/blob/main/manifests/schema.json",
+  "title": "Hornero OS composition manifest",
+  "description": "Version-pinning schema for Hornero OS release manifests. A manifest pins every composed component to an exact git commit SHA. There are no git submodules: pins are plain data, and bumps are ordinary file edits validated by scripts/check-manifests.py.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "name", "date", "components"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "hornero.os/v1",
+      "description": "Composition API version. Bump only with a schema migration note."
+    },
+    "kind": {
+      "const": "CompositionManifest",
+      "description": "Document kind. Other kinds (EditionProfile, Release) are validated structurally by the checker."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Manifest name, e.g. hornero-0.1.0-draft. Profiles and releases reference it."
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Pin date in UTC, YYYY-MM-DD."
+    },
+    "description": {
+      "type": "string"
+    },
+    "components": {
+      "type": "object",
+      "required": ["shell", "config"],
+      "description": "shell and config are always pinned. horneroctl is built from this repo (local). installer and iso are named future slots only.",
+      "properties": {
+        "shell": { "$ref": "#/$defs/component" },
+        "config": { "$ref": "#/$defs/component" },
+        "horneroctl": { "$ref": "#/$defs/component" },
+        "installer": { "$ref": "#/$defs/component" },
+        "iso": { "$ref": "#/$defs/component" }
+      },
+      "additionalProperties": { "$ref": "#/$defs/component" }
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "required": ["repo", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "Source repository URL."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Branch or tag the sha was taken from. Required when status is pinned."
+        },
+        "sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "Full 40-char lowercase commit SHA. Required when status is pinned, forbidden otherwise."
+        },
+        "path": {
+          "type": "string",
+          "description": "Subdirectory owning the component inside repo (e.g. cli/ for horneroctl)."
+        },
+        "status": {
+          "enum": ["pinned", "local", "future"],
+          "description": "pinned: exact sha recorded. local: built from this repo at release time. future: named slot, not resolved yet."
+        },
+        "subject": {
+          "type": "string",
+          "description": "Subject of the pinned commit, for human audit."
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

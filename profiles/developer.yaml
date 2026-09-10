@@ -1,0 +1,22 @@
+# Hornero OS edition profile: developer
+
+apiVersion: hornero.os/v1
+kind: EditionProfile
+name: developer
+manifest: hornero-0.1.0-draft
+description: >-
+  Desktop edition plus a development tooling layer. Extends desktop;
+  same pinned shell and config components.
+target: hardware
+extends: desktop
+components:
+  - name: shell
+    role: Desktop shell UX as pinned by the manifest.
+  - name: config
+    role: Full desktop defaults as pinned by the manifest.
+  - name: horneroctl
+    role: System CLI built from this repository.
+notes: >-
+  The concrete developer package set lands with real package builds
+  and is tracked against this profile; until then the profile pins
+  composition only, not packages.

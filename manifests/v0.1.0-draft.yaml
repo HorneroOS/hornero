@@ -1,0 +1,40 @@
+# Hornero OS composition manifest: hornero-0.1.0-draft
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.1.0-draft
+date: "2026-09-10"
+description: >-
+  First composition manifest. Pins HorneroOS/shell and HorneroOS/config
+  to their current main SHAs. horneroctl builds from this repository.
+  installer and iso are named future slots only.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 329b6858c9bade373efba908fe452e23369d364f
+    status: pinned
+    subject: "Merge pull request #7 from HorneroOS/feat/vm-test-harness"
+    notes: Desktop shell / Quickshell UX.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 69d5ca3c0a082de88f841882100994bc6c837310
+    status: pinned
+    subject: "Merge pull request #3 from HorneroOS/feat/config-packaging"
+    notes: Reusable desktop and system defaults.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. Install and first-boot flows are defined by HorneroOS/installer in a follow-up.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot. Image build order is documented in docs/RELEASE_PROCESS.md; no image exists yet.
