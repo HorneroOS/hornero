@@ -15,10 +15,16 @@ jobs:
       - name: Read V version pin
         id: vpin
         run: echo "version=$(cat cli/.v-version)" >> "$GITHUB_OUTPUT"
-      - name: Setup V
-        uses: vlang/setup-v@v1
-        with:
-          version: ${{ steps.vpin.outputs.version }}
+      # Prebuilt binary: setup-v builds V from source here, and neither the
+      # 0.5.2 nor the weekly source currently bootstraps on this runner
+      # (stale bootstrap compiler). The prebuilt v_linux.zip just works.
+      - name: Install V (prebuilt)
+        run: |
+          curl -sL -o /tmp/v_linux.zip "https://github.com/vlang/v/releases/download/${{ steps.vpin.outputs.version }}/v_linux.zip"
+          unzip -q /tmp/v_linux.zip -d /tmp/vlang
+          echo "/tmp/vlang/v" >> "$GITHUB_PATH"
+      - name: Verify toolchain
+        run: v version
       - name: Format check
         working-directory: cli
         run: ./make.vsh fmt-check
