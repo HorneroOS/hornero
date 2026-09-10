@@ -23,6 +23,7 @@ repository that owns it:
 | Concern | Repository |
 |---|---|
 | Desktop shell / Quickshell UX | [HorneroOS/shell](https://github.com/HorneroOS/shell) |
+| System CLI (`horneroctl`) | this repo, [`cli/`](cli/) |
 | Reusable desktop/system defaults | [HorneroOS/config](https://github.com/HorneroOS/config) |
 | Installation workflow/application | [HorneroOS/installer](https://github.com/HorneroOS/installer) |
 | Technical/user documentation | [HorneroOS/docs](https://github.com/HorneroOS/docs) |

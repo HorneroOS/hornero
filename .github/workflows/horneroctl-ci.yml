@@ -1,0 +1,39 @@
+name: horneroctl-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ['cli/**', '.github/workflows/horneroctl-ci.yml']
+  pull_request:
+    paths: ['cli/**', '.github/workflows/horneroctl-ci.yml']
+
+jobs:
+  horneroctl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read V version pin
+        id: vpin
+        run: echo "version=$(cat cli/.v-version)" >> "$GITHUB_OUTPUT"
+      # Prebuilt binary: setup-v builds V from source here, and neither the
+      # 0.5.2 nor the weekly source currently bootstraps on this runner
+      # (stale bootstrap compiler). The prebuilt v_linux.zip just works.
+      - name: Install V (prebuilt)
+        run: |
+          curl -sL -o /tmp/v_linux.zip "https://github.com/vlang/v/releases/download/${{ steps.vpin.outputs.version }}/v_linux.zip"
+          unzip -q /tmp/v_linux.zip -d /tmp/vlang
+          echo "/tmp/vlang/v" >> "$GITHUB_PATH"
+      - name: Verify toolchain
+        run: v version
+      - name: Format check
+        working-directory: cli
+        run: ./make.vsh fmt-check
+      - name: Vet
+        working-directory: cli
+        run: ./make.vsh vet
+      - name: Test
+        working-directory: cli
+        run: ./make.vsh test
+      - name: Build
+        working-directory: cli
+        run: ./make.vsh build-cli && ./build/horneroctl version && ./build/horneroctl config paths
