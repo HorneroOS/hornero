@@ -38,48 +38,48 @@ pub fn (e DomainError) exit_code() int {
 
 pub fn err_user(code string, message string) DomainError {
 	return DomainError{
-		class: .user
-		code: code
+		class:   .user
+		code:    code
 		message: message
 	}
 }
 
 pub fn err_config(code string, message string) DomainError {
 	return DomainError{
-		class: .config
-		code: code
+		class:   .config
+		code:    code
 		message: message
 	}
 }
 
 pub fn err_env(code string, message string) DomainError {
 	return DomainError{
-		class: .env
-		code: code
+		class:   .env
+		code:    code
 		message: message
 	}
 }
 
 pub fn err_external(code string, message string) DomainError {
 	return DomainError{
-		class: .external
-		code: code
+		class:   .external
+		code:    code
 		message: message
 	}
 }
 
 pub fn err_internal(code string, message string) DomainError {
 	return DomainError{
-		class: .internal
-		code: code
+		class:   .internal
+		code:    code
 		message: message
 	}
 }
 
 pub fn err_usage(code string, message string) DomainError {
 	return DomainError{
-		class: .usage_flags
-		code: code
+		class:   .usage_flags
+		code:    code
 		message: message
 	}
 }

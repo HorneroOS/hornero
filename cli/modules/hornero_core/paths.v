@@ -24,10 +24,10 @@ fn xdg_or_home(env_key string, fallback_under_home string) string {
 
 pub fn resolve_paths() HorneroPaths {
 	return HorneroPaths{
-		config_dir: xdg_or_home('XDG_CONFIG_HOME', '.config')
-		data_dir: xdg_or_home('XDG_DATA_HOME', '.local/share')
-		state_dir: xdg_or_home('XDG_STATE_HOME', '.local/state')
-		cache_dir: xdg_or_home('XDG_CACHE_HOME', '.cache')
+		config_dir:        xdg_or_home('XDG_CONFIG_HOME', '.config')
+		data_dir:          xdg_or_home('XDG_DATA_HOME', '.local/share')
+		state_dir:         xdg_or_home('XDG_STATE_HOME', '.local/state')
+		cache_dir:         xdg_or_home('XDG_CACHE_HOME', '.cache')
 		system_config_dir: '/etc/xdg'
 	}
 }

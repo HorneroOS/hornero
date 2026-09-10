@@ -60,8 +60,8 @@ pub fn config_validate_report() CommandResult {
 	}
 	return CommandResult{
 		command: 'config validate'
-		ok: failed == 0
+		ok:      failed == 0
 		message: lines.join('\n')
-		data: map[string]string{}
+		data:    map[string]string{}
 	}
 }

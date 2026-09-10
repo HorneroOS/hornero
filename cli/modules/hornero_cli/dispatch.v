@@ -40,7 +40,8 @@ pub fn dispatch(args []string) int {
 	}
 	if first !in known_commands {
 		if first.starts_with('-') {
-			return render_error(hornero_core.err_usage('flag.unknown', "unknown flag: ${first}.\nRun 'horneroctl --help' for usage."), mode)
+			return render_error(hornero_core.err_usage('flag.unknown', "unknown flag: ${first}.\nRun 'horneroctl --help' for usage."),
+				mode)
 		}
 		eprintln('Unknown command: ${first}')
 		eprintln("Run 'horneroctl help' for usage.")
@@ -71,7 +72,8 @@ pub fn dispatch(args []string) int {
 			0
 		}
 		else {
-			render_error(hornero_core.err_user('command.unknown', 'Unknown command: ${first}'), mode)
+			render_error(hornero_core.err_user('command.unknown', 'Unknown command: ${first}'),
+				mode)
 		}
 	}
 }
@@ -85,7 +87,7 @@ fn run_shell(args []string, mode hornero_core.RenderMode) int {
 	}
 	return render(hornero_core.ipc_report(hornero_core.IpcOptions{
 		passthrough: opts.passthrough
-		dry_run: opts.dry_run
+		dry_run:     opts.dry_run
 	}), mode)
 }
 
@@ -94,16 +96,17 @@ fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 		return render_error(hornero_core.err_usage('appearance.usage', err.msg()), mode)
 	}
 	return render(hornero_core.appearance_report(hornero_core.AppearanceOptions{
-		action: opts.sub
-		call: opts.call_args
+		action:  opts.sub
+		call:    opts.call_args
 		dry_run: opts.dry_run
-		yes: opts.yes
+		yes:     opts.yes
 	}), mode)
 }
 
 fn run_config(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
-		return render_error(hornero_core.err_usage('config.usage', 'missing subcommand.\nExample: horneroctl config validate'), mode)
+		return render_error(hornero_core.err_usage('config.usage', 'missing subcommand.\nExample: horneroctl config validate'),
+			mode)
 	}
 	match args[0] {
 		'paths', 'show' {
@@ -113,14 +116,16 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 			return render(hornero_core.config_validate_report(), mode)
 		}
 		else {
-			return render_error(hornero_core.err_user('config.unknown', 'unknown config subcommand: ${args[0]}.\nRun: horneroctl config --help'), mode)
+			return render_error(hornero_core.err_user('config.unknown', 'unknown config subcommand: ${args[0]}.\nRun: horneroctl config --help'),
+				mode)
 		}
 	}
 }
 
 fn run_completion(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
-		return render_error(hornero_core.err_usage('completion.usage', 'missing shell.\nExample: horneroctl completion bash'), mode)
+		return render_error(hornero_core.err_usage('completion.usage', 'missing shell.\nExample: horneroctl completion bash'),
+			mode)
 	}
 	match args[0] {
 		'bash' {
@@ -136,7 +141,8 @@ fn run_completion(args []string, mode hornero_core.RenderMode) int {
 			return 0
 		}
 		else {
-			return render_error(hornero_core.err_user('completion.unknown', 'unknown shell: ${args[0]} (bash, zsh, fish).\nExample: horneroctl completion bash'), mode)
+			return render_error(hornero_core.err_user('completion.unknown', 'unknown shell: ${args[0]} (bash, zsh, fish).\nExample: horneroctl completion bash'),
+				mode)
 		}
 	}
 }

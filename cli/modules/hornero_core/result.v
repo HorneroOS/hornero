@@ -20,17 +20,17 @@ pub:
 pub fn ok_result(command string, message string, data map[string]string) CommandResult {
 	return CommandResult{
 		command: command
-		ok: true
+		ok:      true
 		message: message
-		data: data
+		data:    data
 	}
 }
 
 pub fn fail_result(command string, message string) CommandResult {
 	return CommandResult{
 		command: command
-		ok: false
+		ok:      false
 		message: message
-		data: map[string]string{}
+		data:    map[string]string{}
 	}
 }

@@ -14,14 +14,14 @@ fn bin_check(name string, prog string) DoctorCheck {
 	found := find_on_path(prog)
 	if found.len > 0 {
 		return DoctorCheck{
-			name: name
-			ok: true
+			name:   name
+			ok:     true
 			detail: found
 		}
 	}
 	return DoctorCheck{
-		name: name
-		ok: false
+		name:   name
+		ok:     false
 		detail: '${prog} not found on PATH'
 	}
 }
@@ -30,14 +30,14 @@ fn env_check(name string, key string) DoctorCheck {
 	v := os.getenv(key)
 	if v.len > 0 {
 		return DoctorCheck{
-			name: name
-			ok: true
+			name:   name
+			ok:     true
 			detail: '${key} is set'
 		}
 	}
 	return DoctorCheck{
-		name: name
-		ok: false
+		name:   name
+		ok:     false
 		detail: '${key} is not set'
 	}
 }
@@ -55,14 +55,14 @@ pub fn run_doctor() []DoctorCheck {
 	cfg := shell_config_file(p)
 	if os.is_file(cfg) {
 		checks << DoctorCheck{
-			name: 'shell-config'
-			ok: true
+			name:   'shell-config'
+			ok:     true
 			detail: cfg
 		}
 	} else {
 		checks << DoctorCheck{
-			name: 'shell-config'
-			ok: false
+			name:   'shell-config'
+			ok:     false
 			detail: '${cfg} not found (shell will use built-in defaults)'
 		}
 	}
@@ -88,8 +88,8 @@ pub fn doctor_result(checks []DoctorCheck) CommandResult {
 	}
 	return CommandResult{
 		command: 'doctor'
-		ok: failed == 0
+		ok:      failed == 0
 		message: lines.join('\n')
-		data: data
+		data:    data
 	}
 }

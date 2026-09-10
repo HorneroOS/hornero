@@ -28,8 +28,8 @@ fn test_paths_honor_xdg_overrides() {
 fn test_dry_run_never_executes() {
 	// /nonexistent-prog would fail if executed; dry-run must still report ok.
 	rep := run_exec(ExecSpec{
-		prog: '/nonexistent-prog-hornero-test'
-		args: ['--do-something-dangerous']
+		prog:    '/nonexistent-prog-hornero-test'
+		args:    ['--do-something-dangerous']
 		dry_run: true
 	})
 	assert rep.ok
@@ -61,7 +61,7 @@ fn test_doctor_returns_checks() {
 fn test_ipc_missing_binary_fails_cleanly() {
 	r := ipc_report(IpcOptions{
 		passthrough: ['show']
-		qs_bin: '/nonexistent-qs-hornero-test'
+		qs_bin:      '/nonexistent-qs-hornero-test'
 	})
 	// binary missing but explicitly given: execution fails, no panic
 	assert r.command == 'shell ipc'
@@ -71,8 +71,8 @@ fn test_ipc_missing_binary_fails_cleanly() {
 fn test_ipc_dry_run_ok_without_binary() {
 	r := ipc_report(IpcOptions{
 		passthrough: ['show']
-		dry_run: true
-		qs_bin: '/nonexistent-qs-hornero-test'
+		dry_run:     true
+		qs_bin:      '/nonexistent-qs-hornero-test'
 	})
 	assert r.ok
 	assert r.data['dry_run'] == 'true'
@@ -80,10 +80,10 @@ fn test_ipc_dry_run_ok_without_binary() {
 
 fn test_appearance_requires_yes_for_sync() {
 	r := appearance_report(AppearanceOptions{
-		action: 'sync'
-		helper: '/nonexistent-helper-hornero-test'
+		action:  'sync'
+		helper:  '/nonexistent-helper-hornero-test'
 		dry_run: false
-		yes: false
+		yes:     false
 	})
 	assert !r.ok
 	assert r.message.contains('--yes')

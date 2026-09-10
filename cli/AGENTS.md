@@ -28,6 +28,8 @@
 - `VMODULES` points at `cli/modules` (see `make.vsh`); never use relative
   imports.
 - `v fmt -w` before commit; `fmt-check`, `vet`, `test` must all pass.
+  Canonical formatter is the CI toolchain (prebuilt weekly from `.v-version`,
+  runnable locally via `V=<path-to-weekly-v>`); on formatter drift, CI wins.
 - Completions/help strings containing `$` MUST escape as `\$` (V
   interpolates `${}`/`$ident` in strings).
 - JSON via `x.json2` (`encode(v, escape_unicode: true)`,

@@ -85,8 +85,8 @@ pub fn parse_shell_cmd(args []string) !ShellCmdOptions {
 		return error('unexpected argument: ${a}.\nRun: horneroctl shell --help')
 	}
 	return ShellCmdOptions{
-		sub: sub
-		dry_run: dry_run
+		sub:         sub
+		dry_run:     dry_run
 		passthrough: passthrough
 	}
 }
@@ -140,9 +140,9 @@ pub fn parse_appearance_cmd(args []string) !AppearanceCmdOptions {
 		return error('unexpected argument: ${a}.\nRun: horneroctl appearance --help')
 	}
 	return AppearanceCmdOptions{
-		sub: sub
-		dry_run: dry_run
-		yes: yes
+		sub:       sub
+		dry_run:   dry_run
+		yes:       yes
 		call_args: call_args
 	}
 }

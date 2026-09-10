@@ -60,8 +60,8 @@ pub fn appearance_report(opts AppearanceOptions) CommandResult {
 		}
 	}
 	rep := run_exec(ExecSpec{
-		prog: bin
-		args: args
+		prog:    bin
+		args:    args
 		dry_run: opts.dry_run
 	})
 	if opts.dry_run {

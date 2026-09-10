@@ -50,8 +50,8 @@ pub fn ipc_report(opts IpcOptions) CommandResult {
 	mut args := ['ipc']
 	args << opts.passthrough
 	rep := run_exec(ExecSpec{
-		prog: bin
-		args: args
+		prog:    bin
+		args:    args
 		dry_run: opts.dry_run
 	})
 	if opts.dry_run {

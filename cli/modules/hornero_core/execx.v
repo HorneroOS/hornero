@@ -41,19 +41,19 @@ pub fn run_exec(spec ExecSpec) ExecReport {
 	if spec.dry_run {
 		return ExecReport{
 			command_line: line
-			ok: true
-			output: '(dry-run: not executed)'
-			exit_code: 0
-			was_dry_run: true
+			ok:           true
+			output:       '(dry-run: not executed)'
+			exit_code:    0
+			was_dry_run:  true
 		}
 	}
 	r := os.execute('${line}')
 	return ExecReport{
 		command_line: line
-		ok: r.exit_code == 0
-		output: r.output.trim_space()
-		exit_code: r.exit_code
-		was_dry_run: false
+		ok:           r.exit_code == 0
+		output:       r.output.trim_space()
+		exit_code:    r.exit_code
+		was_dry_run:  false
 	}
 }
 
