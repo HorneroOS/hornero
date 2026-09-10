@@ -1,5 +1,7 @@
 module hornero_cli
 
+import os
+
 fn test_dispatch_version_exit_zero() {
 	assert dispatch(['horneroctl', 'version']) == 0
 }
@@ -35,6 +37,17 @@ fn test_dispatch_shell_status_codes() {
 fn test_dispatch_shell_ipc_dry_run() {
 	code := dispatch(['horneroctl', 'shell', 'ipc', '--dry-run', '--', 'show'])
 	assert code == 0
+}
+
+fn test_dry_run_needs_no_backend() {
+	// Hermetic: point both backends at nonexistent paths; dry-run must
+	// still preview successfully on any machine (CI has no qs/dots-*).
+	os.setenv('HORNERO_QS_BIN', '/nonexistent-qs-hornero-test', true)
+	assert dispatch(['horneroctl', 'shell', 'ipc', '--dry-run', '--', 'show']) == 0
+	os.unsetenv('HORNERO_QS_BIN')
+	os.setenv('HORNERO_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
+	assert dispatch(['horneroctl', 'appearance', 'sync', '--dry-run']) == 0
+	os.unsetenv('HORNERO_APPEARANCE_BIN')
 }
 
 fn test_dispatch_appearance_sync_needs_yes() {

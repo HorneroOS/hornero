@@ -37,7 +37,14 @@ fn helper_or_fail(helper string) !string {
 // `sync` map to stable backend verbs; `call -- <args>` passes anything else
 // through untouched. Mutating verbs require --yes; --dry-run only previews.
 pub fn appearance_report(opts AppearanceOptions) CommandResult {
-	bin := helper_or_fail(opts.helper) or { return fail_result('appearance', err.msg()) }
+	// Dry-run previews the planned call and never needs the backend installed.
+	bin := helper_or_fail(opts.helper) or {
+		if opts.dry_run {
+			'dots-gtk-theme'
+		} else {
+			return fail_result('appearance', err.msg())
+		}
+	}
 	mut args := []string{}
 	match opts.action {
 		'status' {

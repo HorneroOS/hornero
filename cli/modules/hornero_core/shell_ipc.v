@@ -42,11 +42,13 @@ pub fn shell_status() CommandResult {
 }
 
 // ipc_report runs `qs ipc <passthrough>` or previews it with --dry-run.
+// Dry-run never needs the backend installed: it previews the planned call.
 pub fn ipc_report(opts IpcOptions) CommandResult {
-	bin := if opts.qs_bin.len > 0 { opts.qs_bin } else { resolve_qs_bin() }
-	if bin.len == 0 {
+	mut bin := if opts.qs_bin.len > 0 { opts.qs_bin } else { resolve_qs_bin() }
+	if bin.len == 0 && !opts.dry_run {
 		return fail_result('shell ipc', 'qs not found on PATH. Set HORNERO_QS_BIN.\nExample: horneroctl shell ipc --dry-run -- show')
 	}
+	bin = if bin.len > 0 { bin } else { 'qs' }
 	mut args := ['ipc']
 	args << opts.passthrough
 	rep := run_exec(ExecSpec{
