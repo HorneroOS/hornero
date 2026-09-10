@@ -1,0 +1,20 @@
+# Hornero OS release: v0.1.0-draft
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.1.0-draft
+version: 0.1.0-draft
+status: pre-release
+date: "2026-09-10"
+manifest: hornero-0.1.0-draft
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.1.0-draft-checklist.md
+summary: >-
+  First composition pre-release. Defines the manifest, the three
+  editions, and the release process. Ships no installable artifacts:
+  installer and iso remain future slots.
+tag: v0.1.0-draft
+published: false
