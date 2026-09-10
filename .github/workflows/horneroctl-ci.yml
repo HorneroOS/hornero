@@ -1,0 +1,33 @@
+name: horneroctl-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ['cli/**', '.github/workflows/horneroctl-ci.yml']
+  pull_request:
+    paths: ['cli/**', '.github/workflows/horneroctl-ci.yml']
+
+jobs:
+  horneroctl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read V version pin
+        id: vpin
+        run: echo "version=$(cat cli/.v-version)" >> "$GITHUB_OUTPUT"
+      - name: Setup V
+        uses: vlang/setup-v@v1
+        with:
+          version: ${{ steps.vpin.outputs.version }}
+      - name: Format check
+        working-directory: cli
+        run: ./make.vsh fmt-check
+      - name: Vet
+        working-directory: cli
+        run: ./make.vsh vet
+      - name: Test
+        working-directory: cli
+        run: ./make.vsh test
+      - name: Build
+        working-directory: cli
+        run: ./make.vsh build-cli && ./build/horneroctl version && ./build/horneroctl config paths
