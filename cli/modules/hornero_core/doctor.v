@@ -69,6 +69,9 @@ pub fn run_doctor() []DoctorCheck {
 	return checks
 }
 
+// doctor_result renders checks for display. Every detail passes through
+// redact_secrets first, so credential-like KEY=VALUE text (tokens, keys,
+// passwords) never reaches human or --json output verbatim.
 pub fn doctor_result(checks []DoctorCheck) CommandResult {
 	mut lines := []string{}
 	mut failed := 0
@@ -78,7 +81,7 @@ pub fn doctor_result(checks []DoctorCheck) CommandResult {
 		if !c.ok {
 			failed++
 		}
-		lines << '${mark}  ${c.name}: ${c.detail}'
+		lines << '${mark}  ${c.name}: ${redact_secrets(c.detail)}'
 		data[c.name] = if c.ok { 'ok' } else { 'fail' }
 	}
 	if failed == 0 {
