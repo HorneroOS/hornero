@@ -6,9 +6,12 @@ import hornero_core
 // so no leaves here): device (brightness/monitors/hardware needs a pinned IPC
 // path first), system, and setup (installer-owned namespace). Batch 1 ships
 // `package check|updates`, `backup list|schedule`, and `config snapshot`;
-// their mutating/privileged siblings (package upgrade/deps, backup
-// create/restore, config default-apps/materialize/gui) stay usage-error
-// deferrals until a pinned backend lands.
+// batch 2 ships `config default-apps list`, `config materialize`, and
+// `config gui`. The remaining mutating/privileged siblings (package
+// upgrade/deps, backup create/restore, config default-apps set) stay
+// usage-error deferrals until a pinned backend lands (`set` has no
+// verified upstream verb: `dots-default-apps --set` never binds its
+// arguments, and handlr stays internal).
 // Each future leaf needs the same treatment as below: a verified backend,
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
@@ -203,6 +206,27 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 		}
 		return run_config_snapshot(args[1..], mode)
 	}
+	if args[0] == 'default-apps' {
+		if wants_help(args) {
+			print(command_help('config default-apps'))
+			return 0
+		}
+		return run_config_default_apps(args[1..], mode)
+	}
+	if args[0] == 'materialize' {
+		if wants_help(args) {
+			print(command_help('config materialize'))
+			return 0
+		}
+		return run_config_materialize(args[1..], mode)
+	}
+	if args[0] == 'gui' {
+		if wants_help(args) {
+			print(command_help('config gui'))
+			return 0
+		}
+		return run_config_gui(args[1..], mode)
+	}
 	match args[0] {
 		'paths' {
 			return render(hornero_core.config_paths_report(), mode)
@@ -247,6 +271,37 @@ fn run_config_snapshot(args []string, mode hornero_core.RenderMode) int {
 		id:      opts.id
 		dry_run: opts.dry_run
 		yes:     opts.yes
+	}), mode)
+}
+
+fn run_config_default_apps(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_default_apps_cmd(args) or {
+		return render_error(hornero_core.err_usage('default-apps.usage', err.msg()), mode)
+	}
+	return render(hornero_core.default_apps_list_report(hornero_core.DefaultAppsListOptions{
+		dry_run: opts.dry_run
+	}), mode)
+}
+
+fn run_config_materialize(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_materialize_cmd(args) or {
+		return render_error(hornero_core.err_usage('config.materialize.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.materialize_report(hornero_core.MaterializeOptions{
+		dest:    opts.dest
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_config_gui(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_gui_cmd(args) or {
+		return render_error(hornero_core.err_usage('config.gui.usage', err.msg()), mode)
+	}
+	return render(hornero_core.settings_gui_report(hornero_core.SettingsGuiOptions{
+		pane:    opts.pane
+		dry_run: opts.dry_run
 	}), mode)
 }
 

@@ -179,15 +179,18 @@ Examples:
 '
 		}
 		'config' {
-			return 'Usage: horneroctl config <paths|validate|show|snapshot> [key]
+			return 'Usage: horneroctl config <paths|validate|show|snapshot|default-apps|materialize|gui> [key]
 
   paths               Print the resolved XDG path contract
   validate            Check materialized config (read-only)
   show [key]          Show materialized shell.json values (read-only);
                       with a dot-notation key (bar.position) show one value
   snapshot ...        Configuration snapshots (create, list, restore)
+  default-apps ...    Default applications (list; set needs a backend)
+  materialize ...     Install curated defaults into --dest (needs --yes)
+  gui [--pane <name>] Open the settings hub
 
-Later phases: default-apps, materialize, gui (no pinned backend yet).
+Later phases: default-apps set (no verified backend yet).
 
 Examples:
   horneroctl config paths
@@ -196,6 +199,53 @@ Examples:
   horneroctl config show bar.position
   horneroctl config show --json
   horneroctl config snapshot list
+  horneroctl config default-apps list
+  horneroctl config materialize --dest /tmp/hx-dest --dry-run
+  horneroctl config gui --pane appearance
+'
+		}
+		'config default-apps' {
+			return 'Usage: horneroctl config default-apps <list|set> [options]
+
+  list [--dry-run]  List current default applications (read-only)
+  set <mime> <app>  Not yet available: needs a pinned backend
+                    (dots-default-apps exposes no verified
+                    non-interactive set verb; handlr stays internal)
+
+Default source: handlr/XDG MIME associations via dots-default-apps
+(HORNERO_DEFAULT_APPS_BIN).
+
+Examples:
+  horneroctl config default-apps list
+  horneroctl config default-apps list --dry-run
+  horneroctl config default-apps list --json
+'
+		}
+		'config materialize' {
+			return 'Usage: horneroctl config materialize --dest <dir> [--dry-run|--yes]
+
+  Install the curated config defaults into <dir> via the config
+  repo materialize.sh (HORNERO_MATERIALIZE_BIN). Mutating: needs
+  --yes; --dry-run previews (passed through to the backend, which
+  stays hermetic for --dest outside the real HOME).
+
+Examples:
+  horneroctl config materialize --dest /tmp/hx-dest --dry-run
+  horneroctl config materialize --dest /tmp/hx-dest --yes
+  horneroctl config materialize --dest /tmp/hx-dest --dry-run --json
+'
+		}
+		'config gui' {
+			return 'Usage: horneroctl config gui [--pane <name>] [--dry-run]
+
+  Open the settings hub via dots-settings-gui
+  (HORNERO_SETTINGS_GUI_BIN). Panes: network, bluetooth, audio,
+  appearance, taskbar, launcher, dashboard, system.
+
+Examples:
+  horneroctl config gui --dry-run
+  horneroctl config gui --pane appearance
+  horneroctl config gui --pane launcher --json
 '
 		}
 		'config snapshot' {

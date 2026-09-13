@@ -34,6 +34,9 @@ horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>> [
 horneroctl scheme ...                       # alias of appearance scheme
 horneroctl config <paths|validate|show [key]>
 horneroctl config snapshot <create|list|restore <id>> [--dry-run|--yes]
+horneroctl config default-apps list [--dry-run]
+horneroctl config materialize --dest <dir> [--dry-run|--yes]
+horneroctl config gui [--pane <name>] [--dry-run]
 horneroctl package <check|updates> [--dry-run]
 horneroctl backup <list|schedule>
 horneroctl completion <bash|zsh|fish>
@@ -59,7 +62,17 @@ delegate to `dots-checkupdates`/`checkupdates`
 (`HORNERO_CHECKUPDATES_BIN` override, read-only, unprivileged);
 backup list reads the materialized `*.zip` archives
 (`HORNERO_BACKUP_DIR` override, else `~/.dotfiles/backup`); backup
-schedule prints the cron/systemd recipe and never installs it.
+schedule prints the cron/systemd recipe and never installs it;
+default-apps list delegates to `dots-default-apps --list`
+(`HORNERO_DEFAULT_APPS_BIN` override, default
+`~/.local/bin/dots-default-apps`, read-only); materialize delegates
+to the config repo `materialize.sh --dest <dir>`
+(`HORNERO_MATERIALIZE_BIN` override; `--dest` travels verbatim,
+never rewritten to a legacy `dots/*` path); gui delegates to
+`dots-settings-gui [--pane=<name>]` (`HORNERO_SETTINGS_GUI_BIN`
+override, default `~/.local/bin/dots-settings-gui`). `default-apps
+set` stays out: `dots-default-apps --set` binds no arguments upstream
+and handlr stays internal.
 
 ## Secrets redaction (doctor)
 
@@ -93,11 +106,12 @@ cli/
 │   ├── paths.v                # XDG path contract
 │   ├── execx.v                # dry-run-aware external runner
 │   ├── version.v doctor.v shell_ipc.v appearance.v configx.v
-│   ├── snapshots.v packages.v backups.v
-│   └── core_test.v batch1_test.v
+│   ├── snapshots.v packages.v backups.v config_ops.v
+│   └── core_test.v batch1_test.v batch2_test.v
 ├── modules/hornero_cli/       # adapter: dispatch/options/render/help
 │   ├── dispatch.v options.v help.v render.v batch1_options.v
-│   └── dispatch_test.v batch1_dispatch_test.v
+│   ├── batch2_options.v
+│   └── dispatch_test.v batch1_dispatch_test.v batch2_dispatch_test.v
 ├── make.vsh .v-version
 ├── README.md AGENTS.md
 ```
@@ -112,6 +126,11 @@ v0.3 (batch 1, backend-grounded): config snapshot create/list/restore
 (list native, create/restore via `dots-config-manager`), package
 check/updates (via `dots-checkupdates`/`checkupdates`, read-only),
 backup list (native) + backup schedule (recipe only, never installed).
+v0.4 (batch 2, backend-grounded): config default-apps list (via
+`dots-default-apps --list`, read-only), config materialize --dest
+(via the config repo `materialize.sh`, needs --yes), config gui
+(via `dots-settings-gui`, launcher semantics). `default-apps set`
+stays deferred: no verified upstream verb.
 The broader command surface is tracked in `../docs/cli-architecture.md`
 (HorneroOS/hornero#1); appearance verbs stay a thin delegation layer until
 native backends land (HorneroOS/shell#2).
@@ -124,7 +143,7 @@ and `setup` (namespace reserved for HorneroOS/installer flows; nothing
 here may claim names under it) are explicitly out of scope for this CLI
 until their owning backends land. Deferred siblings of shipped commands
 (`package upgrade`/`deps`, `backup create`/`restore`,
-`config default-apps`/`materialize`/`gui`, `shell preset apply`) fail
+`config default-apps set`, `shell preset apply`) fail
 with a usage error naming the missing backend instead of inventing
 behavior.
 
@@ -133,7 +152,8 @@ behavior.
 - `shell preset apply` (needs a pinned preset-merge backend).
 - `package upgrade` (needs a polkit backend), `package deps`.
 - `backup create`/`restore` (need a pinned non-interactive backend).
-- `config default-apps`/`materialize`/`gui`.
+- `config default-apps set` (needs a verified non-interactive backend
+  verb; `dots-default-apps --set` binds no arguments upstream).
 See `../docs/cli-architecture.md` section 7.
 
 ## License
