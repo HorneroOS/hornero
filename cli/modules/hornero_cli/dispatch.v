@@ -4,12 +4,16 @@ import hornero_core
 
 // Deferred groups (locked in docs/cli-architecture.md, no verified backend yet,
 // so no leaves here): device (brightness/monitors/hardware needs a pinned IPC
-// path first), system, package, backup, and setup (installer-owned namespace).
+// path first), system, and setup (installer-owned namespace). Batch 1 ships
+// `package check|updates`, `backup list|schedule`, and `config snapshot`;
+// their mutating/privileged siblings (package upgrade/deps, backup
+// create/restore, config default-apps/materialize/gui) stay usage-error
+// deferrals until a pinned backend lands.
 // Each future leaf needs the same treatment as below: a verified backend,
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
-const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'completion',
-	'help']
+const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
+	'backup', 'completion', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -78,6 +82,12 @@ pub fn dispatch(args []string) int {
 		}
 		'config' {
 			run_config(rest[1..], mode)
+		}
+		'package' {
+			run_package(rest[1..], mode)
+		}
+		'backup' {
+			run_backup(rest[1..], mode)
 		}
 		'completion' {
 			run_completion(rest[1..], mode)
@@ -186,6 +196,13 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 		return render_error(hornero_core.err_usage('config.usage', 'missing subcommand.\nExample: horneroctl config validate'),
 			mode)
 	}
+	if args[0] == 'snapshot' {
+		if wants_help(args) {
+			print(command_help('config snapshot'))
+			return 0
+		}
+		return run_config_snapshot(args[1..], mode)
+	}
 	match args[0] {
 		'paths' {
 			return render(hornero_core.config_paths_report(), mode)
@@ -210,6 +227,50 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 				mode)
 		}
 	}
+}
+
+fn run_config_snapshot(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_config_snapshot(args) or {
+		return render_error(hornero_core.err_usage('config.snapshot.usage', err.msg()),
+			mode)
+	}
+	if opts.leaf == 'list' {
+		return render(hornero_core.snapshot_list_report(), mode)
+	}
+	if opts.leaf == 'create' {
+		return render(hornero_core.snapshot_create_report(hornero_core.SnapshotCreateOptions{
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	return render(hornero_core.snapshot_restore_report(hornero_core.SnapshotRestoreOptions{
+		id:      opts.id
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_package(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_package_cmd(args) or {
+		return render_error(hornero_core.err_usage('package.usage', err.msg()), mode)
+	}
+	check := hornero_core.PackageCheckOptions{
+		dry_run: opts.dry_run
+	}
+	if opts.leaf == 'updates' {
+		return render(hornero_core.package_updates_report(check), mode)
+	}
+	return render(hornero_core.package_check_report(check), mode)
+}
+
+fn run_backup(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_backup_cmd(args) or {
+		return render_error(hornero_core.err_usage('backup.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'schedule' {
+		return render(hornero_core.backup_schedule_report(), mode)
+	}
+	return render(hornero_core.backup_list_report(), mode)
 }
 
 fn run_completion(args []string, mode hornero_core.RenderMode) int {
