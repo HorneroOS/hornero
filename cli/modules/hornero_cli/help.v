@@ -92,7 +92,8 @@ Examples:
   current             Show the active preset (read-only)
 
 Preset sources: HORNERO_PRESETS_DIR, else the XDG data catalogue
-(dots/shell-presets); the active pointer lives under XDG state.
+(hornero/shell-presets, legacy dots/shell-presets as read-only fallback);
+the active pointer lives under XDG state.
 
 Later phases: preset apply (needs a pinned merge backend).
 
@@ -134,7 +135,8 @@ Examples:
                       Apply a theme pack (needs --yes)
 
 Pack source: HORNERO_THEMES_DIR, else the XDG data catalogue
-(dots/themes). Reads parse the installed theme.json manifests;
+(hornero/themes, legacy dots/themes as read-only fallback).
+Reads parse the installed theme.json manifests;
 apply delegates to dots-appearance (HORNERO_DOTS_APPEARANCE_BIN).
 
 Examples:
@@ -205,7 +207,8 @@ Examples:
                       Restore one snapshot (needs --yes)
 
 Snapshot source: HORNERO_SNAPSHOTS_DIR, else the XDG cache catalogue
-(dots/snapshots); create/restore delegate to dots-config-manager
+(hornero/snapshots, legacy dots/snapshots as read-only fallback);
+create/restore delegate to dots-config-manager
 (HORNERO_CONFIG_MANAGER_BIN).
 
 Examples:
