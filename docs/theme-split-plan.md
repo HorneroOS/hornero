@@ -21,6 +21,13 @@ Full SHAs: `02f3daca6fa8608d42aa946adc81dd5d86ff41d0`,
 `6d47eee746e6dc21eaf7bd5ba6a31afa58e0bdf8`,
 `b26db04474d9e3ca4d78e4cc7e0e8bee40fbf5d3`.
 
+Currency note (2026-09-13): the revisions above remain the audited
+record. Current mains are `hornero@637e247`, `config@6b7f40d`, and
+`shell@e2f6656` (short SHAs). The `config` delta from the audited
+revision is packaging-only (`packaging/`, `tests/test_package.sh`);
+no `profiles/themes/` pack changed, so this audit still describes
+the current recipes.
+
 All 12 `theme.json` files in config are byte-identical to the
 dotfiles source at that revision.
 
