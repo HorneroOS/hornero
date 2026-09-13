@@ -7,7 +7,8 @@ import hornero_core
 // path first), system, and setup (installer-owned namespace). Batch 1 ships
 // `package check|updates`, `backup list|schedule`, and `config snapshot`;
 // batch 2 ships `config default-apps list`, `config materialize`, and
-// `config gui`. The remaining mutating/privileged siblings (package
+// `config gui`; preview 1 adds `config migrate`. The remaining
+// mutating/privileged siblings (package
 // upgrade/deps, backup create/restore, config default-apps set) stay
 // usage-error deferrals until a pinned backend lands (`set` has no
 // verified upstream verb: `dots-default-apps --set` never binds its
@@ -227,6 +228,13 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 		}
 		return run_config_gui(args[1..], mode)
 	}
+	if args[0] == 'migrate' {
+		if wants_help(args) {
+			print(command_help('config migrate'))
+			return 0
+		}
+		return run_config_migrate(args[1..], mode)
+	}
 	match args[0] {
 		'paths' {
 			return render(hornero_core.config_paths_report(), mode)
@@ -292,6 +300,18 @@ fn run_config_materialize(args []string, mode hornero_core.RenderMode) int {
 		dest:    opts.dest
 		dry_run: opts.dry_run
 		yes:     opts.yes
+	}), mode)
+}
+
+fn run_config_migrate(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_migrate_cmd(args) or {
+		return render_error(hornero_core.err_usage('config.migrate.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.migrate_report(hornero_core.MigrateOptions{
+		dry_run: opts.dry_run
+		yes:     opts.yes
+		helper:  opts.helper
 	}), mode)
 }
 
