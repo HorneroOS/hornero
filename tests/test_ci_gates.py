@@ -47,10 +47,16 @@ def test_workflow_yaml_parses():
 
 
 def test_triggers_cover_cli_docs_and_composition():
+    # Push stays path-filtered (minutes), but pull_request must be UNFILTERED:
+    # required contexts have to report on every PR or strict protection
+    # blocks the merge forever (Track 1).
     doc = _workflow_doc()
-    for event in ("push", "pull_request"):
-        paths = set(doc["on"][event]["paths"])
-        assert REQUIRED_PATHS <= paths, f"{event} paths missing: {REQUIRED_PATHS - paths}"
+    push_paths = set(doc["on"]["push"]["paths"] or [])
+    assert REQUIRED_PATHS <= push_paths, f"push paths missing: {REQUIRED_PATHS - push_paths}"
+    pr_filter = doc["on"]["pull_request"]
+    assert not pr_filter or not pr_filter.get("paths"), (
+        "pull_request must not be path-filtered"
+    )
 
 
 def test_markdownlint_covers_docs_glob():
@@ -105,6 +111,29 @@ def test_secrets_lint_passes_on_clean_tree():
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "SECRETS-PASS" in proc.stdout
+
+
+def test_allowlist_entries_are_live():
+    # Every suppression must match a real current line: no dead entries that
+    # could hide drift. Format: path-prefix|fixed-string|reason.
+    allowlist = ROOT / "scripts" / "secrets-allowlist.txt"
+    assert allowlist.is_file(), "allowlist file missing"
+    entries = [
+        line.split("|", 2)
+        for line in allowlist.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    assert entries, "allowlist is empty"
+    for prefix, fixed, reason in entries:
+        assert reason.strip(), f"entry without reason: {prefix}"
+        candidates = list(ROOT.glob(prefix.rsplit("/", 1)[0] + "/*"))
+        assert candidates, f"allowlist path prefix matches nothing: {prefix}"
+        found = any(
+            fixed in path.read_text(encoding="utf-8", errors="replace")
+            for path in candidates
+            if path.is_file()
+        )
+        assert found, f"dead allowlist entry (no live line contains it): {prefix}|{fixed}"
 
 
 def test_secrets_lint_flags_planted_credential(tmp_path):

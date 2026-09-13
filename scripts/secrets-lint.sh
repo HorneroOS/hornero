@@ -31,7 +31,22 @@ PATTERN='AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36,}|gho_[A-Za-z0-9]{36,}|github_pat_[
 
 HITS="$(grep -rInE --exclude-dir=.git --exclude-dir=__pycache__ \
   --exclude='*.pyc' --exclude='secrets-lint.sh' \
+  --exclude='secrets-allowlist.txt' \
   -e "$PATTERN" "$ROOT" || true)"
+
+# Scoped suppressions (scripts/secrets-allowlist.txt):
+# path-prefix|fixed-string|reason. Hits are relativized to the scanned root,
+# then a hit survives only when no entry matches both its file and its line.
+ALLOWLIST="$(dirname "${BASH_SOURCE[0]}")/secrets-allowlist.txt"
+if [[ -n "$HITS" && -f "$ALLOWLIST" ]]; then
+  HITS="$(printf '%s\n' "$HITS" | sed "s|^${ROOT}/||")"
+  while IFS='|' read -r prefix fixed _reason; do
+    [[ "$prefix" =~ ^[[:space:]]*# || -z "$prefix" ]] && continue
+    HITS="$(printf '%s\n' "$HITS" \
+      | awk -v p="$prefix" -v f="$fixed" 'index($0, p) == 1 && index($0, f) > 0 { next } { print }')"
+  done < "$ALLOWLIST"
+  HITS="$(printf '%s\n' "$HITS" | grep -v '^$' || true)"
+fi
 
 if [[ -n "$HITS" ]]; then
   echo "SECRETS-FAIL: possible credentials found:"

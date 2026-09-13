@@ -49,6 +49,15 @@ under XDG state/cache; preset list/current read the installed presets
 and the state pointer; config show reads the materialized
 `$XDG_CONFIG_HOME/hornero/shell.json` (system default as fallback).
 
+## Secrets redaction (doctor)
+
+`doctor` echoes environment-derived text, so every check detail passes
+through `hornero_core.redact_secrets` before display (human and `--json`
+alike): `KEY=VALUE` / `KEY: VALUE` pairs whose key looks credential-like
+(token, secret, password, key, auth, ...) render as `KEY=[redacted]`.
+`env` probes additionally report only `KEY is set`, never values.
+Contract: `docs/cli-architecture.md` section 4.
+
 ## Build / test
 
 Requires V (see `.v-version`):

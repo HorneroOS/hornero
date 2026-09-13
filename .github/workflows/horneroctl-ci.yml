@@ -4,8 +4,9 @@ on:
   push:
     branches: [main]
     paths: ['cli/**', '.github/workflows/horneroctl-ci.yml']
+  # No paths filter on PRs: required contexts must always report, otherwise
+  # strict branch protection blocks the merge forever (see Track 1).
   pull_request:
-    paths: ['cli/**', '.github/workflows/horneroctl-ci.yml']
 
 jobs:
   horneroctl:
