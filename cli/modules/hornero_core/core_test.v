@@ -309,3 +309,100 @@ fn test_preset_missing_dir_and_pointer() {
 	assert c.message == 'none'
 	os.unsetenv('HORNERO_PRESET_STATE_FILE')
 }
+
+// --- preview-1: version release report, doctor legacy-paths section ---
+
+fn test_version_report_carries_release_metadata() {
+	r := version_result()
+	assert r.ok
+	assert r.command == 'version'
+	// Back-compat fields stay byte-stable for --json consumers.
+	assert r.data['version'] == cli_version()
+	assert r.data['commit'] == cli_commit()
+	assert r.message.contains('horneroctl ${cli_version()} (${cli_commit()})')
+	// Release provenance: flat --json fields, one human line each.
+	assert r.data['horneroctl'] == cli_version()
+	assert r.data['shell_sha'] == shell_pin_sha()
+	assert r.data['config_sha'] == config_pin_sha()
+	assert r.data['manifest'] == release_manifest()
+	assert r.data['release'] == release_name()
+	assert r.message.contains('shell: ${shell_pin_sha()}')
+	assert r.message.contains('config: ${config_pin_sha()}')
+	assert r.message.contains('manifest: ${release_manifest()}')
+	assert r.message.contains('release: ${release_name()}')
+}
+
+fn p1_isolate_xdg() (string, string, string, string, string) {
+	old_data := os.getenv('XDG_DATA_HOME')
+	old_state := os.getenv('XDG_STATE_HOME')
+	old_cache := os.getenv('XDG_CACHE_HOME')
+	old_config := os.getenv('XDG_CONFIG_HOME')
+	old_home := os.getenv('HOME')
+	os.setenv('XDG_DATA_HOME', '/tmp/hx-p1-doctor-test/data', true)
+	os.setenv('XDG_STATE_HOME', '/tmp/hx-p1-doctor-test/state', true)
+	os.setenv('XDG_CACHE_HOME', '/tmp/hx-p1-doctor-test/cache', true)
+	os.setenv('XDG_CONFIG_HOME', '/tmp/hx-p1-doctor-test/config', true)
+	os.setenv('HOME', '/tmp/hx-p1-doctor-test', true)
+	os.rmdir_all('/tmp/hx-p1-doctor-test') or {}
+	os.mkdir_all('/tmp/hx-p1-doctor-test') or { assert false }
+	return old_data, old_state, old_cache, old_config, old_home
+}
+
+fn p1_restore_xdg(old_data string, old_state string, old_cache string, old_config string, old_home string) {
+	os.setenv('XDG_DATA_HOME', old_data, true)
+	os.setenv('XDG_STATE_HOME', old_state, true)
+	os.setenv('XDG_CACHE_HOME', old_cache, true)
+	os.setenv('XDG_CONFIG_HOME', old_config, true)
+	os.setenv('HOME', old_home, true)
+}
+
+fn test_doctor_legacy_paths_clean_without_dots_state() {
+	old_data, old_state, old_cache, old_config, old_home := p1_isolate_xdg()
+	states := detect_legacy_paths()
+	assert states.len == 7
+	for s in states {
+		assert !s.present
+	}
+	r := doctor_result(run_doctor())
+	assert r.command == 'doctor'
+	assert r.message.contains('legacy-paths:')
+	assert r.message.contains('themes (/tmp/hx-p1-doctor-test/data/dots/themes): absent')
+	assert !r.message.contains('migration available')
+	assert r.data['legacy_paths'] == 'clean'
+	assert r.data['legacy.themes'] == 'absent'
+	assert r.data['legacy.notifs'] == 'absent'
+	p1_restore_xdg(old_data, old_state, old_cache, old_config, old_home)
+}
+
+fn test_doctor_legacy_paths_detected_with_hint() {
+	old_data, old_state, old_cache, old_config, old_home := p1_isolate_xdg()
+	os.mkdir_all('/tmp/hx-p1-doctor-test/data/dots/themes/vapor') or { assert false }
+	os.write_file('/tmp/hx-p1-doctor-test/data/dots/themes/vapor/theme.json', '{"id":"vapor"}') or {
+		assert false
+	}
+	os.mkdir_all('/tmp/hx-p1-doctor-test/state/dots/wallpaper') or { assert false }
+	os.write_file('/tmp/hx-p1-doctor-test/state/dots/wallpaper/path', '/pics/wall.jpg\n') or {
+		assert false
+	}
+	states := detect_legacy_paths()
+	mut by_domain := map[string]LegacyPathState{}
+	for s in states {
+		by_domain[s.domain] = s
+	}
+	assert by_domain['themes'].present
+	assert by_domain['themes'].detail == '1 pack(s)'
+	assert by_domain['wallpaper-pointer'].present
+	assert by_domain['wallpaper-pointer'].detail == 'points at /pics/wall.jpg'
+	assert !by_domain['notifs'].present
+	r := doctor_result(run_doctor())
+	assert r.message.contains('legacy-paths:')
+	assert r.message.contains('themes (/tmp/hx-p1-doctor-test/data/dots/themes): present (1 pack(s))')
+	assert r.message.contains('migration available: horneroctl config migrate --dry-run')
+	assert r.data['legacy_paths'] == 'detected'
+	assert r.data['legacy.themes'] == 'present'
+	assert r.data['legacy.notifs'] == 'absent'
+	// Legacy presence is informational: the verdict follows the checks.
+	failed := run_doctor().filter(!it.ok).len
+	assert r.ok == (failed == 0)
+	p1_restore_xdg(old_data, old_state, old_cache, old_config, old_home)
+}
