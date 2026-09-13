@@ -1,6 +1,6 @@
 name: composition-ci
 
-on:
+"on":
   push:
     branches: [main]
     paths:
@@ -9,7 +9,8 @@ on:
       - 'releases/**'
       - 'scripts/**'
       - 'tests/**'
-      - 'docs/RELEASE_PROCESS.md'
+      - 'cli/**'
+      - 'docs/**'
       - '.github/workflows/composition-ci.yml'
   pull_request:
     paths:
@@ -18,7 +19,8 @@ on:
       - 'releases/**'
       - 'scripts/**'
       - 'tests/**'
-      - 'docs/RELEASE_PROCESS.md'
+      - 'cli/**'
+      - 'docs/**'
       - '.github/workflows/composition-ci.yml'
 
 jobs:
@@ -37,4 +39,22 @@ jobs:
       - name: Run composition tests
         run: python3 -m pytest tests/ -q
       - name: Lint composition docs
-        run: npx --yes markdownlint-cli manifests/README.md profiles/README.md releases/v0.1.0-draft-checklist.md docs/RELEASE_PROCESS.md
+        run: npx --yes markdownlint-cli manifests/README.md profiles/README.md releases/v0.1.0-draft-checklist.md docs/*.md
+  pin-freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install checker dependencies
+        run: pip install pyyaml
+      - name: Verify manifest pins match live main SHAs
+        run: python3 scripts/check-pins.py
+  secrets-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for committed secrets
+        run: bash scripts/secrets-lint.sh
