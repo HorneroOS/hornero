@@ -14,7 +14,9 @@ Commands:
   shell         Desktop shell integration (status, ipc, preset)
   appearance    Appearance backend (status, sync, call, theme, scheme)
   scheme        Alias of appearance scheme (compat shortcut)
-  config        Configuration paths, values, and validation
+  config        Configuration paths, values, validation, snapshots
+  package       Pending system updates (check, updates)
+  backup        Config backups (list, schedule)
   completion    Print shell completions
   help          Show help for a command
 
@@ -29,6 +31,8 @@ Examples:
   horneroctl shell status --json
   horneroctl appearance sync --dry-run
   horneroctl config validate
+  horneroctl package check --dry-run
+  horneroctl backup list
 '
 }
 
@@ -173,12 +177,15 @@ Examples:
 '
 		}
 		'config' {
-			return 'Usage: horneroctl config <paths|validate|show> [key]
+			return 'Usage: horneroctl config <paths|validate|show|snapshot> [key]
 
   paths               Print the resolved XDG path contract
   validate            Check materialized config (read-only)
   show [key]          Show materialized shell.json values (read-only);
                       with a dot-notation key (bar.position) show one value
+  snapshot ...        Configuration snapshots (create, list, restore)
+
+Later phases: default-apps, materialize, gui (no pinned backend yet).
 
 Examples:
   horneroctl config paths
@@ -186,6 +193,64 @@ Examples:
   horneroctl config show
   horneroctl config show bar.position
   horneroctl config show --json
+  horneroctl config snapshot list
+'
+		}
+		'config snapshot' {
+			return 'Usage: horneroctl config snapshot <create|list|restore> [options]
+
+  create [--dry-run]  Create a configuration snapshot (needs --yes)
+  list                List materialized snapshots (read-only)
+  restore <id> [--dry-run]
+                      Restore one snapshot (needs --yes)
+
+Snapshot source: HORNERO_SNAPSHOTS_DIR, else the XDG cache catalogue
+(dots/snapshots); create/restore delegate to dots-config-manager
+(HORNERO_CONFIG_MANAGER_BIN).
+
+Examples:
+  horneroctl config snapshot list
+  horneroctl config snapshot create --dry-run
+  horneroctl config snapshot create --yes
+  horneroctl config snapshot restore config_20260101_020000 --dry-run
+  horneroctl config snapshot list --json
+'
+		}
+		'package' {
+			return 'Usage: horneroctl package <check|updates> [options]
+
+  check [--dry-run]   List pending system updates (read-only)
+  updates [--dry-run] Pending-update count readout (read-only)
+
+Update source: dots-checkupdates or checkupdates on PATH
+(HORNERO_CHECKUPDATES_BIN override). Read-only and unprivileged.
+
+Later phases: upgrade (needs a polkit backend), deps (installer-owned).
+
+Examples:
+  horneroctl package check
+  horneroctl package check --dry-run
+  horneroctl package updates
+  horneroctl package updates --json
+'
+		}
+		'backup' {
+			return 'Usage: horneroctl backup <list|schedule>
+
+  list                List materialized backups (read-only)
+  schedule            Print the cron/systemd recipe (documented, not installed)
+
+Backup source: HORNERO_BACKUP_DIR, else the dotfiles backup directory
+(~/.dotfiles/backup). Scheduling is never installed by horneroctl:
+copy-paste the printed recipe instead (legacy dots-backup
+--register-cron flow).
+
+Later phases: create/restore (need a pinned non-interactive backend).
+
+Examples:
+  horneroctl backup list
+  horneroctl backup list --json
+  horneroctl backup schedule
 '
 		}
 		'completion' {
@@ -207,7 +272,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config completion help"
+  local cur cmds="version doctor shell appearance scheme config package backup completion help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -221,7 +286,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config completion help)
+  cmds=(version doctor shell appearance scheme config package backup completion help)
   _describe "command" cmds
 }
 _horneroctl
@@ -236,6 +301,8 @@ complete -c horneroctl -f -n __fish_use_subcommand -a shell -d "Shell integratio
 complete -c horneroctl -f -n __fish_use_subcommand -a appearance -d "Appearance backend"
 complete -c horneroctl -f -n __fish_use_subcommand -a scheme -d "Color scheme shortcut"
 complete -c horneroctl -f -n __fish_use_subcommand -a config -d "Configuration"
+complete -c horneroctl -f -n __fish_use_subcommand -a package -d "Package updates"
+complete -c horneroctl -f -n __fish_use_subcommand -a backup -d "Backups"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
 '
 }
