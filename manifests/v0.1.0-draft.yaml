@@ -3,7 +3,7 @@
 apiVersion: hornero.os/v1
 kind: CompositionManifest
 name: hornero-0.1.0-draft
-date: "2026-09-10"
+date: "2026-09-13"
 description: >-
   First composition manifest. Pins HorneroOS/shell and HorneroOS/config
   to their current main SHAs. horneroctl builds from this repository.
@@ -13,16 +13,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 329b6858c9bade373efba908fe452e23369d364f
+    sha: e2f6656a3d0be83134f4b662f80c905484d77fff
     status: pinned
-    subject: "Merge pull request #7 from HorneroOS/feat/vm-test-harness"
+    subject: "Merge pull request #13 from HorneroOS/feat/screenshots"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 69d5ca3c0a082de88f841882100994bc6c837310
+    sha: 6b7f40dd7f616f79131406331757c30b5b7b408f
     status: pinned
-    subject: "Merge pull request #3 from HorneroOS/feat/config-packaging"
+    subject: "Merge pull request #4 from HorneroOS/feat/config-package-build"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
