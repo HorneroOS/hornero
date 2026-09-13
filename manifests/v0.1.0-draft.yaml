@@ -13,9 +13,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: a189802b5a77a0d67c12ac8df2aac94824fcf390
+    sha: 065fcbd726ce8528e1061c353f3672a26a7177b2
     status: pinned
-    subject: "Merge pull request #19 from HorneroOS/fix/vm-provision-reload"
+    subject: "Merge pull request #20 from HorneroOS/fix/vm-dns-pin-retry"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config

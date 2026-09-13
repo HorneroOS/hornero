@@ -27,7 +27,7 @@ check_profile_doc = _checker.check_profile_doc
 check_release_doc = _checker.check_release_doc
 check_tree = _checker.check_tree
 
-SHELL_SHA = "a189802b5a77a0d67c12ac8df2aac94824fcf390"
+SHELL_SHA = "065fcbd726ce8528e1061c353f3672a26a7177b2"
 CONFIG_SHA = "7989d11a8266a67b00344bcce3b5bde7221bac91"
 
 
