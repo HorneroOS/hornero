@@ -13,9 +13,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: aeb2646069298a1b7c3650453529c93272697d65
+    sha: 236069769159238d26616a3d9ca848b4fdf2c599
     status: pinned
-    subject: "Merge pull request #17 from HorneroOS/feat/p1-shell-runtime"
+    subject: "Merge pull request #18 from HorneroOS/feat/p1-graphical-harness"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
