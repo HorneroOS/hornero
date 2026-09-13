@@ -13,16 +13,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 236069769159238d26616a3d9ca848b4fdf2c599
+    sha: a189802b5a77a0d67c12ac8df2aac94824fcf390
     status: pinned
-    subject: "Merge pull request #18 from HorneroOS/feat/p1-graphical-harness"
+    subject: "Merge pull request #19 from HorneroOS/fix/vm-provision-reload"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: abdad7adfacc5af5d674b2517f4ae085763cbef5
+    sha: 7989d11a8266a67b00344bcce3b5bde7221bac91
     status: pinned
-    subject: "Merge pull request #8 from HorneroOS/feat/p1-config-migration"
+    subject: "Merge pull request #9 from HorneroOS/docs/p1-packaging-catchup"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
