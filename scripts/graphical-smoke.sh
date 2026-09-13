@@ -23,7 +23,8 @@
 #   scripts/graphical-smoke.sh [--manifest FILE] [--work DIR]
 #       [--shell-harness DIR] [--ssh-port N] [--keep] [--dry-run] [SUBCOMMAND]
 #
-#   --manifest       composition manifest (default: manifests/v0.1.0-draft.yaml)
+#   --manifest       composition manifest, repo-relative like compose.sh
+#                    (default: manifests/v0.1.0-draft.yaml)
 #   --work           scratch dir (default: ~/.local/share/hornero/graphical-smoke/work)
 #   --shell-harness  shell tests/vm dir (default: the composed shell pin's)
 #   --ssh-port       host forward for guest sshd (default: 2222)
