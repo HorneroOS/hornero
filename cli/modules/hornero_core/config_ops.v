@@ -219,3 +219,171 @@ pub fn settings_gui_report(opts SettingsGuiOptions) CommandResult {
 	}
 	return fail_result('config gui', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }
+
+// Config migration backend: the one-shot `dots/*` to `hornero/*` move.
+// `config migrate` delegates out-of-process to the config repo's
+// `lib/dots/migrate-to-hornero.sh` (copy-if-absent over the Hornero-owned
+// rows only: themes, presets, the preset pointer, scheme.json plus scheme
+// state, the wallpaper pointer, and notifs), following the same pattern as
+// `config materialize` above: HORNERO_MIGRATE_BIN override, --yes required
+// to mutate, --dry-run previews (passed through so the backend previews
+// too), and machine-readable per-row output.
+//
+// Backend row contract: the migrator prints one `ROW <domain> <status>`
+// line per row to stdout, where domain is one of migrate_row_domains and
+// status is one token (copied, already-canonical, absent-source, skipped,
+// dry-run, error) with optional free-text detail after it. Lines of the
+// form `<domain>: <status>` for a known domain are accepted too; anything
+// else passes through verbatim into the human message.
+
+// migrate_row_domains are the Hornero-owned dots/* rows the migrator moves
+// (docs/PATH_CONTRACT.md rows 1-5, 9-10; snapshots and wallpaper binaries
+// stay out: no verified backend verb moves them yet).
+const migrate_row_domains = ['themes', 'presets', 'preset-pointer', 'scheme', 'scheme-state',
+	'wallpaper-pointer', 'notifs']
+
+// resolve_migrate_bin locates the `migrate-to-hornero.sh` backend.
+// Override with HORNERO_MIGRATE_BIN. Like materialize (and unlike the
+// installed `dots-*` helpers) there is no `~/.local/bin` default: the
+// script lives in the config repo checkout (`lib/dots/`), so resolution
+// is the explicit override, then PATH.
+pub fn resolve_migrate_bin() string {
+	env := os.getenv('HORNERO_MIGRATE_BIN')
+	if env.len > 0 {
+		return env
+	}
+	return find_on_path('migrate-to-hornero.sh')
+}
+
+fn migrate_or_fail(helper string, dry_run bool) !string {
+	bin := if helper.len > 0 { helper } else { resolve_migrate_bin() }
+	if bin.len == 0 {
+		if dry_run {
+			return 'migrate-to-hornero.sh'
+		}
+		return error('migrate backend not found. Set HORNERO_MIGRATE_BIN.\nExample: horneroctl config migrate --dry-run')
+	}
+	return bin
+}
+
+pub struct MigrateRow {
+pub:
+	domain string
+	status string
+	detail string
+}
+
+fn split_row_tail(tail string) (string, string) {
+	for i := 0; i < tail.len; i++ {
+		if tail[i] == ` ` || tail[i] == `\t` {
+			return tail[..i], tail[i + 1..].trim_space()
+		}
+	}
+	return tail, ''
+}
+
+// parse_migrate_rows extracts per-row results from backend stdout.
+// Canonical form is `ROW <domain> <status> [detail]`; `<domain>: <status>`
+// lines for a known domain are accepted as well. Anything else is ignored
+// here (it still reaches the human message verbatim).
+pub fn parse_migrate_rows(output string) []MigrateRow {
+	mut rows := []MigrateRow{}
+	for line in output.split_into_lines() {
+		t := line.trim_space()
+		if t.starts_with('ROW ') {
+			rest := t[4..].trim_space()
+			if rest.len == 0 {
+				continue
+			}
+			domain, tail := split_row_tail(rest)
+			if domain !in migrate_row_domains {
+				continue
+			}
+			status, detail := split_row_tail(tail)
+			if status.len == 0 {
+				continue
+			}
+			rows << MigrateRow{
+				domain: domain
+				status: status
+				detail: detail
+			}
+			continue
+		}
+		for d in migrate_row_domains {
+			prefix := '${d}:'
+			if t.starts_with(prefix) {
+				status := t[prefix.len..].trim_space()
+				if status.len > 0 {
+					rows << MigrateRow{
+						domain: d
+						status: status
+						detail: ''
+					}
+				}
+				break
+			}
+		}
+	}
+	return rows
+}
+
+pub struct MigrateOptions {
+pub:
+	dry_run bool
+	yes     bool
+	helper  string
+}
+
+// migrate_report implements `config migrate [--dry-run] [--yes]` by
+// delegating to `migrate-to-hornero.sh [--dry-run]` (verified backend
+// verbs). Mutating: needs --yes; --dry-run only previews. On success the
+// per-row results are machine-readable: one `row.<domain>` data entry per
+// parsed row plus a `rows` count (--json carries them; the human message
+// lists one line per row).
+pub fn migrate_report(opts MigrateOptions) CommandResult {
+	if !opts.yes && !opts.dry_run {
+		return fail_result('config migrate', 'refusing to migrate without --yes (preview with --dry-run).\nExample: horneroctl config migrate --dry-run')
+	}
+	bin := migrate_or_fail(opts.helper, opts.dry_run) or {
+		return fail_result('config migrate', err.msg())
+	}
+	mut args := []string{}
+	if opts.dry_run {
+		args << '--dry-run'
+	}
+	rep := run_exec(ExecSpec{
+		prog:    bin
+		args:    args
+		dry_run: opts.dry_run
+	})
+	if opts.dry_run {
+		return ok_result('config migrate', 'would run: ${rep.command_line}', {
+			'command_line': rep.command_line
+			'dry_run':      'true'
+		})
+	}
+	if rep.ok {
+		rows := parse_migrate_rows(rep.output)
+		mut data := map[string]string{}
+		data['command_line'] = rep.command_line
+		data['rows'] = rows.len.str()
+		if rows.len == 0 {
+			msg := if rep.output.len > 0 { rep.output } else { 'backend completed with no output' }
+			return ok_result('config migrate', msg, data)
+		}
+		mut lines := []string{}
+		for r in rows {
+			value := if r.detail.len > 0 { '${r.status}: ${r.detail}' } else { r.status }
+			data['row.${r.domain}'] = value
+			lines << '${r.status}  ${r.domain}: ${if r.detail.len > 0 {
+				r.detail
+			} else {
+				'(no detail)'
+			}}'
+		}
+		lines << 'config migrate: ${rows.len} row(s) reported'
+		return ok_result('config migrate', lines.join('\n'), data)
+	}
+	return fail_result('config migrate', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+}

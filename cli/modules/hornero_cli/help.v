@@ -41,7 +41,10 @@ pub fn command_help(name string) string {
 		'version' {
 			return 'Usage: horneroctl version [--json]
 
-Print the horneroctl version and build commit.
+Print the horneroctl version, build commit, and release provenance
+(shell/config pins, manifest, release name; each baked in at build time
+via make.vsh from HX_SHELL_SHA/HX_CONFIG_SHA/HX_MANIFEST/HX_RELEASE,
+defaulting to unknown).
 
 Examples:
   horneroctl version
@@ -52,7 +55,9 @@ Examples:
 			return 'Usage: horneroctl doctor [--json]
 
 Read-only health checks: Wayland/Hyprland session, required binaries,
-shell configuration presence. Never changes anything.
+shell configuration presence, plus a legacy-paths section listing the
+detected dots/* state per contract row (with a migration hint when any
+legacy state exists). Never changes anything.
 
 Exit codes:
   0  all checks passed
@@ -179,7 +184,7 @@ Examples:
 '
 		}
 		'config' {
-			return 'Usage: horneroctl config <paths|validate|show|snapshot|default-apps|materialize|gui> [key]
+			return 'Usage: horneroctl config <paths|validate|show|snapshot|default-apps|materialize|gui|migrate> [key]
 
   paths               Print the resolved XDG path contract
   validate            Check materialized config (read-only)
@@ -189,6 +194,7 @@ Examples:
   default-apps ...    Default applications (list; set needs a backend)
   materialize ...     Install curated defaults into --dest (needs --yes)
   gui [--pane <name>] Open the settings hub
+  migrate ...         One-shot dots/* to hornero/* move (needs --yes)
 
 Later phases: default-apps set (no verified backend yet).
 
@@ -202,6 +208,7 @@ Examples:
   horneroctl config default-apps list
   horneroctl config materialize --dest /tmp/hx-dest --dry-run
   horneroctl config gui --pane appearance
+  horneroctl config migrate --dry-run
 '
 		}
 		'config default-apps' {
@@ -246,6 +253,25 @@ Examples:
   horneroctl config gui --dry-run
   horneroctl config gui --pane appearance
   horneroctl config gui --pane launcher --json
+'
+		}
+		'config migrate' {
+			return 'Usage: horneroctl config migrate [--dry-run|--yes] [--helper PATH]
+
+  Move legacy dots/* state into the canonical hornero/* locations via
+  the config repo migrate-to-hornero.sh backend (HORNERO_MIGRATE_BIN,
+  or --helper PATH for one invocation). Copy-if-absent over the
+  Hornero-owned rows only: themes, presets, the preset pointer,
+  scheme.json plus scheme state, the wallpaper pointer, and notifs.
+  Mutating: needs --yes; --dry-run previews (passed through to the
+  backend). The backend reports one ROW line per row; --json carries
+  them as row.<domain> entries plus a rows count.
+
+Examples:
+  horneroctl config migrate --dry-run
+  horneroctl config migrate --yes
+  horneroctl config migrate --dry-run --helper /tmp/migrate-to-hornero.sh
+  horneroctl config migrate --yes --json
 '
 		}
 		'config snapshot' {
