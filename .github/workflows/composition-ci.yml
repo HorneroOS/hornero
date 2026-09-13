@@ -11,15 +11,9 @@ on:
       - 'tests/**'
       - 'docs/RELEASE_PROCESS.md'
       - '.github/workflows/composition-ci.yml'
+  # No paths filter on PRs: required contexts must always report, otherwise
+  # strict branch protection blocks the merge forever (see Track 1).
   pull_request:
-    paths:
-      - 'manifests/**'
-      - 'profiles/**'
-      - 'releases/**'
-      - 'scripts/**'
-      - 'tests/**'
-      - 'docs/RELEASE_PROCESS.md'
-      - '.github/workflows/composition-ci.yml'
 
 jobs:
   composition:
