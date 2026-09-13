@@ -51,3 +51,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Scan for committed secrets
         run: bash scripts/secrets-lint.sh
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install compose dependencies
+        run: pip install pyyaml
+      - name: Read V version pin
+        id: vpin
+        run: echo "version=$(cat cli/.v-version)" >> "$GITHUB_OUTPUT"
+      # Same prebuilt toolchain as horneroctl-ci (setup-v cannot bootstrap
+      # on this runner; see horneroctl-ci.yml).
+      - name: Install V (prebuilt)
+        run: |
+          curl -sL -o /tmp/v_linux.zip "https://github.com/vlang/v/releases/download/${{ steps.vpin.outputs.version }}/v_linux.zip"
+          unzip -q /tmp/v_linux.zip -d /tmp/vlang
+          echo "/tmp/vlang/v" >> "$GITHUB_PATH"
+      - name: Build pinned composition and validate it
+        run: ./scripts/compose.sh --work "${{ runner.temp }}/hx-compose" --yes
