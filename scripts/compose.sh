@@ -98,17 +98,25 @@ grep -q "hornero" "$WORK/shell/utils/Paths.qml" \
 pass "shell pin carries path-contract resolution"
 
 # --- 4. build horneroctl -------------------------------------------------------
+# Release provenance is baked into the binary via -d defines (see
+# cli/make.vsh build-cli): the pins below become `horneroctl version`.
+HX_MANIFEST="$(python3 -c "import yaml; print(yaml.safe_load(open('$ROOT/$MANIFEST'))['name'])")"
+HX_RELEASE_FILE="$ROOT/releases/$(basename "$MANIFEST" .yaml).yaml"
+HX_RELEASE="$(python3 -c "import yaml,sys; print(yaml.safe_load(open(sys.argv[1])).get('version', 'unknown'))" "$HX_RELEASE_FILE" 2>/dev/null || echo unknown)"
+export HX_SHELL_SHA="$SHELL_SHA" HX_CONFIG_SHA="$CONFIG_SHA"
+export HX_MANIFEST HX_RELEASE
 HORNERectl="$ROOT/cli/build/horneroctl"
-if [[ -x $HORNERectl ]]; then
-  pass "horneroctl binary already built"
-else
+if [[ $YES -eq 1 || ! -x $HORNERectl ]]; then
   # A stale cli/build/ dir without sources shadows vlib's `build` module;
   # it is regenerable output, so drop it before invoking make.vsh.
+  # Always rebuild for --yes: the binary embeds this run's pins.
   if [[ -d $ROOT/cli/build ]]; then
     rm -rf "$ROOT/cli/build"
   fi
   (cd "$ROOT/cli" && ./make.vsh build-cli) || fail "horneroctl build"
-  pass "horneroctl built"
+  pass "horneroctl built (shell=${SHELL_SHA:0:8} config=${CONFIG_SHA:0:8})"
+else
+  pass "horneroctl binary already built"
 fi
 
 # --- 5. materialize the config pin into DEST -----------------------------------
@@ -133,6 +141,14 @@ unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
 pass "config paths resolves against materialized root"
 "$HORNERectl" config validate || fail "config validate against $DEST"
 pass "config validate accepts materialized root (missing shell.json = defaults)"
+"$HORNERectl" version --json | python3 -c "
+import json, sys
+data = json.load(sys.stdin)['data']
+assert data['shell_sha'] == '$SHELL_SHA', data
+assert data['config_sha'] == '$CONFIG_SHA', data
+assert data['manifest'] == '$HX_MANIFEST', data
+" || fail "version provenance does not match pins"
+pass "version reports shell=${SHELL_SHA:0:8} config=${CONFIG_SHA:0:8} manifest=$HX_MANIFEST"
 # shell.json is user-created (the shell writes it on settings change; no
 # repo ships a factory default yet). Seed an empty object so `config show`
 # exercises the parse path against this root without faking user content.

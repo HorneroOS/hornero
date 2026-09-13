@@ -37,6 +37,7 @@ horneroctl config snapshot <create|list|restore <id>> [--dry-run|--yes]
 horneroctl config default-apps list [--dry-run]
 horneroctl config materialize --dest <dir> [--dry-run|--yes]
 horneroctl config gui [--pane <name>] [--dry-run]
+horneroctl config migrate [--dry-run|--yes] [--helper PATH]
 horneroctl package <check|updates> [--dry-run]
 horneroctl backup <list|schedule>
 horneroctl completion <bash|zsh|fish>
@@ -70,9 +71,28 @@ to the config repo `materialize.sh --dest <dir>`
 (`HORNERO_MATERIALIZE_BIN` override; `--dest` travels verbatim,
 never rewritten to a legacy `dots/*` path); gui delegates to
 `dots-settings-gui [--pane=<name>]` (`HORNERO_SETTINGS_GUI_BIN`
-override, default `~/.local/bin/dots-settings-gui`). `default-apps
+override, default `~/.local/bin/dots-settings-gui`); migrate delegates
+to the config repo `migrate-to-hornero.sh [--dry-run]`
+(`HORNERO_MIGRATE_BIN` override, or `--helper PATH` for one invocation;
+needs `--yes`, copy-if-absent over the Hornero-owned rows only: themes,
+presets, the preset pointer, scheme.json plus scheme state, the wallpaper
+pointer, and notifs). The backend reports one `ROW <domain> <status>`
+line per row (`<domain>: <status>` accepted too); `--json` carries them
+as `row.<domain>` entries plus a `rows` count. `default-apps
 set` stays out: `dots-default-apps --set` binds no arguments upstream
 and handlr stays internal.
+
+## Version report
+
+`horneroctl version [--json]` prints the CLI version plus release
+provenance: `shell`/`config` SHAs, manifest, and release name. The four
+provenance values are baked in at build time as V comptime defines
+(`hx_shell_sha`, `hx_config_sha`, `hx_manifest`, `hx_release`, each
+defaulting to `unknown` so no `.git` checkout is needed at runtime).
+`make.vsh build-cli` maps them from the `HX_SHELL_SHA`,
+`HX_CONFIG_SHA`, `HX_MANIFEST`, and `HX_RELEASE` environment values;
+`scripts/compose.sh` exports the shell/config pins (and manifest/release
+names) when it builds the composed binary.
 
 ## Secrets redaction (doctor)
 
@@ -107,11 +127,12 @@ cli/
 │   ├── execx.v                # dry-run-aware external runner
 │   ├── version.v doctor.v shell_ipc.v appearance.v configx.v
 │   ├── snapshots.v packages.v backups.v config_ops.v
-│   └── core_test.v batch1_test.v batch2_test.v
+│   └── core_test.v batch1_test.v batch2_test.v migrate_test.v
 ├── modules/hornero_cli/       # adapter: dispatch/options/render/help
 │   ├── dispatch.v options.v help.v render.v batch1_options.v
-│   ├── batch2_options.v
+│   ├── batch2_options.v migrate_options.v
 │   └── dispatch_test.v batch1_dispatch_test.v batch2_dispatch_test.v
+│       migrate_dispatch_test.v
 ├── make.vsh .v-version
 ├── README.md AGENTS.md
 ```
@@ -131,6 +152,11 @@ v0.4 (batch 2, backend-grounded): config default-apps list (via
 (via the config repo `materialize.sh`, needs --yes), config gui
 (via `dots-settings-gui`, launcher semantics). `default-apps set`
 stays deferred: no verified upstream verb.
+v0.5 (preview 1, worker D): config migrate (via the config repo
+`migrate-to-hornero.sh`, copy-if-absent, needs --yes, per-row `--json`),
+version release report (`shell`/`config` SHAs, manifest, release via
+`HX_*` env at build time), doctor legacy-paths section (detected
+`dots/*` state per contract row plus the migrate hint).
 The broader command surface is tracked in `../docs/cli-architecture.md`
 (HorneroOS/hornero#1); appearance verbs stay a thin delegation layer until
 native backends land (HorneroOS/shell#2).

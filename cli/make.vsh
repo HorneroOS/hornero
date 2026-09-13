@@ -135,8 +135,27 @@ context.task(
 		if cres.exit_code == 0 {
 			commit = cres.output.trim_space()
 		}
+		// Release provenance for `horneroctl version`: scripts/compose.sh
+		// exports the composition pins; every value defaults to unknown so
+		// local builds need no manifest checkout.
+		mut shell_sha := getenv('HX_SHELL_SHA')
+		if shell_sha.len == 0 {
+			shell_sha = 'unknown'
+		}
+		mut config_sha := getenv('HX_CONFIG_SHA')
+		if config_sha.len == 0 {
+			config_sha = 'unknown'
+		}
+		mut manifest := getenv('HX_MANIFEST')
+		if manifest.len == 0 {
+			manifest = 'unknown'
+		}
+		mut release := getenv('HX_RELEASE')
+		if release.len == 0 {
+			release = 'unknown'
+		}
 		out := join_path(r, 'build', 'horneroctl')
-		rc := vcmd('-d version=${ver} -d commit=${commit} -o ${out} ${join_path(r, 'cmd', 'horneroctl')}')
+		rc := vcmd('-d version=${ver} -d commit=${commit} -d hx_shell_sha=${shell_sha} -d hx_config_sha=${config_sha} -d hx_manifest=${manifest} -d hx_release=${release} -o ${out} ${join_path(r, 'cmd', 'horneroctl')}')
 		if rc != 0 {
 			exit(rc)
 		}
