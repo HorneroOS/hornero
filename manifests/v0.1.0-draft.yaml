@@ -13,9 +13,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 065fcbd726ce8528e1061c353f3672a26a7177b2
+    sha: 2b48c6d91f9b9471ad3ff344828a88c29d538b50
     status: pinned
-    subject: "Merge pull request #20 from HorneroOS/fix/vm-dns-pin-retry"
+    subject: "Merge pull request #21 from HorneroOS/fix/vm-guest-icon-font"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
