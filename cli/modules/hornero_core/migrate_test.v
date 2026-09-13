@@ -63,6 +63,22 @@ fn test_migrate_dry_run_needs_no_backend() {
 	os.unsetenv('HORNERO_MIGRATE_BIN')
 }
 
+fn test_migrate_forwards_yes_to_backend() {
+	// The backend requires --yes itself: --yes must reach it, not just
+	// gate the CLI call (regression: --yes was swallowed, backend exited
+	// 2 with "pass --dry-run to preview or --yes to migrate").
+	mig_write('${mig_root}/bin/migrate-to-hornero.sh', '#!/bin/sh\nprintf "%s\\n" "$@" > "' +
+		mig_root + '/argv.txt"\nprintf "ROW themes copied 1 pack(s)\\n"\nexit 0\n')
+	os.setenv('HORNERO_MIGRATE_BIN', '${mig_root}/bin/migrate-to-hornero.sh', true)
+	r := migrate_report(MigrateOptions{
+		yes: true
+	})
+	assert r.ok
+	argv := os.read_file('${mig_root}/argv.txt') or { '' }
+	assert argv.contains('--yes'), argv
+	os.unsetenv('HORNERO_MIGRATE_BIN')
+}
+
 fn test_migrate_runs_backend_and_parses_rows() {
 	mig_setup_backend()
 	r := migrate_report(MigrateOptions{
