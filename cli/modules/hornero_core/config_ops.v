@@ -352,6 +352,9 @@ pub fn migrate_report(opts MigrateOptions) CommandResult {
 	if opts.dry_run {
 		args << '--dry-run'
 	}
+	if opts.yes {
+		args << '--yes'
+	}
 	rep := run_exec(ExecSpec{
 		prog:    bin
 		args:    args
