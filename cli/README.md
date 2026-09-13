@@ -33,6 +33,9 @@ horneroctl appearance theme <list|show <id>|apply <id> [--wallpaper <path>]> [--
 horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>> [--dry-run|--yes]
 horneroctl scheme ...                       # alias of appearance scheme
 horneroctl config <paths|validate|show [key]>
+horneroctl config snapshot <create|list|restore <id>> [--dry-run|--yes]
+horneroctl package <check|updates> [--dry-run]
+horneroctl backup <list|schedule>
 horneroctl completion <bash|zsh|fish>
 ```
 
@@ -47,7 +50,16 @@ data `dots/themes`); scheme status reads the materialized scheme files
 under XDG state/cache; preset list/current read the installed presets
 (`HORNERO_PRESETS_DIR` override, else XDG data `dots/shell-presets`)
 and the state pointer; config show reads the materialized
-`$XDG_CONFIG_HOME/hornero/shell.json` (system default as fallback).
+`$XDG_CONFIG_HOME/hornero/shell.json` (system default as fallback);
+snapshot list reads the materialized snapshots (`HORNERO_SNAPSHOTS_DIR`
+override, else XDG cache `dots/snapshots`) while create/restore delegate
+to `dots-config-manager` (`HORNERO_CONFIG_MANAGER_BIN` override,
+default `~/.local/bin/dots-config-manager`); package check/updates
+delegate to `dots-checkupdates`/`checkupdates`
+(`HORNERO_CHECKUPDATES_BIN` override, read-only, unprivileged);
+backup list reads the materialized `*.zip` archives
+(`HORNERO_BACKUP_DIR` override, else `~/.dotfiles/backup`); backup
+schedule prints the cron/systemd recipe and never installs it.
 
 ## Secrets redaction (doctor)
 
@@ -81,9 +93,11 @@ cli/
 │   ├── paths.v                # XDG path contract
 │   ├── execx.v                # dry-run-aware external runner
 │   ├── version.v doctor.v shell_ipc.v appearance.v configx.v
-│   └── core_test.v
+│   ├── snapshots.v packages.v backups.v
+│   └── core_test.v batch1_test.v
 ├── modules/hornero_cli/       # adapter: dispatch/options/render/help
-│   └── dispatch_test.v
+│   ├── dispatch.v options.v help.v render.v batch1_options.v
+│   └── dispatch_test.v batch1_dispatch_test.v
 ├── make.vsh .v-version
 ├── README.md AGENTS.md
 ```
@@ -94,15 +108,32 @@ v0.1: framework + version/doctor/shell/appearance/config/completion.
 v0.2 (phase 2, backend-grounded): appearance theme list/show/apply,
 appearance scheme status/set-mode/set-variant (+ `scheme` alias),
 config show values, shell preset list/current.
+v0.3 (batch 1, backend-grounded): config snapshot create/list/restore
+(list native, create/restore via `dots-config-manager`), package
+check/updates (via `dots-checkupdates`/`checkupdates`, read-only),
+backup list (native) + backup schedule (recipe only, never installed).
 The broader command surface is tracked in `../docs/cli-architecture.md`
 (HorneroOS/hornero#1); appearance verbs stay a thin delegation layer until
 native backends land (HorneroOS/shell#2).
 
+## Out of scope
+
+`device ...` (brightness/monitors/hardware: no pinned IPC path yet),
+the `system` group (session/media/host utilities: no pinned backend yet),
+and `setup` (namespace reserved for HorneroOS/installer flows; nothing
+here may claim names under it) are explicitly out of scope for this CLI
+until their owning backends land. Deferred siblings of shipped commands
+(`package upgrade`/`deps`, `backup create`/`restore`,
+`config default-apps`/`materialize`/`gui`, `shell preset apply`) fail
+with a usage error naming the missing backend instead of inventing
+behavior.
+
 ## Roadmap (later phases, no verified backend yet)
 
 - `shell preset apply` (needs a pinned preset-merge backend).
-- `device ...` (brightness/monitors/hardware: no pinned IPC path yet).
-- `system`, `package`, `backup` groups; `setup` is installer-owned.
+- `package upgrade` (needs a polkit backend), `package deps`.
+- `backup create`/`restore` (need a pinned non-interactive backend).
+- `config default-apps`/`materialize`/`gui`.
 See `../docs/cli-architecture.md` section 7.
 
 ## License
