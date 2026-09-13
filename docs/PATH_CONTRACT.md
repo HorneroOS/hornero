@@ -42,7 +42,7 @@ and the theme manifest (see rows 6 and 8).
 | 5 | Scheme state (`state.json`: mode/flavour/variant + `gtkColorScheme` policy; absent policy means `follow`) | `$XDG_STATE_HOME/hornero/scheme/state.json` | `$XDG_STATE_HOME/dots/scheme/state.json` | hornero `cli/modules/hornero_core/scheme.v:36` (`scheme_state_file`); config `lib/dots/gtk-theme-manager.sh:29` (`DOTS_SCHEME_STATE`); config `lib/dots/apply-appearance.sh:331` (wallpaper-only path reads `$DOTS_STATE_DIR/scheme/state.json`); dotfiles `home/dot_local/bin/executable_dots-color-scheme:16` (`STATE_DIR`/`STATE_FILE`); config `bin/dots-appearance:150` (hardcoded `$HOME/.local/state/dots/scheme/state.json`, must be fixed per checklist) |
 | 6 | `shell.json` (single runtime settings file; user file first, system default as fallback) | `$XDG_CONFIG_HOME/hornero/shell.json` (user) + `/etc/xdg/hornero/shell.json` (system default). No `dots/*` fallback: already canonical. | none | hornero `cli/modules/hornero_core/paths.v:36` (`shell_config_file`) and `paths.v:41` (`system_shell_config_file`); hornero `cli/modules/hornero_core/configx.v:35` (user-first load order); shell `config/Config.qml:497` (`FileView` at `${Paths.config}/shell.json`); shell `utils/Paths.qml:19` (`config`); dotfiles `home/dot_local/bin/executable_dots-quickshell:60` (`SHELL_CONFIG`) |
 | 7 | Snapshots (`config_<timestamp>/` + `metadata.json`) | `$XDG_CACHE_HOME/hornero/snapshots/config_*/` | `$XDG_CACHE_HOME/dots/snapshots/config_*/` | hornero `cli/modules/hornero_core/snapshots.v:20` (`resolve_snapshots_dir`, override `HORNERO_SNAPSHOTS_DIR`); dotfiles `home/dot_local/bin/executable_dots-config-manager:25` (`SNAPSHOTS_DIR="$HOME/.cache/dots/snapshots"`) |
-| 8 | Theme manifest (wallpaper refs + fetch locations) | `$XDG_DATA_HOME/hornero/themes/wallpapers.manifest.json`. No fallback: already `hornero/*`-native. | none | hornero `cli/modules/hornero_core/configx.v:127` (`config_validate_report`); config `docs/DECISIONS.md:24` (manifest records refs, binaries not vendored) |
+| 8 | Theme manifest (wallpaper refs + fetch locations) | `$XDG_DATA_HOME/hornero/themes/wallpapers.manifest.json`. No fallback: already `hornero/*`-native. Shape is an object `{provenance, note, themes: [{id, ...}, ...]}` (NOT a top-level array); `config validate` counts entries and requires an `id` per entry. | none | hornero `cli/modules/hornero_core/configx.v` (`config_validate_report`); config `docs/DECISIONS.md:24` (manifest records refs, binaries not vendored); hornero `docs/check-theme-refs.sh` (object-shape parity) |
 | 9 | Runtime state: wallpaper pointer (one-line file) | `$XDG_STATE_HOME/hornero/wallpaper/path` | `$XDG_STATE_HOME/dots/wallpaper/path` | shell `utils/Paths.qml:17` (`wallpaperPointer`, must match `wallpaper-resolver.sh`); config `lib/dots/wallpaper-resolver.sh:9` (`DOTS_STATE_DIR`); config `lib/dots/apply-appearance.sh:9` (`DOTS_WALLPAPER_POINTER_FILE`); dotfiles `home/dot_local/bin/executable_dots-color-scheme:18` (`CURRENT_WALL_CACHE`) |
 | 10 | Runtime state: notifications (`notifs.json`) and image caches | `$XDG_STATE_HOME/hornero/notifs.json`; `$XDG_CACHE_HOME/hornero/imagecache[/notifs]` | `$XDG_STATE_HOME/dots/notifs.json`; `$XDG_CACHE_HOME/dots/imagecache[/notifs]` | shell `services/Notifs.qml:91` (`${Paths.state}/notifs.json`); shell `services/Notifs.qml:215` (`Paths.notifimagecache`); shell `components/images/CachingImage.qml:26` (`Paths.imagecache`); shell `utils/Paths.qml:21` (`imagecache`, `notifimagecache`) |
 | 11 | Installed wallpapers (binary packs) | `$XDG_DATA_HOME/hornero/wallpapers/` (see open question 1) | `$XDG_DATA_HOME/dots/wallpapers/` | shell `services/ThemePipeline.qml:13` (`wallpapersDir`); config `lib/dots/apply-appearance.sh:6` (`DOTS_WALLPAPERS_DIR`); config `docs/DECISIONS.md:89` (binaries never vendored, shipped via release pipeline) |
@@ -75,24 +75,31 @@ resolves one dot-notation key (`cli/modules/hornero_core/configx.v:88`).
 plus the optional theme manifest at `.../hornero/themes/wallpapers.manifest.json`
 (`cli/modules/hornero_core/configx.v:113`); both commands read without writing.
 
-## Contract-conformance checklist (for LATER workers, not implemented here)
+## Contract-conformance checklist (implemented 2026-09-13)
 
-- [ ] hornero: extend `resolve_themes_dir`, `resolve_presets_dir`,
+- [x] hornero: `resolve_themes_dir`, `resolve_presets_dir`,
   `resolve_preset_state_file`, `scheme_state_file`/`color_scheme_file`,
-  `resolve_snapshots_dir`, and the wallpaper/notifs/cache path helpers with
-  canonical-first + `dots/*`-fallback reads; all writes target `hornero/*`.
-- [ ] shell: teach `utils/Paths.qml` the `hornero/*`-first resolution with
-  `dots/*` fallback (keeping the `DOTS_*_DIR` env overrides); update
+  `resolve_snapshots_dir`, and the wallpaper/notifs/cache path helpers use
+  canonical-first + `dots/*`-fallback reads; all writes target `hornero/*`
+  (HorneroOS/hornero PR #15, tests in
+  `cli/modules/hornero_core/path_contract_test.v`).
+- [x] shell: `utils/Paths.qml` resolves `hornero/*`-first with `dots/*`
+  fallback (keeping the `DOTS_*_DIR` env overrides);
   `services/ThemePipeline.qml`, `services/Colours.qml`,
   `services/Notifs.qml`, `components/images/CachingImage.qml`,
-  `config/Config.qml`, and `docs/ARCHITECTURE.md` accordingly.
-- [ ] config: teach `lib/dots/*` (`apply-appearance.sh`,
-  `wallpaper-resolver.sh`, `gtk-theme-manager.sh`, `list-themes.py`) and
-  `bin/dots-appearance` (notably the hardcoded `$HOME` paths at
-  `bin/dots-appearance:150`, `:268`-`:269`, `:279`) the same
+  `modules/controlcenter/components/WallpaperGrid.qml`,
+  `config/Config.qml`, and `docs/ARCHITECTURE.md` follow
+  (HorneroOS/shell PR #16, tests in `tests/test_path_contract.py`).
+  `apps.sqlite` consumers (`Apps.qml`, `LauncherPane.qml`) redirect without
+  fallback: the launcher cache rebuilds itself.
+- [x] config: `lib/dots/*` (`apply-appearance.sh`,
+  `wallpaper-resolver.sh`, `gtk-theme-manager.sh`, `list-themes.py`),
+  `bin/dots-appearance` (hardcoded `$HOME` paths fixed),
+  `bin/dots-hyprlock-theme`, and `bin/dots-night-mode` use the same
   canonical-first reads; `scripts/materialize.sh` installs theme packs and
-  presets to the canonical `hornero/*` destinations (with back-compat
-  symlinks or a one-shot migrator, per open question 3).
+  presets to the canonical `hornero/*` destinations with back-compat
+  `dots/*` symlinks (HorneroOS/config PR #7, tests in
+  `tests/test_path_contract.sh`).
 - [ ] Migration tooling: ship the one-shot `dots/*` to `hornero/*`
   migrator (owner TBD, see open question 3) before any fallback is removed.
 - [ ] Docs: record the fallback-removal decision and date once agreed; keep
@@ -110,6 +117,9 @@ plus the optional theme manifest at `.../hornero/themes/wallpapers.manifest.json
    repo is out of scope for this contract step.)
 4. Symlink back-compat (`dots/*` symlinks pointing at `hornero/*`) versus
    dual-path reads: which strategy do shell/config adopt during the window?
+   ANSWERED 2026-09-13: both. `materialize.sh` installs to `hornero/*`
+   and leaves `dots/*` symlinks (config PR #7); all readers resolve
+   canonical-first with `dots/*` fallback reads.
 5. Does `$XDG_CONFIG_HOME/quickshell` (hornero
    `cli/modules/hornero_core/paths.v:46`, dotfiles
    `executable_dots-quickshell:59`) stay as-is as a third-party namespace,
@@ -117,3 +127,5 @@ plus the optional theme manifest at `.../hornero/themes/wallpapers.manifest.json
 6. `config validate` treats a missing user `shell.json` as "defaults apply"
    (not a failure) today (`configx.v:117`); does the contract want a
    stricter stance once the migrator exists?
+   CONFIRMED 2026-09-13: missing `shell.json` stays tolerant (exercised by
+   `scripts/compose.sh`); `config show` requires the file.
