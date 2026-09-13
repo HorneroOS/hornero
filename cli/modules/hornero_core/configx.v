@@ -20,11 +20,13 @@ pub fn config_paths_report() CommandResult {
 	})
 }
 
-pub struct ThemeManifest {
-pub mut:
-	id   string
-	name string
-}
+// NOTE: wallpapers.manifest.json (contract row 8) is an object
+// ({provenance, note, themes: [{id, ...}, ...]}), NOT a top-level array:
+// see HorneroOS/config profiles/themes/wallpapers.manifest.json and
+// docs/check-theme-refs.sh, which validate the object shape.
+// config_validate_report below decodes that shape (map + `themes` array)
+// instead of a struct so upstream camelCase keys (wallpaperDir) survive
+// V's snake_case field rule.
 
 // load_shell_config reads the materialized shell settings: the user file
 // first, the shipped system default as fallback. Returns the path used and
@@ -127,8 +129,34 @@ pub fn config_validate_report() CommandResult {
 	manifest := os.join_path(p.data_dir, 'hornero', 'themes', 'wallpapers.manifest.json')
 	if os.is_file(manifest) {
 		raw := os.read_file(manifest) or { '' }
-		if parsed := json2.decode[[]ThemeManifest](raw) {
-			lines << 'ok  theme manifest: ${manifest} (${parsed.len} entries)'
+		if doc := json2.decode[map[string]json2.Any](raw) {
+			if themes_raw := doc['themes'] {
+				if themes_raw is []json2.Any {
+					mut bad := 0
+					for t in themes_raw {
+						if t is map[string]json2.Any {
+							if id_raw := t['id'] {
+								if id_raw is string && id_raw.len > 0 {
+									continue
+								}
+							}
+						}
+						bad++
+					}
+					if bad == 0 {
+						lines << 'ok  theme manifest: ${manifest} (${themes_raw.len} entries)'
+					} else {
+						lines << 'FAIL theme manifest: ${manifest} has ${bad} entries without an id'
+						failed++
+					}
+				} else {
+					lines << 'FAIL theme manifest: ${manifest} has no themes array'
+					failed++
+				}
+			} else {
+				lines << 'FAIL theme manifest: ${manifest} has no themes array'
+				failed++
+			}
 		} else {
 			lines << 'FAIL theme manifest: ${manifest} does not parse'
 			failed++

@@ -256,3 +256,34 @@ fn test_pc_notifs_and_cache_paths() {
 	assert !os.exists('${pc_root}/notifs-cache/empty-state/hornero/wallpaper/path')
 	pc_unset_xdg()
 }
+
+fn test_pc_manifest_object_shape_validates() {
+	// Contract row 8: the shipped manifest is an object with a `themes`
+	// array (HorneroOS/config profiles/themes/wallpapers.manifest.json),
+	// never a top-level array.
+	pc_set_xdg('manifest-object')
+	pc_write('${pc_root}/manifest-object/data/hornero/themes/wallpapers.manifest.json',
+		'{"provenance": "t", "note": "n", "themes": [{"id": "a", "wallpaperDir": "a"}, {"id": "b"}]}')
+	rep := config_validate_report()
+	assert rep.ok, rep.message
+	assert rep.message.contains('2 entries'), rep.message
+	pc_unset_xdg()
+}
+
+fn test_pc_manifest_top_level_array_fails() {
+	pc_set_xdg('manifest-array')
+	pc_write('${pc_root}/manifest-array/data/hornero/themes/wallpapers.manifest.json',
+		'[{"id": "a", "name": "A"}]')
+	rep := config_validate_report()
+	assert !rep.ok, rep.message
+	assert rep.message.contains('does not parse'), rep.message
+	pc_unset_xdg()
+}
+
+fn test_pc_manifest_missing_is_optional() {
+	pc_set_xdg('manifest-missing')
+	rep := config_validate_report()
+	assert rep.ok, rep.message
+	assert rep.message.contains('missing theme manifest'), rep.message
+	pc_unset_xdg()
+}
