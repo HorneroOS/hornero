@@ -13,16 +13,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: c6d1685ecd2ff3dd5b4e4fb1bad5fd7d450727c1
+    sha: b0a864cd57cfea01d7314c1de9823b873fb9269a
     status: pinned
-    subject: "Merge pull request #15 from HorneroOS/feat/track3-overlay-boot"
+    subject: "Merge pull request #16 from HorneroOS/feat/path-conform-shell"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: dc11c07641bb0dd725522b390d4f813a722799ce
+    sha: c4ac00326cd5476c5efc05c11a403d1d6353a7d6
     status: pinned
-    subject: "Merge pull request #6 from HorneroOS/feat/track3-triage"
+    subject: "Merge pull request #7 from HorneroOS/feat/path-conform-config"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
