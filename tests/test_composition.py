@@ -27,8 +27,8 @@ check_profile_doc = _checker.check_profile_doc
 check_release_doc = _checker.check_release_doc
 check_tree = _checker.check_tree
 
-SHELL_SHA = "e2f6656a3d0be83134f4b662f80c905484d77fff"
-CONFIG_SHA = "6b7f40dd7f616f79131406331757c30b5b7b408f"
+SHELL_SHA = "c6d1685ecd2ff3dd5b4e4fb1bad5fd7d450727c1"
+CONFIG_SHA = "dc11c07641bb0dd725522b390d4f813a722799ce"
 
 
 def read_text(path: Path) -> str:
