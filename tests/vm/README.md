@@ -1,9 +1,35 @@
-# VM smoke test
+# VM smoke tests
+
+Two levels share the KVM discipline (no CI wiring: runners have no KVM;
+without `/dev/kvm` both scripts exit 0 with `*-SKIP`).
+
+## CLI smoke (`smoke.sh`)
 
 CLI-level guest validation of the pinned composition. Boots an Arch cloud
 image under KVM, materializes the composition inside the guest, and runs
 the same checks `scripts/compose.sh` runs on the host (plus a shell-syntax
 pass over every shipped config script).
+
+## Graphical smoke (`scripts/graphical-smoke.sh`)
+
+Graphical guest validation of the pinned composition. Runs
+`scripts/compose.sh --yes`, then invokes the shell pin's graphical
+scenario (HorneroOS/shell `tests/vm/scenarios/vm-smoke.sh`) with the
+composed environment (`HX_CONFIG_PIN`, `HX_MATERIALIZE_BIN`,
+`HX_HOREROCTL_BIN`, `HX_MANIFEST`), so the pinned shell plus the pinned
+config are exercised together under Hyprland on virtio-vga.
+
+```bash
+scripts/graphical-smoke.sh [--manifest FILE] [--work DIR] [--ssh-port N] [--keep] SUBCOMMAND
+# subcommands: start status exec screenshot smoke(stop by default) stop
+```
+
+The `smoke` subcommand merges a structured result object
+`{status,checks,artifacts,duration}` into the harness `assertions.json`
+(additive: existing keys are untouched) and also writes `result.json`
+under the work dir. The shell pin must carry harness composition support
+(`HX_CONFIG_PIN` in its `tests/vm/lib/env.sh`); otherwise the run fails
+with a clear message instead of silently testing shell-local only.
 
 ## Scope
 

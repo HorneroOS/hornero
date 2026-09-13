@@ -13,16 +13,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: aeb2646069298a1b7c3650453529c93272697d65
+    sha: 2b48c6d91f9b9471ad3ff344828a88c29d538b50
     status: pinned
-    subject: "Merge pull request #17 from HorneroOS/feat/p1-shell-runtime"
+    subject: "Merge pull request #21 from HorneroOS/fix/vm-guest-icon-font"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: abdad7adfacc5af5d674b2517f4ae085763cbef5
+    sha: 7989d11a8266a67b00344bcce3b5bde7221bac91
     status: pinned
-    subject: "Merge pull request #8 from HorneroOS/feat/p1-config-migration"
+    subject: "Merge pull request #9 from HorneroOS/docs/p1-packaging-catchup"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
