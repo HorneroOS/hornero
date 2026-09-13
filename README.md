@@ -32,13 +32,13 @@ repository that owns it:
 
 ## Layout
 
+- `cli/` — the `horneroctl` system CLI implementation.
+- `docs/` — locked CLI architecture, release process, and plans.
 - `manifests/` — release manifests pinning component versions.
 - `profiles/` — distribution profiles and edition composition.
-- `releases/` — release definitions and notes.
+- `releases/` — release definitions and checklists.
 - `scripts/` — top-level orchestration helpers.
-
-These directories are placeholders for now and will be filled in as the
-composition tooling takes shape.
+- `tests/` — composition tests for the checker and manifests.
 
 ## Status
 
