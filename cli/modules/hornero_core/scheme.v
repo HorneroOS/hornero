@@ -6,12 +6,14 @@ import x.json2
 // Scheme backend: materialized color-scheme state files plus the
 // `dots-appearance` setters for mutation.
 //
-// Reads are native: `dots-color-scheme` treats
-// `$XDG_CACHE_HOME/dots/smart-colors/scheme.json` as the runtime source of
-// truth and persists `$XDG_STATE_HOME/dots/scheme/state.json`
+// Reads are native: `$XDG_CACHE_HOME/hornero/smart-colors/scheme.json` is
+// the runtime source of truth (docs/PATH_CONTRACT.md row 4, WRITE TARGET)
+// and `$XDG_STATE_HOME/hornero/scheme/state.json` persists
 // (mode/flavour/variant plus the independent `gtkColorScheme` policy; a
 // missing policy key means `follow` for legacy boots per
-// docs/cli-architecture.md section 5).
+// docs/cli-architecture.md section 5). The legacy `dots/*` locations stay
+// readable as a canonical-first fallback. `dots-color-scheme` (dotfiles
+// reference) treats the legacy paths as its source of truth.
 // Mutation (`set-mode`/`set-variant`) delegates to the verified
 // `dots-appearance set-mode|set-variant` verbs.
 //
@@ -33,7 +35,19 @@ pub:
 	scheme_present   bool
 }
 
-fn scheme_state_file() string {
+// scheme_state_file is the canonical scheme state location
+// (docs/PATH_CONTRACT.md row 5) and the WRITE TARGET.
+pub fn scheme_state_file() string {
+	mut base := os.getenv('XDG_STATE_HOME')
+	if base.len == 0 {
+		base = os.join_path(os.home_dir(), '.local', 'state')
+	}
+	return os.join_path(base, 'hornero', 'scheme', 'state.json')
+}
+
+// scheme_state_file_fallback is the legacy `dots/*` location (row 5).
+// Reads only: nothing new is ever written here.
+pub fn scheme_state_file_fallback() string {
 	mut base := os.getenv('XDG_STATE_HOME')
 	if base.len == 0 {
 		base = os.join_path(os.home_dir(), '.local', 'state')
@@ -41,12 +55,52 @@ fn scheme_state_file() string {
 	return os.join_path(base, 'dots', 'scheme', 'state.json')
 }
 
-fn color_scheme_file() string {
+// scheme_state_file_for_read picks the state file actually read:
+// canonical-first with legacy fallback.
+pub fn scheme_state_file_for_read() string {
+	canonical := scheme_state_file()
+	if os.is_file(canonical) {
+		return canonical
+	}
+	fallback := scheme_state_file_fallback()
+	if os.is_file(fallback) {
+		return fallback
+	}
+	return canonical
+}
+
+// color_scheme_file is the canonical scheme runtime location
+// (docs/PATH_CONTRACT.md row 4) and the WRITE TARGET.
+pub fn color_scheme_file() string {
+	mut base := os.getenv('XDG_CACHE_HOME')
+	if base.len == 0 {
+		base = os.join_path(os.home_dir(), '.cache')
+	}
+	return os.join_path(base, 'hornero', 'smart-colors', 'scheme.json')
+}
+
+// color_scheme_file_fallback is the legacy `dots/*` location (row 4).
+// Reads only: nothing new is ever written here.
+pub fn color_scheme_file_fallback() string {
 	mut base := os.getenv('XDG_CACHE_HOME')
 	if base.len == 0 {
 		base = os.join_path(os.home_dir(), '.cache')
 	}
 	return os.join_path(base, 'dots', 'smart-colors', 'scheme.json')
+}
+
+// color_scheme_file_for_read picks the scheme file actually read:
+// canonical-first with legacy fallback.
+pub fn color_scheme_file_for_read() string {
+	canonical := color_scheme_file()
+	if os.is_file(canonical) {
+		return canonical
+	}
+	fallback := color_scheme_file_fallback()
+	if os.is_file(fallback) {
+		return fallback
+	}
+	return canonical
 }
 
 fn scheme_json_field(path string, key string) string {
@@ -62,24 +116,39 @@ fn scheme_json_field(path string, key string) string {
 	return ''
 }
 
+// scheme_field reads one JSON field canonical-first: the legacy fallback is
+// consulted only when the canonical file lacks the key.
+fn scheme_field(canonical string, fallback string, key string) string {
+	v := scheme_json_field(canonical, key)
+	if v.len > 0 {
+		return v
+	}
+	return scheme_json_field(fallback, key)
+}
+
 // read_scheme_state loads mode/flavour/variant from the state file, falling
-// back to the scheme.json runtime meta. Never fails: absent files yield
-// empty fields and the caller reports them as unknown.
+// back to the scheme.json runtime meta. Each file resolves canonical-first
+// with a legacy `dots/*` fallback. Never fails: absent files yield empty
+// fields and the caller reports them as unknown.
 pub fn read_scheme_state() SchemeState {
-	state := scheme_state_file()
-	scheme := color_scheme_file()
+	state := scheme_state_file_for_read()
+	scheme := color_scheme_file_for_read()
 	state_present := os.is_file(state)
 	scheme_present := os.is_file(scheme)
-	mut mode := scheme_json_field(state, 'mode')
-	mut flavour := scheme_json_field(state, 'flavour')
-	mut variant := scheme_json_field(state, 'variant')
+	canon_state := scheme_state_file()
+	legacy_state := scheme_state_file_fallback()
+	canon_scheme := color_scheme_file()
+	legacy_scheme := color_scheme_file_fallback()
+	mut mode := scheme_field(canon_state, legacy_state, 'mode')
+	mut flavour := scheme_field(canon_state, legacy_state, 'flavour')
+	mut variant := scheme_field(canon_state, legacy_state, 'variant')
 	if mode.len == 0 {
-		mode = scheme_json_field(scheme, 'mode')
+		mode = scheme_field(canon_scheme, legacy_scheme, 'mode')
 	}
 	if flavour.len == 0 {
-		flavour = scheme_json_field(scheme, 'flavour')
+		flavour = scheme_field(canon_scheme, legacy_scheme, 'flavour')
 	}
-	mut policy := scheme_json_field(state, 'gtkColorScheme')
+	mut policy := scheme_field(canon_state, legacy_state, 'gtkColorScheme')
 	if policy.len == 0 {
 		policy = 'follow'
 	}

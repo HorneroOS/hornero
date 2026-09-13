@@ -6,14 +6,17 @@ import x.json2
 // Theme-pack backend: installed `theme.json` recipes.
 //
 // The packs ship in HorneroOS/config (`profiles/themes/<id>/theme.json`)
-// and are installed to `$XDG_DATA_HOME/dots/themes/<id>/theme.json`
-// (`DOTS_THEMES_DIR` in the config repo). `dots-appearance theme list/show`
-// read the same files; these native readers stay byte-compatible with that
-// output for reads. Mutation (`apply`) delegates to `dots-appearance`
-// (see theme_apply_report); wallpaper/theme repository splits stay out of
-// scope per docs/theme-split-plan.md.
+// and are installed to `$XDG_DATA_HOME/hornero/themes/<id>/theme.json`
+// (canonical WRITE TARGET, docs/PATH_CONTRACT.md row 1). Legacy installs
+// hold them under `$XDG_DATA_HOME/dots/themes/<id>/theme.json`, which these
+// readers keep as a read-only fallback (canonical-first). `dots-appearance
+// theme list/show` read the same files; these native readers stay
+// byte-compatible with that output for reads. Mutation (`apply`) delegates
+// to `dots-appearance` (see theme_apply_report); wallpaper/theme repository
+// splits stay out of scope per docs/theme-split-plan.md.
 
-// resolve_themes_dir locates installed theme packs.
+// resolve_themes_dir locates installed theme packs: the canonical
+// `hornero/*` location (docs/PATH_CONTRACT.md row 1) and the WRITE TARGET.
 // Override with HORNERO_THEMES_DIR.
 pub fn resolve_themes_dir() string {
 	env := os.getenv('HORNERO_THEMES_DIR')
@@ -24,7 +27,38 @@ pub fn resolve_themes_dir() string {
 	if base.len == 0 {
 		base = os.join_path(os.home_dir(), '.local', 'share')
 	}
+	return os.join_path(base, 'hornero', 'themes')
+}
+
+// resolve_themes_dir_fallback is the legacy `dots/*` location (row 1).
+// Reads only: nothing new is ever written here.
+pub fn resolve_themes_dir_fallback() string {
+	mut base := os.getenv('XDG_DATA_HOME')
+	if base.len == 0 {
+		base = os.join_path(os.home_dir(), '.local', 'share')
+	}
 	return os.join_path(base, 'dots', 'themes')
+}
+
+// resolve_themes_dirs_for_read lists the directories actually read,
+// canonical-first. An explicit HORNERO_THEMES_DIR override wins outright;
+// otherwise every existing directory is returned so readers merge both
+// locations with canonical precedence.
+pub fn resolve_themes_dirs_for_read() []string {
+	env := os.getenv('HORNERO_THEMES_DIR')
+	if env.len > 0 {
+		return [env]
+	}
+	mut dirs := []string{}
+	canonical := resolve_themes_dir()
+	fallback := resolve_themes_dir_fallback()
+	if os.is_dir(canonical) {
+		dirs << canonical
+	}
+	if os.is_dir(fallback) && fallback != canonical {
+		dirs << fallback
+	}
+	return dirs
 }
 
 // resolve_dots_appearance locates the `dots-appearance` backend CLI shipped
@@ -87,22 +121,33 @@ fn theme_entry_from_map(id string, m map[string]json2.Any) !ThemeEntry {
 }
 
 // list_theme_packs returns installed packs sorted by id.
-// Unparseable pack directories are skipped (same as the backend lister).
+// Canonical-first with legacy fallback: both directories are merged and a
+// pack present in both resolves from the canonical side. Unparseable pack
+// directories are skipped (same as the backend lister).
 pub fn list_theme_packs() ![]ThemeEntry {
-	dir := resolve_themes_dir()
-	if !os.is_dir(dir) {
+	dirs := resolve_themes_dirs_for_read().filter(os.is_dir(it))
+	if dirs.len == 0 {
+		explicit := resolve_themes_dirs_for_read()
+		dir := if explicit.len > 0 { explicit[0] } else { resolve_themes_dir() }
 		return error('no themes installed at ${dir}. Set HORNERO_THEMES_DIR.\nExample: horneroctl appearance theme list --json')
 	}
-	entries := os.ls(dir)!
+	mut seen := map[string]bool{}
 	mut packs := []ThemeEntry{}
-	for id in entries {
-		if !os.is_dir(os.join_path(dir, id)) {
-			continue
-		}
-		if pack := read_theme_pack(dir, id) {
-			packs << pack
-		} else {
-			continue
+	for dir in dirs {
+		entries := os.ls(dir) or { continue }
+		for id in entries {
+			if id in seen {
+				continue
+			}
+			if !os.is_dir(os.join_path(dir, id)) {
+				continue
+			}
+			if pack := read_theme_pack(dir, id) {
+				packs << pack
+				seen[id] = true
+			} else {
+				continue
+			}
 		}
 	}
 	packs.sort(a.id < b.id)
@@ -142,12 +187,23 @@ pub:
 }
 
 // show_theme_pack returns the full detail of one installed pack.
+// Canonical-first: the canonical copy wins when both locations hold the id.
 pub fn show_theme_pack(id string) !ThemeShow {
 	if id.len == 0 || id.contains('/') || id == '.' || id == '..' || id.contains('\x00') {
 		return error('invalid theme id: ${id}.\nExample: horneroctl appearance theme show vapor-dreams')
 	}
-	dir := resolve_themes_dir()
-	raw := os.read_file(os.join_path(dir, id, 'theme.json')) or {
+	dirs := resolve_themes_dirs_for_read()
+	if dirs.len == 0 {
+		return error('Theme not found: ${id}.\nRun: horneroctl appearance theme list')
+	}
+	mut raw := ''
+	mut found := false
+	for dir in dirs {
+		raw = os.read_file(os.join_path(dir, id, 'theme.json')) or { continue }
+		found = true
+		break
+	}
+	if !found {
 		return error('Theme not found: ${id}.\nRun: horneroctl appearance theme list')
 	}
 	parsed := json2.decode[json2.Any](raw) or {
