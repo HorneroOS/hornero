@@ -22,18 +22,23 @@ repository. Follow the steps in order; each step gates the next.
 
 ## 2. Validate
 
-Run all three gates from the repository root:
+Run all four gates from the repository root:
 
 ```bash
 python3 scripts/check-manifests.py
 python3 -m pytest tests/ -q
 markdownlint manifests/README.md profiles/README.md \
   releases/v0.1.0-draft-checklist.md docs/RELEASE_PROCESS.md
+./scripts/compose.sh --yes
 ```
 
-All three must pass. Fix failures at the source: never weaken the
+All four must pass. Fix failures at the source: never weaken the
 schema, skip a check, or hand-edit generated output to make a gate
-pass.
+pass. `compose.sh` is the executable gate: it fetches the pinned
+shell/config SHAs, builds horneroctl, materializes the config pin into
+a scratch root, and validates that root with `config paths`, `config
+validate`, and `config show`. The same script runs as the `compose`
+job in `composition-ci`.
 
 ## 3. Tag
 
