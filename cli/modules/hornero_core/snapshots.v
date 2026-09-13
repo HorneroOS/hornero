@@ -15,8 +15,9 @@ import x.json2
 // Later phase: native snapshot/restore stays out until a pinned in-repo
 // backend lands (TRACK 2a).
 
-// resolve_snapshots_dir locates materialized configuration snapshots.
-// Override with HORNERO_SNAPSHOTS_DIR.
+// resolve_snapshots_dir locates materialized configuration snapshots: the
+// canonical `hornero/*` location (docs/PATH_CONTRACT.md row 7) and the
+// WRITE TARGET. Override with HORNERO_SNAPSHOTS_DIR.
 pub fn resolve_snapshots_dir() string {
 	env := os.getenv('HORNERO_SNAPSHOTS_DIR')
 	if env.len > 0 {
@@ -26,7 +27,38 @@ pub fn resolve_snapshots_dir() string {
 	if base.len == 0 {
 		base = os.join_path(os.home_dir(), '.cache')
 	}
+	return os.join_path(base, 'hornero', 'snapshots')
+}
+
+// resolve_snapshots_dir_fallback is the legacy `dots/*` location (row 7).
+// Reads only: nothing new is ever written here.
+pub fn resolve_snapshots_dir_fallback() string {
+	mut base := os.getenv('XDG_CACHE_HOME')
+	if base.len == 0 {
+		base = os.join_path(os.home_dir(), '.cache')
+	}
 	return os.join_path(base, 'dots', 'snapshots')
+}
+
+// resolve_snapshots_dirs_for_read lists the directories actually read,
+// canonical-first. An explicit HORNERO_SNAPSHOTS_DIR override wins outright;
+// otherwise every existing directory is returned so readers merge both
+// locations with canonical precedence.
+pub fn resolve_snapshots_dirs_for_read() []string {
+	env := os.getenv('HORNERO_SNAPSHOTS_DIR')
+	if env.len > 0 {
+		return [env]
+	}
+	mut dirs := []string{}
+	canonical := resolve_snapshots_dir()
+	fallback := resolve_snapshots_dir_fallback()
+	if os.is_dir(canonical) {
+		dirs << canonical
+	}
+	if os.is_dir(fallback) && fallback != canonical {
+		dirs << fallback
+	}
+	return dirs
 }
 
 // resolve_config_manager locates the `dots-config-manager` backend CLI.
@@ -89,24 +121,35 @@ fn read_snapshot(dir string, id string) !SnapshotEntry {
 }
 
 // list_snapshots returns materialized snapshots sorted by id.
+// Canonical-first with legacy fallback: both directories are merged and a
+// snapshot present in both resolves from the canonical side.
 pub fn list_snapshots() ![]SnapshotEntry {
-	dir := resolve_snapshots_dir()
-	if !os.is_dir(dir) {
+	dirs := resolve_snapshots_dirs_for_read().filter(os.is_dir(it))
+	if dirs.len == 0 {
+		explicit := resolve_snapshots_dirs_for_read()
+		dir := if explicit.len > 0 { explicit[0] } else { resolve_snapshots_dir() }
 		return error('no snapshots at ${dir}. Set HORNERO_SNAPSHOTS_DIR.\nExample: horneroctl config snapshot list --json')
 	}
-	entries := os.ls(dir)!
+	mut seen := map[string]bool{}
 	mut snaps := []SnapshotEntry{}
-	for id in entries {
-		if !id.starts_with('config_') {
-			continue
-		}
-		if !os.is_dir(os.join_path(dir, id)) {
-			continue
-		}
-		if snap := read_snapshot(dir, id) {
-			snaps << snap
-		} else {
-			continue
+	for dir in dirs {
+		entries := os.ls(dir) or { continue }
+		for id in entries {
+			if id in seen {
+				continue
+			}
+			if !id.starts_with('config_') {
+				continue
+			}
+			if !os.is_dir(os.join_path(dir, id)) {
+				continue
+			}
+			if snap := read_snapshot(dir, id) {
+				snaps << snap
+				seen[id] = true
+			} else {
+				continue
+			}
 		}
 	}
 	snaps.sort(a.id < b.id)
