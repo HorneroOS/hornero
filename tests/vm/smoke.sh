@@ -266,7 +266,7 @@ $SSH 'sudo iptables -F; sudo ip6tables -F;
   sudo ip6tables -A INPUT -i lo -j ACCEPT; sudo ip6tables -A INPUT -j DROP;
   sudo resolvectl flush-caches' || fail "guest offline boundary (rule install)"
 $SSH true || fail "guest SSH died behind the firewall (boundary broke SSH)"
-$SSH 'resolvectl statistics | grep -qi "Current Cache Size: 0"' \
+$SSH 'sudo resolvectl statistics | grep -qi "Current Cache Size: 0"' \
   || fail "guest resolver cache not empty (DNS probe would be dishonest)"
 leak=""
 if $SSH 'getent hosts archlinux.org >/dev/null 2>&1'; then leak="dns"; fi
