@@ -17,6 +17,10 @@ fn sw_dsetup() {
 	os.write_file('${sw_droot}/themes/hornero-light/theme.json', '{"schemaVersion":1,"id":"hornero-light","name":"Hornero Light","gtkTheme":"Orchis-Light-Compact","iconTheme":"Numix-Circle","defaultWallpaper":"hornero-light-01.jpg","wallpaperDir":"hornero-light","mode":"light"}') or {
 		assert false
 	}
+	os.mkdir_all('${sw_droot}/themes/pampa') or { assert false }
+	os.write_file('${sw_droot}/themes/pampa/theme.json', '{"schemaVersion":1,"id":"pampa","name":"Pampa","gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","mode":"dark"}') or {
+		assert false
+	}
 	os.setenv('HORNERO_THEMES_DIR', '${sw_droot}/themes', true)
 	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
 }
@@ -39,6 +43,7 @@ fn test_dispatch_appearance_theme_set() {
 	sw_dsetup()
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'set', 'hornero-dark', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'set', 'hornero-light', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'set', 'pampa', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'set', 'hornero-dark']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'set', 'vapor-dreams', '--dry-run']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'set']) == 2

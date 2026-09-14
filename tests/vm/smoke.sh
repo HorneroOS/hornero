@@ -73,7 +73,7 @@ OVERLAY="$WORK/guest.qcow2"
 SEED_ISO="$WORK/seed.iso"
 SEED_DIR="$WORK/seed"
 KEY="$WORK/hx-key"
-SSH="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 -i $KEY -p $SSH_PORT arch@127.0.0.1"
+SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=$WORK/known-hosts -o ConnectTimeout=8 -i $KEY -p $SSH_PORT arch@127.0.0.1"
 
 # --- 1. host-side composition (pins + binary + materialized root) -------------
 "$ROOT/scripts/compose.sh" --work "$WORK/compose" --dest "$WORK/root" --yes \
@@ -148,11 +148,73 @@ done
 pass "guest SSH reachable"
 
 # --- 4. guest validation --------------------------------------------------------
-scp -o StrictHostKeyChecking=no -i "$KEY" -P "$SSH_PORT" "$CTL" \
-  arch@127.0.0.1:/home/arch/horneroctl >/dev/null
-scp -qr -o StrictHostKeyChecking=no -i "$KEY" -P "$SSH_PORT" \
-  "$WORK/compose/config" arch@127.0.0.1:/home/arch/hx-config >/dev/null
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile="$WORK/known-hosts" \
+  -i "$KEY" -P "$SSH_PORT" "$CTL" arch@127.0.0.1:/home/arch/horneroctl >/dev/null
+# tar, not scp -r: the pin checkout carries a .git dir whose object files
+# scp cannot reliably transfer (same --exclude=.git approach as the shell
+# harness deploy-shell.sh; the guest never needs the pin history).
+tar cf - --exclude=.git -C "$WORK/compose" config \
+  | ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile="$WORK/known-hosts" \
+    -i "$KEY" -p "$SSH_PORT" arch@127.0.0.1 \
+    'rm -rf ~/hx-config && mkdir -p ~/hx-config && tar xf - -C ~/hx-config --strip-components=1' \
+  || fail "payload transfer (config pin)"
 pass "payload transferred (horneroctl + config pin)"
+# Guest DNS under QEMU slirp is frequently LAN-only/broken. Same cure as
+# the shell harness (provision.sh): pin VM_GUEST_DNS at runtime AND
+# persistently (a .d/ override on the network file that actually manages
+# eth0 — a standalone file would be silently ignored), applied with
+# `networkctl reload` (a full restart drops the DHCP lease under slirp).
+if ! $SSH 'getent hosts archlinux.org >/dev/null 2>&1'; then
+  GUEST_DNS="${VM_GUEST_DNS:-1.1.1.1}"
+  dns_ok=0
+  for _ in $(seq 1 6); do
+    $SSH "sudo resolvectl dns eth0 $GUEST_DNS && \
+      sudo rm -f /etc/systemd/network/10-harness-dns.network && \
+      netfile=\$(networkctl status eth0 --no-pager 2>/dev/null | awk -F': ' '/Network File:/{ print \$2 }' | xargs -r basename) && \
+      if [ -n \"\$netfile\" ]; then \
+        sudo mkdir -p /etc/systemd/network/\"\${netfile}.d\" && \
+        printf '[Network]\nDNS=$GUEST_DNS\n\n[DHCPv4]\nUseDNS=no\n' | \
+        sudo tee /etc/systemd/network/\"\${netfile}.d\"/10-harness-dns-override.conf > /dev/null; \
+      else \
+        sudo mkdir -p /etc/systemd/network && \
+        printf '[Match]\nName=eth0\n\n[Network]\nDHCP=yes\nDNS=$GUEST_DNS\n\n[DHCPv4]\nUseDNS=no\n' | \
+        sudo tee /etc/systemd/network/05-harness-dns.network > /dev/null; \
+      fi && \
+      sudo networkctl reload" >/dev/null 2>&1 || true
+    sleep 5
+    if $SSH 'getent hosts archlinux.org >/dev/null 2>&1'; then dns_ok=1; break; fi
+    sleep 5
+  done
+  [[ $dns_ok -eq 1 ]] || fail "guest DNS still broken after pinning $GUEST_DNS"
+fi
+pass "guest DNS resolves"
+# Guest appearance pre-requisites (network PREP phase, before the offline
+# boundary): pywal (`wal`) and materialyoucolor are hard requirements of
+# dots_apply_theme, and the wallpaper PNGs are rendered on the host
+# (rsvg-convert) and shipped in, mirroring deploy-shell.sh. pip installs
+# with HOME pointed at the materialized root so the user site lands where
+# the apply runs.
+$SSH 'command -v pip3 >/dev/null 2>&1 || sudo pacman -Sy --noconfirm --needed python-pip' \
+  || fail "guest python-pip install"
+# Arch Python is PEP 668 externally-managed: --break-system-packages is the
+# documented override. Scoped to the test guest (prep phase); the install
+# lands in the materialized root's user site (HOME=hx-root), never system-wide.
+$SSH 'export HOME=$HOME/hx-root; python3 -m pip install --user -q --break-system-packages pywal materialyoucolor' \
+  || fail "guest pip install (pywal + materialyoucolor)"
+$SSH 'export HOME=$HOME/hx-root; unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+  export PATH=$HOME/.local/bin:$PATH
+  command -v wal >/dev/null && python3 -c "import materialyoucolor"' \
+  || fail "guest apply deps (wal + materialyoucolor)"
+pass "guest apply deps installed (wal + materialyoucolor)"
+WALLS_DIR="$(mktemp -d)"
+"$WORK/compose/config/scripts/render-brand-assets.sh" --wallpapers "$WALLS_DIR" \
+  >/dev/null || fail "host wallpaper render"
+tar cf - -C "$WALLS_DIR" . | $SSH '
+  export HOME=$HOME/hx-root; unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+  mkdir -p "$HOME/.local/share/hornero/wallpapers"
+  tar xf - -C "$HOME/.local/share/hornero/wallpapers"' || fail "guest wallpaper ship"
+rm -rf "$WALLS_DIR"
+pass "wallpaper PNGs rendered on host and shipped to guest"
 $SSH 'HORNERO_MATERIALIZE_BIN=$HOME/hx-config/scripts/materialize.sh ./horneroctl config materialize --dest $HOME/hx-root --yes >/dev/null' \
   || fail "guest materialize"
 pass "guest materialized composition"
@@ -164,12 +226,55 @@ $SSH 'export HOME=$HOME/hx-root; unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_H
   mkdir -p $HOME/.config/hornero; printf "{}\n" > $HOME/.config/hornero/shell.json
   ./horneroctl config show >/dev/null' || fail "guest config show"
 pass "guest config show parses"
-$SSH 'python3 -c "import json; d=json.load(open(\"hx-root/.local/share/hornero/themes/wallpapers.manifest.json\")); assert len(d[\"themes\"]) == 12; print(len(d[\"themes\"]))"' \
-  | grep -q 12 || fail "guest manifest entries"
-pass "guest theme manifest: 12 entries"
+EXPECTED_THEMES="$(python3 -c "import json; print(len(json.load(open('$WORK/compose/config/profiles/themes/wallpapers.manifest.json'))['themes']))")"
+GUEST_THEMES="$($SSH 'python3 -c "import json; print(len(json.load(open(\"hx-root/.local/share/hornero/themes/wallpapers.manifest.json\"))[\"themes\"]))"')" \
+  || fail "guest manifest entries"
+[[ $GUEST_THEMES == "$EXPECTED_THEMES" ]] || fail "guest manifest entries ($GUEST_THEMES != $EXPECTED_THEMES)"
+pass "guest theme manifest: $GUEST_THEMES entries (matches config pin)"
 $SSH 'for f in hx-config/bin/dots-* hx-config/lib/dots/*.sh hx-config/scripts/*.sh; do bash -n "$f" || exit 1; done' \
   || fail "guest shell syntax"
 pass "guest shell syntax of shipped scripts"
+# --- 4b. offline boundary ------------------------------------------------------
+# All network prep is done. Drop the default route: packets for the slirp
+# host (10.0.2.2, SSH) still flow over the connected route, but nothing
+# leaves the guest. Every appearance assertion below runs offline.
+$SSH 'sudo ip route del default 2>/dev/null || sudo ip route del default via 10.0.2.2' \
+  || fail "guest offline boundary"
+$SSH true || fail "guest SSH died with the default route (boundary broke SSH)"
+if $SSH 'getent hosts archlinux.org >/dev/null 2>&1 || python3 -c "import urllib.request; urllib.request.urlopen(\"https://archlinux.org\", timeout=8)" >/dev/null 2>&1'; then
+  fail "guest still reaches the internet (offline boundary broken)"
+fi
+pass "guest is offline (no DNS, no HTTPS egress; host SSH alive)"
+# --- 4c. official trio matrix --------------------------------------------------
+# Each official theme goes through the real control plane
+# (`horneroctl appearance theme set --yes`: validate -> resolve -> apply via
+# dots-appearance -> verify mode+GTK), then `theme get` must read the id
+# back and the consumer files must agree. No hand-editing between themes.
+GENV='export HOME=$HOME/hx-root; unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME; export PATH=$HOME/.local/bin:$PATH'
+for spec in \
+  "hornero-dark:Hornero-Dark:hornero-dark/hornero-dark-01.png:dark" \
+  "hornero-light:Hornero-Light:hornero-light/hornero-light-01.png:light" \
+  "pampa:Hornero-Pampa:pampa/pampa-01.png:dark"; do
+  id="${spec%%:*}"; rest="${spec#*:}"
+  gtk="${rest%%:*}"; rest="${rest#*:}"
+  wall="${rest%%:*}"; mode="${rest##*:}"
+  if ! bout="$($SSH "$GENV; ./horneroctl appearance theme set $id --yes" 2>&1)"; then
+    fail "guest theme set $id: $bout"
+  fi
+  $SSH "$GENV; ./horneroctl appearance theme get" | grep -q "current theme: $id (mode=$mode," \
+    || fail "guest theme get $id"
+  $SSH "$GENV; grep -q \"^gtk-theme-name=$gtk\$\" \$HOME/.config/gtk-3.0/settings.ini" \
+    || fail "guest GTK mapping $id ($gtk)"
+  $SSH "$GENV; grep -q \"$wall\$\" \$HOME/.local/state/hornero/wallpaper/path" \
+    || fail "guest wallpaper pointer $id ($wall)"
+  $SSH "$GENV; test -f \$HOME/.config/kitty/kitty.conf" \
+    || fail "guest kitty palette $id"
+  $SSH "$GENV; test -f \$HOME/.cache/hornero/smart-colors/scheme.json" \
+    || fail "guest M3 scheme $id"
+  pass "guest official theme $id (set+get+GTK+wallpaper+kitty+M3)"
+done
+pass "guest trio matrix: hornero-dark hornero-light pampa applied via horneroctl (offline)"
+$SSH 'sudo ip route add default via 10.0.2.2' || true
 
 # --- 5. done --------------------------------------------------------------------
 if [[ $KEEP -eq 1 ]]; then
