@@ -200,10 +200,10 @@ pass "guest DNS resolves"
 # (rsvg-convert) and shipped in, mirroring deploy-shell.sh. pip installs
 # with HOME pointed at the materialized root so the user site lands where
 # the apply runs.
-# A previous failed run may have left the guest offline (route-drop
-# boundary): restore egress for prep (idempotent), the boundary section
-# drops it again before the matrix.
-$SSH 'sudo ip route add default via 10.0.2.2 2>/dev/null || true'
+# A previous failed run may have left the guest walled off (firewall
+# boundary): flush guest firewall rules and restore the route for prep
+# (idempotent); the boundary section walls it off again before the matrix.
+$SSH 'sudo iptables -F 2>/dev/null; sudo ip6tables -F 2>/dev/null; sudo ip route add default via 10.0.2.2 2>/dev/null || true'
 $SSH 'command -v pip3 >/dev/null 2>&1 || sudo pacman -Sy --noconfirm --needed python-pip' \
   || fail "guest python-pip install"
 # pywal's default `wal` backend shells out to ImageMagick (proven: bare
@@ -249,22 +249,29 @@ $SSH 'for f in hx-config/bin/dots-* hx-config/lib/dots/*.sh hx-config/scripts/*.
   || fail "guest shell syntax"
 pass "guest shell syntax of shipped scripts"
 # --- 4b. offline boundary ------------------------------------------------------
-# All network prep is done. Drop the default route: packets for the slirp
-# host (10.0.2.2, SSH) still flow over the connected route, but nothing
-# leaves the guest. Every appearance assertion below runs offline.
-# Route drops must cover both families: QEMU slirp can egress IPv6 even
-# with the v4 default gone. resolved caches are flushed so the DNS probe
-# cannot pass on prep-phase answers.
-$SSH 'sudo ip route del default 2>/dev/null; sudo ip -6 route del default 2>/dev/null; sudo resolvectl flush-caches 2>/dev/null; true' \
-  || fail "guest offline boundary"
-$SSH true || fail "guest SSH died with the default route (boundary broke SSH)"
+# All network prep is done. Route drops do NOT stick: systemd-networkd's
+# DHCP client re-installs the v4 default within seconds (proven live), and
+# slirp keeps a working v6 RA route — so the boundary is a guest firewall:
+# v4 egress limited to the slirp host net (SSH stays up), v6 egress fully
+# dropped. Rules are idempotent (-F first) and logged at fail time.
+# The DNS probe cannot pass on prep-phase answers: resolved caches are
+# flushed and the empty cache is asserted before probing.
+$SSH 'sudo iptables -F; sudo ip6tables -F;
+  sudo iptables -A OUTPUT -o lo -j ACCEPT; sudo iptables -A OUTPUT -d 10.0.2.0/24 -j ACCEPT; sudo iptables -A OUTPUT -j DROP;
+  sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT; sudo iptables -A INPUT -s 10.0.2.0/24 -j ACCEPT; sudo iptables -A INPUT -i lo -j ACCEPT; sudo iptables -A INPUT -j DROP;
+  sudo ip6tables -A OUTPUT -o lo -j ACCEPT; sudo ip6tables -A OUTPUT -j DROP;
+  sudo ip6tables -A INPUT -i lo -j ACCEPT; sudo ip6tables -A INPUT -j DROP;
+  sudo resolvectl flush-caches' || fail "guest offline boundary (rule install)"
+$SSH true || fail "guest SSH died behind the firewall (boundary broke SSH)"
+$SSH 'resolvectl statistics | grep -qi "Current Cache Size: 0"' \
+  || fail "guest resolver cache not empty (DNS probe would be dishonest)"
 leak=""
 if $SSH 'getent hosts archlinux.org >/dev/null 2>&1'; then leak="dns"; fi
 if [[ -z $leak ]] && $SSH 'python3 -c "import urllib.request; urllib.request.urlopen(\"https://archlinux.org\", timeout=8)" >/dev/null 2>&1'; then leak="https"; fi
 if [[ -n $leak ]]; then
   fail "guest still reaches the internet via $leak (offline boundary broken)"
 fi
-pass "guest is offline (no DNS, no HTTPS egress; host SSH alive)"
+pass "guest is offline (firewall: no DNS, no HTTPS egress; host SSH alive)"
 # --- 4c. official trio matrix --------------------------------------------------
 # Each official theme goes through the real control plane
 # (`horneroctl appearance theme set --yes`: validate -> resolve -> apply via
@@ -294,7 +301,7 @@ for spec in \
   pass "guest official theme $id (set+get+GTK+wallpaper+kitty+M3)"
 done
 pass "guest trio matrix: hornero-dark hornero-light pampa applied via horneroctl (offline)"
-$SSH 'sudo ip route add default via 10.0.2.2' || true
+$SSH 'sudo iptables -F 2>/dev/null; sudo ip6tables -F 2>/dev/null; sudo ip route add default via 10.0.2.2 2>/dev/null || true'
 
 # --- 5. done --------------------------------------------------------------------
 if [[ $KEEP -eq 1 ]]; then
