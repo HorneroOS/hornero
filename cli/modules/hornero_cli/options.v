@@ -99,10 +99,10 @@ pub:
 	call_args []string
 }
 
-// ThemeCmdOptions covers `appearance theme <list|show|apply>`.
+// ThemeCmdOptions covers `appearance theme <list|show|get|apply|set>`.
 pub struct ThemeCmdOptions {
 pub:
-	leaf      string // list | show | apply
+	leaf      string // list | show | get | apply | set
 	id        string
 	wallpaper string
 	dry_run   bool
@@ -114,7 +114,7 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl appearance theme list')
 	}
 	leaf := args[0]
-	if leaf !in ['list', 'show', 'apply'] {
+	if leaf !in ['list', 'show', 'get', 'apply', 'set'] {
 		return error('unknown theme subcommand: ${leaf}.\nRun: horneroctl appearance theme --help')
 	}
 	mut id := ''
@@ -151,7 +151,10 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 		id = a
 		i++
 	}
-	if leaf in ['show', 'apply'] && id.len == 0 {
+	if leaf in ['show', 'apply', 'set'] && id.len == 0 {
+		if leaf == 'set' {
+			return error('missing theme id.\nExample: horneroctl appearance theme set hornero-dark --dry-run')
+		}
 		return error('missing theme id.\nExample: horneroctl appearance theme ${leaf} vapor-dreams')
 	}
 	if leaf == 'list' && (dry_run || yes || wallpaper.len > 0) {
@@ -159,6 +162,12 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 	}
 	if leaf == 'show' && (dry_run || yes || wallpaper.len > 0) {
 		return error('theme show takes no flags.\nExample: horneroctl appearance theme show vapor-dreams')
+	}
+	if leaf == 'get' && (id.len > 0 || yes || wallpaper.len > 0) {
+		return error('theme get takes no arguments.\nExample: horneroctl appearance theme get')
+	}
+	if leaf == 'set' && wallpaper.len > 0 {
+		return error('theme set applies the official pack as-is; custom wallpaper needs apply.\nExample: horneroctl appearance theme apply ${id} --wallpaper ~/wall.jpg --dry-run')
 	}
 	return ThemeCmdOptions{
 		leaf:      leaf

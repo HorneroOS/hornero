@@ -115,7 +115,7 @@ Examples:
   sync [--dry-run]    Apply the pending color scheme (needs --yes)
   call [--dry-run] -- <backend-args...>
                       Pass arguments to the appearance backend directly
-  theme ...           Installed theme packs (list, show, apply)
+  theme ...           Installed theme packs (list, show, get, apply, set)
   scheme ...          Color scheme state and setters (status, set-mode, set-variant)
 
 Options:
@@ -132,23 +132,33 @@ Examples:
 '
 		}
 		'appearance theme' {
-			return 'Usage: horneroctl appearance theme <list|show|apply> [options]
+			return 'Usage: horneroctl appearance theme <list|show|get|apply|set> [options]
 
   list                List installed theme packs (read-only)
   show <id>           Show one theme pack (read-only)
+  get [--dry-run]     Show the active official theme (read-only)
   apply <id> [--wallpaper <path>] [--dry-run]
                       Apply a theme pack (needs --yes)
+  set <hornero-dark|hornero-light> [--dry-run]
+                      Switch the official theme atomically (needs --yes)
 
 Pack source: HORNERO_THEMES_DIR, else the XDG data catalogue
 (hornero/themes, legacy dots/themes as read-only fallback).
 Reads parse the installed theme.json manifests;
 apply delegates to dots-appearance (HORNERO_DOTS_APPEARANCE_BIN).
+get matches the live backend state against the official
+hornero-dark/hornero-light pair; set validates, applies via
+dots-appearance, then verifies GTK/scheme agree (best-effort
+rollback to the previous official theme on failure).
 
 Examples:
   horneroctl appearance theme list
   horneroctl appearance theme show vapor-dreams
+  horneroctl appearance theme get
   horneroctl appearance theme apply vapor-dreams --dry-run
   horneroctl appearance theme apply vapor-dreams --yes
+  horneroctl appearance theme set hornero-dark --dry-run
+  horneroctl appearance theme set hornero-light --yes
 '
 		}
 		'appearance scheme' {

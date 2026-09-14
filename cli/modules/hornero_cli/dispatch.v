@@ -170,6 +170,18 @@ fn run_appearance_theme(args []string, mode hornero_core.RenderMode) int {
 	if opts.leaf == 'show' {
 		return render(hornero_core.theme_show_report(opts.id), mode)
 	}
+	if opts.leaf == 'get' {
+		return render(hornero_core.theme_get_report(hornero_core.ThemeGetOptions{
+			dry_run: opts.dry_run
+		}), mode)
+	}
+	if opts.leaf == 'set' {
+		return render(hornero_core.theme_set_report(hornero_core.ThemeSetOptions{
+			id:      opts.id
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
 	return render(hornero_core.theme_apply_report(hornero_core.ThemeApplyOptions{
 		id:        opts.id
 		wallpaper: opts.wallpaper
