@@ -232,6 +232,11 @@ tar cf - -C "$WALLS_DIR" . | $SSH '
   tar xf - -C "$HOME/.local/share/hornero/wallpapers"' || fail "guest wallpaper ship"
 rm -rf "$WALLS_DIR"
 pass "wallpaper PNGs rendered on host and shipped to guest"
+# Pristine root per run: the overlay persists across runs, and leftover
+# state (e.g. a stale scheme mode from a previous run's backend) would leak
+# into this run's matrix. materialize --dest must never wipe user state
+# itself, so the test resets its own artifact dir explicitly.
+$SSH 'rm -rf $HOME/hx-root' || fail "guest root reset"
 $SSH 'HORNERO_MATERIALIZE_BIN=$HOME/hx-config/scripts/materialize.sh ./horneroctl config materialize --dest $HOME/hx-root --yes >/dev/null' \
   || fail "guest materialize"
 pass "guest materialized composition"
