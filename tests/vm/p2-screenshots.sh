@@ -153,7 +153,7 @@ pass "guest deployed (shell, composed config, factory defaults, wallpapers)"
 # deploy so the composition owns HOME first; pip --user lands in the real
 # session HOME (/home/hornero) where the matrix applies themes.
 # shellcheck disable=SC2016
-vm_ssh 'sudo pacman -S --noconfirm --needed python-pip gtk3 gtk4 gtk4-demos zenity loupe hyprlock imagemagick' \
+vm_ssh 'sudo pacman -S --noconfirm --needed python-pip gtk3 gtk4 gtk4-demos zenity loupe hyprlock imagemagick qt6ct copyq' \
   || fail "guest P2 packages"
 # shellcheck disable=SC2016
 vm_ssh 'python3 -m pip install --user -q --break-system-packages pywal materialyoucolor' \
@@ -258,12 +258,26 @@ timeout 25 grim /tmp/p2shot.png" 2>/dev/null; then ok=1; break; fi
 }
 
 close_apps() {
-  # Close any launched demo app; a lingering window would pollute the next
-  # capture. Best-effort: missing windows are fine.
+  # Close every demo window, then VERIFY zero clients. killactive alone
+  # cannot close kitty: it only summons kitty's close-confirm dialog, which
+  # then survives into later captures and leaks across themes (proven: the
+  # light/pampa desktop cells showed dark's orphaned dialog). So SIGTERM
+  # each demo binary first (no confirm prompt on SIGTERM), killactive as
+  # fallback, and fail loudly on any leaked client instead of silently
+  # mislabelling the next capture.
+  # shellcheck disable=SC2016
+  vm_ssh 'pkill -x kitty; pkill -f zenity; pkill -f gtk3-widget-factory; pkill -f gtk4-widget-factory; pkill -x qml6; pkill -x loupe; pkill -x qt6ct; pkill -x copyq' >/dev/null 2>&1 || true
+  sleep 1
   # shellcheck disable=SC2016
   vm_ssh "$HENV
 hyprctl dispatch killactive >/dev/null 2>&1 || true" >/dev/null 2>&1 || true
   sleep 1
+  local nclients
+  # shellcheck disable=SC2016
+  nclients="$(vm_ssh "$HENV
+hyprctl clients -j 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'")" \
+    || fail "guest client count ($*)"
+  [[ $nclients -eq 0 ]] || fail "guest windows leaked after close ($*): $nclients clients remain"
 }
 
 launch() {
@@ -279,10 +293,15 @@ hyprctl dispatch exec -- $*" >/dev/null || fail "guest launch: $*"
 # Demo app commands (verified by probing a live session; override for
 # toolkit renames). Shell drawers toggle over quickshell IPC
 # (`drawers state <name>` -> true/false, `drawers toggle <name>` flips).
+# Qt vehicle is the qt6ct configurator window, not a QML demo: the config
+# repo's documented Qt story (docs/QT_DECISION.md) is Qt6 Widgets apps via
+# the qt6ct platform theme (the shipped Qt app is CopyQ); QtQuick Controls
+# do not consume qt6ct and render stock Fusion, so a QML window would be
+# dishonest evidence. The qt6ct window shows the deployed style, fonts,
+# and icon theme directly.
 GTK3_BIN="${P2_GTK3_BIN:-zenity --forms --title=Hornero-P2-GTK3 --text=GTK3-widget-evidence --add-entry=Normal-entry --add-entry=Second-entry}"
 GTK4_BIN="${P2_GTK4_BIN:-gtk4-widget-factory}"
-QML_BIN="${P2_QML_BIN:-qml6}"
-QT_QML_DEMO="${P2_QT_QML_DEMO:-/tmp/p2-qt-demo.qml}"
+QT_BIN="${P2_QT_BIN:-qt6ct}"
 
 drawer_set() {
   # drawer_set <name> <true|false>: deterministic drawer visibility over
@@ -359,6 +378,7 @@ for spec in \
     echo '--- wallpaper pointer'; cat \$HOME/.local/state/hornero/wallpaper/path 2>/dev/null || echo '(no wallpaper pointer)'
     echo '--- kitty'; ls -la \$HOME/.config/kitty/kitty.conf 2>/dev/null || echo '(no kitty conf)'
     echo '--- M3 scheme'; ls -la \$HOME/.cache/hornero/smart-colors/scheme.json 2>/dev/null || echo '(no M3 scheme)'
+    echo '--- qt6ct'; cat \$HOME/.config/qt6ct/qt6ct.conf 2>/dev/null | head -6 || cat /etc/xdg/qt6ct/qt6ct.conf 2>/dev/null | head -6 || echo '(no qt6ct conf)'
     echo '--- hyprland borders'; $HENV hyprctl getoption general:col.active_border 2>/dev/null || echo '(no hypr border option)'
   }" >"$SHOT_LOGS/$id-state.txt" 2>&1 || fail "guest state snapshot ($id)"
   # NOTE: snapshot lines carry grep -H filename prefixes, so the theme
@@ -369,6 +389,10 @@ for spec in \
     || fail "guest wallpaper pointer $id ($wall)"
 
   # 6c. desktop with the applied theme (wallpaper + shell bar).
+  # Belt-and-braces: the previous theme's loop must have left zero
+  # clients (close_apps verifies), but re-verify before the first cell
+  # so a leak can never hide in a desktop baseline again.
+  close_apps "pre-desktop $id"
   shot "$id" desktop
 
   # 6d. kitty with palette/ANSI readability content (demo file written
@@ -385,35 +409,11 @@ for spec in \
   shot "$id" gtk4
   close_apps
 
-  # 6f. Qt6 deterministic demo window.
-  # shellcheck disable=SC2016
-  vm_ssh "cat > $QT_QML_DEMO <<'QML'
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Layouts
-ApplicationWindow {
-  visible: true
-  width: 640
-  height: 420
-  title: 'Hornero P2 Qt6'
-  ColumnLayout {
-    anchors.fill: parent
-    anchors.margins: 16
-    spacing: 8
-    Label { text: 'Hornero P2 Qt6 demo'; font.bold: true; font.pointSize: 16 }
-    Button { text: 'Enabled button' }
-    Button { text: 'Disabled button'; enabled: false }
-    Switch { checked: true }
-    Slider { value: 0.6 }
-    ProgressBar { value: 0.4 }
-    TextField { placeholderText: 'Type here'; text: 'Muted and normal text' }
-  }
-}
-QML" || fail "guest Qt demo write ($id)"
-  # shellcheck disable=SC2016
-  launch "$QML_BIN $QT_QML_DEMO"
+  # 6f. Qt6 platform-theme evidence: the qt6ct window (style + fonts +
+  # icon theme the deployed qt6ct.conf prescribes for Qt6 Widgets apps).
+  launch "$QT_BIN"
   shot "$id" qt6
-  close_apps
+  close_apps qt6
 
   # 6g. shell launcher + dashboard (deterministic IPC visibility).
   drawer_set launcher true
@@ -453,10 +453,17 @@ timeout 25 grim /tmp/p2shot.png" 2>/dev/null || fail "guest grim ($id/lockscreen
   echo "$id/lockscreen grim" >>"$SHOT_LOGS/shots.tsv"
   echo "P2SHOTS-SHOT: $id/lockscreen.png (via grim)"
 
-  # 6h. hyprlock (lock screen over the applied theme).
+  # 6h. hyprlock (lock screen over the applied theme). The locker must
+  # be provably running before the capture: a dead hyprlock leaves the
+  # plain desktop in frame and the cell would silently mislabel it (seen
+  # in review). Its log is always fetched for the evidence bundle.
   # shellcheck disable=SC2016
   vm_ssh "$HENV
 (hyprlock >/tmp/p2-hyprlock.log 2>&1 &) ; sleep 4" || fail "guest hyprlock start ($id)"
+  vm_scp "${VM_SSH_USER}@127.0.0.1:/tmp/p2-hyprlock.log" "$SHOT_LOGS/$id-hyprlock.log" >/dev/null 2>&1 || true
+  # shellcheck disable=SC2016
+  vm_ssh 'pgrep -x hyprlock >/dev/null' \
+    || fail "guest hyprlock not running ($id): $(cat $SHOT_LOGS/$id-hyprlock.log 2>/dev/null | tail -5)"
   shot "$id" hyprlock
   # shellcheck disable=SC2016
   vm_ssh 'pkill -x hyprlock' >/dev/null 2>&1 || true
