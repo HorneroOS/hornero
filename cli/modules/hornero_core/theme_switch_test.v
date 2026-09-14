@@ -28,7 +28,16 @@ fn sw_setup_packs() {
 // apply, HX_ROLLBACK_RC the rollback re-apply, HX_STATUS_RC the status
 // read; every invocation appends to argv.log.
 fn sw_setup_stub(before string, after string) {
-	sw_write('${sw_root}/bin/dots-appearance', '#!/bin/sh\n' + 'echo "\$@" >> "' + sw_root + '/argv.log"\n' + 'if [ "\$1" = "status" ] && [ "\$2" = "--json" ]; then\n' + '  if grep -q "theme apply" "' + sw_root + '/argv.log" 2>/dev/null && [ -n "\$HX_STATUS_AFTER" ]; then\n' + '    printf "%s\\n" "\$HX_STATUS_AFTER"\n' + '  else\n' + '    printf "%s\\n" "\$HX_STATUS_BEFORE"\n' + '  fi\n' + '  exit "\${HX_STATUS_RC:-0}"\n' + 'fi\n' + 'if [ "\$1" = "theme" ] && [ "\$2" = "apply" ]; then\n' + '  printf "%s\\n" "applied \$3"\n' + '  n=\$(grep -c "theme apply" "' + sw_root + '/argv.log")\n' + '  if [ "\$n" -le 1 ]; then exit "\${HX_APPLY_RC:-0}"; fi\n' + '  exit "\${HX_ROLLBACK_RC:-0}"\n' + 'fi\n' + 'echo "stub: unknown: \$@" >&2\n' + 'exit 1\n')
+	sw_write('${sw_root}/bin/dots-appearance', '#!/bin/sh\n' + 'echo "\$@" >> "' + sw_root +
+		'/argv.log"\n' + 'if [ "\$1" = "status" ] && [ "\$2" = "--json" ]; then\n' +
+		'  if grep -q "theme apply" "' + sw_root +
+		'/argv.log" 2>/dev/null && [ -n "\$HX_STATUS_AFTER" ]; then\n' +
+		'    printf "%s\\n" "\$HX_STATUS_AFTER"\n' + '  else\n' +
+		'    printf "%s\\n" "\$HX_STATUS_BEFORE"\n' + '  fi\n' + '  exit "\${HX_STATUS_RC:-0}"\n' +
+		'fi\n' + 'if [ "\$1" = "theme" ] && [ "\$2" = "apply" ]; then\n' +
+		'  printf "%s\\n" "applied \$3"\n' + '  n=\$(grep -c "theme apply" "' + sw_root +
+		'/argv.log")\n' + '  if [ "\$n" -le 1 ]; then exit "\${HX_APPLY_RC:-0}"; fi\n' +
+		'  exit "\${HX_ROLLBACK_RC:-0}"\n' + 'fi\n' + 'echo "stub: unknown: \$@" >&2\n' + 'exit 1\n')
 	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '${sw_root}/bin/dots-appearance', true)
 	os.setenv('HX_STATUS_BEFORE', before, true)
 	os.setenv('HX_STATUS_AFTER', after, true)
@@ -108,7 +117,8 @@ fn test_theme_get_matches_official() {
 
 fn test_theme_get_custom_state_stays_ok() {
 	sw_setup_packs()
-	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}', '')
+	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}',
+		'')
 	r := theme_get_report(ThemeGetOptions{})
 	assert r.ok
 	assert r.data['id'] == ''
@@ -119,7 +129,8 @@ fn test_theme_get_custom_state_stays_ok() {
 
 fn test_theme_get_empty_state_matches_nothing() {
 	sw_setup_packs()
-	sw_setup_stub('{"wallpaper":"","mode":"","flavour":"","gtkTheme":"","iconTheme":"","gtkColorScheme":"follow"}', '')
+	sw_setup_stub('{"wallpaper":"","mode":"","flavour":"","gtkTheme":"","iconTheme":"","gtkColorScheme":"follow"}',
+		'')
 	r := theme_get_report(ThemeGetOptions{})
 	assert r.ok
 	assert r.data['id'] == ''
@@ -163,7 +174,7 @@ fn test_theme_set_rejects_non_official() {
 
 fn test_theme_set_needs_yes() {
 	refused := theme_set_report(ThemeSetOptions{
-		id:      'hornero-dark'
+		id:     'hornero-dark'
 		helper: '/nonexistent-helper-hornero-test'
 	})
 	assert !refused.ok
@@ -265,7 +276,8 @@ fn test_theme_set_verify_failure_without_clean_pre_state() {
 	sw_setup_packs()
 	// Custom pre-state, backend leaves it untouched: verify fails and
 	// there is nothing coherent to roll back to.
-	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}', '{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}')
+	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}',
+		'{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}')
 	r := theme_set_report(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true
@@ -280,7 +292,8 @@ fn test_theme_set_verify_failure_without_clean_pre_state() {
 
 fn test_theme_set_from_custom_pre_state_succeeds_without_rollback() {
 	sw_setup_packs()
-	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}', sw_dark_status)
+	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}',
+		sw_dark_status)
 	r := theme_set_report(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true

@@ -174,9 +174,11 @@ pub fn theme_get_report(opts ThemeGetOptions) CommandResult {
 		'gtk_color_scheme': st.gtk_color_scheme
 	}
 	if data['id'].len > 0 {
-		return ok_result('appearance theme get', 'current theme: ${data['id']} (mode=${st.mode}, gtk=${st.gtk_theme})', data)
+		return ok_result('appearance theme get', 'current theme: ${data['id']} (mode=${st.mode}, gtk=${st.gtk_theme})',
+			data)
 	}
-	return ok_result('appearance theme get', 'current theme: (custom) mode=${st.mode}, gtk=${st.gtk_theme}', data)
+	return ok_result('appearance theme get', 'current theme: (custom) mode=${st.mode}, gtk=${st.gtk_theme}',
+		data)
 }
 
 pub struct ThemeSetOptions {
@@ -217,9 +219,7 @@ pub fn theme_set_report(opts ThemeSetOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('appearance theme set', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance theme set ${opts.id} --dry-run')
 	}
-	pack := show_theme_pack(opts.id) or {
-		return fail_result('appearance theme set', err.msg())
-	}
+	pack := show_theme_pack(opts.id) or { return fail_result('appearance theme set', err.msg()) }
 	mode := official_pack_mode(opts.id)
 	bin := dots_appearance_or_fail(opts.helper) or {
 		if opts.dry_run {
@@ -230,12 +230,12 @@ pub fn theme_set_report(opts ThemeSetOptions) CommandResult {
 	}
 	apply_line := command_line(bin, ['theme', 'apply', opts.id])
 	if opts.dry_run {
-		return ok_result('appearance theme set', 'would run: ${apply_line} (then verify mode=${mode} gtk=${pack.gtk_theme})', {
+		return ok_result('appearance theme set', 'would run: ${apply_line} (then verify mode=${mode} gtk=${pack.gtk_theme})',
+			{
 			'command_line': apply_line
 			'dry_run':      'true'
 			'id':           opts.id
 		})
-
 	}
 	pre := query_appearance_status(opts.helper) or { AppearanceStatus{} }
 	pre_id := match_official_theme(pre)
@@ -278,7 +278,8 @@ pub fn theme_set_report(opts ThemeSetOptions) CommandResult {
 		}
 		return fail_result('appearance theme set', msg)
 	}
-	return ok_result('appearance theme set', 'theme set to ${opts.id} (mode=${post.mode}, gtk=${post.gtk_theme})', {
+	return ok_result('appearance theme set', 'theme set to ${opts.id} (mode=${post.mode}, gtk=${post.gtk_theme})',
+		{
 		'id':           opts.id
 		'mode':         post.mode
 		'gtk_theme':    post.gtk_theme
