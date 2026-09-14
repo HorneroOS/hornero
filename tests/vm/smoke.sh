@@ -238,11 +238,17 @@ pass "guest shell syntax of shipped scripts"
 # All network prep is done. Drop the default route: packets for the slirp
 # host (10.0.2.2, SSH) still flow over the connected route, but nothing
 # leaves the guest. Every appearance assertion below runs offline.
-$SSH 'sudo ip route del default 2>/dev/null || sudo ip route del default via 10.0.2.2' \
+# Route drops must cover both families: QEMU slirp can egress IPv6 even
+# with the v4 default gone. resolved caches are flushed so the DNS probe
+# cannot pass on prep-phase answers.
+$SSH 'sudo ip route del default 2>/dev/null; sudo ip -6 route del default 2>/dev/null; sudo resolvectl flush-caches 2>/dev/null; true' \
   || fail "guest offline boundary"
 $SSH true || fail "guest SSH died with the default route (boundary broke SSH)"
-if $SSH 'getent hosts archlinux.org >/dev/null 2>&1 || python3 -c "import urllib.request; urllib.request.urlopen(\"https://archlinux.org\", timeout=8)" >/dev/null 2>&1'; then
-  fail "guest still reaches the internet (offline boundary broken)"
+leak=""
+if $SSH 'getent hosts archlinux.org >/dev/null 2>&1'; then leak="dns"; fi
+if [[ -z $leak ]] && $SSH 'python3 -c "import urllib.request; urllib.request.urlopen(\"https://archlinux.org\", timeout=8)" >/dev/null 2>&1'; then leak="https"; fi
+if [[ -n $leak ]]; then
+  fail "guest still reaches the internet via $leak (offline boundary broken)"
 fi
 pass "guest is offline (no DNS, no HTTPS egress; host SSH alive)"
 # --- 4c. official trio matrix --------------------------------------------------
