@@ -20,9 +20,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 8d568284b411fe9e958ae57314a52e7d74ec5e63
+    sha: c1ab0642f0160068d8c630c2ddab12668d8d36bb
     status: pinned
-    subject: "Merge pull request #16 from HorneroOS/feat/p2-theme-pampa"
+    subject: "Merge pull request #17 from HorneroOS/fix/p2-easyoptions-no-which"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
