@@ -146,6 +146,12 @@ for _ in $(seq 1 30); do
 done
 [[ $ready -eq 1 ]] || fail "guest SSH never came up (see $WORK/boot.log)"
 pass "guest SSH reachable"
+# cloud-init regenerates guest host keys on every fresh-instance boot, so a
+# stale known-hosts entry is expected (host-only VM, not an attack):
+# refresh it once SSH is up to keep later diagnostics banner-free.
+ssh-keygen -R "[127.0.0.1]:$SSH_PORT" -f "$WORK/known-hosts" >/dev/null 2>&1 || true
+ssh-keyscan -p "$SSH_PORT" -t ed25519 127.0.0.1 >>"$WORK/known-hosts" 2>/dev/null \
+  || fail "guest host-key refresh"
 
 # --- 4. guest validation --------------------------------------------------------
 scp -o StrictHostKeyChecking=no -o UserKnownHostsFile="$WORK/known-hosts" \
@@ -194,8 +200,16 @@ pass "guest DNS resolves"
 # (rsvg-convert) and shipped in, mirroring deploy-shell.sh. pip installs
 # with HOME pointed at the materialized root so the user site lands where
 # the apply runs.
+# A previous failed run may have left the guest offline (route-drop
+# boundary): restore egress for prep (idempotent), the boundary section
+# drops it again before the matrix.
+$SSH 'sudo ip route add default via 10.0.2.2 2>/dev/null || true'
 $SSH 'command -v pip3 >/dev/null 2>&1 || sudo pacman -Sy --noconfirm --needed python-pip' \
   || fail "guest python-pip install"
+# pywal's default `wal` backend shells out to ImageMagick (proven: bare
+# `wal -i` fails in a minimal guest with "Imagemagick wasn't found").
+$SSH 'command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1 || sudo pacman -S --noconfirm --needed imagemagick' \
+  || fail "guest imagemagick install"
 # Arch Python is PEP 668 externally-managed: --break-system-packages is the
 # documented override. Scoped to the test guest (prep phase); the install
 # lands in the materialized root's user site (HOME=hx-root), never system-wide.
