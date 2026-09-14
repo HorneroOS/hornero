@@ -13,16 +13,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: fde8b3c1adbd067d695629727e7875cc4bca858a
+    sha: 16984ac0194dcad4977531e88fc7b372f6c53672
     status: pinned
-    subject: "Merge pull request #22 from HorneroOS/feat/p2-appearance-tokens"
+    subject: "Merge pull request #23 from HorneroOS/feat/p2-factory-visuals"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 9e3c4ee86843f9d2f90ba1ba28991ff098ddbf48
+    sha: 67aa987a4aae52c42d7e7db5e61205a1c3e54a5b
     status: pinned
-    subject: "Merge pull request #13 from HorneroOS/feat/p2-brand-assets"
+    subject: "Merge pull request #18 from HorneroOS/fix/p2-easyoptions-no-which"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero

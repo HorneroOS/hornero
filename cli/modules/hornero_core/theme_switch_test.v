@@ -19,6 +19,7 @@ fn sw_setup_packs() {
 	sw_write('${sw_root}/themes/hornero-dark/theme.json', '{"schemaVersion":1,"id":"hornero-dark","name":"Hornero Dark","description":"Flagship dark","gtkTheme":"Orchis-Dark-Compact","iconTheme":"Papirus-Dark","defaultWallpaper":"hornero-dark-01.jpg","wallpaperDir":"hornero-dark","mode":"dark"}')
 	sw_write('${sw_root}/themes/hornero-light/theme.json', '{"schemaVersion":1,"id":"hornero-light","name":"Hornero Light","description":"Flagship light","gtkTheme":"Orchis-Light-Compact","iconTheme":"Numix-Circle","defaultWallpaper":"hornero-light-01.jpg","wallpaperDir":"hornero-light","mode":"light"}')
 	sw_write('${sw_root}/themes/legacy-dark/theme.json', '{"schemaVersion":1,"id":"legacy-dark","name":"Legacy Dark","gtkTheme":"Legacy-Dark","iconTheme":"Papirus-Dark","defaultWallpaper":"l.jpg","wallpaperDir":"legacy-dark","darkMode":true}')
+	sw_write('${sw_root}/themes/pampa/theme.json', '{"schemaVersion":1,"id":"pampa","name":"Pampa","description":"Flagship grassland-night","gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","mode":"dark"}')
 	os.setenv('HORNERO_THEMES_DIR', '${sw_root}/themes', true)
 }
 
@@ -67,6 +68,7 @@ const sw_light_status = '{"wallpaper":"w.jpg","mode":"light","flavour":"vibrant"
 fn test_official_theme_ids() {
 	assert is_official_theme_id('hornero-dark')
 	assert is_official_theme_id('hornero-light')
+	assert is_official_theme_id('pampa')
 	assert !is_official_theme_id('vapor-dreams')
 	assert !is_official_theme_id('')
 	assert !is_official_theme_id('../escape')
@@ -112,6 +114,32 @@ fn test_theme_get_matches_official() {
 	assert r.data['mode'] == 'dark'
 	assert r.data['gtk_theme'] == 'Orchis-Dark-Compact'
 	assert r.message.contains('hornero-dark')
+	sw_teardown()
+}
+
+const sw_pampa_status = '{"wallpaper":"pampa-01.png","mode":"dark","flavour":"tonal-spot","gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark","gtkColorScheme":"follow"}'
+
+fn test_theme_get_matches_pampa_via_gtk_discriminator() {
+	sw_setup_packs()
+	// mode=dark is shared with hornero-dark: only the GTK signal picks pampa.
+	sw_setup_stub(sw_pampa_status, '')
+	r := theme_get_report(ThemeGetOptions{})
+	assert r.ok
+	assert r.data['id'] == 'pampa'
+	assert r.data['mode'] == 'dark'
+	assert r.data['gtk_theme'] == 'Hornero-Pampa'
+	assert r.message.contains('pampa')
+	sw_teardown()
+}
+
+fn test_theme_get_mode_only_dark_prefers_first_official() {
+	sw_setup_packs()
+	// No GTK signal: both dark packs match on mode, first id wins.
+	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"","iconTheme":"","gtkColorScheme":"follow"}',
+		'')
+	r := theme_get_report(ThemeGetOptions{})
+	assert r.ok
+	assert r.data['id'] == 'hornero-dark'
 	sw_teardown()
 }
 
@@ -164,7 +192,7 @@ fn test_theme_set_rejects_non_official() {
 		dry_run: true
 	})
 	assert !r.ok
-	assert r.message.contains('hornero-dark|hornero-light')
+	assert r.message.contains('hornero-dark|hornero-light|pampa')
 	bad := theme_set_report(ThemeSetOptions{
 		id:      '../escape'
 		dry_run: true
@@ -222,6 +250,22 @@ fn test_theme_set_happy_path_verifies() {
 	assert r.data['mode'] == 'dark'
 	assert r.data['gtk_theme'] == 'Orchis-Dark-Compact'
 	assert sw_argv_log().contains('theme apply hornero-dark')
+	sw_teardown()
+}
+
+fn test_theme_set_pampa_happy_path_verifies() {
+	sw_setup_packs()
+	sw_setup_stub(sw_dark_status, sw_pampa_status)
+	r := theme_set_report(ThemeSetOptions{
+		id:  'pampa'
+		yes: true
+	})
+	assert r.ok, r.message
+	assert r.command == 'appearance theme set'
+	assert r.data['id'] == 'pampa'
+	assert r.data['mode'] == 'dark'
+	assert r.data['gtk_theme'] == 'Hornero-Pampa'
+	assert sw_argv_log().contains('theme apply pampa')
 	sw_teardown()
 }
 

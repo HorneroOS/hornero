@@ -3,8 +3,8 @@ module hornero_core
 import os
 import x.json2
 
-// Official theme switching over the flagship hornero-dark/hornero-light
-// pair (HorneroOS/config profiles/themes/).
+// Official theme switching over the flagship trio
+// (hornero-dark/hornero-light/pampa, HorneroOS/config profiles/themes/).
 //
 // Reads stay native (installed theme.json packs, same as theme list/show)
 // while every mutation delegates to the verified `dots-appearance theme
@@ -16,10 +16,14 @@ import x.json2
 // reported as a failure, never as success; when the pre-apply state was a
 // clean official theme, one best-effort re-apply restores it.
 
-// official_theme_ids is the flagship pair `theme set` switches between.
-// Any other installed pack still goes through `theme apply`.
+// official_theme_ids is the flagship trio `theme set` switches between.
+// Any other installed pack still goes through `theme apply`. Order is
+// significant for mode-only live states: hornero-dark and pampa are both
+// dark-mode packs, so a state carrying mode=dark but no GTK signal resolves
+// to hornero-dark (first); GTK is the discriminator (Hornero-Dark vs
+// Hornero-Pampa) whenever the backend reports it.
 pub fn official_theme_ids() []string {
-	return ['hornero-dark', 'hornero-light']
+	return ['hornero-dark', 'hornero-light', 'pampa']
 }
 
 pub fn is_official_theme_id(id string) bool {
@@ -141,7 +145,7 @@ pub:
 }
 
 // theme_get_report implements `appearance theme get` (read-only): the live
-// backend state matched against the official pair. Unknown/custom states
+// backend state matched against the official trio. Unknown/custom states
 // still succeed; they report id '' with the observed values.
 pub fn theme_get_report(opts ThemeGetOptions) CommandResult {
 	bin := dots_appearance_or_fail(opts.helper) or {
@@ -214,7 +218,7 @@ fn rollback_official_theme(bin string, pre_id string, target string) string {
 // only previews.
 pub fn theme_set_report(opts ThemeSetOptions) CommandResult {
 	if !is_official_theme_id(opts.id) {
-		return fail_result('appearance theme set', 'unknown official theme: ${opts.id} (want hornero-dark|hornero-light).\nExample: horneroctl appearance theme set hornero-dark --dry-run')
+		return fail_result('appearance theme set', 'unknown official theme: ${opts.id} (want hornero-dark|hornero-light|pampa).\nExample: horneroctl appearance theme set hornero-dark --dry-run')
 	}
 	if !opts.yes && !opts.dry_run {
 		return fail_result('appearance theme set', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance theme set ${opts.id} --dry-run')

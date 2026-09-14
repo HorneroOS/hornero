@@ -29,7 +29,7 @@ horneroctl shell preset <list|current>
 horneroctl appearance status
 horneroctl appearance sync [--dry-run|--yes]
 horneroctl appearance call [--dry-run] -- <backend-args...>
-horneroctl appearance theme <list|show <id>|get|apply <id> [--wallpaper <path>]|set <hornero-dark|hornero-light>> [--dry-run|--yes]
+horneroctl appearance theme <list|show <id>|get|apply <id> [--wallpaper <path>]|set <hornero-dark|hornero-light|pampa>> [--dry-run|--yes]
 horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>> [--dry-run|--yes]
 horneroctl scheme ...                       # alias of appearance scheme
 horneroctl config <paths|validate|show [key]>
@@ -51,8 +51,9 @@ delegate to `dots-appearance` (`HORNERO_DOTS_APPEARANCE_BIN` override,
 default `~/.local/bin/dots-appearance`); theme list/show read the
 installed `theme.json` packs (`HORNERO_THEMES_DIR` override, else XDG
 data `dots/themes`); theme get matches the live `dots-appearance
-status --json` state against the official hornero-dark/hornero-light
-pair; theme set switches that pair atomically (validate, resolve via the
+status --json` state against the official hornero-dark/hornero-light/pampa
+trio (GTK discriminates the two dark-mode packs); theme set switches that
+trio atomically (validate, resolve via the
 packs, apply via `dots-appearance theme apply`, verify GTK/scheme agree,
 best-effort rollback to the previous official theme); scheme status
 reads the materialized scheme files under XDG state/cache; preset list/current read the installed presets
@@ -164,7 +165,7 @@ version release report (`shell`/`config` SHAs, manifest, release via
 `HX_*` env at build time), doctor legacy-paths section (detected
 `dots/*` state per contract row plus the migrate hint).
 v0.6 (phase 2 appearance, this change): `appearance theme get`
-(live backend state matched to hornero-dark/hornero-light, read-only)
+(live backend state matched to the hornero-dark/hornero-light/pampa trio, read-only)
 and `appearance theme set` (atomic official switch: validate, resolve,
 apply via `dots-appearance theme apply`, verify GTK/scheme agree with
 best-effort rollback; needs --yes, --dry-run previews).

@@ -139,7 +139,7 @@ Examples:
   get [--dry-run]     Show the active official theme (read-only)
   apply <id> [--wallpaper <path>] [--dry-run]
                       Apply a theme pack (needs --yes)
-  set <hornero-dark|hornero-light> [--dry-run]
+  set <hornero-dark|hornero-light|pampa> [--dry-run]
                       Switch the official theme atomically (needs --yes)
 
 Pack source: HORNERO_THEMES_DIR, else the XDG data catalogue
@@ -147,7 +147,7 @@ Pack source: HORNERO_THEMES_DIR, else the XDG data catalogue
 Reads parse the installed theme.json manifests;
 apply delegates to dots-appearance (HORNERO_DOTS_APPEARANCE_BIN).
 get matches the live backend state against the official
-hornero-dark/hornero-light pair; set validates, applies via
+hornero-dark/hornero-light/pampa trio; set validates, applies via
 dots-appearance, then verifies GTK/scheme agree (best-effort
 rollback to the previous official theme on failure).
 
