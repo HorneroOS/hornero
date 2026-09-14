@@ -165,6 +165,12 @@ tar cf - --exclude=.git -C "$WORK/compose" config \
     'rm -rf ~/hx-config && mkdir -p ~/hx-config && tar xf - -C ~/hx-config --strip-components=1' \
   || fail "payload transfer (config pin)"
 pass "payload transferred (horneroctl + config pin)"
+# A previous failed run may have left the guest walled off (firewall
+# boundary): flush guest firewall rules and restore the route FIRST —
+# before the DNS check — or a stale DROP rule makes the DNS probe hang
+# in timeouts and the pin loop can never succeed. The boundary section
+# walls the guest off again before the matrix (idempotent both ways).
+$SSH 'sudo iptables -F 2>/dev/null; sudo ip6tables -F 2>/dev/null; sudo ip route add default via 10.0.2.2 2>/dev/null || true'
 # Guest DNS under QEMU slirp is frequently LAN-only/broken. Same cure as
 # the shell harness (provision.sh): pin VM_GUEST_DNS at runtime AND
 # persistently (a .d/ override on the network file that actually manages
@@ -200,10 +206,7 @@ pass "guest DNS resolves"
 # (rsvg-convert) and shipped in, mirroring deploy-shell.sh. pip installs
 # with HOME pointed at the materialized root so the user site lands where
 # the apply runs.
-# A previous failed run may have left the guest walled off (firewall
-# boundary): flush guest firewall rules and restore the route for prep
-# (idempotent); the boundary section walls it off again before the matrix.
-$SSH 'sudo iptables -F 2>/dev/null; sudo ip6tables -F 2>/dev/null; sudo ip route add default via 10.0.2.2 2>/dev/null || true'
+# Egress was restored right after the payload (see above); prep continues.
 $SSH 'command -v pip3 >/dev/null 2>&1 || sudo pacman -Sy --noconfirm --needed python-pip' \
   || fail "guest python-pip install"
 # pywal's default `wal` backend shells out to ImageMagick (proven: bare
