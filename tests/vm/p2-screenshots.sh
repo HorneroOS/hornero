@@ -453,18 +453,41 @@ timeout 25 grim /tmp/p2shot.png" 2>/dev/null || fail "guest grim ($id/lockscreen
   echo "$id/lockscreen grim" >>"$SHOT_LOGS/shots.tsv"
   echo "P2SHOTS-SHOT: $id/lockscreen.png (via grim)"
 
-  # 6h. hyprlock (lock screen over the applied theme). The locker must
-  # be provably running before the capture: a dead hyprlock leaves the
-  # plain desktop in frame and the cell would silently mislabel it (seen
-  # in review). Its log is always fetched for the evidence bundle.
+  # 6h0b. release the shell lock before the hyprlock cell: a session can
+  # hold only one locker, and hyprlock is yeeted ("Is another lockscreen
+  # running?") while the shell lock holds it — proven by the hyprlock
+  # logs of the previous matrix run.
+  # shellcheck disable=SC2016
+  vm_ssh "$HENV
+export LC_ALL=C.UTF-8
+QS_BIN=\$(command -v qs || command -v quickshell)
+\$QS_BIN ipc call lock unlock" >/dev/null || fail "guest shell unlock ($id)"
+  sleep 1
+  # shellcheck disable=SC2016
+  locked="$(vm_ssh "$HENV
+export LC_ALL=C.UTF-8
+QS_BIN=\$(command -v qs || command -v quickshell)
+\$QS_BIN ipc call lock isLocked 2>/dev/null")" || fail "guest lock re-state ($id/unlock)"
+  [[ $locked != "true" ]] || fail "guest still locked after unlock ($id)"
+
+  # 6h. hyprlock (lock screen over the applied theme). The lock must be
+  # proven EFFECTIVE, not just started: a yeeted or dead hyprlock leaves
+  # the plain desktop in frame and the cell would silently mislabel it
+  # (seen in review: pgrep passed on a process that never locked). So
+  # the log must show "Locking session" with no "yeeten" after the shot.
   # shellcheck disable=SC2016
   vm_ssh "$HENV
 (hyprlock >/tmp/p2-hyprlock.log 2>&1 &) ; sleep 4" || fail "guest hyprlock start ($id)"
-  vm_scp "${VM_SSH_USER}@127.0.0.1:/tmp/p2-hyprlock.log" "$SHOT_LOGS/$id-hyprlock.log" >/dev/null 2>&1 || true
   # shellcheck disable=SC2016
   vm_ssh 'pgrep -x hyprlock >/dev/null' \
-    || fail "guest hyprlock not running ($id): $(cat $SHOT_LOGS/$id-hyprlock.log 2>/dev/null | tail -5)"
+    || fail "guest hyprlock not running ($id)"
   shot "$id" hyprlock
+  vm_scp "${VM_SSH_USER}@127.0.0.1:/tmp/p2-hyprlock.log" "$SHOT_LOGS/$id-hyprlock.log" >/dev/null \
+    || fail "guest hyprlock log fetch ($id)"
+  grep -q "Locking session" "$SHOT_LOGS/$id-hyprlock.log" \
+    || fail "guest hyprlock never locked ($id, see $id-hyprlock.log)"
+  grep -q "yeeten" "$SHOT_LOGS/$id-hyprlock.log" \
+    && fail "guest hyprlock was yeeted by another locker ($id, see $id-hyprlock.log)"
   # shellcheck disable=SC2016
   vm_ssh 'pkill -x hyprlock' >/dev/null 2>&1 || true
   sleep 1
