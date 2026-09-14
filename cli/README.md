@@ -29,7 +29,7 @@ horneroctl shell preset <list|current>
 horneroctl appearance status
 horneroctl appearance sync [--dry-run|--yes]
 horneroctl appearance call [--dry-run] -- <backend-args...>
-horneroctl appearance theme <list|show <id>|apply <id> [--wallpaper <path>]> [--dry-run|--yes]
+horneroctl appearance theme <list|show <id>|get|apply <id> [--wallpaper <path>]|set <hornero-dark|hornero-light>> [--dry-run|--yes]
 horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>> [--dry-run|--yes]
 horneroctl scheme ...                       # alias of appearance scheme
 horneroctl config <paths|validate|show [key]>
@@ -50,8 +50,12 @@ default `~/.local/bin/dots-gtk-theme`); theme apply and scheme setters
 delegate to `dots-appearance` (`HORNERO_DOTS_APPEARANCE_BIN` override,
 default `~/.local/bin/dots-appearance`); theme list/show read the
 installed `theme.json` packs (`HORNERO_THEMES_DIR` override, else XDG
-data `dots/themes`); scheme status reads the materialized scheme files
-under XDG state/cache; preset list/current read the installed presets
+data `dots/themes`); theme get matches the live `dots-appearance
+status --json` state against the official hornero-dark/hornero-light
+pair; theme set switches that pair atomically (validate, resolve via the
+packs, apply via `dots-appearance theme apply`, verify GTK/scheme agree,
+best-effort rollback to the previous official theme); scheme status
+reads the materialized scheme files under XDG state/cache; preset list/current read the installed presets
 (`HORNERO_PRESETS_DIR` override, else XDG data `dots/shell-presets`)
 and the state pointer; config show reads the materialized
 `$XDG_CONFIG_HOME/hornero/shell.json` (system default as fallback);
@@ -127,12 +131,14 @@ cli/
 │   ├── execx.v                # dry-run-aware external runner
 │   ├── version.v doctor.v shell_ipc.v appearance.v configx.v
 │   ├── snapshots.v packages.v backups.v config_ops.v
+│   ├── themes.v scheme.v theme_switch.v
 │   └── core_test.v batch1_test.v batch2_test.v migrate_test.v
+│       theme_switch_test.v
 ├── modules/hornero_cli/       # adapter: dispatch/options/render/help
 │   ├── dispatch.v options.v help.v render.v batch1_options.v
 │   ├── batch2_options.v migrate_options.v
 │   └── dispatch_test.v batch1_dispatch_test.v batch2_dispatch_test.v
-│       migrate_dispatch_test.v
+│       migrate_dispatch_test.v theme_switch_dispatch_test.v
 ├── make.vsh .v-version
 ├── README.md AGENTS.md
 ```
@@ -157,6 +163,11 @@ v0.5 (preview 1, worker D): config migrate (via the config repo
 version release report (`shell`/`config` SHAs, manifest, release via
 `HX_*` env at build time), doctor legacy-paths section (detected
 `dots/*` state per contract row plus the migrate hint).
+v0.6 (phase 2 appearance, this change): `appearance theme get`
+(live backend state matched to hornero-dark/hornero-light, read-only)
+and `appearance theme set` (atomic official switch: validate, resolve,
+apply via `dots-appearance theme apply`, verify GTK/scheme agree with
+best-effort rollback; needs --yes, --dry-run previews).
 The broader command surface is tracked in `../docs/cli-architecture.md`
 (HorneroOS/hornero#1); appearance verbs stay a thin delegation layer until
 native backends land (HorneroOS/shell#2).
