@@ -1,0 +1,138 @@
+---
+# horneroctl release: on horneroctl-v* tags, create the GitHub Release,
+# build native per-arch binaries with the pinned V toolchain, upload
+# them as release assets, then publish horneroctl-bin to AUR with the
+# real checksums. Mirrors the agent-toolkit release pattern (matrix +
+# arch gate + smoke test), scoped to the two Linux arches AUR serves.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "horneroctl-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  build:
+    name: Build ${{ matrix.asset }}
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: horneroctl-linux-x86_64
+            v_zip: v_linux.zip
+            expect_arch: x86_64
+          - os: ubuntu-24.04-arm
+            asset: horneroctl-linux-arm64
+            v_zip: v_linux_arm64.zip
+            expect_arch: arm64
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - name: Read V version pin
+        id: vpin
+        run: echo "version=$(cat cli/.v-version)" >> "$GITHUB_OUTPUT"
+      - name: Install V (prebuilt)
+        run: |
+          base="https://github.com/vlang/v/releases/download"
+          ver="${{ steps.vpin.outputs.version }}"
+          curl -sL -o /tmp/v.zip "${base}/${ver}/${{ matrix.v_zip }}"
+          unzip -q /tmp/v.zip -d /tmp/vlang
+          echo "/tmp/vlang/v" >> "$GITHUB_PATH"
+      - name: Verify toolchain
+        run: v version
+      - name: Check architecture
+        run: |
+          got="$(uname -m | tr 'A-Z' 'a-z')"
+          case "${got}" in
+            aarch64|arm64) got=arm64 ;;
+            x86_64|amd64) got=x86_64 ;;
+          esac
+          want="${{ matrix.expect_arch }}"
+          if [ "${got}" != "${want}" ]; then
+            echo "mismatch: ${got} != ${want}" >&2
+            exit 1
+          fi
+      - name: Build native CLI
+        working-directory: cli
+        run: ./make.vsh build-cli
+      - name: Smoke test
+        working-directory: cli
+        run: |
+          ./build/horneroctl version
+          ./build/horneroctl --help | head -n 12
+          cp -f build/horneroctl "build/${{ matrix.asset }}"
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.create-release.outputs.tag }}" \
+            "cli/build/${{ matrix.asset }}" --clobber
+
+  aur-publish:
+    name: Publish horneroctl-bin to AUR
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - name: Stamp pkgver and checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="${{ needs.create-release.outputs.tag }}"
+          ver="${tag#horneroctl-v}"
+          pkgdir="${GITHUB_WORKSPACE}/packaging/horneroctl-bin"
+          pkgbuild="${pkgdir}/PKGBUILD"
+          sed -i "s/^pkgver=.*/pkgver=${ver}/" "${pkgbuild}"
+          mkdir -p /tmp/assets
+          gh release download "${tag}" -D /tmp/assets \
+            -p 'horneroctl-linux-x86_64' -p 'horneroctl-linux-arm64'
+          cd /tmp/assets
+          x86="$(sha256sum horneroctl-linux-x86_64 | cut -d' ' -f1)"
+          arm="$(sha256sum horneroctl-linux-arm64 | cut -d' ' -f1)"
+          cd - >/dev/null
+          sed -i "s/x86_64=('.*')/x86_64=('${x86}')/" "${pkgbuild}"
+          sed -i "s/aarch64=('.*')/aarch64=('${arm}')/" "${pkgbuild}"
+          grep -E '^(pkgver|source_|sha256sums_)' "${pkgbuild}"
+      - name: Publish AUR package
+        uses: ulises-jeremias/github-actions-aur-publish@507f0dba7755bdc2ad351232405bd7e4cd4a4a67  # v1
+        with:
+          pkgname: horneroctl-bin
+          pkgbuild: packaging/horneroctl-bin/PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Release ${{ needs.create-release.outputs.tag }}
