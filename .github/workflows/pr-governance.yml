@@ -1,0 +1,25 @@
+# Thin caller for the shared HorneroOS PR-governance engine.
+#
+# The engine lives in HorneroOS/.github (`governance/danger`) and is
+# versioned by `governance-*` tags: callers pin a full commit SHA with a
+# version comment. This caller temporarily tracks `@main` because the
+# engine PR has not merged yet, so no SHA exists to pin.
+# TODO: repin to @<SHA> with the `governance-*` version comment once the
+# engine PR merges.
+#
+# Fork-safe: triggers on `pull_request` (never `pull_request_target`
+# combined with checkout + execution of PR code). Least privilege below.
+
+name: PR governance
+
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+jobs:
+  governance:
+    # TODO: repin to @<SHA> + `governance-*` version comment once merged.
+    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
