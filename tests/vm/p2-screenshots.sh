@@ -365,6 +365,17 @@ for spec in \
   gtk="${rest%%:*}"; rest="${rest#*:}"
   wall="${rest%%:*}"; mode="${rest##*:}"
 
+  # 6a0. fresh session per theme. Proven necessity, not paranoia: a
+  # SIGTERM-released hyprlock poisons the NEXT shell lock in the same
+  # session (quickshell dies with a Wayland invalid-object error and
+  # Hyprland shows its crashed-lockscreen fallback — reproduced live).
+  # Restarting gives every theme a pristine compositor+shell pair, so
+  # each theme's evidence stands alone and no locker state bleeds
+  # across themes. (The interop bug itself belongs to the shell repo;
+  # this sequencing only avoids the test-artifact trigger.)
+  bash "$SHELL_HARNESS/lib/start-session.sh" || fail "guest session restart ($id)"
+  for _d in launcher dashboard session utilities; do drawer_set "$_d" false; done
+
   # 6a. apply through the real control plane (validate/resolve/apply/verify).
   # NOTE: $HOME below is guest-side (escaped); unescaped $HOME would expand
   # on the host and run the wrong binary.
