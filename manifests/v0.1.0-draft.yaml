@@ -20,9 +20,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 67aa987a4aae52c42d7e7db5e61205a1c3e54a5b
+    sha: b22b13c8a2697aa5489cf54f2a5d0ab822447d60
     status: pinned
-    subject: "Merge pull request #18 from HorneroOS/fix/p2-easyoptions-no-which"
+    subject: "Merge pull request #24 from HorneroOS/fix/p2-hyprlock-drop-date"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
