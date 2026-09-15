@@ -15,9 +15,9 @@ name: PR governance
 
 jobs:
   governance:
-    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@91b24509dfa043d5ca9e63d3ce2248a4c401c6b5 # governance-v1.1
+    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@dfd2a5d6358e86243d389a4f58433dc4c9fe5ed5 # governance-v1.2
     with:
-      engine-ref: 91b24509dfa043d5ca9e63d3ce2248a4c401c6b5 # governance-v1.1
+      engine-ref: dfd2a5d6358e86243d389a4f58433dc4c9fe5ed5 # governance-v1.2
     permissions:
       contents: read
       pull-requests: write
