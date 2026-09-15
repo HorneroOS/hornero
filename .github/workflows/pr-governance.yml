@@ -2,10 +2,7 @@
 #
 # The engine lives in HorneroOS/.github (`governance/danger`) and is
 # versioned by `governance-*` tags: callers pin a full commit SHA with a
-# version comment. This caller temporarily tracks `@main` because the
-# engine PR has not merged yet, so no SHA exists to pin.
-# TODO: repin to @<SHA> with the `governance-*` version comment once the
-# engine PR merges.
+# version comment (currently governance-v1).
 #
 # Fork-safe: triggers on `pull_request` (never `pull_request_target`
 # combined with checkout + execution of PR code). Least privilege below.
@@ -18,11 +15,9 @@ name: PR governance
 
 jobs:
   governance:
-    # TODO: repin to @<SHA> + `governance-*` version comment once merged.
-    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@main
+    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@b07ba693aa49c2088798a050f427b2e4c5b488b5 # governance-v1
     with:
-      # TODO: repin to the `governance-*` tag SHA once the engine merges.
-      engine-ref: main
+      engine-ref: b07ba693aa49c2088798a050f427b2e4c5b488b5 # governance-v1
     permissions:
       contents: read
       pull-requests: write
