@@ -3,7 +3,7 @@
 #
 # The engine lives in HorneroOS/.github (`governance/danger`) and is
 # versioned by `governance-*` tags: callers pin a full commit SHA with a
-# version comment (currently governance-v1.5).
+# version comment (currently governance-v1.6).
 #
 # Fork-safe: triggers on `pull_request` (never `pull_request_target`
 # combined with checkout + execution of PR code). Least privilege below.
@@ -17,11 +17,11 @@ name: PR governance
 jobs:
   governance:
     # yamllint disable rule:line-length
-    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@23c634b3c5587dc336fb11dfaee4f6ad0779e300  # governance-v1.5
+    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@906d6dad0638773413442ffafa03a5da4da160b1  # governance-v1.6
     # yamllint enable rule:line-length
     with:
       # Same engine pin as `uses:` above.
-      engine-ref: 23c634b3c5587dc336fb11dfaee4f6ad0779e300
+      engine-ref: 906d6dad0638773413442ffafa03a5da4da160b1
     permissions:
       contents: read
       pull-requests: write
