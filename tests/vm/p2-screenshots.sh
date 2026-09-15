@@ -52,7 +52,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 pass() { echo "P2SHOTS-PASS: $1"; }
-fail() { echo "P2SHOTS-FAIL: $1" >&2; exit 1; }
+fail() {
+  # Forensic bundle: on any failure inside the theme loop the guest holds
+  # the only copy of the shell/compositor logs. Fetch them best-effort so
+  # a crashed shell (proven once: quickshell died on lock, Hyprland
+  # showed its crashed-lockscreen screen) leaves evidence, not silence.
+  if [[ -n ${SHOT_LOGS:-} && -n ${VM_SSH_USER:-} ]]; then
+    mkdir -p "$SHOT_LOGS"
+    vm_scp "${VM_SSH_USER}@127.0.0.1:/tmp/qs.log" "$SHOT_LOGS/fail-qs.log" >/dev/null 2>&1 || true
+    vm_scp "${VM_SSH_USER}@127.0.0.1:/tmp/hypr.log" "$SHOT_LOGS/fail-hypr.log" >/dev/null 2>&1 || true
+  fi
+  echo "P2SHOTS-FAIL: $1" >&2; exit 1
+}
 
 if [[ ! -e /dev/kvm ]] || ! command -v qemu-system-x86_64 >/dev/null; then
   echo "P2SHOTS-SKIP: no KVM (needs /dev/kvm + qemu-system-x86_64)"
@@ -441,6 +452,16 @@ export LC_ALL=C.UTF-8
 QS_BIN=\$(command -v qs || command -v quickshell)
 \$QS_BIN ipc call lock lock" >/dev/null || fail "guest shell lock ($id)"
   sleep 2
+  # Verify the shell still owns the lock: if the lockscreen client died
+  # (Hyprland falls back to its crashed-lockscreen screen), the IPC
+  # endpoint goes with it and the capture below would mislabel the
+  # fallback as the shell lock screen.
+  # shellcheck disable=SC2016
+  locked="$(vm_ssh "$HENV
+export LC_ALL=C.UTF-8
+QS_BIN=\$(command -v qs || command -v quickshell)
+\$QS_BIN ipc call lock isLocked 2>/dev/null")" || fail "guest lock state post-lock ($id: shell IPC gone)"
+  [[ $locked == "true" ]] || fail "guest lock not held post-lock ($id: got $locked)"
   # shellcheck disable=SC2016
   vm_ssh "$HENV
 hyprctl dispatch dpms on >/dev/null 2>&1 || true" >/dev/null 2>&1 || true
