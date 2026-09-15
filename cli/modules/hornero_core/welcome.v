@@ -221,9 +221,7 @@ pub fn welcome_write(st WelcomeState) ! {
 	dir := os.dir(path)
 	os.mkdir_all(dir) or { return error('cannot create ${dir}: ${err.msg()}') }
 	tmp := os.join_path(dir, '.state.json.tmp')
-	os.write_file(tmp, welcome_encode(st)) or {
-		return error('cannot write ${tmp}: ${err.msg()}')
-	}
+	os.write_file(tmp, welcome_encode(st)) or { return error('cannot write ${tmp}: ${err.msg()}') }
 	os.mv(tmp, path) or { return error('cannot move ${tmp} to ${path}: ${err.msg()}') }
 }
 
@@ -245,7 +243,11 @@ fn welcome_data(st WelcomeState) map[string]string {
 // welcome_status_report is `horneroctl welcome status` (read-only).
 pub fn welcome_status_report() CommandResult {
 	st := welcome_read()
-	detail := if st.source == 'file' { 'from ${resolve_welcome_state_file()}' } else { 'defaults (no state file yet)' }
+	detail := if st.source == 'file' {
+		'from ${resolve_welcome_state_file()}'
+	} else {
+		'defaults (no state file yet)'
+	}
 	msg := 'show on login: ${st.show_on_login} (${detail})\ncontent: ${st.content_revision} (last seen: ${if st.last_seen_content_revision.len > 0 {
 		st.last_seen_content_revision
 	} else {
@@ -303,12 +305,14 @@ pub fn welcome_set_show_report(opts WelcomeSetOptions) CommandResult {
 	if opts.dry_run {
 		mut data := welcome_data(next)
 		data['dry_run'] = 'true'
-		return ok_result(name, 'would write show_on_login=${opts.value} to ${resolve_welcome_state_file()}', data)
+		return ok_result(name, 'would write show_on_login=${opts.value} to ${resolve_welcome_state_file()}',
+			data)
 	}
 	welcome_write(next) or {
 		return fail_result(name, 'cannot write state: ${err.msg()}.\nExample: HORNERO_WELCOME_STATE_FILE=/tmp/w.json horneroctl welcome set-show-on-login ${opts.value} --yes')
 	}
-	return ok_result(name, 'show_on_login=${opts.value} (stored in ${resolve_welcome_state_file()})', welcome_data(next))
+	return ok_result(name, 'show_on_login=${opts.value} (stored in ${resolve_welcome_state_file()})',
+		welcome_data(next))
 }
 
 pub struct WelcomeSeenOptions {
@@ -333,17 +337,15 @@ pub fn welcome_mark_seen_report(opts WelcomeSeenOptions) CommandResult {
 	next := WelcomeState{
 		...st
 		last_seen_content_revision: rev
-		first_opened_at:              first
-		last_opened_at:               now
+		first_opened_at:            first
+		last_opened_at:             now
 	}
 	if opts.dry_run {
 		mut data := welcome_data(next)
 		data['dry_run'] = 'true'
 		return ok_result(name, 'would mark revision ${rev} as seen', data)
 	}
-	welcome_write(next) or {
-		return fail_result(name, 'cannot write state: ${err.msg()}')
-	}
+	welcome_write(next) or { return fail_result(name, 'cannot write state: ${err.msg()}') }
 	return ok_result(name, 'marked revision ${rev} as seen', welcome_data(next))
 }
 
@@ -362,11 +364,10 @@ pub fn welcome_reset_report(dry_run bool, yes bool) CommandResult {
 	if dry_run {
 		mut data := welcome_data(next)
 		data['dry_run'] = 'true'
-		return ok_result(name, 'would reset to defaults in ${resolve_welcome_state_file()}', data)
+		return ok_result(name, 'would reset to defaults in ${resolve_welcome_state_file()}',
+			data)
 	}
-	welcome_write(next) or {
-		return fail_result(name, 'cannot write state: ${err.msg()}')
-	}
+	welcome_write(next) or { return fail_result(name, 'cannot write state: ${err.msg()}') }
 	return ok_result(name, 'reset to defaults (show on login)', welcome_data(next))
 }
 
