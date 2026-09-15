@@ -116,6 +116,10 @@ jobs:
           ver="${tag#horneroctl-v}"
           pkgdir="${GITHUB_WORKSPACE}/packaging/horneroctl-bin"
           pkgbuild="${pkgdir}/PKGBUILD"
+          # Exactly one mutation target each: fail loudly otherwise.
+          [ "$(grep -c '^pkgver=' "${pkgbuild}")" -eq 1 ]
+          [ "$(grep -c '^sha256sums_x86_64=(' "${pkgbuild}")" -eq 1 ]
+          [ "$(grep -c '^sha256sums_aarch64=(' "${pkgbuild}")" -eq 1 ]
           sed -i "s/^pkgver=.*/pkgver=${ver}/" "${pkgbuild}"
           mkdir -p /tmp/assets
           gh release download "${tag}" -D /tmp/assets \
