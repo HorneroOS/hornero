@@ -307,15 +307,15 @@ hyprctl dispatch exec -- $*" >/dev/null || fail "guest launch: $*"
 # Demo app commands (verified by probing a live session; override for
 # toolkit renames). Shell drawers toggle over quickshell IPC
 # (`drawers state <name>` -> true/false, `drawers toggle <name>` flips).
-# Qt vehicle is the qt6ct configurator window, not a QML demo: the config
-# repo's documented Qt story (docs/QT_DECISION.md) is Qt6 Widgets apps via
-# the qt6ct platform theme (the shipped Qt app is CopyQ); QtQuick Controls
-# do not consume qt6ct and render stock Fusion, so a QML window would be
-# dishonest evidence. The qt6ct window shows the deployed style, fonts,
-# and icon theme directly.
+# Qt vehicle is CopyQ itself: the config repo's documented Qt story
+# (docs/QT_DECISION.md) is Qt6 Widgets apps via the qt6ct platform theme
+# with generated per-theme palettes, and CopyQ is the shipped Qt6 app.
+# A QML demo would be dishonest evidence (QtQuick Controls ignore
+# qt6ct); the qt6ct configurator window proved the deployed conf but not
+# a themed product app, so CopyQ is the primary acceptance target.
 GTK3_BIN="${P2_GTK3_BIN:-zenity --forms --title=Hornero-P2-GTK3 --text=GTK3-widget-evidence --add-entry=Normal-entry --add-entry=Second-entry}"
 GTK4_BIN="${P2_GTK4_BIN:-gtk4-widget-factory}"
-QT_BIN="${P2_QT_BIN:-qt6ct}"
+QT_BIN="${P2_QT_BIN:-copyq show}"
 
 drawer_set() {
   # drawer_set <name> <true|false>: deterministic drawer visibility over
@@ -404,6 +404,8 @@ for spec in \
     echo '--- kitty'; ls -la \$HOME/.config/kitty/kitty.conf 2>/dev/null || echo '(no kitty conf)'
     echo '--- M3 scheme'; ls -la \$HOME/.cache/hornero/smart-colors/scheme.json 2>/dev/null || echo '(no M3 scheme)'
     echo '--- qt6ct'; cat \$HOME/.config/qt6ct/qt6ct.conf 2>/dev/null | head -6 || cat /etc/xdg/qt6ct/qt6ct.conf 2>/dev/null | head -6 || echo '(no qt6ct conf)'
+    echo '--- qt6ct effective'; grep -H '^custom_palette\|^color_scheme_path' \$HOME/.config/qt6ct/qt6ct.conf 2>/dev/null || echo '(no effective qt palette)'
+    echo '--- hyprland env pin'; grep -H '^env = QT_QPA_PLATFORMTHEME' \$HOME/.config/hypr/hyprland.conf.d/environment.conf 2>/dev/null || echo '(no platformtheme pin)'
     echo '--- hyprland borders'; $HENV hyprctl getoption general:col.active_border 2>/dev/null || echo '(no hypr border option)'
   }" >"$SHOT_LOGS/$id-state.txt" 2>&1 || fail "guest state snapshot ($id)"
   # NOTE: snapshot lines carry grep -H filename prefixes, so the theme
@@ -412,6 +414,12 @@ for spec in \
     || fail "guest GTK mapping $id ($gtk)"
   grep -q "$wall\$" "$SHOT_LOGS/$id-state.txt" \
     || fail "guest wallpaper pointer $id ($wall)"
+  grep -q "color_scheme_path=.*/qt6ct/colors/$id.conf\$" "$SHOT_LOGS/$id-state.txt" \
+    || fail "guest qt6ct not pointed at the $id palette"
+  grep -q "custom_palette=true\$" "$SHOT_LOGS/$id-state.txt" \
+    || fail "guest qt6ct custom palette not enabled ($id)"
+  grep -q "QT_QPA_PLATFORMTHEME,qt6ct" "$SHOT_LOGS/$id-state.txt" \
+    || fail "guest hypr environment lacks the qt6ct platformtheme pin ($id)"
 
   # 6c. desktop with the applied theme (wallpaper + shell bar).
   # Belt-and-braces: the previous theme's loop must have left zero
@@ -434,9 +442,17 @@ for spec in \
   shot "$id" gtk4
   close_apps
 
-  # 6f. Qt6 platform-theme evidence: the qt6ct window (style + fonts +
-  # icon theme the deployed qt6ct.conf prescribes for Qt6 Widgets apps).
-  launch "$QT_BIN"
+  # 6f. Qt6 evidence: CopyQ, the curated Qt6 Widgets app, under the
+  # theme's generated palette. The harness test-session compositor does
+  # not source the deployed environment.conf, so QT_QPA_PLATFORMTHEME is
+  # set explicitly at launch (the deployed pin is asserted in the state
+  # snapshot above); real sessions inherit it from Hyprland. Extra settle
+  # time: a cold CopyQ also starts its server on first show.
+  # shellcheck disable=SC2016
+  vm_ssh "$HENV
+hyprctl dispatch exec -- env QT_QPA_PLATFORMTHEME=qt6ct $QT_BIN" >/dev/null \
+    || fail "guest launch: copyq ($id)"
+  sleep 7
   shot "$id" qt6
   close_apps qt6
 

@@ -29,8 +29,11 @@ mislabeling): zero-client verification after every close (kitty's
 close-confirm survives `killactive`), per-theme fresh sessions (a
 released hyprlock poisons the next shell lock), effective-lock asserts
 from locker logs, and shell-IPCs verified after every lock/unlock.
-The Qt cell captures the `qt6ct` window per the config repo's Qt
-decision (Qt6 Widgets via the `qt6ct` platform theme); the `adwaita`
+The Qt cell captures CopyQ itself (the shipped Qt6 app) under the
+theme's generated `qt6ct` palette, with `QT_QPA_PLATFORMTHEME=qt6ct` set
+explicitly at launch because the harness test-session compositor does
+not source the deployed `environment.conf` (the deployed pin is
+asserted per theme in the state snapshot); the `adwaita`
 cell captures `loupe` on the theme wallpaper (libadwaita follows the
 color scheme by design, see config `docs/DECISIONS.md`). Contact
 sheets are generated from the shots dir with ImageMagick `montage`.

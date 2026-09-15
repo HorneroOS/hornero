@@ -20,9 +20,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: b22b13c8a2697aa5489cf54f2a5d0ab822447d60
+    sha: b5af574b50d83054b720495c8a993c14ef07a46e
     status: pinned
-    subject: "Merge pull request #24 from HorneroOS/fix/p2-hyprlock-drop-date"
+    subject: "Merge pull request #25 from HorneroOS/feat/p2-qt-palette"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
