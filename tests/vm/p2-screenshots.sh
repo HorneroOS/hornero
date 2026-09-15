@@ -264,9 +264,12 @@ close_apps() {
   # light/pampa desktop cells showed dark's orphaned dialog). So SIGTERM
   # each demo binary first (no confirm prompt on SIGTERM), killactive as
   # fallback, and fail loudly on any leaked client instead of silently
-  # mislabelling the next capture.
+  # mislabelling the next capture. The -f patterns use the [x] trick: a
+  # bare `pkill -f foo` also matches the invoking ssh shell (its cmdline
+  # contains the pattern), suiciding the shell mid-chain so later targets
+  # survive and the leak assert fires intermittently.
   # shellcheck disable=SC2016
-  vm_ssh 'pkill -x kitty; pkill -f zenity; pkill -f gtk3-widget-factory; pkill -f gtk4-widget-factory; pkill -x qml6; pkill -x loupe; pkill -x qt6ct; pkill -x copyq' >/dev/null 2>&1 || true
+  vm_ssh 'pkill -x kitty; pkill -f [z]enity; pkill -f [g]tk3-widget-factory; pkill -f [g]tk4-widget-factory; pkill -x qml6; pkill -x loupe; pkill -x qt6ct; pkill -x copyq' >/dev/null 2>&1 || true
   sleep 1
   # shellcheck disable=SC2016
   vm_ssh "$HENV
