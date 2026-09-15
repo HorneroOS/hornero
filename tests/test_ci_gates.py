@@ -46,14 +46,23 @@ def test_workflow_yaml_parses():
     assert set(doc["jobs"]) >= {"composition", "pin-freshness", "secrets-lint"}
 
 
+def _triggers(doc):
+    # Bare `on:` parses as boolean True under YAML 1.1 (PyYAML); quoted
+    # "on:" stays a string. Accept both spellings, same assertions.
+    triggers = doc.get("on", doc.get(True))
+    assert isinstance(triggers, dict), "workflow has no 'on' trigger mapping"
+    return triggers
+
+
 def test_triggers_cover_cli_docs_and_composition():
     # Push stays path-filtered (minutes), but pull_request must be UNFILTERED:
     # required contexts have to report on every PR or strict protection
     # blocks the merge forever (Track 1).
     doc = _workflow_doc()
-    push_paths = set(doc["on"]["push"]["paths"] or [])
+    triggers = _triggers(doc)
+    push_paths = set(triggers["push"]["paths"] or [])
     assert REQUIRED_PATHS <= push_paths, f"push paths missing: {REQUIRED_PATHS - push_paths}"
-    pr_filter = doc["on"]["pull_request"]
+    pr_filter = triggers["pull_request"]
     assert not pr_filter or not pr_filter.get("paths"), (
         "pull_request must not be path-filtered"
     )
