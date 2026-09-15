@@ -111,6 +111,12 @@ horneroctl
 │   └── notify <title> <body>           # desktop notification helper
 ├── backup              # dotfiles and config backups
 │   ├── create | list | restore <id> | schedule
+├── welcome             # first-login onboarding state (Hornero-wide contract)
+│   ├── status [--json]
+│   ├── set-show-on-login <true|false> [--dry-run] [--yes]
+│   ├── mark-seen [--revision <r>] [--dry-run] [--yes]
+│   ├── open [page] [--dry-run]
+│   └── reset [--dry-run] [--yes]
 ├── setup               # RESERVED for HorneroOS/installer flows
 ├── doctor              # cross-area consistency checks
 ├── version
@@ -126,6 +132,7 @@ horneroctl
 | Desktop defaults and snapshots | HorneroOS/config | `config` |
 | Package updates and dependencies | HorneroOS/hornero | `package` |
 | Install and first-boot flows | HorneroOS/installer | `setup` (reserved namespace) |
+| First-login onboarding state (portable contract) | HorneroOS/hornero | `welcome` |
 | Session, media, host utilities | HorneroOS/hornero | `system`, `device`, `backup` |
 
 The `setup` group is namespace-reserved only. Its subcommands are
