@@ -446,13 +446,35 @@ for spec in \
   # theme's generated palette. The harness test-session compositor does
   # not source the deployed environment.conf, so QT_QPA_PLATFORMTHEME is
   # set explicitly at launch (the deployed pin is asserted in the state
-  # snapshot above); real sessions inherit it from Hyprland. Extra settle
-  # time: a cold CopyQ also starts its server on first show.
+  # snapshot above); real sessions inherit it from Hyprland. The server
+  # must start BEFORE show: a cold `copyq show` alone leaves no window
+  # inside the settle window (proven by empty qt6 cells), and LC_ALL
+  # silences the Qt C-locale warning. The window's presence is polled —
+  # never assumed — so a missing CopyQ fails loudly instead of
+  # mislabelling a bare desktop.
   # shellcheck disable=SC2016
   vm_ssh "$HENV
-hyprctl dispatch exec -- env QT_QPA_PLATFORMTHEME=qt6ct $QT_BIN" >/dev/null \
-    || fail "guest launch: copyq ($id)"
+export LC_ALL=C.UTF-8
+hyprctl dispatch exec -- env QT_QPA_PLATFORMTHEME=qt6ct LC_ALL=C.UTF-8 copyq --start-server" >/dev/null \
+    || fail "guest launch: copyq server ($id)"
   sleep 7
+  # shellcheck disable=SC2016
+  vm_ssh "$HENV
+export LC_ALL=C.UTF-8
+hyprctl dispatch exec -- env QT_QPA_PLATFORMTHEME=qt6ct LC_ALL=C.UTF-8 $QT_BIN" >/dev/null \
+    || fail "guest launch: copyq show ($id)"
+  _qt_tries=0
+  while (( _qt_tries < 8 )); do
+    # shellcheck disable=SC2016
+    if vm_ssh "$HENV
+hyprctl clients -j 2>/dev/null | python3 -c 'import json,sys; sys.exit(0 if any(\"copyq\" in (c.get(\"class\",\"\")+c.get(\"title\",\"\")).lower() for c in json.load(sys.stdin)) else 1)'" 2>/dev/null; then
+      break
+    fi
+    sleep 2
+    _qt_tries=$((_qt_tries + 1))
+  done
+  (( _qt_tries < 8 )) || fail "guest CopyQ window never appeared ($id)"
+  sleep 2
   shot "$id" qt6
   close_apps qt6
 
