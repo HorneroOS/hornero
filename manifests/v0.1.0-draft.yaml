@@ -20,9 +20,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 6cde9fbb096e6a1e180de02b3639927cbc9da2a2
+    sha: 70be1c45b8b9bcbeb3594afba1257b8e1d9c5f5f
     status: pinned
-    subject: "Merge pull request #21 from HorneroOS/fix/p2-hyprlock-date-generator"
+    subject: "Merge pull request #22 from HorneroOS/fix/p2-hyprlock-date-cmd"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
