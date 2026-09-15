@@ -153,3 +153,24 @@ fn test_dispatch_config_show() {
 	assert dispatch(['horneroctl', 'config', 'show', 'a', 'b']) == 2
 	p2_dispatch_teardown()
 }
+
+fn test_dispatch_welcome_status_readonly() {
+	assert dispatch(['horneroctl', 'welcome', 'status']) == 0
+	assert dispatch(['horneroctl', 'welcome', 'status', '--bogus']) == 2
+	assert dispatch(['horneroctl', 'welcome', 'status', 'extra']) == 2
+	assert dispatch(['horneroctl', 'welcome']) == 2
+	assert dispatch(['horneroctl', 'welcome', 'bogus']) == 2
+}
+
+fn test_dispatch_welcome_mutations_need_yes() {
+	assert dispatch(['horneroctl', 'welcome', 'set-show-on-login', 'false']) == 1
+	assert dispatch(['horneroctl', 'welcome', 'set-show-on-login', 'false', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'welcome', 'set-show-on-login']) == 2
+	assert dispatch(['horneroctl', 'welcome', 'set-show-on-login', 'maybe', '--yes']) == 2
+	assert dispatch(['horneroctl', 'welcome', 'mark-seen']) == 1
+	assert dispatch(['horneroctl', 'welcome', 'mark-seen', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'welcome', 'reset']) == 1
+	assert dispatch(['horneroctl', 'welcome', 'reset', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'welcome', 'open', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'welcome', 'open', 'BAD PAGE!']) == 1
+}

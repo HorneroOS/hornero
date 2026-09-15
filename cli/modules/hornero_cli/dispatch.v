@@ -17,7 +17,7 @@ import hornero_core
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
-	'backup', 'completion', 'help']
+	'backup', 'completion', 'welcome', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -95,6 +95,9 @@ pub fn dispatch(args []string) int {
 		}
 		'completion' {
 			run_completion(rest[1..], mode)
+		}
+		'welcome' {
+			run_welcome(rest[1..], mode)
 		}
 		'help' {
 			print(root_help())
@@ -358,6 +361,48 @@ fn run_backup(args []string, mode hornero_core.RenderMode) int {
 		return render(hornero_core.backup_schedule_report(), mode)
 	}
 	return render(hornero_core.backup_list_report(), mode)
+}
+
+fn run_welcome(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_welcome(args) or {
+		return render_error(hornero_core.err_usage('welcome.usage', err.msg()), mode)
+	}
+	match opts.leaf {
+		'status' {
+			return render(hornero_core.welcome_status_report(), mode)
+		}
+		'set-show-on-login' {
+			value := hornero_core.welcome_parse_cli_bool(opts.value) or {
+				return render_error(hornero_core.err_usage('welcome.usage', 'invalid value: ${opts.value} (use true|false).\nExample: horneroctl welcome set-show-on-login false --dry-run'),
+					mode)
+			}
+			return render(hornero_core.welcome_set_show_report(hornero_core.WelcomeSetOptions{
+				value:   value
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}), mode)
+		}
+		'mark-seen' {
+			return render(hornero_core.welcome_mark_seen_report(hornero_core.WelcomeSeenOptions{
+				revision: opts.revision
+				dry_run:  opts.dry_run
+				yes:      opts.yes
+			}), mode)
+		}
+		'open' {
+			return render(hornero_core.welcome_open_report(hornero_core.WelcomeOpenOptions{
+				page:    opts.value
+				dry_run: opts.dry_run
+			}), mode)
+		}
+		'reset' {
+			return render(hornero_core.welcome_reset_report(opts.dry_run, opts.yes), mode)
+		}
+		else {
+			return render_error(hornero_core.err_usage('welcome.usage', 'unknown welcome leaf.\nExample: horneroctl welcome status'),
+				mode)
+		}
+	}
 }
 
 fn run_completion(args []string, mode hornero_core.RenderMode) int {

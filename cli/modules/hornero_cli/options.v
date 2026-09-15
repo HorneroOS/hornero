@@ -306,3 +306,86 @@ pub fn parse_appearance_cmd(args []string) !AppearanceCmdOptions {
 		call_args: call_args
 	}
 }
+
+// WelcomeCmdOptions covers
+// `welcome <status|set-show-on-login|mark-seen|open|reset>`.
+pub struct WelcomeCmdOptions {
+pub:
+	leaf     string
+	value    string // set-show-on-login bool arg | open page | mark-seen --revision
+	revision string // mark-seen --revision value
+	dry_run  bool
+	yes      bool
+}
+
+pub fn parse_welcome(args []string) !WelcomeCmdOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl welcome status')
+	}
+	leaf := args[0]
+	if leaf !in ['status', 'set-show-on-login', 'mark-seen', 'open', 'reset'] {
+		return error('unknown welcome subcommand: ${leaf}.\nRun: horneroctl welcome --help')
+	}
+	mut value := ''
+	mut revision := ''
+	mut dry_run := false
+	mut yes := false
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		if a == '--dry-run' {
+			dry_run = true
+			i++
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			i++
+			continue
+		}
+		if a == '--revision' {
+			if i + 1 >= args.len || args[i + 1].starts_with('-') {
+				return error('missing value for --revision.\nExample: horneroctl welcome mark-seen --revision p1 --dry-run')
+			}
+			revision = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl welcome status')
+		}
+		if value.len > 0 {
+			return error('unexpected argument: ${a}.\nRun: horneroctl welcome --help')
+		}
+		value = a
+		i++
+	}
+	if leaf == 'status' && (value.len > 0 || revision.len > 0 || dry_run || yes) {
+		return error('welcome status takes no arguments.\nExample: horneroctl welcome status')
+	}
+	if leaf == 'reset' && (value.len > 0 || revision.len > 0) {
+		return error('welcome reset takes no arguments.\nExample: horneroctl welcome reset --dry-run')
+	}
+	if leaf == 'set-show-on-login' && value.len == 0 {
+		return error('missing value (true|false).\nExample: horneroctl welcome set-show-on-login false --dry-run')
+	}
+	if leaf == 'set-show-on-login' && revision.len > 0 {
+		return error('welcome set-show-on-login takes no --revision.\nExample: horneroctl welcome set-show-on-login false --dry-run')
+	}
+	if leaf == 'mark-seen' && value.len > 0 {
+		return error('welcome mark-seen takes --revision, not a positional.\nExample: horneroctl welcome mark-seen --revision p1 --dry-run')
+	}
+	if leaf == 'open' && revision.len > 0 {
+		return error('welcome open takes no --revision.\nExample: horneroctl welcome open --dry-run')
+	}
+	if leaf == 'open' && yes {
+		return error('welcome open needs no --yes (it only asks the shell).\nExample: horneroctl welcome open --dry-run')
+	}
+	return WelcomeCmdOptions{
+		leaf:     leaf
+		value:    value
+		revision: revision
+		dry_run:  dry_run
+		yes:      yes
+	}
+}

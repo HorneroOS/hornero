@@ -17,6 +17,7 @@ Commands:
   config        Configuration paths, values, validation, snapshots
   package       Pending system updates (check, updates)
   backup        Config backups (list, schedule)
+  welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   completion    Print shell completions
   help          Show help for a command
 
@@ -350,6 +351,90 @@ Print a shell completion script to stdout.
 Examples:
   horneroctl completion bash > /etc/bash_completion.d/horneroctl
   horneroctl completion zsh > ~/.zsh/completions/_horneroctl
+'
+		}
+		'welcome' {
+			return 'Usage: horneroctl welcome <status|set-show-on-login|mark-seen|open|reset> [options]
+
+Hornero-wide first-login onboarding state (docs/PATH_CONTRACT.md).
+The state file is the single source of truth every frontend reads;
+the Shell never shells out for it at startup.
+
+  status                        Show the current state (read-only)
+  set-show-on-login <bool>      Opt in/out of login-time Welcome [--dry-run] [--yes]
+  mark-seen [--revision <r>]    Record content revision as seen [--dry-run] [--yes]
+  open [page]                   Ask the shell to open Welcome [--dry-run]
+  reset                         Restore defaults (show on login) [--dry-run] [--yes]
+
+Mutations need --yes; --dry-run only previews. An explicit opt-out
+always wins, even when content is updated.
+
+Examples:
+  horneroctl welcome status
+  horneroctl welcome status --json
+  horneroctl welcome set-show-on-login false --dry-run
+  horneroctl welcome set-show-on-login false --yes
+  horneroctl welcome mark-seen --dry-run
+  horneroctl welcome open --dry-run
+  horneroctl welcome reset --dry-run
+'
+		}
+		'welcome status' {
+			return 'Usage: horneroctl welcome status [--json]
+
+Show the Welcome state (read-only): whether Welcome opens at login,
+which content revision shipped vs was seen, and the state file path.
+Missing or malformed state behaves as defaults (first login shows).
+
+Examples:
+  horneroctl welcome status
+  horneroctl welcome status --json
+'
+		}
+		'welcome set-show-on-login' {
+			return 'Usage: horneroctl welcome set-show-on-login <true|false> [--dry-run] [--yes]
+
+Opt in or out of login-time Welcome. Idempotent: setting the current
+value succeeds without rewriting the file.
+
+Examples:
+  horneroctl welcome set-show-on-login false --dry-run
+  horneroctl welcome set-show-on-login false --yes
+  horneroctl welcome set-show-on-login true --yes
+'
+		}
+		'welcome mark-seen' {
+			return 'Usage: horneroctl welcome mark-seen [--revision <r>] [--dry-run] [--yes]
+
+Record a content revision as seen (defaults to the shipped revision)
+and refresh open timestamps. Never flips showOnLogin.
+
+Examples:
+  horneroctl welcome mark-seen --dry-run
+  horneroctl welcome mark-seen --yes
+  horneroctl welcome mark-seen --revision p1 --yes
+'
+		}
+		'welcome open' {
+			return 'Usage: horneroctl welcome open [page] [--dry-run]
+
+Ask a running Hornero Shell to open Welcome (optional page id) via
+`qs ipc call welcome open`. Needs no --yes; --dry-run previews.
+
+Examples:
+  horneroctl welcome open --dry-run
+  horneroctl welcome open navigate
+'
+		}
+		'welcome reset' {
+			return 'Usage: horneroctl welcome reset [--dry-run] [--yes]
+
+Restore defaults (show on login). The only path back to auto-show;
+content updates never flip the flag.
+
+Examples:
+  horneroctl welcome reset --dry-run
+  horneroctl welcome reset --yes
 '
 		}
 		else {
