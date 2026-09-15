@@ -20,9 +20,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 879b5211692750f08dbbad6fbcfd00f3feb77ddc
+    sha: 11c285061d51d3bc4c7ae048b35ddddaf42a4466
     status: pinned
-    subject: "Merge pull request #19 from HorneroOS/fix/p2-hyprlock-smart-colors-path"
+    subject: "Merge pull request #20 from HorneroOS/fix/p2-hyprlock-date-label"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
