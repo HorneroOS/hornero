@@ -10,6 +10,31 @@ image under KVM, materializes the composition inside the guest, and runs
 the same checks `scripts/compose.sh` runs on the host (plus a shell-syntax
 pass over every shipped config script).
 
+## Appearance matrix (`tests/vm/p2-screenshots.sh`)
+
+Preview 2 graphical evidence: for each official theme
+(`hornero-dark`, `hornero-light`, `pampa`) applies it through the real
+control plane (`horneroctl appearance theme set --yes`) inside a live
+Hyprland + Hornero Shell session and captures ten cells per theme
+(`desktop`, `kitty`, `gtk3`, `gtk4`, `qt6`, `launcher`, `dashboard`,
+`adwaita`, `lockscreen`, `hyprlock`) plus machine-readable state, all
+offline behind the same firewall discipline as `smoke.sh`.
+
+```bash
+tests/vm/p2-screenshots.sh [--work DIR] [--ssh-port N] [--keep]
+```
+
+Hardening learned from review (each fails loudly instead of
+mislabeling): zero-client verification after every close (kitty's
+close-confirm survives `killactive`), per-theme fresh sessions (a
+released hyprlock poisons the next shell lock), effective-lock asserts
+from locker logs, and shell-IPCs verified after every lock/unlock.
+The Qt cell captures the `qt6ct` window per the config repo's Qt
+decision (Qt6 Widgets via the `qt6ct` platform theme); the `adwaita`
+cell captures `loupe` on the theme wallpaper (libadwaita follows the
+color scheme by design, see config `docs/DECISIONS.md`). Contact
+sheets are generated from the shots dir with ImageMagick `montage`.
+
 ## Graphical smoke (`scripts/graphical-smoke.sh`)
 
 Graphical guest validation of the pinned composition. Runs
