@@ -32,7 +32,7 @@ jobs:
       - name: Run composition tests
         run: python3 -m pytest tests/ -q
       - name: Lint composition docs
-        run: npx --yes markdownlint-cli manifests/README.md profiles/README.md releases/v0.1.0-draft-checklist.md docs/*.md
+        run: npx --yes markdownlint-cli manifests/README.md profiles/README.md releases/v0.1.0-draft-checklist.md releases/v0.2.0-preview2-checklist.md docs/*.md
   pin-freshness:
     runs-on: ubuntu-latest
     steps:

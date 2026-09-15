@@ -3,7 +3,28 @@
 How to cut a Hornero OS release from the composition in this
 repository. Follow the steps in order; each step gates the next.
 
-## 1. Bump
+## 0. Release model (read first)
+
+Composition manifests are immutable release records:
+
+- one manifest file describes exactly one composition;
+- a new release gets a NEW manifest file (never reuse, never
+  rename-and-refresh an old one);
+- a tagged manifest is never edited again — not even to refresh
+  pins. Tags preserve the release state; the file preserves its
+  content;
+- `manifests/candidate` names the ONE release-candidate manifest
+  whose `shell`/`config` pins track current component mains;
+- historical manifests keep schema/content validation but are
+  exempt from freshness checks and are never rewritten;
+- `profiles/` are live files tracking the candidate manifest;
+  `releases/` definitions pin one manifest each, so historical
+  releases stay valid without chasing moved profiles;
+- `scripts/compose.sh` defaults to the candidate pointer;
+  `scripts/check-pins.py` enforces freshness for the candidate
+  only (`--manifest` overrides the pointer explicitly).
+
+## 1. Refresh the candidate
 
 1. Resolve the current component SHAs from their `main` branches:
 
@@ -12,23 +33,26 @@ repository. Follow the steps in order; each step gates the next.
    git ls-remote https://github.com/HorneroOS/config refs/heads/main
    ```
 
-2. Create the new manifest in `manifests/` (copy the previous one),
-   update `name`, `date`, and the `sha` / `subject` fields.
-   Keep `installer` and `iso` as `future` slots until their owning
-   work lands; never pin a SHA you have not resolved yourself.
-3. Point new or updated profiles in `profiles/` at the new manifest
-   name, and write the release definition plus checklist in
-   `releases/` (copy `v0.1.0-draft` as a template).
+2. Update `sha` / `subject` ONLY in the candidate manifest named by
+   `manifests/candidate`. Keep `installer` and `iso` as `future`
+   slots until their owning work lands; never pin a SHA you have
+   not resolved yourself; never touch a historical manifest.
+3. Point new or updated profiles in `profiles/` at the candidate
+   manifest name, and write the release definition plus checklist in
+   `releases/` (copy `v0.2.0-preview2` as a template for the next
+   release: new manifest file, repointed `candidate`, updated
+   profiles and release files).
 
 ## 2. Validate
 
-Run all four gates from the repository root:
+Run all five gates from the repository root:
 
 ```bash
 python3 scripts/check-manifests.py
+python3 scripts/check-pins.py
 python3 -m pytest tests/ -q
 markdownlint manifests/README.md profiles/README.md \
-  releases/v0.1.0-draft-checklist.md docs/RELEASE_PROCESS.md
+  releases/v0.2.0-preview2-checklist.md docs/RELEASE_PROCESS.md
 ./scripts/compose.sh --yes
 ```
 

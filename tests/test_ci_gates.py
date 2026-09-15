@@ -74,15 +74,20 @@ def test_secrets_lint_job_runs_scanner():
     assert "scripts/secrets-lint.sh" in text
 
 
+def _candidate_entries():
+    candidate = _pins.read_candidate_name(ROOT)
+    return _pins.manifest_pin_entries(ROOT / "manifests" / candidate)
+
+
 def test_pin_entries_cover_shell_and_config():
-    entries = _pins.manifest_pin_entries(ROOT)
+    entries = _candidate_entries()
     assert entries, "no pinned shell/config entries found"
     names = {name for _, name, _, _, _ in entries}
     assert {"shell", "config"} <= names
 
 
 def test_compare_pins_accepts_fresh():
-    entries = _pins.manifest_pin_entries(ROOT)
+    entries = _candidate_entries()
     live = {(repo, ref): sha for _, _, repo, ref, sha in entries}
     assert _pins.compare_pins(entries, live) == []
 
@@ -97,9 +102,10 @@ def test_compare_pins_rejects_stale_with_detail():
 
 def test_bump_instructions_point_at_bump_process():
     errors = ["manifests/x.yaml: 'shell' pin stale"]
-    text = _pins.bump_instructions(errors)
+    text = _pins.bump_instructions("x.yaml", errors)
     assert "git ls-remote" in text
     assert "RELEASE_PROCESS" in text
+    assert "never rewrite history" in text
 
 
 def test_secrets_lint_passes_on_clean_tree():

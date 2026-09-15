@@ -3,7 +3,7 @@
 apiVersion: hornero.os/v1
 kind: EditionProfile
 name: base
-manifest: hornero-0.1.0-draft
+manifest: hornero-0.2.0-preview2
 description: >-
   Minimal composed system for VM smoke tests: shell, config defaults,
   and horneroctl. No developer tooling, no installer integration.
