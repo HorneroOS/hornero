@@ -165,7 +165,37 @@ def check_profile_chain(profiles: dict) -> list[str]:
     return errors
 
 
-def check_release_doc(doc, source: str, manifests: dict, profiles: dict) -> list[str]:
+def candidate_manifest_name(root: Path) -> str | None:
+    """Return the candidate manifest's document name, if the pointer resolves.
+
+    ``manifests/candidate`` names a manifest FILE; this maps it to the
+    manifest document ``name:`` inside. Returns None when the pointer is
+    missing or unresolvable (callers then fall back to strict checks).
+    """
+    pointer = root / "manifests" / "candidate"
+    try:
+        lines = pointer.read_text(encoding="utf-8").strip().splitlines()
+    except OSError:
+        return None
+    names = [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
+    if len(names) != 1:
+        return None
+    try:
+        doc = load_yaml(root / "manifests" / names[0])
+    except (OSError, ValueError):
+        return None
+    if isinstance(doc, dict) and isinstance(doc.get("name"), str):
+        return doc["name"]
+    return None
+
+
+def check_release_doc(
+    doc,
+    source: str,
+    manifests: dict,
+    profiles: dict,
+    strict_profile_manifest: bool = True,
+) -> list[str]:
     errors: list[str] = []
     if not isinstance(doc, dict):
         return [f"{source}: document must be a mapping"]
@@ -190,7 +220,7 @@ def check_release_doc(doc, source: str, manifests: dict, profiles: dict) -> list
         profile = profiles.get(profile_name)
         if profile is None:
             errors.append(f"{source}: unknown profile '{profile_name}'")
-        elif profile.get("manifest") != manifest_name:
+        elif strict_profile_manifest and profile.get("manifest") != manifest_name:
             errors.append(f"{source}: profile '{profile_name}' uses another manifest")
     return errors
 
@@ -230,10 +260,21 @@ def check_tree(root: Path) -> list[str]:
             profiles[doc["name"]] = doc
     errors.extend(check_profile_chain(profiles))
 
+    # Profiles are live files tracking the candidate manifest, so only the
+    # candidate release gets the strict profile-manifest agreement check.
+    # Historical releases keep manifest/profiles/checklist existence
+    # validation but are never rewritten to chase moved profiles.
+    candidate_name = candidate_manifest_name(root)
+
     for path in doc_files(root / "releases", "yaml"):
         doc = load_yaml(path)
         source = f"releases/{path.name}"
-        errors.extend(check_release_doc(doc, source, manifests, profiles))
+        strict = candidate_name is None or (
+            isinstance(doc, dict) and doc.get("manifest") == candidate_name
+        )
+        errors.extend(
+            check_release_doc(doc, source, manifests, profiles, strict)
+        )
         checklist = doc.get("checklist") if isinstance(doc, dict) else None
         if isinstance(checklist, str) and not (root / checklist).is_file():
             errors.append(f"{source}: missing checklist '{checklist}'")

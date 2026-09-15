@@ -1,0 +1,7 @@
+# Release-candidate pointer.
+#
+# Names the ONE composition manifest whose shell/config pins must be
+# fresh against current component mains (scripts/check-pins.py,
+# scripts/compose.sh default). Historical manifests keep schema/content
+# validation but are never freshness-checked and never rewritten.
+v0.2.0-preview2.yaml

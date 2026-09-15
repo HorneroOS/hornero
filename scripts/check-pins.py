@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-"""Cross-gate: manifest pins must equal live main SHAs of shell+config.
+"""Cross-gate: the release-candidate manifest pins must equal live main SHAs.
 
 Usage:
-    python3 scripts/check-pins.py [--root DIR]
+    python3 scripts/check-pins.py [--root DIR] [--manifest FILE]
 
-Resolves the current ``main`` SHA of every pinned ``shell``/``config``
-component via ``git ls-remote`` and compares it with the ``sha``
-recorded in ``manifests/*.yaml``. Exit 0 when every pin is fresh,
-1 otherwise (with bump instructions).
+Composition manifests are immutable release records: a new release gets
+a new file under ``manifests/`` and historical manifests are never
+rewritten. Freshness against live component mains is therefore enforced
+only for the ONE release-candidate manifest named by
+``manifests/candidate`` (override with ``--manifest``). Every other
+manifest still gets structural validation (it must parse and any
+``pinned`` entry must carry a well-formed 40-char SHA), but a
+historical pin is allowed to remain historical.
+
+Exit 0 when the candidate pins are fresh, 1 otherwise (with bump
+instructions).
 
 Network access to github.com is required: a pin cannot be proven
 fresh offline.
@@ -27,33 +34,87 @@ except ImportError:  # pragma: no cover
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 PINNED_COMPONENTS = ("shell", "config")
+CANDIDATE_POINTER = "candidate"
 
 
-def manifest_pin_entries(root: Path) -> list[tuple[str, str, str, str, str]]:
+def read_candidate_name(root: Path) -> str:
+    """Return the candidate manifest filename from manifests/candidate.
+
+    The pointer is a committed file, so candidate selection is explicit,
+    reviewable, and deterministic: CI can never silently check (or bump)
+    the wrong manifest.
+    """
+    pointer = root / "manifests" / CANDIDATE_POINTER
+    try:
+        name = pointer.read_text(encoding="utf-8").strip().splitlines()
+    except OSError as exc:
+        raise RuntimeError(f"cannot read {pointer}: {exc}") from exc
+    names = [line.strip() for line in name if line.strip() and not line.strip().startswith("#")]
+    if len(names) != 1 or "/" in names[0] or not names[0].endswith(".yaml"):
+        raise RuntimeError(
+            f"{pointer} must name exactly one manifest file "
+            f"(e.g. 'v0.2.0-preview2.yaml'), got: {names!r}"
+        )
+    candidate = root / "manifests" / names[0]
+    if not candidate.is_file():
+        raise RuntimeError(f"candidate manifest '{names[0]}' does not exist")
+    return names[0]
+
+
+def manifest_pin_entries(manifest_path: Path) -> list[tuple[str, str, str, str, str]]:
     """Return (manifest_file, component, repo, ref, sha) for shell/config pins."""
+    with manifest_path.open(encoding="utf-8") as fh:
+        doc = yaml.safe_load(fh)
+    if not isinstance(doc, dict):
+        return []
+    components = doc.get("components")
+    if not isinstance(components, dict):
+        return []
     entries: list[tuple[str, str, str, str, str]] = []
-    for path in sorted((root / "manifests").glob("*.yaml")):
-        with path.open(encoding="utf-8") as fh:
-            doc = yaml.safe_load(fh)
-        if not isinstance(doc, dict):
+    for name in PINNED_COMPONENTS:
+        comp = components.get(name)
+        if not isinstance(comp, dict) or comp.get("status") != "pinned":
             continue
-        components = doc.get("components")
-        if not isinstance(components, dict):
+        entries.append(
+            (
+                f"manifests/{manifest_path.name}",
+                name,
+                str(comp.get("repo", "")),
+                str(comp.get("ref", "main")),
+                str(comp.get("sha", "")),
+            )
+        )
+    return entries
+
+
+def validate_historical_manifests(root: Path, candidate: str) -> list[str]:
+    """Structural check for non-candidate manifests: parseable + well-formed SHAs.
+
+    Historical pins are allowed to differ from live mains; malformed
+    entries are still rejected so history stays machine-readable.
+    """
+    errors: list[str] = []
+    for path in sorted((root / "manifests").glob("*.yaml")):
+        if path.name == candidate:
+            continue
+        source = f"manifests/{path.name}"
+        try:
+            with path.open(encoding="utf-8") as fh:
+                doc = yaml.safe_load(fh)
+        except (OSError, ValueError) as exc:
+            errors.append(f"{source}: unreadable ({exc})")
+            continue
+        if not isinstance(doc, dict) or not isinstance(doc.get("components"), dict):
+            errors.append(f"{source}: not a composition manifest document")
             continue
         for name in PINNED_COMPONENTS:
-            comp = components.get(name)
+            comp = doc["components"].get(name)
             if not isinstance(comp, dict) or comp.get("status") != "pinned":
                 continue
-            entries.append(
-                (
-                    f"manifests/{path.name}",
-                    name,
-                    str(comp.get("repo", "")),
-                    str(comp.get("ref", "main")),
-                    str(comp.get("sha", "")),
-                )
-            )
-    return entries
+            sha = comp.get("sha", "")
+            if not isinstance(sha, str) or not SHA_RE.match(sha):
+                errors.append(f"{source}: '{name}' pin is not a 40-char SHA")
+    return errors
 
 
 def resolve_live_sha(repo: str, ref: str = "main") -> str:
@@ -91,36 +152,59 @@ def compare_pins(
     return errors
 
 
-def bump_instructions(errors: list[str]) -> str:
+def bump_instructions(candidate: str, errors: list[str]) -> str:
     lines = [
-        "PIN-FAIL: manifest pins are stale. Bump them:",
+        f"PIN-FAIL: candidate manifest '{candidate}' pins are stale. Bump them:",
         "",
     ]
     lines.extend(f"  - {error}" for error in errors)
     lines.extend(
         [
             "",
-            "To bump, resolve the live SHAs yourself (never invent one):",
+            "Refresh the CANDIDATE manifest only (never rewrite history):",
             "",
             "  git ls-remote https://github.com/HorneroOS/shell refs/heads/main",
             "  git ls-remote https://github.com/HorneroOS/config refs/heads/main",
             "",
-            "Then copy the newest manifest in manifests/, update name, date,",
-            "and the sha/subject fields per docs/RELEASE_PROCESS.md, and",
-            "re-run: python3 scripts/check-pins.py",
+            "Then update the sha/subject fields of manifests/"
+            + candidate
+            + " per docs/RELEASE_PROCESS.md, and re-run:",
+            "  python3 scripts/check-pins.py",
+            "",
+            "Cutting a new release instead? Copy the candidate to a new",
+            "manifest file, repoint manifests/candidate, and update",
+            "profiles/ + releases/ (never edit a tagged manifest).",
         ]
     )
     return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Check manifest pins are fresh.")
+    parser = argparse.ArgumentParser(description="Check candidate manifest pins are fresh.")
     parser.add_argument("--root", default=None, help="Repository root")
+    parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Candidate manifest filename (default: manifests/candidate pointer)",
+    )
     args = parser.parse_args(argv)
     root = Path(args.root) if args.root else Path(__file__).resolve().parent.parent
-    entries = manifest_pin_entries(root)
+    try:
+        candidate = args.manifest or read_candidate_name(root)
+        if args.manifest and not (root / "manifests" / args.manifest).is_file():
+            print(f"PIN-FAIL: manifest '{args.manifest}' does not exist")
+            return 1
+    except RuntimeError as exc:
+        print(f"PIN-FAIL: {exc}")
+        return 1
+    structural = validate_historical_manifests(root, candidate)
+    if structural:
+        for error in structural:
+            print(f"PIN-FAIL: {error}")
+        return 1
+    entries = manifest_pin_entries(root / "manifests" / candidate)
     if not entries:
-        print("PIN-FAIL: no pinned shell/config entries found in manifests/*.yaml")
+        print(f"PIN-FAIL: no pinned shell/config entries in manifests/{candidate}")
         return 1
     live: dict[tuple[str, str], str] = {}
     failures: list[str] = []
@@ -138,9 +222,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     errors = compare_pins(entries, live)
     if errors:
-        print(bump_instructions(errors))
+        print(bump_instructions(candidate, errors))
         return 1
-    print(f"PIN-PASS: {len(entries)} pin(s) match live main SHAs")
+    print(f"PIN-PASS: candidate manifests/{candidate} pins match live main SHAs")
     return 0
 
 

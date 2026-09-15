@@ -14,7 +14,7 @@
 # Usage:
 #   scripts/compose.sh [--manifest FILE] [--work DIR] [--dest DIR] [--yes]
 #
-#   --manifest  composition manifest (default: manifests/v0.1.0-draft.yaml)
+#   --manifest  composition manifest (default: manifests/candidate pointer)
 #   --work      scratch dir for pin checkouts (default: <mktemp>)
 #   --dest      materialization root (default: <work>/root)
 #   --yes       actually materialize (default is preview: --dry-run + report)
@@ -24,7 +24,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MANIFEST="manifests/v0.1.0-draft.yaml"
+# Default manifest follows the release-candidate pointer so compose always
+# resolves the current candidate without script edits per release.
+MANIFEST="manifests/$(grep -v '^#' "$ROOT/manifests/candidate" | grep -v '^$' | head -1)"
 WORK=""
 DEST=""
 YES=0

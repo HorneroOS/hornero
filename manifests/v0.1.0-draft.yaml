@@ -1,34 +1,28 @@
 # Hornero OS composition manifest: hornero-0.1.0-draft
-#
-# Live pin surface: shell/config SHAs track their mains and are refreshed
-# by the release process (docs/RELEASE_PROCESS.md) whenever check-pins
-# reports drift. History is preserved by git tags (v0.1.0-draft, ...),
-# never by stale pins in this file.
 
 apiVersion: hornero.os/v1
 kind: CompositionManifest
 name: hornero-0.1.0-draft
-date: "2026-09-15"
+date: "2026-09-13"
 description: >-
-  Composition manifest. Pins HorneroOS/shell and HorneroOS/config
+  First composition manifest. Pins HorneroOS/shell and HorneroOS/config
   to their current main SHAs. horneroctl builds from this repository.
-  installer and iso are named future slots only. Refreshed 2026-09-15
-  (governance + AUR packaging pins).
+  installer and iso are named future slots only.
 
 components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 4317bddcff59b367a87bc2984363a33ef7bf8103
+    sha: b0a864cd57cfea01d7314c1de9823b873fb9269a
     status: pinned
-    subject: "Merge pull request #29 from HorneroOS/style/bare-on-trigger"
+    subject: "Merge pull request #16 from HorneroOS/feat/path-conform-shell"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 923bdbc932036145f37ccea981d9cbc62f0f4077
+    sha: c4ac00326cd5476c5efc05c11a403d1d6353a7d6
     status: pinned
-    subject: "Merge pull request #29 from HorneroOS/style/bare-on-trigger"
+    subject: "Merge pull request #7 from HorneroOS/feat/path-conform-config"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero

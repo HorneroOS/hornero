@@ -8,8 +8,22 @@ This directory holds the pinning schema and the dated manifests.
 - `schema.json` — JSON Schema (draft 2020-12) for `CompositionManifest`
   documents. It enforces the component table shape, the `pinned` /
   `local` / `future` statuses, and the 40-char commit SHA format.
-- `v0.1.0-draft.yaml` — first manifest, backing the `0.1.0-draft`
-  pre-release. Pins `shell` and `config` to their current `main` SHAs.
+- `candidate` — pointer naming the ONE release-candidate manifest
+  whose pins must be fresh. Reviewed like code; CI follows it.
+- `v0.1.0-draft.yaml` — IMMUTABLE record of the `0.1.0-draft`
+  (Preview 0) composition. Never rewritten; history lives here, not
+  in refreshed pins.
+- `v0.2.0-preview2.yaml` — release-candidate composition for
+  Development Preview 2. Frozen on tag day, then immutable too.
+
+## Immutability rule
+
+A manifest describes exactly one composition. A new release gets a
+new manifest file; a tagged manifest is never edited again, not even
+to "refresh" pins. `git tag` preserves the release state; the file
+preserves its content. A PR that mutates a manifest older than the
+candidate is a release-architecture bug, and tests fail it
+(`tests/test_composition.py`).
 
 ## Component statuses
 
@@ -27,9 +41,9 @@ stay reviewable as a diff, checkable without network access, and
 releasable from a source archive. Nothing here requires
 `git submodule update`.
 
-## Bump process
+## Release-candidate refresh (before freeze only)
 
-To pin newer component revisions:
+To refresh the release-candidate pins:
 
 1. Resolve the new SHAs from the component `main` branches:
 
@@ -38,17 +52,28 @@ To pin newer component revisions:
    git ls-remote https://github.com/HorneroOS/config refs/heads/main
    ```
 
-2. Copy the current manifest to a new dated file (or edit it in
-   place for a draft), update `date`, `sha`, and `subject` fields.
+2. Update `sha` and `subject` in the candidate manifest named by
+   `candidate`. Never touch any other manifest file.
 3. Validate everything:
 
    ```bash
    python3 scripts/check-manifests.py
+   python3 scripts/check-pins.py
    python3 -m pytest tests/ -q
    ```
 
 4. Rescan for personal data and secrets (see `docs/RELEASE_PROCESS.md`)
    before committing and pushing.
+
+## Cutting a new release
+
+1. Copy the candidate manifest to a new file (e.g.
+   `v0.3.0.yaml`), update `name`, `date`, `sha`, `subject`.
+2. Repoint `candidate` at the new file.
+3. Point `profiles/` at the new manifest name; add the release
+   definition plus checklist under `releases/`.
+4. Run the four gates (`docs/RELEASE_PROCESS.md`); tag only when
+   the checklist is complete. The previous manifest stays untouched.
 
 ## Validation
 

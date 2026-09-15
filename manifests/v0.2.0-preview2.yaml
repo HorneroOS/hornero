@@ -1,0 +1,49 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview2
+#
+# Release-candidate composition for Development Preview 2. This file is
+# IMMUTABLE once the v0.2.0-preview2 tag is cut: a new release always
+# gets a new manifest file, historical manifests are never rewritten.
+# Before freezing, the shell/config pins below are refreshed to their
+# current mains (docs/RELEASE_PROCESS.md); freshness is enforced only
+# for the candidate named in manifests/candidate
+# (scripts/check-pins.py).
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview2
+date: "2026-09-15"
+description: >-
+  Release-candidate composition for Development Preview 2. Pins
+  HorneroOS/shell and HorneroOS/config to their release-candidate
+  main SHAs. horneroctl builds from this repository. installer and
+  iso are named future slots only.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 4317bddcff59b367a87bc2984363a33ef7bf8103
+    status: pinned
+    subject: "Merge pull request #29 from HorneroOS/style/bare-on-trigger"
+    notes: Desktop shell / Quickshell UX.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 923bdbc932036145f37ccea981d9cbc62f0f4077
+    status: pinned
+    subject: "Merge pull request #29 from HorneroOS/style/bare-on-trigger"
+    notes: Reusable desktop and system defaults.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. Install and first-boot flows are defined by HorneroOS/installer in a follow-up.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot. Image build order is documented in docs/RELEASE_PROCESS.md; no image exists yet.
