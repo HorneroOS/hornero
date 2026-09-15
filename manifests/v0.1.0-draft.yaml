@@ -1,28 +1,34 @@
 # Hornero OS composition manifest: hornero-0.1.0-draft
+#
+# Live pin surface: shell/config SHAs track their mains and are refreshed
+# by the release process (docs/RELEASE_PROCESS.md) whenever check-pins
+# reports drift. History is preserved by git tags (v0.1.0-draft, ...),
+# never by stale pins in this file.
 
 apiVersion: hornero.os/v1
 kind: CompositionManifest
 name: hornero-0.1.0-draft
-date: "2026-09-13"
+date: "2026-09-15"
 description: >-
-  First composition manifest. Pins HorneroOS/shell and HorneroOS/config
+  Composition manifest. Pins HorneroOS/shell and HorneroOS/config
   to their current main SHAs. horneroctl builds from this repository.
-  installer and iso are named future slots only.
+  installer and iso are named future slots only. Refreshed 2026-09-15
+  (governance + AUR packaging pins).
 
 components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 16984ac0194dcad4977531e88fc7b372f6c53672
+    sha: 4317bddcff59b367a87bc2984363a33ef7bf8103
     status: pinned
-    subject: "Merge pull request #23 from HorneroOS/feat/p2-factory-visuals"
+    subject: "Merge pull request #29 from HorneroOS/style/bare-on-trigger"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: b5af574b50d83054b720495c8a993c14ef07a46e
+    sha: 923bdbc932036145f37ccea981d9cbc62f0f4077
     status: pinned
-    subject: "Merge pull request #25 from HorneroOS/feat/p2-qt-palette"
+    subject: "Merge pull request #29 from HorneroOS/style/bare-on-trigger"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
