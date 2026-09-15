@@ -2,7 +2,7 @@
 #
 # The engine lives in HorneroOS/.github (`governance/danger`) and is
 # versioned by `governance-*` tags: callers pin a full commit SHA with a
-# version comment (currently governance-v1).
+# version comment (currently governance-v1.3).
 #
 # Fork-safe: triggers on `pull_request` (never `pull_request_target`
 # combined with checkout + execution of PR code). Least privilege below.
@@ -15,9 +15,9 @@ name: PR governance
 
 jobs:
   governance:
-    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@dfd2a5d6358e86243d389a4f58433dc4c9fe5ed5 # governance-v1.2
+    uses: HorneroOS/.github/.github/workflows/pr-governance.yml@ce0dfa83591969920d14e4cd57a01ccf615a25fc # governance-v1.3
     with:
-      engine-ref: dfd2a5d6358e86243d389a4f58433dc4c9fe5ed5 # governance-v1.2
+      engine-ref: ce0dfa83591969920d14e4cd57a01ccf615a25fc # governance-v1.3
     permissions:
       contents: read
       pull-requests: write
