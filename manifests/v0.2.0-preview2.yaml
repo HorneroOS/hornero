@@ -22,16 +22,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 4317bddcff59b367a87bc2984363a33ef7bf8103
+    sha: 3cd8abaa26ec5774377bd64269e3648ddd410155
     status: pinned
-    subject: "Merge pull request #29 from HorneroOS/style/bare-on-trigger"
+    subject: "Merge pull request #31 from HorneroOS/ci/pin-actions"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 923bdbc932036145f37ccea981d9cbc62f0f4077
+    sha: 1ef11f8f6264e25a5be19ef7a72c5cddc8e2293d
     status: pinned
-    subject: "Merge pull request #29 from HorneroOS/style/bare-on-trigger"
+    subject: "Merge pull request #30 from HorneroOS/ci/pin-actions"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
