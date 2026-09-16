@@ -17,6 +17,8 @@ Commands:
   config        Configuration paths, values, validation, snapshots
   package       Pending system updates (check, updates)
   backup        Config backups (list, schedule)
+  power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
+  lock          Screen lock (now, status)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   completion    Print shell completions
   help          Show help for a command
@@ -343,6 +345,48 @@ Examples:
   horneroctl backup schedule
 '
 		}
+		'power' {
+			return 'Usage: horneroctl power <lock|suspend|reboot|shutdown|logout|status> [--dry-run|--yes]
+
+  lock                Lock the screen via the shared lock plan (needs --yes)
+  suspend             Suspend the machine via systemctl (needs --yes)
+  reboot              Reboot the machine via systemctl (needs --yes)
+  shutdown            Power off the machine via systemctl (needs --yes)
+  logout              End the current login session via loginctl (needs --yes)
+  status              Show session and power backend state (read-only)
+
+Mutating actions need --yes; --dry-run only previews. The lock plan
+prefers dots-lockscreen --lock (HORNERO_LOCKSCREEN_BIN), then bare
+hyprlock (HORNERO_HYPRLOCK_BIN), then loginctl lock-session;
+suspend/reboot/shutdown use systemctl (HORNERO_SYSTEMCTL_BIN) and
+logout uses loginctl (HORNERO_LOGINCTL_BIN).
+
+Examples:
+  horneroctl power status
+  horneroctl power lock --dry-run
+  horneroctl power lock --yes
+  horneroctl power suspend --dry-run
+  horneroctl power reboot --yes
+  horneroctl power shutdown --yes
+  horneroctl power logout --yes
+'
+		}
+		'lock' {
+			return 'Usage: horneroctl lock <now|status> [--dry-run|--yes]
+
+  now [--dry-run]     Lock the screen now (needs --yes)
+  status              Show lock backend state (read-only)
+
+Backend: dots-lockscreen --lock (HORNERO_LOCKSCREEN_BIN), else bare
+hyprlock (HORNERO_HYPRLOCK_BIN), else loginctl lock-session
+(HORNERO_LOGINCTL_BIN).
+
+Examples:
+  horneroctl lock status
+  horneroctl lock now --dry-run
+  horneroctl lock now --yes
+'
+		}
 		'completion' {
 			return 'Usage: horneroctl completion <bash|zsh|fish>
 
@@ -446,7 +490,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config package backup completion help"
+  local cur cmds="version doctor shell appearance scheme config package backup power lock completion help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -460,7 +504,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config package backup completion help)
+  cmds=(version doctor shell appearance scheme config package backup power lock completion help)
   _describe "command" cmds
 }
 _horneroctl
@@ -477,6 +521,8 @@ complete -c horneroctl -f -n __fish_use_subcommand -a scheme -d "Color scheme sh
 complete -c horneroctl -f -n __fish_use_subcommand -a config -d "Configuration"
 complete -c horneroctl -f -n __fish_use_subcommand -a package -d "Package updates"
 complete -c horneroctl -f -n __fish_use_subcommand -a backup -d "Backups"
+complete -c horneroctl -f -n __fish_use_subcommand -a power -d "Power actions"
+complete -c horneroctl -f -n __fish_use_subcommand -a lock -d "Screen lock"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
 '
 }
