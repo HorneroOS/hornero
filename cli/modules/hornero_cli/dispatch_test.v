@@ -67,7 +67,8 @@ fn test_dispatch_completion() {
 
 fn test_every_help_has_examples() {
 	for cmd in ['version', 'doctor', 'shell', 'shell preset', 'appearance', 'appearance theme',
-		'appearance scheme', 'scheme', 'config', 'completion'] {
+		'appearance scheme', 'appearance colors', 'appearance accent', 'appearance night-mode',
+		'scheme', 'config', 'completion'] {
 		h := command_help(cmd)
 		assert h.contains('Examples:')
 	}
@@ -77,6 +78,9 @@ fn test_every_help_has_examples() {
 fn test_dispatch_nested_help_exit_zero() {
 	assert dispatch(['horneroctl', 'appearance', 'theme', '--help']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'scheme', '--help']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'colors', '--help']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'accent', '--help']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'night-mode', '--help']) == 0
 	assert dispatch(['horneroctl', 'shell', 'preset', '--help']) == 0
 	assert dispatch(['horneroctl', 'scheme', '--help']) == 0
 	assert dispatch(['horneroctl', 'help', 'scheme']) == 0
@@ -134,6 +138,36 @@ fn test_dispatch_appearance_scheme_and_alias() {
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'set-mode', 'dark']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'bogus']) == 2
 	p2_dispatch_teardown()
+}
+
+fn test_dispatch_appearance_plus() {
+	// Hermetic: nonexistent backends; dry-run previews must still exit 0
+	// (CI has no dots-*), real runs must fail cleanly, usage errors exit 2.
+	os.setenv('HORNERO_SMART_COLORS_BIN', '/nonexistent-colors-hornero-test', true)
+	os.setenv('HORNERO_M3_COLORS_BIN', '/nonexistent-m3-hornero-test', true)
+	os.setenv('HORNERO_NIGHT_MODE_BIN', '/nonexistent-night-hornero-test', true)
+	os.setenv('HORNERO_ACCENT_OVERRIDE_BIN', '/nonexistent-accent-hornero-test', true)
+	assert dispatch(['horneroctl', 'appearance', 'colors', 'status']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'colors', 'status', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'colors', 'generate', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'colors', 'generate', '--m3', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'colors', 'generate']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'colors', 'm3', '--dry-run', '--', '--help']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'colors', 'bogus']) == 2
+	assert dispatch(['horneroctl', 'appearance', 'accent', 'show', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'accent', 'set', '#8839ef', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'accent', 'set', 'bogus', '--dry-run']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'accent', 'set', '#8839ef']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'accent', 'clear', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'accent', 'clear']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'accent', 'bogus']) == 2
+	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'status']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'status', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'toggle']) == 2
+	os.unsetenv('HORNERO_SMART_COLORS_BIN')
+	os.unsetenv('HORNERO_M3_COLORS_BIN')
+	os.unsetenv('HORNERO_NIGHT_MODE_BIN')
+	os.unsetenv('HORNERO_ACCENT_OVERRIDE_BIN')
 }
 
 fn test_dispatch_shell_preset() {

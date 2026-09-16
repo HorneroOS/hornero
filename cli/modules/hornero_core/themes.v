@@ -300,7 +300,7 @@ pub fn theme_apply_report(opts ThemeApplyOptions) CommandResult {
 		args << '--wallpaper'
 		args << opts.wallpaper
 	}
-	rep := run_exec(ExecSpec{
+	rep := delegated_run(ExecSpec{
 		prog:    bin
 		args:    args
 		dry_run: opts.dry_run

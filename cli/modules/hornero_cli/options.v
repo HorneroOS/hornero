@@ -234,6 +234,191 @@ pub fn parse_appearance_scheme(args []string) !SchemeCmdOptions {
 	}
 }
 
+// ColorsCmdOptions covers `appearance colors <status|generate|m3>`.
+// `status` previews the palette (read-only, --dry-run only);
+// `generate` rewrites the smart-color files (--m3 also refreshes
+// scheme.json, needs --yes); `m3 -- <args>` passes through to the M3
+// backend (needs --yes).
+pub struct ColorsCmdOptions {
+pub:
+	leaf      string // status | generate | m3
+	m3        bool
+	dry_run   bool
+	yes       bool
+	call_args []string
+}
+
+// parse_appearance_colors parses `appearance colors <status|generate|m3>` arguments.
+pub fn parse_appearance_colors(args []string) !ColorsCmdOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl appearance colors status')
+	}
+	leaf := args[0]
+	if leaf !in ['status', 'generate', 'm3'] {
+		return error('unknown colors subcommand: ${leaf}.\nRun: horneroctl appearance colors --help')
+	}
+	mut m3 := false
+	mut dry_run := false
+	mut yes := false
+	mut call_args := []string{}
+	mut sep := false
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		if sep {
+			call_args << a
+			i++
+			continue
+		}
+		if a == '--' {
+			sep = true
+			i++
+			continue
+		}
+		if a == '--dry-run' {
+			dry_run = true
+			i++
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			i++
+			continue
+		}
+		if a == '--m3' {
+			m3 = true
+			i++
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl appearance colors ${leaf} --dry-run')
+		}
+		return error('unexpected argument: ${a}.\nRun: horneroctl appearance colors --help')
+	}
+	if leaf == 'status' && (m3 || yes || call_args.len > 0) {
+		return error('colors status takes no arguments.\nExample: horneroctl appearance colors status --dry-run')
+	}
+	if leaf == 'generate' && call_args.len > 0 {
+		return error('colors generate takes no passthrough arguments.\nExample: horneroctl appearance colors generate --m3 --dry-run')
+	}
+	if leaf == 'm3' && m3 {
+		return error('colors m3 passes through; --m3 belongs to generate.\nExample: horneroctl appearance colors generate --m3 --dry-run')
+	}
+	return ColorsCmdOptions{
+		leaf:      leaf
+		m3:        m3
+		dry_run:   dry_run
+		yes:       yes
+		call_args: call_args
+	}
+}
+
+// AccentCmdOptions covers `appearance accent <show|set|clear>`.
+// `show` is read-only; `set <hex>`/`clear` mutate (need --yes).
+pub struct AccentCmdOptions {
+pub:
+	leaf    string // show | set | clear
+	value   string
+	dry_run bool
+	yes     bool
+}
+
+// parse_appearance_accent parses `appearance accent <show|set|clear>` arguments.
+pub fn parse_appearance_accent(args []string) !AccentCmdOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl appearance accent show')
+	}
+	leaf := args[0]
+	if leaf !in ['show', 'set', 'clear'] {
+		return error('unknown accent subcommand: ${leaf}.\nRun: horneroctl appearance accent --help')
+	}
+	mut value := ''
+	mut dry_run := false
+	mut yes := false
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		if a == '--dry-run' {
+			dry_run = true
+			i++
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			i++
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl appearance accent ${leaf} --dry-run')
+		}
+		if value.len > 0 {
+			return error('unexpected argument: ${a}.\nRun: horneroctl appearance accent --help')
+		}
+		value = a
+		i++
+	}
+	if leaf == 'show' && (value.len > 0 || yes) {
+		return error('accent show takes no arguments.\nExample: horneroctl appearance accent show')
+	}
+	if leaf == 'set' && value.len == 0 {
+		return error('missing hex color.\nExample: horneroctl appearance accent set "#8839ef" --dry-run')
+	}
+	if leaf == 'clear' && value.len > 0 {
+		return error('accent clear takes no value.\nExample: horneroctl appearance accent clear --dry-run')
+	}
+	return AccentCmdOptions{
+		leaf:    leaf
+		value:   value
+		dry_run: dry_run
+		yes:     yes
+	}
+}
+
+// NightModeCmdOptions covers `appearance night-mode <status>`
+// (read-only; toggles stay in dots-night-mode for now).
+pub struct NightModeCmdOptions {
+pub:
+	leaf    string // status
+	dry_run bool
+	yes     bool
+}
+
+// parse_appearance_night_mode parses `appearance night-mode <status>` arguments.
+pub fn parse_appearance_night_mode(args []string) !NightModeCmdOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl appearance night-mode status')
+	}
+	leaf := args[0]
+	if leaf != 'status' {
+		return error('unknown night-mode subcommand: ${leaf}.\nRun: horneroctl appearance night-mode --help')
+	}
+	mut dry_run := false
+	mut yes := false
+	for i in 1 .. args.len {
+		a := args[i]
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl appearance night-mode status --dry-run')
+		}
+		return error('unexpected argument: ${a}.\nRun: horneroctl appearance night-mode --help')
+	}
+	if yes {
+		return error('night-mode status takes no --yes.\nExample: horneroctl appearance night-mode status')
+	}
+	return NightModeCmdOptions{
+		leaf:    leaf
+		dry_run: dry_run
+		yes:     yes
+	}
+}
+
 // PresetCmdOptions covers `shell preset <list|current>` (read-only).
 pub struct PresetCmdOptions {
 pub:

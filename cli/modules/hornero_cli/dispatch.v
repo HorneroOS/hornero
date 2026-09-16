@@ -163,13 +163,22 @@ fn run_shell_preset(args []string, mode hornero_core.RenderMode) int {
 }
 
 fn run_appearance(args []string, mode hornero_core.RenderMode) int {
-	if args.len > 0 && args[0] in ['theme', 'scheme'] {
+	if args.len > 0 && args[0] in ['theme', 'scheme', 'colors', 'accent', 'night-mode'] {
 		if wants_help(args) {
 			print(command_help('appearance ' + args[0]))
 			return 0
 		}
 		if args[0] == 'theme' {
 			return run_appearance_theme(args[1..], mode)
+		}
+		if args[0] == 'colors' {
+			return run_appearance_colors(args[1..], mode)
+		}
+		if args[0] == 'accent' {
+			return run_appearance_accent(args[1..], mode)
+		}
+		if args[0] == 'night-mode' {
+			return run_appearance_night_mode(args[1..], mode)
 		}
 		return run_appearance_scheme(args[1..], mode)
 	}
@@ -212,6 +221,45 @@ fn run_appearance_theme(args []string, mode hornero_core.RenderMode) int {
 		wallpaper: opts.wallpaper
 		dry_run:   opts.dry_run
 		yes:       opts.yes
+	}), mode)
+}
+
+fn run_appearance_colors(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_appearance_colors(args) or {
+		return render_error(hornero_core.err_usage('appearance.colors.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.colors_report(hornero_core.ColorsOptions{
+		action:  opts.leaf
+		m3:      opts.m3
+		call:    opts.call_args
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_appearance_accent(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_appearance_accent(args) or {
+		return render_error(hornero_core.err_usage('appearance.accent.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.accent_report(hornero_core.AccentOptions{
+		action:  opts.leaf
+		value:   opts.value
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_appearance_night_mode(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_appearance_night_mode(args) or {
+		return render_error(hornero_core.err_usage('appearance.night-mode.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.night_mode_report(hornero_core.NightModeOptions{
+		action:  opts.leaf
+		dry_run: opts.dry_run
+		yes:     opts.yes
 	}), mode)
 }
 
