@@ -17,7 +17,7 @@ import hornero_core
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
-	'backup', 'power', 'lock', 'completion', 'welcome', 'help']
+	'backup', 'power', 'lock', 'completion', 'welcome', 'wallpaper', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -104,6 +104,9 @@ pub fn dispatch(args []string) int {
 		}
 		'welcome' {
 			run_welcome(rest[1..], mode)
+		}
+		'wallpaper' {
+			run_wallpaper(rest[1..], mode)
 		}
 		'help' {
 			print(root_help())
@@ -436,6 +439,18 @@ fn run_welcome(args []string, mode hornero_core.RenderMode) int {
 				mode)
 		}
 	}
+}
+
+fn run_wallpaper(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_wallpaper_cmd(args) or {
+		return render_error(hornero_core.err_usage('wallpaper.usage', err.msg()), mode)
+	}
+	return render(hornero_core.wallpaper_report(hornero_core.WallpaperOptions{
+		action:  opts.action
+		path:    opts.path
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
 }
 
 fn run_completion(args []string, mode hornero_core.RenderMode) int {

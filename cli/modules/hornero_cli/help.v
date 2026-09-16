@@ -20,6 +20,7 @@ Commands:
   power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
   lock          Screen lock (now, status)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
+  wallpaper     Wallpaper image (set, current, reload)
   completion    Print shell completions
   help          Show help for a command
 
@@ -387,6 +388,32 @@ Examples:
   horneroctl lock now --yes
 '
 		}
+		'wallpaper' {
+			return 'Usage: horneroctl wallpaper <set|current|reload> [options]
+
+  set <path> [--dry-run]    Apply a wallpaper image (needs --yes)
+  current [path]            Print the current wallpaper path (read-only)
+  reload [--dry-run]        Re-apply the color pipeline (needs --yes)
+
+Reads resolve canonical-first: the hornero/* pointer, then the legacy
+dots/* pointer, then the pywal link. Mutations delegate to the verified
+dots-wallpaper-set / dots-wal-reload backends (HORNERO_WALLPAPER_SET_BIN,
+HORNERO_WAL_RELOAD_BIN), which own the Quickshell appearance IPC verbs
+plus the wal+M3 fallback; every backend call carries
+HORNEROCTL_DELEGATED=1 so the delegating dots-* shims run their legacy
+body instead of calling back.
+
+Mutations need --yes; --dry-run only previews.
+
+Examples:
+  horneroctl wallpaper current
+  horneroctl wallpaper current --json
+  horneroctl wallpaper set ~/wall.jpg --dry-run
+  horneroctl wallpaper set ~/wall.jpg --yes
+  horneroctl wallpaper reload --dry-run
+  horneroctl wallpaper reload --yes
+'
+		}
 		'completion' {
 			return 'Usage: horneroctl completion <bash|zsh|fish>
 
@@ -490,7 +517,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config package backup power lock completion help"
+  local cur cmds="version doctor shell appearance scheme config package backup power lock completion wallpaper help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -504,7 +531,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config package backup power lock completion help)
+  cmds=(version doctor shell appearance scheme config package backup power lock completion wallpaper help)
   _describe "command" cmds
 }
 _horneroctl
@@ -524,5 +551,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a backup -d "Backups"
 complete -c horneroctl -f -n __fish_use_subcommand -a power -d "Power actions"
 complete -c horneroctl -f -n __fish_use_subcommand -a lock -d "Screen lock"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
+complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 '
 }
