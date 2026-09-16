@@ -19,6 +19,7 @@ Commands:
   backup        Config backups (list, schedule)
   power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
   lock          Screen lock (now, status)
+  hypr          Hyprland controls (animations, layout, monitors, workspace, plugins)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
   completion    Print shell completions
@@ -372,6 +373,152 @@ Examples:
   horneroctl power logout --yes
 '
 		}
+		'hypr' {
+			return 'Usage: horneroctl hypr <animations|layout|monitors|workspace|plugins> [options]
+
+  animations        Animation profiles (list, current, set, next, restore)
+  layout            Layout profiles (current, status, set, toggle, restore)
+  monitors          Monitor arrangements (list, status, set)
+  workspace         Next/prev workspace cycling (next, prev)
+  plugins           Hyprland plugin status (list, status; install stays legacy)
+
+Reads (list/current/status) never touch the compositor state;
+mutations need --yes and --dry-run only previews. Plugin install,
+enable, and reload stay in dots-hyprland-plugins (hyprpm/AUR-helper
+flow): horneroctl only reports plugin status.
+
+Examples:
+  horneroctl hypr animations list
+  horneroctl hypr animations set cozy --dry-run
+  horneroctl hypr layout toggle --dry-run
+  horneroctl hypr monitors status
+  horneroctl hypr monitors set extend-right --dry-run
+  horneroctl hypr workspace next --dry-run
+  horneroctl hypr plugins status
+'
+		}
+		'hypr animations' {
+			return 'Usage: horneroctl hypr animations <list|current|set|next|restore> [options]
+
+  list                List available profiles (read-only)
+  current             Print the persisted profile (read-only)
+  set <profile> [--dry-run]
+                      Apply default|cozy|cyberpunk|nature|minimal|vaporwave
+                      live via hyprctl keywords (needs --yes)
+  next [--dry-run]    Cycle to the next profile (needs --yes)
+  restore [--dry-run] Re-apply the persisted profile (needs --yes)
+
+Options:
+  --ephemeral         Do not persist the selection to disk
+  --dry-run           Preview the hyprctl invocations without running them
+  --yes               Confirm a mutating action
+
+Profiles come from hyprland.conf.d/animations[-<profile>].conf under
+\$XDG_CONFIG_HOME/hypr; the selection persists under \$XDG_STATE_HOME
+(dots/hypr-animations/current).
+
+Examples:
+  horneroctl hypr animations list
+  horneroctl hypr animations current
+  horneroctl hypr animations set cozy --dry-run
+  horneroctl hypr animations set cozy --yes
+  horneroctl hypr animations next --yes
+  horneroctl hypr animations restore --yes
+'
+		}
+		'hypr layout' {
+			return 'Usage: horneroctl hypr layout <current|status|set|toggle|restore> [options]
+
+  current             Print the live layout, else persisted (read-only)
+  status              Live layout, persisted pointer, backend state (read-only)
+  set <layout> [--dry-run]
+                      Apply scrolling|dwindle|master (needs --yes)
+  toggle [--dry-run]  Flip scrolling to dwindle and back (needs --yes)
+  restore [--dry-run] Re-apply the persisted layout (needs --yes)
+
+Options:
+  --ephemeral         Do not persist the selection to disk
+  --dry-run           Preview the hyprctl invocations without running them
+  --yes               Confirm a mutating action
+
+The scrolling profile sets general:layout plus the scrolling tunables;
+dwindle/master set one keyword. The selection persists under
+\$XDG_STATE_HOME (dots/hypr-layout/current).
+
+Examples:
+  horneroctl hypr layout status
+  horneroctl hypr layout current
+  horneroctl hypr layout set scrolling --dry-run
+  horneroctl hypr layout set dwindle --yes
+  horneroctl hypr layout toggle --yes
+  horneroctl hypr layout restore --yes
+'
+		}
+		'hypr monitors' {
+			return 'Usage: horneroctl hypr monitors <list|status|set> [options]
+
+  list                List monitors from hyprctl (read-only)
+  status              Internal/external split and backend state (read-only)
+  set <mode> [--dry-run]
+                      Apply one arrangement (needs --yes):
+                      internal-only, external-only, extend-right,
+                      extend-left, extend-above, extend-below, mirror,
+                      disable-external
+
+Options:
+  --dry-run           Preview the hyprctl invocations without running them
+  --yes               Confirm a mutating action
+
+Internal is the first eDP* monitor (else the first entry); external
+is the first non-eDP monitor (else the second entry). Extend modes
+place displays using live geometry from `hyprctl monitors -j`.
+
+Examples:
+  horneroctl hypr monitors list
+  horneroctl hypr monitors status
+  horneroctl hypr monitors set extend-right --dry-run
+  horneroctl hypr monitors set mirror --yes
+  horneroctl hypr monitors set internal-only --yes
+'
+		}
+		'hypr workspace' {
+			return 'Usage: horneroctl hypr workspace <next|prev> [--dry-run|--yes]
+
+  next [--dry-run]    Switch to the next workspace, wrapping (needs --yes)
+  prev [--dry-run]    Switch to the previous workspace, wrapping (needs --yes)
+
+Options:
+  --previous, --left  Alias for prev (legacy dots-next-workspace flags)
+  --dry-run           Preview the i3-msg invocation without running it
+  --yes               Confirm a mutating action
+
+Backend: i3-msg (HORNERO_I3_MSG_BIN). Order comes from the ordered
+`set \$WS` names in the i3 config, the focused workspace from
+get_workspaces; the target wraps around at either end.
+
+Examples:
+  horneroctl hypr workspace next --dry-run
+  horneroctl hypr workspace next --yes
+  horneroctl hypr workspace prev --yes
+'
+		}
+		'hypr plugins' {
+			return 'Usage: horneroctl hypr plugins <list|status>
+
+  list                Print the hyprpm plugin list (read-only)
+  status              hyprpm presence plus ScrollOverview installed/enabled
+                      (read-only, never fails)
+
+Plugin install, enable, and reload stay in dots-hyprland-plugins
+(hyprpm/AUR-helper flow) and are intentionally not ported: there is
+no verified non-interactive install backend for horneroctl to own.
+
+Examples:
+  horneroctl hypr plugins status
+  horneroctl hypr plugins list
+  horneroctl hypr plugins status --json
+'
+		}
 		'lock' {
 			return 'Usage: horneroctl lock <now|status> [--dry-run|--yes]
 
@@ -517,7 +664,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config package backup power lock completion wallpaper help"
+  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr completion wallpaper help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -531,7 +678,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config package backup power lock completion wallpaper help)
+  cmds=(version doctor shell appearance scheme config package backup power lock hypr completion wallpaper help)
   _describe "command" cmds
 }
 _horneroctl
@@ -550,6 +697,7 @@ complete -c horneroctl -f -n __fish_use_subcommand -a package -d "Package update
 complete -c horneroctl -f -n __fish_use_subcommand -a backup -d "Backups"
 complete -c horneroctl -f -n __fish_use_subcommand -a power -d "Power actions"
 complete -c horneroctl -f -n __fish_use_subcommand -a lock -d "Screen lock"
+complete -c horneroctl -f -n __fish_use_subcommand -a hypr -d "Hyprland controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 '

@@ -17,7 +17,7 @@ import hornero_core
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
-	'backup', 'power', 'lock', 'completion', 'welcome', 'wallpaper', 'help']
+	'backup', 'power', 'lock', 'hypr', 'completion', 'welcome', 'wallpaper', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -98,6 +98,9 @@ pub fn dispatch(args []string) int {
 		}
 		'lock' {
 			run_lock(rest[1..], mode)
+		}
+		'hypr' {
+			run_hypr(rest[1..], mode)
 		}
 		'completion' {
 			run_completion(rest[1..], mode)
@@ -397,6 +400,135 @@ fn run_lock(args []string, mode hornero_core.RenderMode) int {
 		dry_run: opts.dry_run
 		yes:     opts.yes
 	}), mode)
+}
+
+fn run_hypr(args []string, mode hornero_core.RenderMode) int {
+	if args.len > 0 && args[0] in ['animations', 'layout', 'monitors', 'workspace', 'plugins'] {
+		if wants_help(args) {
+			print(command_help('hypr ' + args[0]))
+			return 0
+		}
+		match args[0] {
+			'animations' {
+				return run_hypr_animations(args[1..], mode)
+			}
+			'layout' {
+				return run_hypr_layout(args[1..], mode)
+			}
+			'monitors' {
+				return run_hypr_monitors(args[1..], mode)
+			}
+			'workspace' {
+				return run_hypr_workspace(args[1..], mode)
+			}
+			else {
+				return run_hypr_plugins(args[1..], mode)
+			}
+		}
+	}
+	if args.len == 0 {
+		return render_error(hornero_core.err_usage('hypr.usage', 'missing subcommand.\nExample: horneroctl hypr animations list'),
+			mode)
+	}
+	if wants_help(args) {
+		print(command_help('hypr'))
+		return 0
+	}
+	return render_error(hornero_core.err_usage('hypr.usage', 'unknown hypr subcommand: ${args[0]}.\nRun: horneroctl hypr --help'),
+		mode)
+}
+
+fn run_hypr_animations(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hypr_animations(args) or {
+		return render_error(hornero_core.err_usage('hypr.animations.usage', err.msg()),
+			mode)
+	}
+	mut profile := opts.profile
+	if opts.leaf == 'next' {
+		profile = hornero_core.animation_next_profile()
+	} else if opts.leaf == 'restore' {
+		profile = hornero_core.animation_current_profile()
+	}
+	match opts.leaf {
+		'list' {
+			return render(hornero_core.animation_list_report(), mode)
+		}
+		'current' {
+			return render(hornero_core.animation_current_report(), mode)
+		}
+		else {
+			return render(hornero_core.animation_apply_report(hornero_core.AnimationApplyOptions{
+				profile:   profile
+				dry_run:   opts.dry_run
+				yes:       opts.yes
+				ephemeral: opts.ephemeral
+			}), mode)
+		}
+	}
+}
+
+fn run_hypr_layout(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hypr_layout(args) or {
+		return render_error(hornero_core.err_usage('hypr.layout.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'current' {
+		return render(hornero_core.layout_current_report(), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.layout_status_report(), mode)
+	}
+	mut layout := opts.layout
+	if opts.leaf == 'toggle' {
+		layout = hornero_core.layout_toggle_value(hornero_core.layout_current_value())
+	} else if opts.leaf == 'restore' {
+		layout = hornero_core.layout_restore_value()
+	}
+	return render(hornero_core.layout_apply_report(hornero_core.LayoutApplyOptions{
+		layout:    layout
+		dry_run:   opts.dry_run
+		yes:       opts.yes
+		ephemeral: opts.ephemeral
+	}), mode)
+}
+
+fn run_hypr_monitors(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hypr_monitors(args) or {
+		return render_error(hornero_core.err_usage('hypr.monitors.usage', err.msg()),
+			mode)
+	}
+	if opts.leaf == 'list' {
+		return render(hornero_core.monitors_list_report(), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.monitors_status_report(), mode)
+	}
+	return render(hornero_core.monitors_set_report(hornero_core.MonitorsSetOptions{
+		mode:    opts.mode
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_hypr_workspace(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hypr_workspace(args) or {
+		return render_error(hornero_core.err_usage('hypr.workspace.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.workspace_cycle_report(hornero_core.WorkspaceCycleOptions{
+		direction: opts.leaf
+		dry_run:   opts.dry_run
+		yes:       opts.yes
+	}), mode)
+}
+
+fn run_hypr_plugins(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hypr_plugins(args) or {
+		return render_error(hornero_core.err_usage('hypr.plugins.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.plugins_status_report(), mode)
+	}
+	return render(hornero_core.plugins_list_report(), mode)
 }
 
 fn run_welcome(args []string, mode hornero_core.RenderMode) int {
