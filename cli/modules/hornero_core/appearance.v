@@ -66,7 +66,7 @@ pub fn appearance_report(opts AppearanceOptions) CommandResult {
 			return fail_result('appearance', 'unknown action: ${opts.action}.\nRun: horneroctl appearance --help')
 		}
 	}
-	rep := run_exec(ExecSpec{
+	rep := delegated_run(ExecSpec{
 		prog:    bin
 		args:    args
 		dry_run: opts.dry_run

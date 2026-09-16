@@ -116,7 +116,7 @@ Examples:
 '
 		}
 		'appearance' {
-			return 'Usage: horneroctl appearance <status|sync|call|theme|scheme> [options]
+			return 'Usage: horneroctl appearance <status|sync|call|theme|scheme|colors|accent|night-mode> [options]
 
   status              Show current appearance state (read-only)
   sync [--dry-run]    Apply the pending color scheme (needs --yes)
@@ -124,6 +124,9 @@ Examples:
                       Pass arguments to the appearance backend directly
   theme ...           Installed theme packs (list, show, get, apply, set)
   scheme ...          Color scheme state and setters (status, set-mode, set-variant)
+  colors ...          Smart-color palette (status, generate, m3)
+  accent ...          Accent override seed (show, set, clear)
+  night-mode ...      Display temperature backend (status)
 
 Options:
   --dry-run           Preview without changing anything
@@ -136,6 +139,9 @@ Examples:
   horneroctl appearance call -- theme list
   horneroctl appearance theme list
   horneroctl appearance scheme status
+  horneroctl appearance colors status --dry-run
+  horneroctl appearance accent show
+  horneroctl appearance night-mode status
 '
 		}
 		'appearance theme' {
@@ -188,6 +194,65 @@ Examples:
   horneroctl appearance scheme set-mode dark --dry-run
   horneroctl appearance scheme set-mode dark --yes
   horneroctl appearance scheme set-variant tonalspot --yes
+'
+		}
+		'appearance colors' {
+			return 'Usage: horneroctl appearance colors <status|generate|m3> [options]
+
+  status [--dry-run]  Preview the generated palette (read-only)
+  generate [--m3] [--dry-run]
+                      Rewrite the smart-color files (needs --yes;
+                      --m3 also refreshes scheme.json)
+  m3 [--dry-run] -- <backend-args...>
+                      Pass arguments to dots-m3-colors directly (needs --yes)
+
+Backend: dots-smart-colors (HORNERO_SMART_COLORS_BIN); m3 passes
+through to dots-m3-colors (HORNERO_M3_COLORS_BIN). The palette
+generation engine itself stays in the backend; V only delegates.
+Every backend call runs under HORNEROCTL_DELEGATED=1 so the
+delegating dots-* shims run their legacy body.
+
+Examples:
+  horneroctl appearance colors status
+  horneroctl appearance colors status --dry-run
+  horneroctl appearance colors generate --dry-run
+  horneroctl appearance colors generate --m3 --yes
+  horneroctl appearance colors m3 --dry-run -- --help
+'
+		}
+		'appearance accent' {
+			return 'Usage: horneroctl appearance accent <show|set|clear> [options]
+
+  show [--dry-run]    Print the accent override seed (read-only)
+  set <hex> [--dry-run]
+                      Set the accent seed (needs --yes)
+  clear [--dry-run]   Clear the override, regenerate from wallpaper (needs --yes)
+
+Backend: dots-accent-override (HORNERO_ACCENT_OVERRIDE_BIN).
+Set/clear trigger a scheme regenerate downstream. Every backend
+call runs under HORNEROCTL_DELEGATED=1 so the delegating dots-*
+shims run their legacy body.
+
+Examples:
+  horneroctl appearance accent show
+  horneroctl appearance accent set "#8839ef" --dry-run
+  horneroctl appearance accent set "#8839ef" --yes
+  horneroctl appearance accent clear --dry-run
+'
+		}
+		'appearance night-mode' {
+			return 'Usage: horneroctl appearance night-mode <status> [options]
+
+  status [--dry-run]  Show whether the temperature backend is active (read-only)
+
+Backend: dots-night-mode (HORNERO_NIGHT_MODE_BIN). Toggles
+(on/off) stay in the backend for now: no verified portable
+surface yet. Every backend call runs under HORNEROCTL_DELEGATED=1
+so the delegating dots-* shims run their legacy body.
+
+Examples:
+  horneroctl appearance night-mode status
+  horneroctl appearance night-mode status --dry-run
 '
 		}
 		'scheme' {

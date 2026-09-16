@@ -53,7 +53,7 @@ fn status_field(m map[string]json2.Any, key string) string {
 // backend. The JSON shape is the backend's contract; V only decodes it.
 fn query_appearance_status(helper string) !AppearanceStatus {
 	bin := dots_appearance_or_fail(helper)!
-	rep := run_exec(ExecSpec{
+	rep := delegated_run(ExecSpec{
 		prog: bin
 		args: ['status', '--json']
 	})
@@ -200,7 +200,7 @@ fn rollback_official_theme(bin string, pre_id string, target string) string {
 	if pre_id.len == 0 || pre_id == target {
 		return ''
 	}
-	rb := run_exec(ExecSpec{
+	rb := delegated_run(ExecSpec{
 		prog: bin
 		args: ['theme', 'apply', pre_id]
 	})
@@ -243,7 +243,7 @@ pub fn theme_set_report(opts ThemeSetOptions) CommandResult {
 	}
 	pre := query_appearance_status(opts.helper) or { AppearanceStatus{} }
 	pre_id := match_official_theme(pre)
-	rep := run_exec(ExecSpec{
+	rep := delegated_run(ExecSpec{
 		prog: bin
 		args: ['theme', 'apply', opts.id]
 	})

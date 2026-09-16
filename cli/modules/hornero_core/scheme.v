@@ -222,7 +222,7 @@ pub fn scheme_set_report(opts SchemeSetOptions) CommandResult {
 		return fail_result('appearance scheme', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance scheme set-${opts.kind} ${opts.value} --dry-run')
 	}
 	verb := if opts.kind == 'mode' { 'set-mode' } else { 'set-variant' }
-	rep := run_exec(ExecSpec{
+	rep := delegated_run(ExecSpec{
 		prog:    bin
 		args:    [verb, opts.value]
 		dry_run: opts.dry_run
