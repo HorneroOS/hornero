@@ -21,7 +21,7 @@ import hornero_core
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
 	'backup', 'power', 'lock', 'hypr', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'help']
+	'apps', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -120,6 +120,9 @@ pub fn dispatch(args []string) int {
 		}
 		'capture' {
 			run_capture(rest[1..], mode)
+		}
+		'apps' {
+			run_apps(rest[1..], mode)
 		}
 		'help' {
 			print(root_help())
@@ -823,6 +826,128 @@ fn run_capture(args []string, mode hornero_core.RenderMode) int {
 			return render(hornero_core.clipboard_report(hornero_core.ClipboardOptions{
 				backend: opts.backend
 				dry_run: opts.dry_run
+			}), mode)
+		}
+	}
+}
+
+fn run_apps(args []string, mode hornero_core.RenderMode) int {
+	if args.len > 0 && args[0] in apps_verbs {
+		if wants_help(args) {
+			print(command_help('apps ' + args[0]))
+			return 0
+		}
+	}
+	opts := parse_apps_cmd(args) or {
+		return render_error(hornero_core.err_usage('apps.usage', err.msg()), mode)
+	}
+	match opts.verb {
+		'files' {
+			fopts := parse_apps_files(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.files.usage', err.msg()),
+					mode)
+			}
+			return render(hornero_core.files_report(hornero_core.FilesOptions{
+				path:    fopts.path
+				info:    fopts.info
+				dry_run: fopts.dry_run
+			}), mode)
+		}
+		'terminal-file' {
+			topts := parse_apps_terminal_file(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.terminal-file.usage',
+					err.msg()), mode)
+			}
+			return render(hornero_core.terminal_file_report(hornero_core.TerminalFileOptions{
+				path:         topts.path
+				selected:     topts.selected
+				last_dir:     topts.last_dir
+				cheatsheet:   topts.cheatsheet
+				fix_previews: topts.fix_previews
+				dry_run:      topts.dry_run
+			}), mode)
+		}
+		'weather' {
+			wopts := parse_apps_weather(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.weather.usage', err.msg()),
+					mode)
+			}
+			return render(hornero_core.weather_report(hornero_core.WeatherOptions{
+				field:   wopts.field
+				dry_run: wopts.dry_run
+			}), mode)
+		}
+		'git-status' {
+			gopts := parse_apps_git_status(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.git-status.usage', err.msg()),
+					mode)
+			}
+			return render(hornero_core.git_status_report(hornero_core.GitStatusOptions{
+				leaf:       gopts.leaf
+				branch:     gopts.branch
+				repository: gopts.repository
+				interval:   gopts.interval
+				async:      gopts.async
+				verbose:    gopts.verbose
+				dry_run:    gopts.dry_run
+				yes:        gopts.yes
+			}), mode)
+		}
+		'audit' {
+			aopts := parse_apps_audit(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.audit.usage', err.msg()),
+					mode)
+			}
+			return render(hornero_core.audit_report(hornero_core.AuditOptions{
+				check:   aopts.check
+				dry_run: aopts.dry_run
+			}), mode)
+		}
+		'launch' {
+			lopts := parse_apps_launch(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.launch.usage', err.msg()),
+					mode)
+			}
+			return render(hornero_core.launch_report(hornero_core.LaunchOptions{
+				backend: lopts.backend
+				list:    lopts.list
+				dry_run: lopts.dry_run
+			}), mode)
+		}
+		'toggle' {
+			topts := parse_apps_toggle(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.toggle.usage', err.msg()),
+					mode)
+			}
+			return render(hornero_core.toggle_report(hornero_core.ToggleOptions{
+				component: topts.component
+				dry_run:   topts.dry_run
+				yes:       topts.yes
+			}), mode)
+		}
+		'switcher' {
+			sopts := parse_apps_switcher(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.switcher.usage', err.msg()),
+					mode)
+			}
+			return render(hornero_core.switcher_report(hornero_core.SwitcherOptions{
+				leaf:    sopts.leaf
+				arg:     sopts.arg
+				dry_run: sopts.dry_run
+				yes:     sopts.yes
+			}), mode)
+		}
+		else {
+			popts := parse_apps_performance(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.performance.usage', err.msg()),
+					mode)
+			}
+			return render(hornero_core.performance_report(hornero_core.PerformanceOptions{
+				leaf:    popts.leaf
+				sub:     popts.sub
+				profile: popts.profile
+				dry_run: popts.dry_run
+				yes:     popts.yes
 			}), mode)
 		}
 	}

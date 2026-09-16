@@ -24,6 +24,7 @@ Commands:
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
+  apps          Everyday apps (files, terminal-file, weather, git-status, audit, launch, toggle, switcher, performance)
   completion    Print shell completions
   help          Show help for a command
 
@@ -801,6 +802,229 @@ Examples:
   horneroctl capture clipboard --backend minimal
 '
 		}
+		'apps' {
+			return 'Usage: horneroctl apps <files|terminal-file|weather|git-status|audit|launch|toggle|switcher|performance> ... [--dry-run|--yes]
+
+  files [--path PATH] [--info]
+                      Open the default file manager (view-open, no --yes)
+                      or show it with --info (read-only)
+  terminal-file [--path PATH] [--select FILE] [--last-dir]
+                      Open yazi, show the cheatsheet, or diagnose previews
+                      (view-open and reads, no --yes)
+  weather <--getdata|--icon|--temp|--hex|--stat|--loc|--quote|--quote2>
+                      Read one cached weather field or refresh (read-only)
+  git-status [watch|jobs|stop] [--branch B] [--repository R]
+                      Watch a repo with desktop notifications (needs --yes),
+                      list watchers (jobs, read-only), or stop them (needs --yes)
+  audit [--permissions|--secrets|--system]
+                      Read-only security checks (fix and report stay legacy)
+  launch [--backend NAME] [--list]
+                      Open the app launcher or list backends (no --yes)
+  toggle <component>  Toggle a shell component or daemon (needs --yes)
+  switcher <leaf>     Drive the window switcher; status is read-only,
+                      control leaves need --yes
+  performance <leaf>  Shell/memory/benchmark/report reads plus the
+                      power-profile mode (set needs --yes)
+
+Reads and view-opens need no --yes; mutations need --yes and preview
+with --dry-run. Backends mirror the dots-* scripts, each with a
+HORNERO_*_BIN override; dots-* calls carry HORNEROCTL_DELEGATED=1.
+
+Later phases: default-apps set (no verified backend yet; list lives
+under `config default-apps list`).
+
+Examples:
+  horneroctl apps files --dry-run
+  horneroctl apps files --info
+  horneroctl apps terminal-file --cheatsheet
+  horneroctl apps weather --temp
+  horneroctl apps git-status jobs
+  horneroctl apps audit --dry-run
+  horneroctl apps launch --list
+  horneroctl apps toggle bar --dry-run
+  horneroctl apps switcher status
+  horneroctl apps performance memory
+  horneroctl apps performance mode
+'
+		}
+		'apps files' {
+			return 'Usage: horneroctl apps files [--path PATH] [--info] [--dry-run]
+
+  open (default)      Open the default file manager at --path, else the
+                      working directory (view-open, no --yes)
+  --info              Show the current default file manager (read-only)
+
+Backend chain (dots-file-manager): exo-open --launch FileManager,
+handlr open, xdg-open (HORNERO_EXO_OPEN_BIN / HORNERO_HANDLR_BIN /
+HORNERO_XDG_OPEN_BIN); --info reads via dots-file-manager
+(HORNERO_FILE_MANAGER_BIN).
+
+Examples:
+  horneroctl apps files --dry-run
+  horneroctl apps files --path ~/Documents --dry-run
+  horneroctl apps files --info
+  horneroctl apps files --info --json
+'
+		}
+		'apps terminal-file' {
+			return 'Usage: horneroctl apps terminal-file [--path PATH] [--select FILE] [--last-dir] [--cheatsheet] [--fix-previews] [--dry-run]
+
+  open (default)      Open yazi via dots-yazi (view-open, no --yes)
+  --cheatsheet        Print the keybinding reference (read-only)
+  --fix-previews      Diagnose preview dependencies (read-only)
+
+Launch wraps dots-yazi (HORNERO_DOTS_YAZI_BIN), falling back to bare
+yazi (HORNERO_YAZI_BIN).
+
+Examples:
+  horneroctl apps terminal-file --dry-run
+  horneroctl apps terminal-file --path ~/Documents --dry-run
+  horneroctl apps terminal-file --select ~/notes.txt --dry-run
+  horneroctl apps terminal-file --last-dir --dry-run
+  horneroctl apps terminal-file --cheatsheet
+  horneroctl apps terminal-file --fix-previews
+'
+		}
+		'apps weather' {
+			return 'Usage: horneroctl apps weather <--getdata|--icon|--temp|--hex|--stat|--loc|--quote|--quote2> [--dry-run]
+
+  --getdata           Refresh the cache from OpenWeatherMap (read-only)
+  --icon --temp --hex --stat --loc --quote --quote2
+                      Read one cached field (read-only)
+
+Exactly one field per invocation. Reads resolve via dots-weather-info
+(HORNERO_WEATHER_BIN); refresh needs a WEATHER_API_KEY like the script.
+
+Examples:
+  horneroctl apps weather --temp
+  horneroctl apps weather --icon --json
+  horneroctl apps weather --getdata --dry-run
+  horneroctl apps weather --loc
+'
+		}
+		'apps git-status' {
+			return 'Usage: horneroctl apps git-status [watch|jobs|stop] [--branch B] [--repository R] [--interval N] [--async] [--verbose] [--dry-run|--yes]
+
+  watch (default)     Notify on new commits in this repo (needs --yes)
+  jobs                List running watcher jobs (read-only)
+  stop                Kill running watcher jobs (needs --yes)
+
+Options:
+  --branch B          Branch to watch (default origin/main)
+  --repository R      Revision to watch (default origin/main)
+  --interval N        Poll seconds (default 60)
+  --async             Detach the watcher into the background
+  --verbose           Timestamped logging
+
+Backend: dots-git-notify (HORNERO_GIT_NOTIFY_BIN); watch runs inside
+the current git repository.
+
+Examples:
+  horneroctl apps git-status jobs
+  horneroctl apps git-status watch --dry-run
+  horneroctl apps git-status watch --interval 30 --async --yes
+  horneroctl apps git-status stop --dry-run
+  horneroctl apps git-status stop --yes
+'
+		}
+		'apps audit' {
+			return 'Usage: horneroctl apps audit [--permissions|--secrets|--system] [--dry-run]
+
+  audit (default)     Full read-only security audit
+  --permissions       File permission checks only (read-only)
+  --secrets           Exposed-secret scan only (read-only)
+  --system            Firewall, updates, SSH, MAC checks only (read-only)
+
+At most one check per invocation. Backend: dots-security-audit
+(HORNERO_SECURITY_AUDIT_BIN). --fix (permission changes, history
+scrub) and --report stay in dots-security-audit and are intentionally
+not ported.
+
+Examples:
+  horneroctl apps audit
+  horneroctl apps audit --dry-run
+  horneroctl apps audit --permissions
+  horneroctl apps audit --system --json
+'
+		}
+		'apps launch' {
+			return 'Usage: horneroctl apps launch [--backend NAME] [--list] [--dry-run]
+
+  launch (default)    Open the app launcher (view-open, no --yes)
+  --list              Print detected backends in priority order (read-only)
+
+Backends: quickshell, minimal (else auto). Backend: dots-launcher
+(HORNERO_LAUNCHER_BIN).
+
+Examples:
+  horneroctl apps launch --dry-run
+  horneroctl apps launch --backend quickshell --dry-run
+  horneroctl apps launch --list
+'
+		}
+		'apps toggle' {
+			return 'Usage: horneroctl apps toggle <bar|launcher|dashboard|sidebar|session|utilities|redshift|caffeine> [--dry-run|--yes]
+
+  bar launcher dashboard sidebar session utilities
+                      Toggle one quickshell component via ipc (needs --yes)
+  redshift caffeine   Toggle the daemon once via --toggle (needs --yes);
+                      the monitor loops stay in dots-toggle
+
+Backend: dots-toggle (HORNERO_TOGGLE_BIN).
+
+Examples:
+  horneroctl apps toggle bar --dry-run
+  horneroctl apps toggle bar --yes
+  horneroctl apps toggle launcher --yes
+  horneroctl apps toggle redshift --dry-run
+  horneroctl apps toggle caffeine --yes
+'
+		}
+		'apps switcher' {
+			return 'Usage: horneroctl apps switcher [daemon|next|prev|toggle|hide|select|quit|status|apply-theme|apply-theme-pack] [arg] [--dry-run|--yes]
+
+  status              Show whether the daemon runs (read-only)
+  daemon next prev toggle hide select quit
+                      Drive the switcher (needs --yes)
+  apply-theme <file>  Apply an explicit theme file (needs --yes)
+  apply-theme-pack [id]
+                      Apply a theme from the appearance pack (needs --yes)
+
+Default leaf is toggle. Backend: dots-snappy-switcher
+(HORNERO_SNAPPY_BIN).
+
+Examples:
+  horneroctl apps switcher status
+  horneroctl apps switcher next --dry-run
+  horneroctl apps switcher toggle --yes
+  horneroctl apps switcher apply-theme nord.ini --dry-run
+  horneroctl apps switcher apply-theme-pack --dry-run
+'
+		}
+		'apps performance' {
+			return 'Usage: horneroctl apps performance <startup|memory|benchmark|report|mode> [set <profile>] [--dry-run|--yes]
+
+  startup             Measure shell startup (read-only)
+  memory              Wayland stack memory readout (read-only)
+  benchmark           Full benchmark suite (read-only)
+  report              Generate the markdown report (read-only)
+  mode                Show the power profile and available ones (read-only)
+  mode set <profile>  Switch the power profile via powerprofilesctl
+                      (needs --yes)
+
+Reads delegate to dots-performance (HORNERO_PERFORMANCE_BIN); mode
+uses powerprofilesctl get/list/set
+(HORNERO_POWERPROFILESCTL_BIN). The interactive menu, quickshell
+pane, and auto-cpufreq GUI stay in dots-performance-mode.
+
+Examples:
+  horneroctl apps performance memory
+  horneroctl apps performance startup --dry-run
+  horneroctl apps performance mode
+  horneroctl apps performance mode set balanced --dry-run
+  horneroctl apps performance mode set balanced --yes
+'
+		}
 		'completion' {
 			return 'Usage: horneroctl completion <bash|zsh|fish>
 
@@ -904,7 +1128,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture help"
+  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture apps help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -918,7 +1142,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture help)
+  cmds=(version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture apps help)
   _describe "command" cmds
 }
 _horneroctl
@@ -942,5 +1166,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a hardware -d "Hardware cont
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, recording, clipboard"
+complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"
 '
 }
