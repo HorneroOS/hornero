@@ -17,7 +17,7 @@ import hornero_core
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
-	'backup', 'completion', 'welcome', 'help']
+	'backup', 'power', 'lock', 'completion', 'welcome', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -92,6 +92,12 @@ pub fn dispatch(args []string) int {
 		}
 		'backup' {
 			run_backup(rest[1..], mode)
+		}
+		'power' {
+			run_power(rest[1..], mode)
+		}
+		'lock' {
+			run_lock(rest[1..], mode)
 		}
 		'completion' {
 			run_completion(rest[1..], mode)
@@ -361,6 +367,33 @@ fn run_backup(args []string, mode hornero_core.RenderMode) int {
 		return render(hornero_core.backup_schedule_report(), mode)
 	}
 	return render(hornero_core.backup_list_report(), mode)
+}
+
+fn run_power(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_power_cmd(args) or {
+		return render_error(hornero_core.err_usage('power.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.power_status_report(), mode)
+	}
+	return render(hornero_core.power_action_report(hornero_core.PowerActionOptions{
+		action:  opts.leaf
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_lock(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_lock_cmd(args) or {
+		return render_error(hornero_core.err_usage('lock.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.lock_status_report(), mode)
+	}
+	return render(hornero_core.lock_now_report(hornero_core.LockNowOptions{
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
 }
 
 fn run_welcome(args []string, mode hornero_core.RenderMode) int {
