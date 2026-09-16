@@ -20,7 +20,8 @@ import hornero_core
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
-	'backup', 'power', 'lock', 'hypr', 'hardware', 'completion', 'welcome', 'wallpaper', 'help']
+	'backup', 'power', 'lock', 'hypr', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
+	'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -116,6 +117,9 @@ pub fn dispatch(args []string) int {
 		}
 		'wallpaper' {
 			run_wallpaper(rest[1..], mode)
+		}
+		'capture' {
+			run_capture(rest[1..], mode)
 		}
 		'help' {
 			print(root_help())
@@ -727,6 +731,53 @@ fn run_wallpaper(args []string, mode hornero_core.RenderMode) int {
 		dry_run: opts.dry_run
 		yes:     opts.yes
 	}), mode)
+}
+
+fn run_capture(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_capture_cmd(args) or {
+		return render_error(hornero_core.err_usage('capture.usage', err.msg()), mode)
+	}
+	match opts.group {
+		'screenshot' {
+			return render(hornero_core.screenshot_report(hornero_core.ScreenshotOptions{
+				region:  opts.region
+				output:  opts.output
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}), mode)
+		}
+		'record' {
+			match opts.leaf {
+				'start' {
+					return render(hornero_core.record_start_report(hornero_core.RecordStartOptions{
+						region:  opts.region
+						sound:   opts.sound
+						fps:     opts.fps
+						dry_run: opts.dry_run
+						yes:     opts.yes
+					}), mode)
+				}
+				'stop' {
+					return render(hornero_core.record_stop_report(hornero_core.RecordStopOptions{
+						dry_run: opts.dry_run
+						yes:     opts.yes
+					}), mode)
+				}
+				else {
+					return render(hornero_core.record_pause_report(hornero_core.RecordPauseOptions{
+						dry_run: opts.dry_run
+						yes:     opts.yes
+					}), mode)
+				}
+			}
+		}
+		else {
+			return render(hornero_core.clipboard_report(hornero_core.ClipboardOptions{
+				backend: opts.backend
+				dry_run: opts.dry_run
+			}), mode)
+		}
+	}
 }
 
 fn run_completion(args []string, mode hornero_core.RenderMode) int {
