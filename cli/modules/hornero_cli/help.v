@@ -23,6 +23,7 @@ Commands:
   hardware      Hardware controls (brightness, battery, mic, keyboard, network)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
+  capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
   completion    Print shell completions
   help          Show help for a command
 
@@ -692,6 +693,49 @@ Examples:
   horneroctl hardware network status --json
 '
 		}
+		'capture' {
+			return 'Usage: horneroctl capture <screenshot|record|clipboard> [options]
+
+  screenshot [--fullscreen|--region] [--output PATH] [--dry-run]
+                      Take a screenshot via sss (needs --yes)
+  record <start|stop|pause> [--region] [--sound] [--sr] [--fps N] [--dry-run]
+                      Drive gpu-screen-recorder (needs --yes)
+  clipboard [--backend NAME] [--dry-run]
+                      Open the clipboard picker view (read-only, no --yes)
+
+Screenshot defaults to fullscreen (\$XDG_PICTURES_DIR, else ~/Pictures,
+screenshot_YYYYMMDD_HHMMSS.png); --region takes an interactive region
+instead (--region wins when both are given). Recordings land in
+\$CAELESTIA_RECORDINGS_DIR, else \$XDG_VIDEOS_DIR/Recordings, as
+recording_YYYYMMDD_HH-MM-SS.mp4; start reuses fps 30 unless --fps sets
+it, and --sr selects region plus desktop audio together. start is an
+ok no-op while a recording runs; stop and pause are ok no-ops with
+none running. Clipboard resolves like dots-clipboard (Wayland:
+copyq, cliphist, minimal; otherwise copyq, minimal): copyq opens the
+picker, cliphist lists history (top 25, no interactive pick), minimal
+previews the paste.
+
+Mutations (screenshot, every record leaf) need --yes; --dry-run only
+previews. Backend overrides: HORNERO_SSS_BIN,
+HORNERO_GPU_SCREEN_RECORDER_BIN, HORNERO_RECORDER_MATCH (pgrep/pkill
+pattern, default gpu-screen-recorder), HORNERO_COPYQ_BIN,
+HORNERO_CLIPHIST_BIN, HORNERO_WL_PASTE_BIN.
+
+Examples:
+  horneroctl capture screenshot --dry-run
+  horneroctl capture screenshot --yes
+  horneroctl capture screenshot --region --dry-run
+  horneroctl capture screenshot --output ~/shot.png --yes
+  horneroctl capture record start --dry-run
+  horneroctl capture record start --region --sound --yes
+  horneroctl capture record start --fps 60 --dry-run
+  horneroctl capture record stop --yes
+  horneroctl capture record pause --yes
+  horneroctl capture clipboard
+  horneroctl capture clipboard --backend copyq --dry-run
+  horneroctl capture clipboard --backend minimal
+'
+		}
 		'completion' {
 			return 'Usage: horneroctl completion <bash|zsh|fish>
 
@@ -795,7 +839,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper help"
+  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -809,7 +853,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper help)
+  cmds=(version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture help)
   _describe "command" cmds
 }
 _horneroctl
@@ -832,5 +876,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a hypr -d "Hyprland controls
 complete -c horneroctl -f -n __fish_use_subcommand -a hardware -d "Hardware controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
+complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, recording, clipboard"
 '
 }
