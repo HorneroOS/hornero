@@ -20,6 +20,7 @@ Commands:
   power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
   lock          Screen lock (now, status)
   hypr          Hyprland controls (animations, layout, monitors, workspace, plugins)
+  hardware      Hardware controls (brightness, battery, mic, keyboard, network)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
   completion    Print shell completions
@@ -561,6 +562,136 @@ Examples:
   horneroctl wallpaper reload --yes
 '
 		}
+		'hardware' {
+			return 'Usage: horneroctl hardware <brightness|battery|mic|keyboard|network> ... [--dry-run|--yes]
+
+  brightness    Display brightness (status, set, up, down)
+  battery       Battery charge (status, monitor)
+  mic           Microphone mute state (status, toggle)
+  keyboard      Keyboard layout, settings GUI, keybindings (layout, settings, keys)
+  network       Connectivity probe (status)
+
+Reads report backend state; mutating leaves need --yes and preview
+with --dry-run. Backends mirror the dots-* scripts (brightnessctl /
+xrandr, acpi / upower, wpctl, hyprctl / setxkbmap, ping), each with a
+HORNERO_*_BIN override.
+
+Examples:
+  horneroctl hardware brightness status
+  horneroctl hardware brightness set 0.8 --dry-run
+  horneroctl hardware battery status
+  horneroctl hardware mic toggle --dry-run
+  horneroctl hardware keyboard layout --current
+  horneroctl hardware network status
+'
+		}
+		'hardware brightness' {
+			return 'Usage: horneroctl hardware brightness <status|set|up|down> [--display NAME] [--dry-run|--yes]
+
+  status [--display NAME]
+                Show current brightness (read-only); without --display,
+                xrandr lists every connected display
+  set <0.0-1.0> [--display NAME]
+                Set brightness fraction, clamped into range (needs --yes)
+  up [--step 0.1] [--display NAME]
+                Raise brightness by step (needs --yes)
+  down [--step 0.1] [--display NAME]
+                Lower brightness by step (needs --yes)
+
+Backend precedence (dots-brightness): brightnessctl, blight,
+xbacklight, xrandr (HORNERO_BRIGHTNESSCTL_BIN and siblings override).
+xbacklight/xrandr need a display: --display, else the first connected
+output. Color-temperature (--temp) stays in dots-brightness.
+
+Examples:
+  horneroctl hardware brightness status
+  horneroctl hardware brightness status --display eDP-1
+  horneroctl hardware brightness set 0.8 --dry-run
+  horneroctl hardware brightness set 0.8 --yes
+  horneroctl hardware brightness up --step 0.05 --dry-run
+  horneroctl hardware brightness down --display eDP-1 --yes
+'
+		}
+		'hardware battery' {
+			return 'Usage: horneroctl hardware battery <status|monitor> [options]
+
+  status              Show charge percent and state (read-only)
+  monitor [--low 20] [--crit 10] [--interval 120] [--daemon]
+                      Poll with low/critical notifications (needs --yes)
+
+Charge source: acpi, else upower (HORNERO_ACPI_BIN /
+HORNERO_UPOWER_BIN); machines with no battery report as such instead
+of 100%. With poweralertd present the monitor stays idle. --daemon
+detaches a background copy via nohup.
+
+Examples:
+  horneroctl hardware battery status
+  horneroctl hardware battery monitor --dry-run
+  horneroctl hardware battery monitor --low=25 --crit=15 --dry-run
+  horneroctl hardware battery monitor --yes
+  horneroctl hardware battery monitor --interval=60 --daemon --yes
+'
+		}
+		'hardware mic' {
+			return 'Usage: horneroctl hardware mic <status|toggle> [--dry-run|--yes]
+
+  status              Show muted/unmuted via wpctl (read-only)
+  toggle [--dry-run]  Flip the default-source mute (needs --yes)
+
+Source: HORNERO_MIC_SOURCE, else the wpctl default-source
+placeholder (HORNERO_WPCTL_BIN override). The event-driven listen
+loop stays in dots-microphone.
+
+Examples:
+  horneroctl hardware mic status
+  horneroctl hardware mic toggle --dry-run
+  horneroctl hardware mic toggle --yes
+'
+		}
+		'hardware keyboard' {
+			return 'Usage: horneroctl hardware keyboard <layout|settings|keys> [options]
+
+  layout [--current|--get|--toggle] [--dry-run]
+                      Toggle the us/latam cycle (needs --yes);
+                      --current shows info, --get prints the name
+  settings [--dry-run]
+                      Open the LXQt keyboard settings GUI
+  keys [--category CAT] [--search TERM] [--dry-run]
+                      List Hyprland keybindings, optionally filtered
+
+Layout backend: hyprctl on Hyprland, else setxkbmap
+(HORNERO_HYPRCTL_BIN / HORNERO_SETXKBMAP_BIN). settings opens
+dots-keyboard-settings, else lxqt-config-input. keys parses the
+Hyprland keybindings file (HORNERO_KEYBINDINGS_FILE override),
+rewriting \$mainMod to SUPER; with quickshell running it asks the
+settings GUI instead (DOTS_BYPASS_QUICKSHELL=1 forces parsing).
+
+Examples:
+  horneroctl hardware keyboard layout --current
+  horneroctl hardware keyboard layout --get
+  horneroctl hardware keyboard layout --dry-run
+  horneroctl hardware keyboard layout --yes
+  horneroctl hardware keyboard settings --dry-run
+  horneroctl hardware keyboard keys --search workspace
+  horneroctl hardware keyboard keys --category=Window
+'
+		}
+		'hardware network' {
+			return 'Usage: horneroctl hardware network status [--timeout 5] [--dry-run]
+
+  status              Ping the probe host once and classify the first
+                      UP interface as wired/wireless (read-only)
+
+Target: DOTS_PING_HOST, else 1.1.1.1; --timeout is the ping deadline
+in seconds. The polling loop stays in dots-check-network.
+
+Examples:
+  horneroctl hardware network status
+  horneroctl hardware network status --timeout=2
+  horneroctl hardware network status --dry-run
+  horneroctl hardware network status --json
+'
+		}
 		'completion' {
 			return 'Usage: horneroctl completion <bash|zsh|fish>
 
@@ -664,7 +795,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr completion wallpaper help"
+  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -678,7 +809,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config package backup power lock hypr completion wallpaper help)
+  cmds=(version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper help)
   _describe "command" cmds
 }
 _horneroctl
@@ -698,6 +829,7 @@ complete -c horneroctl -f -n __fish_use_subcommand -a backup -d "Backups"
 complete -c horneroctl -f -n __fish_use_subcommand -a power -d "Power actions"
 complete -c horneroctl -f -n __fish_use_subcommand -a lock -d "Screen lock"
 complete -c horneroctl -f -n __fish_use_subcommand -a hypr -d "Hyprland controls"
+complete -c horneroctl -f -n __fish_use_subcommand -a hardware -d "Hardware controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 '

@@ -3,8 +3,11 @@ module hornero_cli
 import hornero_core
 
 // Deferred groups (locked in docs/cli-architecture.md, no verified backend yet,
-// so no leaves here): device (brightness/monitors/hardware needs a pinned IPC
-// path first), system, and setup (installer-owned namespace). Batch 1 ships
+// so no leaves here): device (monitors/compositor needs a pinned IPC path
+// first), system, and setup (installer-owned namespace). The dots-*
+// hardware surfaces (brightness, battery, mic, keyboard, network) ship
+// under `hardware` instead, delegating to the same backend CLIs.
+// Batch 1 ships
 // `package check|updates`, `backup list|schedule`, and `config snapshot`;
 // batch 2 ships `config default-apps list`, `config materialize`, and
 // `config gui`; preview 1 adds `config migrate`. The remaining
@@ -17,7 +20,7 @@ import hornero_core
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
-	'backup', 'power', 'lock', 'hypr', 'completion', 'welcome', 'wallpaper', 'help']
+	'backup', 'power', 'lock', 'hypr', 'hardware', 'completion', 'welcome', 'wallpaper', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -101,6 +104,9 @@ pub fn dispatch(args []string) int {
 		}
 		'hypr' {
 			run_hypr(rest[1..], mode)
+		}
+		'hardware' {
+			run_hardware(rest[1..], mode)
 		}
 		'completion' {
 			run_completion(rest[1..], mode)
@@ -529,6 +535,144 @@ fn run_hypr_plugins(args []string, mode hornero_core.RenderMode) int {
 		return render(hornero_core.plugins_status_report(), mode)
 	}
 	return render(hornero_core.plugins_list_report(), mode)
+}
+
+fn run_hardware(args []string, mode hornero_core.RenderMode) int {
+	if args.len == 0 {
+		return render_error(hornero_core.err_usage('hardware.usage', 'missing subcommand.\nExample: horneroctl hardware brightness status'),
+			mode)
+	}
+	group := args[0]
+	if group !in ['brightness', 'battery', 'mic', 'keyboard', 'network'] {
+		return render_error(hornero_core.err_usage('hardware.usage', 'unknown hardware group: ${group}.\nRun: horneroctl hardware --help'),
+			mode)
+	}
+	if wants_help(args) {
+		print(command_help('hardware ' + group))
+		return 0
+	}
+	match group {
+		'brightness' {
+			return run_hardware_brightness(args[1..], mode)
+		}
+		'battery' {
+			return run_hardware_battery(args[1..], mode)
+		}
+		'mic' {
+			return run_hardware_mic(args[1..], mode)
+		}
+		'keyboard' {
+			return run_hardware_keyboard(args[1..], mode)
+		}
+		else {
+			return run_hardware_network(args[1..], mode)
+		}
+	}
+}
+
+fn run_hardware_brightness(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hardware_brightness(args) or {
+		return render_error(hornero_core.err_usage('hardware.brightness.usage', err.msg()),
+			mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.brightness_status_report(hornero_core.BrightnessStatusOptions{
+			display: opts.display
+			dry_run: opts.dry_run
+		}), mode)
+	}
+	if opts.leaf == 'set' {
+		return render(hornero_core.brightness_set_report(hornero_core.BrightnessSetOptions{
+			value:   opts.value
+			display: opts.display
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	return render(hornero_core.brightness_adjust_report(hornero_core.BrightnessAdjustOptions{
+		dir:     opts.leaf
+		step:    opts.step
+		display: opts.display
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_hardware_battery(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hardware_battery(args) or {
+		return render_error(hornero_core.err_usage('hardware.battery.usage', err.msg()),
+			mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.battery_status_report(hornero_core.BatteryStatusOptions{
+			dry_run: opts.dry_run
+		}), mode)
+	}
+	return render(hornero_core.battery_monitor_report(hornero_core.BatteryMonitorOptions{
+		low:      opts.low
+		crit:     opts.crit
+		interval: opts.interval
+		daemon:   opts.daemon
+		dry_run:  opts.dry_run
+		yes:      opts.yes
+	}), mode)
+}
+
+fn run_hardware_mic(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hardware_mic(args) or {
+		return render_error(hornero_core.err_usage('hardware.mic.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.mic_status_report(hornero_core.MicStatusOptions{
+			dry_run: opts.dry_run
+		}), mode)
+	}
+	return render(hornero_core.mic_toggle_report(hornero_core.MicToggleOptions{
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_hardware_keyboard(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hardware_keyboard(args) or {
+		return render_error(hornero_core.err_usage('hardware.keyboard.usage', err.msg()),
+			mode)
+	}
+	if opts.leaf == 'settings' {
+		return render(hornero_core.keyboard_settings_report(hornero_core.KeyboardSettingsOptions{
+			dry_run: opts.dry_run
+		}), mode)
+	}
+	if opts.leaf == 'keys' {
+		return render(hornero_core.keyboard_keys_report(hornero_core.KeyboardKeysOptions{
+			category: opts.category
+			search:   opts.search
+			dry_run:  opts.dry_run
+		}), mode)
+	}
+	mode_name := if opts.get {
+		'get'
+	} else if opts.current {
+		'current'
+	} else {
+		'toggle'
+	}
+	return render(hornero_core.keyboard_layout_report(hornero_core.KeyboardLayoutOptions{
+		mode:    mode_name
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
+}
+
+fn run_hardware_network(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hardware_network(args) or {
+		return render_error(hornero_core.err_usage('hardware.network.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.network_status_report(hornero_core.NetworkStatusOptions{
+		timeout: opts.timeout
+		dry_run: opts.dry_run
+	}), mode)
 }
 
 fn run_welcome(args []string, mode hornero_core.RenderMode) int {
