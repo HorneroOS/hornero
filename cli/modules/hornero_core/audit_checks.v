@@ -1,12 +1,14 @@
 module hornero_core
 
 import os
+import strconv
 import time
+import x.json2
 
-// Native security-audit backend: mirrors the retired
-// dots-security-audit read-only checks (full/permissions/secrets/
-// system). --fix and --report stay legacy by design. HOME redirection
-// scopes every check (tests); leaf tools resolve via PATH with
+// Native security-audit backend: mirrors the retired dots-security-audit
+// checks (full/permissions/secrets/system) plus --fix (chmod/history
+// scrub), --report (markdown), and --json. HOME redirection scopes
+// every verb (tests); leaf tools resolve via PATH with
 // HORNERO_STAT_BIN / HORNERO_FIND_BIN seams.
 
 fn audit_stat_bin() string {
@@ -421,5 +423,269 @@ fn audit_section_native(check string) CommandResult {
 	}
 	return ok_result(name, lines.join('\n'), {
 		'check': check
+	})
+}
+
+// audit_history_keep reports whether a shell-history line survives the
+// scrub: drop lines that set password/token/secret/key values before any
+// comment marker. Mirrors `grep -vEi "^[^#]*(password|token|secret|key).*="`
+// (vlib regex has no case-insensitive mode, so the predicate lowers first).
+fn audit_history_keep(line string) bool {
+	lower := line.to_lower()
+	code := if lower.contains('#') { lower.all_before('#') } else { lower }
+	for w in ['password', 'token', 'secret', 'key'] {
+		if idx := code.index(w) {
+			if code[idx..].contains('=') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// audit_chmod flips one path (dry-run returns the would-do line instead
+// of touching disk).
+fn audit_chmod(path string, mode int, dry_run bool) !string {
+	if dry_run {
+		return 'would chmod 0o' + strconv.format_int(mode, 8) + ' ' + path
+	}
+	os.chmod(path, mode) or { return error('cannot chmod ${path}: ${err.msg()}') }
+	return ''
+}
+
+// audit_octal_tail parses the last three `%a` digits (setuid-style leading
+// digits are ignored, like the script's `${perms: -1}` tail check).
+fn audit_octal_tail(perms string) int {
+	t := if perms.len > 3 { perms[perms.len - 3..] } else { perms }
+	if t.len != 3 {
+		return -1
+	}
+	mut mode := 0
+	for c in t {
+		d := c.str().int()
+		if d < 0 || d > 7 || d.str() != c.str() {
+			return -1
+		}
+		mode = mode * 8 + d
+	}
+	return mode
+}
+
+// audit_fix_native mirrors apply_security_fixes: SSH/credential/script
+// file modes, home world-bit strip, shell-history scrub. Mutating: needs
+// --yes; --dry-run only previews.
+fn audit_fix_native(dry_run bool, yes bool) CommandResult {
+	name := 'apps audit --fix'
+	if !yes && !dry_run {
+		return fail_result(name, 'refusing to apply fixes without --yes (preview with --dry-run).\nExample: horneroctl apps audit --fix --dry-run')
+	}
+	home := os.home_dir()
+	mut lines := ['🔧 Applying security fixes...']
+	mut preview := []string{}
+	ssh_dir := os.join_path(home, '.ssh')
+	if os.is_dir(ssh_dir) {
+		for f in audit_find([ssh_dir, '-type', 'f', '(', '-name', 'id_*', '-o', '-name', '*_rsa',
+			'-o', '-name', '*_ed25519', '-o', '-name', '*_ecdsa', ')', '!', '-name', '*.pub']) {
+			msg := audit_chmod(f, 0o600, dry_run) or { return fail_result(name, err.msg()) }
+			if dry_run {
+				preview << msg
+			}
+		}
+		msg := audit_chmod(ssh_dir, 0o700, dry_run) or { return fail_result(name, err.msg()) }
+		if dry_run {
+			preview << msg
+		}
+		lines << '✅ Fixed SSH directory permissions (700)'
+		lines << '✅ Fixed SSH private key permissions (600)'
+		cfg := os.join_path(ssh_dir, 'config')
+		if os.is_file(cfg) {
+			msg2 := audit_chmod(cfg, 0o600, dry_run) or { return fail_result(name, err.msg()) }
+			if dry_run {
+				preview << msg2
+			}
+			lines << '✅ Fixed SSH config permissions (600)'
+		}
+		for p in audit_find([ssh_dir, '-name', '*.pub']) {
+			msg3 := audit_chmod(p, 0o644, dry_run) or { return fail_result(name, err.msg()) }
+			if dry_run {
+				preview << msg3
+			}
+		}
+		lines << '✅ Fixed SSH public key permissions (644)'
+	}
+	xdg := os.getenv('XDG_CONFIG_HOME')
+	cfg_base := if xdg.len > 0 { xdg } else { os.join_path(home, '.config') }
+	cred_dir := os.join_path(cfg_base, 'private_credentials')
+	if os.is_dir(cred_dir) {
+		for f in audit_find([cred_dir, '-type', 'f']) {
+			msg := audit_chmod(f, 0o600, dry_run) or { return fail_result(name, err.msg()) }
+			if dry_run {
+				preview << msg
+			}
+		}
+		msg := audit_chmod(cred_dir, 0o700, dry_run) or { return fail_result(name, err.msg()) }
+		if dry_run {
+			preview << msg
+		}
+		lines << '✅ Fixed credential file permissions'
+	}
+	bin_dir := os.join_path(home, '.local', 'bin')
+	for s in audit_find([bin_dir, '-name', 'executable_dots-*']) {
+		msg := audit_chmod(s, 0o755, dry_run) or { return fail_result(name, err.msg()) }
+		if dry_run {
+			preview << msg
+		}
+	}
+	lines << '✅ Fixed script permissions'
+	for f in audit_find([home, '-maxdepth', '3', '-type', 'f', '(', '-name', '*.key', '-o', '-name',
+		'*.pem', '-o', '-name', '*.p12', '-o', '-name', '*.pfx', ')']) {
+		msg := audit_chmod(f, 0o600, dry_run) or { return fail_result(name, err.msg()) }
+		if dry_run {
+			preview << msg
+		}
+	}
+	lines << '✅ Fixed sensitive file permissions'
+	home_perms := audit_stat_mode(home)
+	if home_perms.len > 0 {
+		mode := audit_octal_tail(home_perms)
+		if mode >= 0 && mode & 0o007 > 5 {
+			if dry_run {
+				preview << 'would chmod o-rwx ${home}'
+			} else {
+				os.chmod(home, mode & ~0o007) or {
+					return fail_result(name, 'cannot chmod ${home}: ${err.msg()}')
+				}
+			}
+			lines << '✅ Removed world permissions from home directory'
+		}
+	}
+	for hist in [os.join_path(home, '.zsh_history'), os.join_path(home, '.bash_history')] {
+		if os.is_file(hist) {
+			if dry_run {
+				preview << 'would scrub sensitive entries in ${hist}'
+			} else {
+				raw := os.read_file(hist) or { '' }
+				kept := raw.split_into_lines().filter(fn (line string) bool {
+					return audit_history_keep(line)
+				})
+				ending := if raw.ends_with('\n') { '\n' } else { '' }
+				os.write_file(hist, kept.join('\n') + ending) or {
+					return fail_result(name, 'cannot scrub ${hist}: ${err.msg()}')
+				}
+			}
+			lines << '✅ Cleaned sensitive entries from ${os.file_name(hist)}'
+		}
+	}
+	lines << ''
+	lines << '🔒 Security fixes applied.'
+	lines << "⚠️  Review the cleaned history files to ensure legitimate content wasn't removed."
+	if dry_run {
+		return ok_result(name, 'would apply fixes:\n  ' + preview.join('\n  '), {
+			'mode':    'fix'
+			'dry_run': 'true'
+		})
+	}
+	return ok_result(name, lines.join('\n'), {
+		'mode': 'fix'
+	})
+}
+
+// audit_report_native mirrors generate_security_report: the three sections
+// plus static recommendations, written to a markdown file under
+// $HOME/.cache/dots.
+fn audit_report_native(dry_run bool) CommandResult {
+	name := 'apps audit --report'
+	home := os.home_dir()
+	stamp := perf_datestamp(time.now())
+	report := os.join_path(home, '.cache', 'dots', 'security_report_${stamp}.md')
+	if dry_run {
+		return ok_result(name, 'would write ${report} (permissions, secrets, system sections)',
+			{
+			'mode':    'report'
+			'dry_run': 'true'
+		})
+	}
+	os.mkdir_all(os.dir(report)) or {}
+	perm, _ := audit_permissions_native()
+	sec, _ := audit_secrets_native()
+	sys, _ := audit_system_native()
+	doc := ['# horneroctl Security Audit Report', '', '_Generated: ${audit_utc_now()}_', '',
+		'## File Permissions', '', perm.join('\n'), '', '## Secrets Scan', '', sec.join('\n'),
+		'', '## System Security', '', sys.join('\n'), '', '## Recommendations', '',
+		'### High Priority', '- Ensure all SSH keys have 600 permissions',
+		'- Review any files flagged above for hardcoded secrets',
+		'- Enable firewall if not already active', '', '### Medium Priority',
+		'- Set up automatic security updates', '- Review SSH configuration for hardening',
+		'- Run monthly security audits', '', '### Security Checklist',
+		'- [ ] SSH keys properly secured', '- [ ] No plain-text secrets in config files',
+		'- [ ] Firewall configured', '- [ ] Automatic updates enabled', '', '## Next Steps', '',
+		'Run `horneroctl apps audit --fix` to apply permission fixes and scrub shell history.',
+		'']
+	os.write_file(report, doc.join('\n')) or {
+		return fail_result(name, 'cannot write report: ${err.msg()}')
+	}
+	return ok_result(name, '📋 Security report generated: ${report}', {
+		'mode':   'report'
+		'report': report
+	})
+}
+
+pub struct AuditJsonSection {
+pub:
+	output string
+	ok     bool
+}
+
+pub struct AuditJsonReport {
+pub:
+	timestamp    string
+	total_checks int
+	failures     int
+	compliant    bool
+	permissions  AuditJsonSection
+	secrets      AuditJsonSection
+	system       AuditJsonSection
+}
+
+// audit_json_native mirrors run_security_audit_json: machine-readable
+// summary over the three native sections.
+fn audit_json_native() CommandResult {
+	name := 'apps audit --json'
+	perm, perm_issues := audit_permissions_native()
+	sec, sec_issues := audit_secrets_native()
+	sys, sys_issues := audit_system_native()
+	mut failures := 0
+	if perm_issues > 0 {
+		failures++
+	}
+	if sec_issues > 0 {
+		failures++
+	}
+	if sys_issues > 0 {
+		failures++
+	}
+	body := json2.encode(AuditJsonReport{
+		timestamp:    audit_utc_now()
+		total_checks: 3
+		failures:     failures
+		compliant:    failures == 0
+		permissions:  AuditJsonSection{
+			output: perm.join('\n')
+			ok:     perm_issues == 0
+		}
+		secrets:      AuditJsonSection{
+			output: sec.join('\n')
+			ok:     sec_issues == 0
+		}
+		system:       AuditJsonSection{
+			output: sys.join('\n')
+			ok:     sys_issues == 0
+		}
+	})
+	if failures > 0 {
+		return fail_result(name, body)
+	}
+	return ok_result(name, body, {
+		'mode': 'json'
 	})
 }

@@ -5,8 +5,8 @@ module hornero_cli
 // carry a correct Example (exit-2 contract). View-open verbs (files
 // open, terminal launch, launcher) need no --yes; state-changing verbs
 // (toggles, switcher control, git watch/stop, profile set) need --yes
-// with --dry-run previews. `audit` covers the read-only checks only;
-// default-apps set stays a deferral under `config default-apps`.
+// with --dry-run previews. `audit` covers checks plus --fix/--report/
+// --json; default-apps set stays a deferral under `config default-apps`.
 
 pub const apps_verbs = ['files', 'terminal-file', 'weather', 'git-status', 'audit', 'launch',
 	'toggle', 'switcher', 'performance']
@@ -351,19 +351,28 @@ pub fn parse_apps_git_status(args []string) !GitStatusCmdOptions {
 	}
 }
 
-// AuditCmdOptions covers `apps audit [--permissions|--secrets|--system]`.
+// AuditCmdOptions covers `apps audit [--permissions|--secrets|--system]
+// [--fix|--report|--json] [--yes]`.
 pub struct AuditCmdOptions {
 pub:
 	check   string
+	mode    string // check | fix | report | json
+	yes     bool
 	dry_run bool
 }
 
 pub fn parse_apps_audit(args []string) !AuditCmdOptions {
 	mut check := 'full'
+	mut mode := 'check'
+	mut yes := false
 	mut dry_run := false
 	for a in args {
 		if a == '--dry-run' {
 			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
 			continue
 		}
 		if a in ['--permissions', '--secrets', '--system'] {
@@ -373,6 +382,13 @@ pub fn parse_apps_audit(args []string) !AuditCmdOptions {
 			check = a.all_after('--')
 			continue
 		}
+		if a in ['--fix', '--report', '--json'] {
+			if mode != 'check' {
+				return error('audit takes at most one mode.\nExample: horneroctl apps audit --fix --yes')
+			}
+			mode = a.all_after('--')
+			continue
+		}
 		if a.starts_with('-') {
 			return error('unknown flag: ${a}.\nExample: horneroctl apps audit --dry-run')
 		}
@@ -380,6 +396,8 @@ pub fn parse_apps_audit(args []string) !AuditCmdOptions {
 	}
 	return AuditCmdOptions{
 		check:   check
+		mode:    mode
+		yes:     yes
 		dry_run: dry_run
 	}
 }

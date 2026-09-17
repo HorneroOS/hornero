@@ -43,6 +43,9 @@ fn test_dispatch_apps_reads_dry_run() {
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'stop', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'audit', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'audit', '--permissions', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'apps', 'audit', '--fix', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'apps', 'audit', '--report', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'apps', 'audit', '--fix']) == 1
 	assert dispatch(['horneroctl', 'apps', 'launch', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'launch', '--list', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'toggle', 'bar', '--dry-run']) == 0
@@ -97,6 +100,7 @@ fn test_dispatch_apps_usage_errors() {
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'jobs', '--async']) == 2
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'watch', '--interval', 'soon']) == 2
 	assert dispatch(['horneroctl', 'apps', 'audit', '--permissions', '--system']) == 2
+	assert dispatch(['horneroctl', 'apps', 'audit', '--fix', '--report']) == 2
 	assert dispatch(['horneroctl', 'apps', 'launch', '--backend', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'apps', 'launch', '--list', '--backend', 'minimal']) == 2
 	assert dispatch(['horneroctl', 'apps', 'toggle']) == 2

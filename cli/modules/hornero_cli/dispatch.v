@@ -1148,6 +1148,8 @@ fn run_apps(args []string, mode hornero_core.RenderMode) int {
 			}
 			return render(hornero_core.audit_report(hornero_core.AuditOptions{
 				check:   aopts.check
+				mode:    aopts.mode
+				yes:     aopts.yes
 				dry_run: aopts.dry_run
 			}), mode)
 		}
