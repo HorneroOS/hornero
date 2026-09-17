@@ -26,9 +26,10 @@ jobs:
       - name: Format check
         working-directory: cli
         run: ./make.vsh fmt-check
-      # Non-blocking: `v vet` on master HEAD corrupts its own diagnostics
-      # (NUL-filled warnings, memory faults) — upstream vlang/v#28692.
-      # Re-enforce when that issue closes.
+      # Non-blocking: the master-HEAD toolchain has upstream memory bugs
+      # (`v vet` corrupts its own diagnostics — vlang/v#28692; `v test`
+      # reporter can fault on large suites — vlang/v#28693). Re-enforce
+      # when those issues close; fmt/test/build still gate.
       - name: Vet
         working-directory: cli
         continue-on-error: true
