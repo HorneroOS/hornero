@@ -1121,8 +1121,9 @@ Examples:
   apply-theme-pack [id]
                       Apply a theme from the appearance pack (needs --yes)
 
-Default leaf is toggle. Backend: dots-snappy-switcher
-(HORNERO_SNAPPY_BIN).
+Default leaf is toggle. Backend: native snappy-switcher control
+(HORNERO_SNAPPY_SWITCHER_BIN); apply-theme* still delegate to
+dots-snappy-switcher (HORNERO_SNAPPY_BIN).
 
 Examples:
   horneroctl apps switcher status

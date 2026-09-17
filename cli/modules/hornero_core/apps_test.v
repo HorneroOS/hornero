@@ -23,10 +23,11 @@ fn apps_test_restore_env(saved map[string]string) {
 
 const apps_test_keys = ['HORNERO_FILE_MANAGER_BIN', 'HORNERO_EXO_OPEN_BIN', 'HORNERO_HANDLR_BIN',
 	'HORNERO_XDG_OPEN_BIN', 'HORNERO_DOTS_YAZI_BIN', 'HORNERO_YAZI_BIN', 'HORNERO_GIT_NOTIFY_BIN',
-	'HORNERO_SNAPPY_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN',
-	'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN', 'HORNERO_CAFFEINE_BIN',
-	'HORNERO_WEATHER_CACHE_DIR', 'HORNERO_WEATHER_GEO_URL', 'HORNERO_WEATHER_API_URL', 'WEATHER_API_KEY',
-	'XDG_CONFIG_HOME', 'DOTS_BYPASS_QUICKSHELL', 'HORNERO_POWERPROFILESCTL_BIN']
+	'HORNERO_SNAPPY_BIN', 'HORNERO_SNAPPY_SWITCHER_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_PGREP_BIN',
+	'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN', 'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN',
+	'HORNERO_CAFFEINE_BIN', 'HORNERO_WEATHER_CACHE_DIR', 'HORNERO_WEATHER_GEO_URL',
+	'HORNERO_WEATHER_API_URL', 'WEATHER_API_KEY', 'XDG_CONFIG_HOME', 'DOTS_BYPASS_QUICKSHELL',
+	'HORNERO_POWERPROFILESCTL_BIN']
 
 fn apps_test_break_backends() {
 	os.setenv('HORNERO_FILE_MANAGER_BIN', '/nonexistent-fm-hornero-test', true)
@@ -264,6 +265,36 @@ fn test_apps_weather_native_refresh_writes_cache() {
 	assert weather_report(WeatherOptions{ field: 'quote2' }).message == "Don't go wandering all by yourself though..."
 	os.rmdir_all(dir) or {}
 	os.rmdir_all(fix) or {}
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_switcher_status_native() {
+	// Native port: status answers from the pgrep seam alone.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	os.setenv('HORNERO_PGREP_BIN', '/bin/false', true)
+	r := switcher_report(SwitcherOptions{ leaf: 'status' })
+	assert r.ok
+	assert r.message.contains('not running')
+	os.setenv('HORNERO_PGREP_BIN', '/bin/true', true)
+	r2 := switcher_report(SwitcherOptions{ leaf: 'status' })
+	assert r2.ok
+	assert r2.message.contains('snappy-switcher daemon: running')
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_switcher_control_native() {
+	// Native port: control verbs run the snappy-switcher binary
+	// directly; missing binary fails closed with the install hint.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	os.setenv('HORNERO_SNAPPY_SWITCHER_BIN', '/nonexistent-snappy-hornero-test', true)
+	r := switcher_report(SwitcherOptions{ leaf: 'next', yes: true })
+	assert !r.ok
+	assert r.message.contains('not installed')
+	os.setenv('HORNERO_SNAPPY_SWITCHER_BIN', '/bin/true', true)
+	r2 := switcher_report(SwitcherOptions{ leaf: 'toggle', yes: true })
+	assert r2.ok
 	apps_test_restore_env(saved)
 }
 

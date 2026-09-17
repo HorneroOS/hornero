@@ -102,6 +102,16 @@ pub fn resolve_dots_snappy_bin() string {
 	return dots_helper_bin('HORNERO_SNAPPY_BIN', 'dots-snappy-switcher')
 }
 
+// resolve_snappy_switcher_bin locates the snappy-switcher binary itself
+// (daemon + window commands). Override with HORNERO_SNAPPY_SWITCHER_BIN.
+pub fn resolve_snappy_switcher_bin() string {
+	env := os.getenv('HORNERO_SNAPPY_SWITCHER_BIN')
+	if env.len > 0 {
+		return env
+	}
+	return find_on_path('snappy-switcher')
+}
+
 // resolve_powerprofilesctl_bin locates powerprofilesctl.
 // Override with HORNERO_POWERPROFILESCTL_BIN.
 pub fn resolve_powerprofilesctl_bin() string {
@@ -896,7 +906,55 @@ pub:
 	yes     bool
 }
 
-// switcher_report implements `apps switcher` over dots-snappy-switcher:
+// switcher_daemon_native runs one snappy-switcher daemon/window command
+// without the dots-snappy-switcher wrapper (retired for control verbs):
+// the snappy-switcher binary runs foreground, like run_snappy. Missing
+// binary fails closed with the AUR install hint.
+fn switcher_daemon_native(leaf string) CommandResult {
+	name := 'apps switcher ${leaf}'
+	mut bin := resolve_snappy_switcher_bin()
+	if bin.len > 0 && bin.contains('/') && !os.is_file(bin) {
+		bin = ''
+	}
+	if bin.len == 0 {
+		return fail_result(name, 'snappy-switcher is not installed.\nInstall it with your package manager (AUR: snappy-switcher).')
+	}
+	rep := run_exec(ExecSpec{
+		prog: bin
+		args: [leaf]
+	})
+	if !rep.ok {
+		return fail_result(name, 'snappy-switcher ${leaf} failed (exit ${rep.exit_code}):\n${rep.output}')
+	}
+	return ok_result(name, rep.output, {
+		'leaf': leaf
+	})
+}
+
+// switcher_status_native mirrors the status branch: pgrep for the daemon.
+fn switcher_status_native() CommandResult {
+	pg := resolve_pgrep_bin()
+	mut running := false
+	if pg.len > 0 {
+		rep := run_exec(ExecSpec{
+			prog: pg
+			args: ['-x', 'snappy-switcher']
+		})
+		running = rep.ok
+	}
+	if running {
+		return ok_result('apps switcher status', 'snappy-switcher daemon: running', {
+			'status': 'running'
+		})
+	}
+	return ok_result('apps switcher status', 'snappy-switcher daemon: not running', {
+		'status': 'stopped'
+	})
+}
+
+// switcher_report implements `apps switcher`: daemon/window commands and
+// status run natively; apply-theme* still delegate to dots-snappy-switcher
+// (theme synthesis lives in the dots lib, like audit --fix):
 // `status` is read-only; every control leaf mutates (windows, daemon,
 // theme) and needs --yes. --dry-run only previews.
 pub fn switcher_report(opts SwitcherOptions) CommandResult {
@@ -907,23 +965,21 @@ pub fn switcher_report(opts SwitcherOptions) CommandResult {
 	if opts.leaf == 'apply-theme' && opts.arg.len == 0 {
 		return fail_result('apps switcher apply-theme', 'missing theme file.\nExample: horneroctl apps switcher apply-theme nord.ini --dry-run')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_snappy_bin(), 'dots-snappy-switcher',
-		'HORNERO_SNAPPY_BIN', opts.dry_run, 'horneroctl apps switcher status --dry-run') or {
-		return fail_result('apps switcher ${opts.leaf}', err.msg())
-	}
 	if opts.leaf == 'status' {
-		rep := apps_run_delegated(bin, ['status'], opts.dry_run)
-		if opts.dry_run {
-			return ok_result('apps switcher status', 'would run: ${rep.command_line}',
-				{
-					'command_line': rep.command_line
-					'dry_run':      'true'
-				})
+		return switcher_status_native()
+	}
+	if opts.leaf in ['daemon', 'next', 'prev', 'toggle', 'hide', 'select', 'quit'] && !opts.dry_run {
+		if !opts.yes {
+			return fail_result('apps switcher ${opts.leaf}', 'refusing to ${opts.leaf} without --yes (preview with --dry-run).\nExample: horneroctl apps switcher ${opts.leaf} --dry-run')
 		}
-		return apps_delegated_ok('apps switcher status', rep, {})
+		return switcher_daemon_native(opts.leaf)
 	}
 	if !opts.yes && !opts.dry_run {
 		return fail_result('apps switcher ${opts.leaf}', 'refusing to ${opts.leaf} without --yes (preview with --dry-run).\nExample: horneroctl apps switcher ${opts.leaf} --dry-run')
+	}
+	bin := apps_backend_or_placeholder(resolve_dots_snappy_bin(), 'dots-snappy-switcher',
+		'HORNERO_SNAPPY_BIN', opts.dry_run, 'horneroctl apps switcher status --dry-run') or {
+		return fail_result('apps switcher ${opts.leaf}', err.msg())
 	}
 	mut args := [opts.leaf]
 	if opts.arg.len > 0 && opts.leaf in ['apply-theme', 'apply-theme-pack', 'apply-rice-theme'] {
