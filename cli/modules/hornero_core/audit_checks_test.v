@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import x.json2
 
 // Fixture-backed tests for the native audit checks: a redirected HOME
 // with controlled modes plus fake leaf tools keep runs hermetic.
@@ -120,4 +121,87 @@ fn test_audit_full_native_clean_with_fakes() {
 	assert r.data['log'].contains('security_audit_')
 	os.read_file(r.data['log']) or { assert false }
 	audit_test_restore_env(saved)
+}
+
+fn test_audit_fix_native_repairs_fixture_home() {
+	saved := audit_test_save_env()
+	home := audit_test_setup_home()
+	os.chmod(home + '/.ssh', 0o755) or { assert false }
+	os.chmod(home + '/.ssh/id_ed25519', 0o644) or { assert false }
+	os.chmod(home + '/.ssh/config', 0o644) or { assert false }
+	os.write_file(home + '/.ssh/id_ed25519.pub', 'fake-pub') or { assert false }
+	os.chmod(home + '/.ssh/id_ed25519.pub', 0o600) or { assert false }
+	os.mkdir_all(home + '/.local/bin') or { assert false }
+	os.write_file(home + '/.local/bin/executable_dots-fake', '#!/bin/sh\n') or { assert false }
+	os.chmod(home + '/.local/bin/executable_dots-fake', 0o644) or { assert false }
+	os.write_file(home + '/vault.key', 'x') or { assert false }
+	os.chmod(home + '/vault.key', 0o644) or { assert false }
+	os.write_file(home + '/.zsh_history', 'export MY_TOKEN=abc\nls -la\n# password=hidden\nwaldorf\n') or {
+		assert false
+	}
+	r := audit_report(AuditOptions{ mode: 'fix', yes: true })
+	assert r.ok, r.message
+	assert r.message.contains('✅ Fixed SSH directory permissions (700)')
+	assert r.message.contains('✅ Fixed SSH config permissions (600)')
+	assert r.message.contains('🔒 Security fixes applied.')
+	assert audit_stat_mode(home + '/.ssh') == '700'
+	assert audit_stat_mode(home + '/.ssh/id_ed25519') == '600'
+	assert audit_stat_mode(home + '/.ssh/config') == '600'
+	assert audit_stat_mode(home + '/.ssh/id_ed25519.pub') == '644'
+	assert audit_stat_mode(home + '/.local/bin/executable_dots-fake') == '755'
+	assert audit_stat_mode(home + '/vault.key') == '600'
+	hist := os.read_file(home + '/.zsh_history') or { '' }
+	assert !hist.contains('MY_TOKEN')
+	assert hist.contains('ls -la')
+	assert hist.contains('# password=hidden')
+	assert hist.contains('waldorf')
+	audit_test_restore_env(saved)
+	os.rmdir_all('/tmp/hx-audit-test') or {}
+}
+
+fn test_audit_fix_dry_run_changes_nothing() {
+	saved := audit_test_save_env()
+	home := audit_test_setup_home()
+	os.chmod(home + '/.ssh', 0o755) or { assert false }
+	r := audit_report(AuditOptions{ mode: 'fix', dry_run: true })
+	assert r.ok, r.message
+	assert r.message.contains('would chmod')
+	assert audit_stat_mode(home + '/.ssh') == '755'
+	audit_test_restore_env(saved)
+	os.rmdir_all('/tmp/hx-audit-test') or {}
+}
+
+fn test_audit_fix_needs_yes() {
+	r := audit_report(AuditOptions{ mode: 'fix' })
+	assert !r.ok
+	assert r.message.contains('--yes')
+}
+
+fn test_audit_report_native_writes_markdown() {
+	saved := audit_test_save_env()
+	audit_test_setup_home()
+	audit_test_setup_system_fakes()
+	r := audit_report(AuditOptions{ mode: 'report' })
+	assert r.ok, r.message
+	assert r.message.contains('Security report generated:')
+	raw := os.read_file(r.data['report']) or { '' }
+	assert raw.contains('## File Permissions')
+	assert raw.contains('## Secrets Scan')
+	assert raw.contains('## System Security')
+	assert raw.contains('horneroctl apps audit --fix')
+	audit_test_restore_env(saved)
+	os.rmdir_all('/tmp/hx-audit-test') or {}
+}
+
+fn test_audit_json_native_shape() {
+	saved := audit_test_save_env()
+	audit_test_setup_home()
+	audit_test_setup_system_fakes()
+	r := audit_report(AuditOptions{ mode: 'json' })
+	parsed := json2.decode[AuditJsonReport](r.message) or { assert false, err.msg() }
+	assert parsed.total_checks == 3
+	assert parsed.compliant == (parsed.failures == 0)
+	assert parsed.permissions.output.len > 0
+	audit_test_restore_env(saved)
+	os.rmdir_all('/tmp/hx-audit-test') or {}
 }

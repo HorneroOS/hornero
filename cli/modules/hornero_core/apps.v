@@ -16,8 +16,8 @@ import os
 // verbs (files open, terminal launch, launcher) need no --yes — like
 // `config gui` / `welcome open` / `capture clipboard`. State-changing
 // verbs (toggles, switcher control, git watch/stop, profile set) need
-// --yes; --dry-run only previews. `audit` ports the read-only checks
-// only: --fix (chmod/history scrub) and --report stay legacy.
+// --yes; --dry-run only previews. `audit` ports checks plus --fix
+// (chmod/history scrub), --report, and --json.
 
 // dots_helper_bin resolves one dots-* wrapper: explicit override, then
 // ~/.local/bin, then PATH.
@@ -655,14 +655,25 @@ pub fn git_status_report(opts GitStatusOptions) CommandResult {
 pub struct AuditOptions {
 pub:
 	check   string // full | permissions | secrets | system
+	mode    string // check | fix | report | json
+	yes     bool
 	dry_run bool
 }
 
 // audit_report implements `apps audit` natively (no dots-security-audit):
-// the read-only checks (full audit by default) run in-process. --fix
-// (permission changes, history scrub) and --report stay legacy and are
-// intentionally not ported. --dry-run only previews the delegation.
+// the read-only checks (full audit by default) run in-process, and so do
+// --fix (permission changes, history scrub), --report (markdown file),
+// and --json (machine summary). --fix mutates: needs --yes.
 pub fn audit_report(opts AuditOptions) CommandResult {
+	if opts.mode == 'fix' {
+		return audit_fix_native(opts.dry_run, opts.yes)
+	}
+	if opts.mode == 'report' {
+		return audit_report_native(opts.dry_run)
+	}
+	if opts.mode == 'json' {
+		return audit_json_native()
+	}
 	if opts.check !in ['full', 'permissions', 'secrets', 'system'] {
 		return fail_result('apps audit', 'unknown audit check: ${opts.check}.\nRun: horneroctl apps audit --help')
 	}

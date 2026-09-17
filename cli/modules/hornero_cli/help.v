@@ -965,8 +965,8 @@ Examples:
   git-status [watch|jobs|stop] [--branch B] [--repository R]
                       Watch a repo with desktop notifications (needs --yes),
                       list watchers (jobs, read-only), or stop them (needs --yes)
-  audit [--permissions|--secrets|--system]
-                      Read-only security checks (fix and report stay legacy)
+  audit [--permissions|--secrets|--system] [--fix|--report|--json] [--yes]
+                      Security checks, fixes, markdown report, JSON summary
   launch [--backend NAME] [--list]
                       Open the app launcher or list backends (no --yes)
   toggle <component>  Toggle a shell component or daemon (needs --yes)
@@ -1076,17 +1076,18 @@ Examples:
 '
 		}
 		'apps audit' {
-			return 'Usage: horneroctl apps audit [--permissions|--secrets|--system] [--dry-run]
+			return 'Usage: horneroctl apps audit [--permissions|--secrets|--system] [--fix|--report|--json] [--yes] [--dry-run]
 
   audit (default)     Full read-only security audit
   --permissions       File permission checks only (read-only)
   --secrets           Exposed-secret scan only (read-only)
   --system            Firewall, updates, SSH, MAC checks only (read-only)
+  --fix               Apply permission fixes, scrub shell history (needs --yes)
+  --report            Write a markdown report under ~/.cache/dots
+  --json              Machine-readable summary (exit non-zero on findings)
 
-At most one check per invocation. Backend: native (stat/find HOME
-scan, system leaf checks). --fix (permission changes, history
-scrub) and --report stay in dots-security-audit and are intentionally
-not ported.
+At most one check and one mode per invocation. Backend: native
+(stat/find HOME scan, system leaf checks, os.chmod fixes).
 
 Examples:
   horneroctl apps audit
