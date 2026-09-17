@@ -374,7 +374,8 @@ fn perf_report_report(dry_run bool) CommandResult {
 			kept << l
 		}
 	}
-	mem := perf_memory_lines(perf_stack_rows()).join('\n')
+	rows := perf_stack_rows()
+	mem := perf_memory_lines(rows).join('\n')
 	recent := perf_recent_benchmarks(dir)
 	mut doc := ['# HorneroConfig Performance Report', '', 'Generated: ${time.now()}', '',
 		'## System Information', '- OS: ${perf_os_pretty()}', '- Kernel: ${os.uname().release}',
@@ -421,10 +422,9 @@ fn perf_report_report(dry_run bool) CommandResult {
 		'N/A'
 	}
 	summary << '  Latest startup time: ${latest}'
-	summary << '  Current memory usage: ${perf_format_mb(
-		perf_sum_rss(perf_stack_rows(), 'Hyprland') +
-		perf_sum_rss(perf_stack_rows(), 'quickshell') + perf_sum_rss(perf_stack_rows(), 'mako') +
-		perf_sum_rss(perf_stack_rows(), 'hyprlock') + perf_sum_rss(perf_stack_rows(), 'kitty'))}'
+	summary << '  Current memory usage: ${perf_format_mb(perf_sum_rss(rows, 'Hyprland') +
+		perf_sum_rss(rows, 'quickshell') + perf_sum_rss(rows, 'mako') +
+		perf_sum_rss(rows, 'hyprlock') + perf_sum_rss(rows, 'kitty'))}'
 	msg := '📄 Report generated: ${log}\n' + summary.join('\n')
 	return ok_result(name, msg, {
 		'log': log

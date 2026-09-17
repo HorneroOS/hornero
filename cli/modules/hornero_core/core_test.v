@@ -410,3 +410,10 @@ fn test_doctor_legacy_paths_detected_with_hint() {
 	assert r.ok == (failed == 0)
 	p1_restore_xdg(old_data, old_state, old_cache, old_config, old_home)
 }
+
+fn test_command_line_escapes_single_quotes() {
+	// Args with shell metacharacters stay inside one single-quoted word.
+	assert command_line('prog', ["a'b"]) == "prog 'a'\\''b'"
+	assert command_line('prog', ['a b', 'plain']) == "prog 'a b' plain"
+	assert command_line('prog', ['']) == "prog ''"
+}

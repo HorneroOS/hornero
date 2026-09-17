@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import x.json2
 
 // Keyboard backend: layout toggle/readout (Hyprland or X11, mirroring
 // dots-keyboard-layout), the LXQt settings GUI opener (mirroring
@@ -92,9 +93,23 @@ fn kb_preferred_layouts() []string {
 	return ['us:', 'latam:']
 }
 
+// hypr_option_str mirrors one `hyprctl getoption -j` response object;
+// unknown keys decode-ignored, so only `str` is declared.
+pub struct HyprOptionStr {
+pub:
+	str string
+}
+
 // hypr_opt_str extracts the `str` value from `hyprctl getoption -j`
 // output (or the plain `str: value` form).
 fn hypr_opt_str(output string) string {
+	trimmed := output.trim_space()
+	if trimmed.starts_with('{') {
+		opt := json2.decode[HyprOptionStr](trimmed) or { HyprOptionStr{} }
+		if opt.str.len > 0 {
+			return opt.str
+		}
+	}
 	key := '"str"'
 	i := output.index(key) or {
 		j := output.index('str:') or { return '' }
@@ -252,7 +267,9 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 			return fail_result('hardware keyboard layout', err.msg())
 		}
 		full := '${layout}:${variant}'
-		display := kb_layout_names()[full] or { layout }
+		display := kb_layout_names()[full] or {
+			if variant.len > 0 { '${layout} (${variant})}' } else { layout }
+		}
 		mut lines := []string{}
 		mut data := map[string]string{}
 		lines << 'Session: ${session}'
@@ -334,7 +351,9 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 		}
 	}
 	names := kb_layout_names()
-	display := names[next] or { nlayout }
+	display := names[next] or {
+		if nvariant.len > 0 { '${nlayout} (${nvariant})' } else { nlayout }
+	}
 	nb := resolve_notify_bin()
 	if nb.len > 0 {
 		run_exec(ExecSpec{

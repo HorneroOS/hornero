@@ -200,3 +200,15 @@ fn test_batch2_resolvers_never_hardcode_dots_paths() {
 	}
 	b2_restore_resolution(old_home, old_path)
 }
+
+fn test_default_apps_friendly_name_searches_all_dirs() {
+	// A Name-less .desktop file in the first dir must not stop the
+	// search: the Name= entry in a later dir wins.
+	base := '/tmp/hx-friendly-test'
+	os.rmdir_all(base) or {}
+	b2_write(base + '/a/app.desktop', '[Desktop Entry]\nType=Application\n')
+	b2_write(base + '/b/app.desktop', '[Desktop Entry]\nName=Second Name\n')
+	assert default_apps_friendly_name('app.desktop', [base + '/a', base + '/b']) == 'Second Name'
+	assert default_apps_friendly_name('missing.desktop', [base + '/a']) == 'missing.desktop'
+	os.rmdir_all(base) or {}
+}

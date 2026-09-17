@@ -473,3 +473,23 @@ fn test_apps_resolvers_prefer_env() {
 	assert resolve_powerprofilesctl_bin() == '/tmp/custom-ppctl'
 	apps_test_restore_env(saved)
 }
+
+fn test_apps_weather_native_missing_cache_fails_cleanly() {
+	// Missing cache (fresh machine, no key, no network) must fail with a
+	// message, never panic on the quote line index.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	dir := '/tmp/hx-weather-test-missing'
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false }
+	os.setenv('HORNERO_WEATHER_CACHE_DIR', dir, true)
+	os.setenv('WEATHER_API_KEY', '', true)
+	assert !weather_report(WeatherOptions{ field: 'quote' }).ok
+	assert !weather_report(WeatherOptions{ field: 'quote2' }).ok
+	assert !weather_report(WeatherOptions{ field: 'temp' }).ok
+	os.write_file(dir + '/weather-quote', '') or { assert false }
+	assert weather_report(WeatherOptions{ field: 'quote' }).message == ''
+	assert weather_report(WeatherOptions{ field: 'quote2' }).message == ''
+	os.rmdir_all(dir) or {}
+	apps_test_restore_env(saved)
+}

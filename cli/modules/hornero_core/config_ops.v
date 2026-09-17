@@ -139,7 +139,6 @@ fn default_apps_friendly_name(id string, app_dirs []string) string {
 				return line['Name='.len..].trim_space()
 			}
 		}
-		return id
 	}
 	return id
 }

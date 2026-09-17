@@ -367,15 +367,20 @@ fn weather_field_native(field string) CommandResult {
 	} else {
 		'weather-icon'
 	}
-	content := os.read_file(os.join_path(dir, file)) or { '' }
+	content := os.read_file(os.join_path(dir, file)) or {
+		return fail_result(name, 'no weather cache yet (run `horneroctl apps weather --getdata` first)')
+	}
 	if field == 'quote' {
-		return ok_result(name, content.split_into_lines()[0], {
+		lines := content.split_into_lines()
+		first := if lines.len > 0 { lines[0] } else { '' }
+		return ok_result(name, first, {
 			'field': field
 		})
 	}
 	if field == 'quote2' {
 		lines := content.split_into_lines()
-		return ok_result(name, lines[lines.len - 1], {
+		last := if lines.len > 0 { lines[lines.len - 1] } else { '' }
+		return ok_result(name, last, {
 			'field': field
 		})
 	}

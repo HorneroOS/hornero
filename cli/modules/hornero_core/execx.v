@@ -21,8 +21,8 @@ pub:
 }
 
 fn quote_arg(a string) string {
-	if a.contains(' ') || a.contains('"') || a.len == 0 {
-		return "'${a}'"
+	if a.contains(' ') || a.contains('"') || a.contains("'") || a.len == 0 {
+		return "'${a.replace("'", "'\\''")}'"
 	}
 	return a
 }
