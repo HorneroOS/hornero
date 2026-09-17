@@ -197,10 +197,9 @@ fn wallpaper_set_native(path string, dry_run bool) CommandResult {
 	if !dry_run && shell_running() {
 		ipc := ipc_appearance_call(['setWallpaper', path], false)
 		if ipc.ok && !ipc.output.contains('Target not found') {
-			wait_appearance_ipc(false) or {
-				return fail_result('wallpaper set', err.msg())
-			}
-			return ok_result('wallpaper set', 'wallpaper applied via shell: ${path}', {
+			wait_appearance_ipc(false) or { return fail_result('wallpaper set', err.msg()) }
+			return ok_result('wallpaper set', 'wallpaper applied via shell: ${path}',
+				{
 				'path':    path
 				'backend': 'shell'
 			})
@@ -244,7 +243,8 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 				bin := opts.set_helper
 				rep := wallpaper_run_backend(bin, [opts.path], opts.dry_run)
 				if opts.dry_run {
-					return ok_result('wallpaper set', 'would run: ${rep.command_line}', {
+					return ok_result('wallpaper set', 'would run: ${rep.command_line}',
+						{
 						'command_line': rep.command_line
 						'dry_run':      'true'
 						'path':         resolved
@@ -279,9 +279,9 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			if opts.dry_run {
 				return ok_result('wallpaper reload', 'would run: ${rep.command_line}',
 					{
-						'command_line': rep.command_line
-						'dry_run':      'true'
-					})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 			}
 			if rep.ok {
 				return ok_result('wallpaper reload', rep.output, {

@@ -45,9 +45,7 @@ fn audit_test_setup_home() string {
 fn audit_test_setup_system_fakes() {
 	base := '/tmp/hx-audit-test/bin'
 	os.mkdir_all(base) or { assert false }
-	os.write_file(base + '/ufw', '#!/bin/sh\necho "Status: active"\nexit 0\n') or {
-		assert false
-	}
+	os.write_file(base + '/ufw', '#!/bin/sh\necho "Status: active"\nexit 0\n') or { assert false }
 	os.write_file(base + '/systemctl', '#!/bin/sh\nexit 0\n') or { assert false }
 	os.write_file(base + '/apparmor_status', '#!/bin/sh\nexit 0\n') or { assert false }
 	os.write_file(base + '/ss', '#!/bin/sh\nexit 0\n') or { assert false }

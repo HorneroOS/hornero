@@ -38,7 +38,8 @@ fn test_dispatch_wallpaper_current() {
 
 fn test_dispatch_wallpaper_set() {
 	wp_dispatch_setup()
-	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg',
+		'--dry-run']) == 0
 	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg']) == 1
 	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/missing.jpg',
 		'--dry-run']) == 1
@@ -74,7 +75,8 @@ fn test_wallpaper_help_has_examples() {
 fn test_wallpaper_dry_run_needs_no_backend() {
 	// Hermetic: nonexistent backends; dry-run previews must still pass.
 	wp_dispatch_setup()
-	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg',
+		'--dry-run']) == 0
 	assert dispatch(['horneroctl', 'wallpaper', 'reload', '--dry-run']) == 0
 	wp_dispatch_teardown()
 }
