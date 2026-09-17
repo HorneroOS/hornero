@@ -198,7 +198,10 @@ fn test_audit_json_native_shape() {
 	audit_test_setup_home()
 	audit_test_setup_system_fakes()
 	r := audit_report(AuditOptions{ mode: 'json' })
-	parsed := json2.decode[AuditJsonReport](r.message) or { assert false, err.msg() }
+	parsed := json2.decode[AuditJsonReport](r.message) or {
+		assert false, err.msg()
+		AuditJsonReport{}
+	}
 	assert parsed.total_checks == 3
 	assert parsed.compliant == (parsed.failures == 0)
 	assert parsed.permissions.output.len > 0
