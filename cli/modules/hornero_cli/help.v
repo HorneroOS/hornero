@@ -793,22 +793,28 @@ Examples:
 '
 		}
 		'hardware brightness' {
-			return 'Usage: horneroctl hardware brightness <status|set|up|down> [--display NAME] [--dry-run|--yes]
+			return 'Usage: horneroctl hardware brightness <status|set|up|down> [--display NAME] [--temp] [--dry-run|--yes]
 
   status [--display NAME]
                 Show current brightness (read-only); without --display,
                 xrandr lists every connected display
-  set <0.0-1.0> [--display NAME]
-                Set brightness fraction, clamped into range (needs --yes)
-  up [--step 0.1] [--display NAME]
-                Raise brightness by step (needs --yes)
-  down [--step 0.1] [--display NAME]
-                Lower brightness by step (needs --yes)
+  set <0.0-1.0> [--display NAME] [--temp]
+                Set brightness fraction, clamped into range (needs --yes);
+                with --temp, set color temperature instead (0.0 = 3000K,
+                0.6 = 6500K neutral, 1.0 = 10000K)
+  up [--step 0.1] [--display NAME] [--temp]
+                Raise brightness by step (needs --yes); with --temp,
+                shift color temperature up the ramp by step
+  down [--step 0.1] [--display NAME] [--temp]
+                Lower brightness by step (needs --yes); with --temp,
+                shift color temperature down the ramp by step
 
 Backend precedence (dots-brightness): brightnessctl, blight,
 xbacklight, xrandr (HORNERO_BRIGHTNESSCTL_BIN and siblings override).
 xbacklight/xrandr need a display: --display, else the first connected
-output. Color-temperature (--temp) stays in dots-brightness.
+output. --temp always drives xrandr --gamma on one display
+(HORNERO_XRANDR_BIN override), mirroring the dots-brightness gamma
+ramps cribbed from redshift.
 
 Examples:
   horneroctl hardware brightness status
@@ -817,6 +823,8 @@ Examples:
   horneroctl hardware brightness set 0.8 --yes
   horneroctl hardware brightness up --step 0.05 --dry-run
   horneroctl hardware brightness down --display eDP-1 --yes
+  horneroctl hardware brightness set 0.6 --temp --display eDP-1 --dry-run
+  horneroctl hardware brightness up --temp --display eDP-1 --yes
 '
 		}
 		'hardware battery' {

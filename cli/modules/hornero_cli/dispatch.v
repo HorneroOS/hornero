@@ -874,6 +874,16 @@ fn run_hardware_brightness(args []string, mode hornero_core.RenderMode) int {
 			dry_run: opts.dry_run
 		}), mode)
 	}
+	if opts.temp {
+		amount := if opts.leaf == 'set' { opts.value } else { opts.step }
+		return render(hornero_core.brightness_temp_report(hornero_core.BrightnessTempOptions{
+			op:      opts.leaf
+			value:   amount
+			display: opts.display
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
 	if opts.leaf == 'set' {
 		return render(hornero_core.brightness_set_report(hornero_core.BrightnessSetOptions{
 			value:   opts.value

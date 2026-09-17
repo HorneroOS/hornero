@@ -572,3 +572,172 @@ pub fn brightness_adjust_report(opts BrightnessAdjustOptions) CommandResult {
 	}
 	return fail_result('hardware brightness ${opts.dir}', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }
+
+// brightness_gamma_ramps maps color temperature to xrandr gamma triplets
+// (3000K to 10000K, cribbed from redshift like dots-brightness). The
+// temperature scale is the ramp index over 10 (0.0-1.0 in 0.1 steps).
+const brightness_gamma_ramps = ['1.0:0.7:0.4', '1.0:0.7:0.5', '1.0:0.8:0.6', '1.0:0.8:0.7',
+	'1.0:0.9:0.8', '1.0:0.9:0.9', '1.0:1.0:1.0', '0.9:0.9:1.0', '0.8:0.9:1.0', '0.8:0.8:1.0',
+	'0.7:0.8:1.0']
+
+const brightness_temp_kelvin = [3000, 3500, 4000, 4500, 5000, 6000, 6500, 7000, 8000, 9000, 10000]
+
+// brightness_temp_of_gamma maps a corrected gamma triplet to its
+// temperature (ramp index over 10), or -1.0 when it matches nothing.
+pub fn brightness_temp_of_gamma(gamma string) f64 {
+	for i, ramp in brightness_gamma_ramps {
+		if ramp == gamma {
+			return f64(i) / 10.0
+		}
+	}
+	return -1.0
+}
+
+// brightness_ramp_idx maps a temperature to its ramp index, clamped
+// into range like dots-brightness.
+fn brightness_ramp_idx(temp f64) int {
+	mut idx := int(temp * 10.0)
+	if idx < 0 {
+		idx = 0
+	}
+	if idx > 10 {
+		idx = 10
+	}
+	return idx
+}
+
+// brightness_gamma_of_temp maps a temperature to its gamma triplet.
+pub fn brightness_gamma_of_temp(temp f64) string {
+	return brightness_gamma_ramps[brightness_ramp_idx(temp)]
+}
+
+// brightness_temp_kelvin_of maps a temperature to its label in kelvin.
+pub fn brightness_temp_kelvin_of(temp f64) int {
+	return brightness_temp_kelvin[brightness_ramp_idx(temp)]
+}
+
+// brightness_invert_gamma corrects the xrandr --verbose Gamma readout,
+// which reports inverted values (1/x per channel, one decimal).
+pub fn brightness_invert_gamma(gamma string) !string {
+	parts := gamma.split(':')
+	if parts.len != 3 {
+		return error('could not parse gamma value: ${gamma}.\nExample: horneroctl hardware brightness status --display eDP-1')
+	}
+	mut out := []string{}
+	for p in parts {
+		v := p.f64()
+		if v == 0.0 {
+			return error('could not parse gamma value: ${gamma}.\nExample: horneroctl hardware brightness status --display eDP-1')
+		}
+		out << '${1.0 / v:.1f}'
+	}
+	return out.join(':')
+}
+
+// brightness_read_gamma returns the corrected gamma triplet of one
+// display from `xrandr --verbose`.
+fn brightness_read_gamma(xr string, display string) !string {
+	rep := run_exec(ExecSpec{
+		prog: xr
+		args: ['--verbose']
+	})
+	if !rep.ok {
+		return error('xrandr --verbose failed (exit ${rep.exit_code}):\n${rep.output}')
+	}
+	mut cur := ''
+	for line in rep.output.split_into_lines() {
+		fields := line.fields()
+		if fields.len >= 2 && fields[1] == 'connected' {
+			cur = fields[0]
+			continue
+		}
+		t := line.trim_space()
+		if cur == display && t.starts_with('Gamma:') {
+			return brightness_invert_gamma(t['Gamma:'.len..].trim_space())
+		}
+	}
+	return error('no gamma value for display ${display}.\nExample: horneroctl hardware brightness status --display ${display}')
+}
+
+pub struct BrightnessTempOptions {
+pub:
+	op      string // set | up | down
+	value   f64    // set target / up-down step
+	display string
+	dry_run bool
+	yes     bool
+}
+
+// brightness_temp_report implements `hardware brightness set|up|down
+// --temp`: color temperature on the 0.0-1.0 ramp scale via xrandr
+// --gamma, mirroring dots-brightness --temp. Mutating: needs --yes;
+// --dry-run previews the read plus the exact gamma command.
+pub fn brightness_temp_report(opts BrightnessTempOptions) CommandResult {
+	name := 'hardware brightness ${opts.op}'
+	if !opts.yes && !opts.dry_run {
+		return fail_result(name, 'refusing to set temperature without --yes (preview with --dry-run).\nExample: horneroctl hardware brightness ${opts.op} --temp --dry-run')
+	}
+	xr := resolve_xrandr_bin()
+	mut disp := opts.display
+	if disp == '' {
+		if opts.dry_run {
+			disp = 'DISPLAY'
+		} else {
+			d := default_display()
+			if d == '' {
+				return fail_result(name, 'no display selected (pass --display NAME).\nExample: horneroctl hardware brightness ${opts.op} --temp --display eDP-1 --dry-run')
+			}
+			disp = d
+		}
+	}
+	mut prog := xr
+	if prog.len == 0 {
+		if opts.dry_run {
+			prog = 'xrandr'
+		} else {
+			return fail_result(name, 'xrandr not found (temperature needs xrandr). Set HORNERO_XRANDR_BIN.\nExample: horneroctl hardware brightness ${opts.op} --temp --dry-run')
+		}
+	}
+	if opts.dry_run {
+		probe := command_line(prog, ['--verbose'])
+		intent := if opts.op == 'set' {
+			'set temperature ${opts.value.str()} (${brightness_temp_kelvin_of(opts.value)}K)'
+		} else {
+			sign := if opts.op == 'up' { '+' } else { '-' }
+			'shift temperature ${sign}${opts.value.str()} (clamped 0.0-1.0)'
+		}
+		return ok_result(name, 'would run: ${probe}, then ${intent}', {
+			'read_command': probe
+			'direction':    opts.op
+			'step':         opts.value.str()
+			'dry_run':      'true'
+			'display':      disp
+		})
+	}
+	mut target := opts.value
+	if opts.op in ['up', 'down'] {
+		cur_gamma := brightness_read_gamma(prog, disp) or { return fail_result(name, err.msg()) }
+		cur := brightness_temp_of_gamma(cur_gamma)
+		if cur < 0.0 {
+			return fail_result(name, 'current gamma ${cur_gamma} matches no known ramp on ${disp}.')
+		}
+		target = if opts.op == 'up' { cur + opts.value } else { cur - opts.value }
+	}
+	target = brightness_clamp(target)
+	gamma := brightness_gamma_of_temp(target)
+	rep := run_exec(ExecSpec{
+		prog: prog
+		args: ['--output', disp, '--gamma', gamma]
+	})
+	if !rep.ok {
+		return fail_result(name, 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	}
+	k := brightness_temp_kelvin_of(target)
+	return ok_result(name, 'temperature set to ${target.str()} (${k}K) on ${disp} via xrandr',
+		{
+		'command_line': rep.command_line
+		'value':        target.str()
+		'kelvin':       k.str()
+		'display':      disp
+	})
+}

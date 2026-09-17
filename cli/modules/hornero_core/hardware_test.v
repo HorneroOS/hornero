@@ -292,3 +292,111 @@ fn test_hw_keys_parse_fixture() {
 	assert m.message.contains('not found')
 	hw_test_restore_env(saved)
 }
+
+fn test_hw_brightness_temp_tables() {
+	// Ramps cribbed from redshift like dots-brightness: index 0 is
+	// 3000K, index 6 neutral 6500K, index 10 is 10000K.
+	assert brightness_gamma_of_temp(0.0) == '1.0:0.7:0.4'
+	assert brightness_gamma_of_temp(0.6) == '1.0:1.0:1.0'
+	assert brightness_gamma_of_temp(1.0) == '0.7:0.8:1.0'
+	// Out-of-range clamps like the dots-brightness exec_op.
+	assert brightness_gamma_of_temp(-0.5) == '1.0:0.7:0.4'
+	assert brightness_gamma_of_temp(2.5) == '0.7:0.8:1.0'
+	assert brightness_temp_of_gamma('1.0:1.0:1.0') == 0.6
+	assert brightness_temp_of_gamma('1.0:0.7:0.4') == 0.0
+	assert brightness_temp_of_gamma('0.7:0.8:1.0') == 1.0
+	assert brightness_temp_of_gamma('9.9:9.9:9.9') == -1.0
+	assert brightness_temp_kelvin_of(0.0) == 3000
+	assert brightness_temp_kelvin_of(0.6) == 6500
+	assert brightness_temp_kelvin_of(1.0) == 10000
+}
+
+fn test_hw_brightness_invert_gamma() {
+	// xrandr --verbose reports inverted gamma: raw 1.0:1.4:2.5 reads
+	// back as the corrected 3000K ramp triplet.
+	assert brightness_invert_gamma('1.0:1.4:2.5')! == '1.0:0.7:0.4'
+	assert brightness_invert_gamma('1.0:1.0:1.0')! == '1.0:1.0:1.0'
+	if _ := brightness_invert_gamma('1.0:0.5') {
+		assert false
+	} else {
+		assert true
+	}
+	if _ := brightness_invert_gamma('1.0:0.0:1.0') {
+		assert false
+	} else {
+		assert true
+	}
+}
+
+fn test_hw_brightness_temp_mutations_need_yes() {
+	r1 := brightness_temp_report(BrightnessTempOptions{
+		op:    'set'
+		value: 0.6
+	})
+	assert !r1.ok
+	assert r1.message.contains('--yes')
+	r2 := brightness_temp_report(BrightnessTempOptions{
+		op:    'up'
+		value: 0.1
+	})
+	assert !r2.ok
+	assert r2.message.contains('--yes')
+}
+
+fn test_hw_brightness_temp_dry_run_needs_no_backend() {
+	saved := hw_test_save_env(hw_test_keys())
+	hw_test_break_backends()
+	os.unsetenv('HYPRLAND_INSTANCE_SIGNATURE')
+	os.unsetenv('WAYLAND_DISPLAY')
+	os.unsetenv('I3SOCK')
+	assert brightness_temp_report(BrightnessTempOptions{
+		op:      'set'
+		value:   0.6
+		display: 'eDP-1'
+		dry_run: true
+	}).ok
+	assert brightness_temp_report(BrightnessTempOptions{
+		op:      'up'
+		value:   0.1
+		dry_run: true
+	}).ok
+	assert brightness_temp_report(BrightnessTempOptions{
+		op:      'down'
+		value:   0.1
+		dry_run: true
+	}).ok
+	hw_test_restore_env(saved)
+}
+
+fn test_hw_brightness_temp_live() {
+	saved := hw_test_save_env(hw_test_keys())
+	os.mkdir_all('/tmp/hx-hw-temp-live/bin') or { assert false }
+	os.write_file('/tmp/hx-hw-temp-live/bin/xrandr', '#!/bin/sh\nif [ "$1" = "--verbose" ]; then printf "eDP-1 connected primary 1920x1080+0+0\\n\\tBrightness: 0.8\\n\\tGamma: 1.0:1.4:2.5\\n"; exit 0; fi\nexit 0\n') or {
+		assert false
+	}
+	os.chmod('/tmp/hx-hw-temp-live/bin/xrandr', 0o755) or { assert false }
+	// Break every backend except xrandr so temperature resolves
+	// hermetically (dots-brightness --temp always drives xrandr).
+	hw_test_break_backends()
+	os.setenv('HORNERO_XRANDR_BIN', '/tmp/hx-hw-temp-live/bin/xrandr', true)
+	// set needs no gamma read: the fixture exits 0 on the --gamma call.
+	s := brightness_temp_report(BrightnessTempOptions{
+		op:      'set'
+		value:   0.6
+		display: 'eDP-1'
+		yes:     true
+	})
+	assert s.ok
+	assert s.message.contains('6500K')
+	// up reads the current temp (raw 1.0:1.4:2.5 -> 3000K ramp 0.0)
+	// then shifts +0.1 to the 3500K ramp.
+	u := brightness_temp_report(BrightnessTempOptions{
+		op:      'up'
+		value:   0.1
+		display: 'eDP-1'
+		yes:     true
+	})
+	assert u.ok
+	assert u.message.contains('3500K')
+	hw_test_restore_env(saved)
+}

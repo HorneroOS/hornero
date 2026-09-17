@@ -114,6 +114,27 @@ fn test_dispatch_apps_usage_errors() {
 	apps_dispatch_teardown()
 }
 
+fn test_dispatch_apps_performance_mode_set_live() {
+	apps_dispatch_setup()
+	os.mkdir_all('/tmp/hx-apps-dtest-ppctl') or { assert false }
+	os.write_file('/tmp/hx-apps-dtest-ppctl/powerprofilesctl', '#!/bin/sh\nif [ "$1" = "list" ]; then printf "* balanced:\n    CpuDriver: amd_pstate\n  power-saver:\n    CpuDriver: amd_pstate\n"; exit 0; fi\nif [ "$1" = "get" ]; then echo "balanced"; exit 0; fi\necho "set $*"\nexit 0\n') or {
+		assert false
+	}
+	os.chmod('/tmp/hx-apps-dtest-ppctl/powerprofilesctl', 0o755) or { assert false }
+	os.setenv('HORNERO_POWERPROFILESCTL_BIN', '/tmp/hx-apps-dtest-ppctl/powerprofilesctl',
+		true)
+	// The exact call dots-performance-mode delegates to after a menu pick.
+	assert dispatch(['horneroctl', 'apps', 'performance', 'mode', 'set', 'power-saver', '--yes']) == 0
+	assert dispatch(['horneroctl', 'apps', 'performance', 'mode', 'set', 'bogus-profile', '--yes']) == 1
+	apps_dispatch_teardown()
+}
+
+fn test_apps_help_carries_performance_mode_probe() {
+	// dots-performance-mode delegates only when `apps --help` contains
+	// this usage line; pin it so the probe can never silently break.
+	assert command_help('apps').contains('Usage: horneroctl apps')
+}
+
 fn test_apps_help_has_examples() {
 	for cmd in ['apps', 'apps files', 'apps terminal-file', 'apps weather', 'apps git-status',
 		'apps audit', 'apps launch', 'apps toggle', 'apps switcher', 'apps performance'] {

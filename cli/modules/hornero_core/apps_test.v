@@ -462,6 +462,16 @@ fn test_apps_performance_mode_set_validates_profile() {
 	})
 	assert preview.ok
 	assert preview.message.contains('powerprofilesctl')
+	// Live set through the fixture backend (the dots-performance-mode
+	// delegation path): validates the profile, then runs powerprofilesctl.
+	set := performance_report(PerformanceOptions{
+		leaf:    'mode'
+		sub:     'set'
+		profile: 'power-saver'
+		yes:     true
+	})
+	assert set.ok
+	assert set.data['profile'] == 'power-saver'
 	apps_test_restore_env(saved)
 }
 
