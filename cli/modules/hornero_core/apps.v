@@ -108,12 +108,6 @@ pub fn resolve_dots_snappy_bin() string {
 	return dots_helper_bin('HORNERO_SNAPPY_BIN', 'dots-snappy-switcher')
 }
 
-// resolve_dots_performance_bin locates dots-performance.
-// Override with HORNERO_PERFORMANCE_BIN.
-pub fn resolve_dots_performance_bin() string {
-	return dots_helper_bin('HORNERO_PERFORMANCE_BIN', 'dots-performance')
-}
-
 // resolve_powerprofilesctl_bin locates powerprofilesctl.
 // Override with HORNERO_POWERPROFILESCTL_BIN.
 pub fn resolve_powerprofilesctl_bin() string {
@@ -964,10 +958,11 @@ pub:
 	yes     bool
 }
 
-// performance_report implements `apps performance`: shell startup,
-// memory, benchmark, and report read through dots-performance
-// (read-only); `mode` shows the powerprofilesctl profile and `mode set`
-// switches it (needs --yes). --dry-run only previews.
+// performance_report implements `apps performance` natively (no
+// dots-performance): shell startup, memory, benchmark, and report
+// reads run in-process (read-only); `mode` shows the powerprofilesctl
+// profile and `mode set` switches it (needs --yes).
+// --dry-run only previews the legacy delegation.
 pub fn performance_report(opts PerformanceOptions) CommandResult {
 	if opts.leaf !in ['startup', 'memory', 'benchmark', 'report', 'mode'] {
 		return fail_result('apps performance', 'unknown performance leaf: ${opts.leaf}.\nRun: horneroctl apps performance --help')
@@ -975,19 +970,19 @@ pub fn performance_report(opts PerformanceOptions) CommandResult {
 	if opts.leaf == 'mode' {
 		return performance_mode_report(opts)
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_performance_bin(), 'dots-performance',
-		'HORNERO_PERFORMANCE_BIN', opts.dry_run, 'horneroctl apps performance ${opts.leaf} --dry-run') or {
-		return fail_result('apps performance ${opts.leaf}', err.msg())
+	if opts.leaf == 'startup' {
+		return perf_startup_report(opts.dry_run)
 	}
-	rep := apps_run_delegated(bin, ['--' + opts.leaf], opts.dry_run)
-	if opts.dry_run {
-		return ok_result('apps performance ${opts.leaf}', 'would run: ${rep.command_line}',
-			{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+	if opts.leaf == 'memory' {
+		return perf_memory_report(opts.dry_run)
 	}
-	return apps_delegated_ok('apps performance ${opts.leaf}', rep, {})
+	if opts.leaf == 'benchmark' {
+		return perf_benchmark_report(opts.dry_run)
+	}
+	if opts.leaf == 'report' {
+		return perf_report_report(opts.dry_run)
+	}
+	return fail_result('apps performance', 'unknown performance leaf: ${opts.leaf}.\nRun: horneroctl apps performance --help')
 }
 
 // performance_mode_profiles lists powerprofilesctl profiles natively.

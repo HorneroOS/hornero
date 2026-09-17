@@ -1142,7 +1142,7 @@ Examples:
   mode set <profile>  Switch the power profile via powerprofilesctl
                       (needs --yes)
 
-Reads delegate to dots-performance (HORNERO_PERFORMANCE_BIN); mode
+Reads run natively (ps/zsh/free seams); mode
 uses powerprofilesctl get/list/set
 (HORNERO_POWERPROFILESCTL_BIN). The interactive menu, quickshell
 pane, and auto-cpufreq GUI stay in dots-performance-mode.
