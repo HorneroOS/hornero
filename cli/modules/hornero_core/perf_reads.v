@@ -207,12 +207,12 @@ fn perf_startup_lines() !([]string, []string) {
 
 // perf_mem_total reads total memory like `free -h | grep Mem`.
 fn perf_mem_total() string {
-	free := perf_free_bin()
-	if free.len == 0 {
+	free_bin := perf_free_bin()
+	if free_bin.len == 0 {
 		return 'unknown'
 	}
 	rep := run_exec(ExecSpec{
-		prog: free
+		prog: free_bin
 		args: ['-h']
 	})
 	if !rep.ok {

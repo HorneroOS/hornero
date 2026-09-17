@@ -23,8 +23,8 @@ fn apps_test_restore_env(saved map[string]string) {
 
 const apps_test_keys = ['HORNERO_FILE_MANAGER_BIN', 'HORNERO_EXO_OPEN_BIN', 'HORNERO_HANDLR_BIN',
 	'HORNERO_XDG_OPEN_BIN', 'HORNERO_DOTS_YAZI_BIN', 'HORNERO_YAZI_BIN', 'HORNERO_GIT_NOTIFY_BIN',
-	'HORNERO_SECURITY_AUDIT_BIN', 'HORNERO_SNAPPY_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_KILLALL_BIN',
-	'HORNERO_PKILL_BIN', 'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN', 'HORNERO_CAFFEINE_BIN',
+	'HORNERO_SNAPPY_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN',
+	'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN', 'HORNERO_CAFFEINE_BIN',
 	'HORNERO_WEATHER_CACHE_DIR', 'HORNERO_WEATHER_GEO_URL', 'HORNERO_WEATHER_API_URL', 'WEATHER_API_KEY',
 	'XDG_CONFIG_HOME', 'DOTS_BYPASS_QUICKSHELL', 'HORNERO_POWERPROFILESCTL_BIN']
 
@@ -36,7 +36,6 @@ fn apps_test_break_backends() {
 	os.setenv('HORNERO_DOTS_YAZI_BIN', '/nonexistent-dots-yazi-hornero-test', true)
 	os.setenv('HORNERO_YAZI_BIN', '/nonexistent-yazi-hornero-test', true)
 	os.setenv('HORNERO_GIT_NOTIFY_BIN', '/nonexistent-git-notify-hornero-test', true)
-	os.setenv('HORNERO_SECURITY_AUDIT_BIN', '/nonexistent-audit-hornero-test', true)
 	os.setenv('HORNERO_SNAPPY_BIN', '/nonexistent-snappy-hornero-test', true)
 	os.setenv('HORNERO_POWERPROFILESCTL_BIN', '/nonexistent-ppctl-hornero-test', true)
 }
@@ -386,21 +385,18 @@ fn test_files_info_native_needs_no_dots_backend() {
 	apps_test_restore_env(saved)
 }
 
-fn test_apps_delegated_success_path() {
+fn test_apps_audit_dry_run_keeps_delegation_preview() {
+	// Native port: real runs never consult the wrapper, but dry-run
+	// still previews the guarded legacy delegation.
 	saved := apps_test_save_env(apps_test_keys)
 	base := '/tmp/hx-apps-test/bin2'
 	os.mkdir_all(base) or { assert false }
-	os.write_file(base + '/dots-security-audit', '#!/bin/sh\n[ -n "' + '$' +
-		'{HORNEROCTL_DELEGATED}' +
-		'" ] || { echo missing delegation guard >&2; exit 3; }\necho "audit ok"\nexit 0\n') or {
-		assert false
-	}
+	os.write_file(base + '/dots-security-audit', '#!/bin/sh\nexit 0\n') or { assert false }
 	os.chmod(base + '/dots-security-audit', 0o755) or { assert false }
-	os.setenv('HORNERO_SECURITY_AUDIT_BIN', base + '/dots-security-audit', true)
-	r := audit_report(AuditOptions{ check: 'system' })
+	r := audit_report(AuditOptions{ check: 'system', dry_run: true })
 	assert r.ok
-	assert r.message.contains('audit ok')
-	assert r.data['command_line'].contains('HORNEROCTL_DELEGATED=1')
+	assert r.message.contains('--system')
+	assert r.message.contains('HORNEROCTL_DELEGATED=1')
 	apps_test_restore_env(saved)
 }
 

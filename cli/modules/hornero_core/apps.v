@@ -94,12 +94,6 @@ pub fn resolve_dots_git_notify_bin() string {
 	return dots_helper_bin('HORNERO_GIT_NOTIFY_BIN', 'dots-git-notify')
 }
 
-// resolve_dots_security_audit_bin locates dots-security-audit.
-// Override with HORNERO_SECURITY_AUDIT_BIN.
-pub fn resolve_dots_security_audit_bin() string {
-	return dots_helper_bin('HORNERO_SECURITY_AUDIT_BIN', 'dots-security-audit')
-}
-
 // resolve_dots_launcher_bin locates dots-launcher.
 // Override with HORNERO_LAUNCHER_BIN.
 // resolve_dots_snappy_bin locates dots-snappy-switcher.
@@ -651,30 +645,27 @@ pub:
 	dry_run bool
 }
 
-// audit_report implements `apps audit`: the dots-security-audit
-// read-only checks (full audit by default). --fix (permission changes,
-// history scrub) and --report stay legacy and are intentionally not
-// ported. --dry-run only previews.
+// audit_report implements `apps audit` natively (no dots-security-audit):
+// the read-only checks (full audit by default) run in-process. --fix
+// (permission changes, history scrub) and --report stay legacy and are
+// intentionally not ported. --dry-run only previews the delegation.
 pub fn audit_report(opts AuditOptions) CommandResult {
 	if opts.check !in ['full', 'permissions', 'secrets', 'system'] {
 		return fail_result('apps audit', 'unknown audit check: ${opts.check}.\nRun: horneroctl apps audit --help')
 	}
 	flag := if opts.check == 'full' { '--audit' } else { '--' + opts.check }
-	bin := apps_backend_or_placeholder(resolve_dots_security_audit_bin(), 'dots-security-audit',
-		'HORNERO_SECURITY_AUDIT_BIN', opts.dry_run, 'horneroctl apps audit --dry-run') or {
-		return fail_result('apps audit', err.msg())
-	}
-	rep := apps_run_delegated(bin, [flag], opts.dry_run)
 	if opts.dry_run {
+		rep := apps_run_delegated('dots-security-audit', [flag], true)
 		return ok_result('apps audit', 'would run: ${rep.command_line}', {
 			'command_line': rep.command_line
 			'dry_run':      'true'
 			'check':        opts.check
 		})
 	}
-	return apps_delegated_ok('apps audit', rep, {
-		'check': opts.check
-	})
+	if opts.check == 'full' {
+		return audit_full_native()
+	}
+	return audit_section_native(opts.check)
 }
 
 pub struct LaunchOptions {

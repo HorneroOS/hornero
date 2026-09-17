@@ -1066,8 +1066,8 @@ Examples:
   --secrets           Exposed-secret scan only (read-only)
   --system            Firewall, updates, SSH, MAC checks only (read-only)
 
-At most one check per invocation. Backend: dots-security-audit
-(HORNERO_SECURITY_AUDIT_BIN). --fix (permission changes, history
+At most one check per invocation. Backend: native (stat/find HOME
+scan, system leaf checks). --fix (permission changes, history
 scrub) and --report stay in dots-security-audit and are intentionally
 not ported.
 

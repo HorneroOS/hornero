@@ -13,7 +13,6 @@ fn apps_dispatch_setup() {
 	os.setenv('HORNERO_DOTS_YAZI_BIN', '/nonexistent-dots-yazi-hornero-test', true)
 	os.setenv('HORNERO_YAZI_BIN', '/nonexistent-yazi-hornero-test', true)
 	os.setenv('HORNERO_GIT_NOTIFY_BIN', '/nonexistent-git-notify-hornero-test', true)
-	os.setenv('HORNERO_SECURITY_AUDIT_BIN', '/nonexistent-audit-hornero-test', true)
 	os.setenv('HORNERO_SNAPPY_BIN', '/nonexistent-snappy-hornero-test', true)
 	os.setenv('HORNERO_POWERPROFILESCTL_BIN', '/nonexistent-ppctl-hornero-test', true)
 }
@@ -26,7 +25,6 @@ fn apps_dispatch_teardown() {
 	os.unsetenv('HORNERO_DOTS_YAZI_BIN')
 	os.unsetenv('HORNERO_YAZI_BIN')
 	os.unsetenv('HORNERO_GIT_NOTIFY_BIN')
-	os.unsetenv('HORNERO_SECURITY_AUDIT_BIN')
 	os.unsetenv('HORNERO_SNAPPY_BIN')
 	os.unsetenv('HORNERO_POWERPROFILESCTL_BIN')
 }
