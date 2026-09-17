@@ -20,7 +20,7 @@
 #   --yes       actually materialize (default is preview: --dry-run + report)
 #
 # Toolchain: needs python3 with PyYAML and a V toolchain for horneroctl
-# (the CI pin in cli/.v-version; make.vsh honours $V/$VBIN).
+# (CI builds V master HEAD from source; make.vsh honours $V/$VBIN).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

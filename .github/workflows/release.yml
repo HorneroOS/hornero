@@ -51,24 +51,19 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: horneroctl-linux-x86_64
-            v_zip: v_linux.zip
             expect_arch: x86_64
           - os: ubuntu-24.04-arm
             asset: horneroctl-linux-arm64
-            v_zip: v_linux_arm64.zip
             expect_arch: arm64
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      - name: Read V version pin
-        id: vpin
-        run: echo "version=$(cat cli/.v-version)" >> "$GITHUB_OUTPUT"
-      - name: Install V (prebuilt)
+      # Always latest V: build master HEAD from source (same as CI; also
+      # frees the arm64 runner from depending on a v_linux_arm64.zip asset).
+      - name: Install V (master HEAD)
         run: |
-          base="https://github.com/vlang/v/releases/download"
-          ver="${{ steps.vpin.outputs.version }}"
-          curl -sL -o /tmp/v.zip "${base}/${ver}/${{ matrix.v_zip }}"
-          unzip -q /tmp/v.zip -d /tmp/vlang
-          echo "/tmp/vlang/v" >> "$GITHUB_PATH"
+          git clone -q --depth 1 https://github.com/vlang/v /tmp/vlang-src
+          make -C /tmp/vlang-src
+          echo "/tmp/vlang-src" >> "$GITHUB_PATH"
       - name: Verify toolchain
         run: v version
       - name: Check architecture

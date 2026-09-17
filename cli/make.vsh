@@ -10,7 +10,7 @@ const mods = ['hornero_core', 'hornero_cli']
 
 fn root() string {
 	d := dir(@FILE)
-	if is_file(join_path(d, '.v-version')) {
+	if is_dir(join_path(d, 'modules')) {
 		return d
 	}
 	return getwd()
@@ -73,9 +73,8 @@ mut context := build.context(
 context.task(
 	name: 'help'
 	help: 'Show targets (default); also: --tasks'
-	run:  fn [r] (_ build.Task) ! {
-		pin := (read_file(join_path(r, '.v-version')) or { 'pending' }).trim_space()
-		println('horneroctl V targets (pin: ${pin}) — ./make.vsh --tasks')
+	run:  fn (_ build.Task) ! {
+		println('horneroctl V targets (latest master) — ./make.vsh --tasks')
 		println('  fmt | fmt-check | vet | test | build | build-cli | install-cli')
 	}
 )

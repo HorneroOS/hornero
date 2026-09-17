@@ -61,15 +61,11 @@ jobs:
           python-version: '3.12'
       - name: Install compose dependencies
         run: pip install pyyaml
-      - name: Read V version pin
-        id: vpin
-        run: echo "version=$(cat cli/.v-version)" >> "$GITHUB_OUTPUT"
-      # Same prebuilt toolchain as horneroctl-ci (setup-v cannot bootstrap
-      # on this runner; see horneroctl-ci.yml).
-      - name: Install V (prebuilt)
+      # Same master-HEAD toolchain as horneroctl-ci (see that workflow).
+      - name: Install V (master HEAD)
         run: |
-          curl -sL -o /tmp/v_linux.zip "https://github.com/vlang/v/releases/download/${{ steps.vpin.outputs.version }}/v_linux.zip"
-          unzip -q /tmp/v_linux.zip -d /tmp/vlang
-          echo "/tmp/vlang/v" >> "$GITHUB_PATH"
+          git clone -q --depth 1 https://github.com/vlang/v /tmp/vlang-src
+          make -C /tmp/vlang-src
+          echo "/tmp/vlang-src" >> "$GITHUB_PATH"
       - name: Build pinned composition and validate it
         run: ./scripts/compose.sh --work "${{ runner.temp }}/hx-compose" --yes

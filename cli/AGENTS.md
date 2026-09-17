@@ -23,13 +23,13 @@
 
 ## V specifics
 
-- Pinned toolchain: `.v-version`. Keep code conservative (must compile on the
-  pin AND reasonably newer V).
+- Toolchain: always latest V master (CI builds master HEAD from source;
+  keep local `v` current with `v up`). No version pin exists on purpose.
 - `VMODULES` points at `cli/modules` (see `make.vsh`); never use relative
   imports.
 - `v fmt -w` before commit; `fmt-check`, `vet`, `test` must all pass.
-  Canonical formatter is the CI toolchain (prebuilt weekly from `.v-version`,
-  runnable locally via `V=<path-to-weekly-v>`); on formatter drift, CI wins.
+  Canonical formatter is the CI toolchain (master HEAD, runnable locally via
+  `V=<path-to-master-v>` after `v up`); on formatter drift, CI wins.
 - Completions/help strings containing `$` MUST escape as `\$` (V
   interpolates `${}`/`$ident` in strings).
 - JSON via `x.json2` (`encode(v, escape_unicode: true)`,
