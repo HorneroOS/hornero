@@ -10,12 +10,13 @@ import hornero_core
 // Batch 1 ships
 // `package check|updates`, `backup list|schedule`, and `config snapshot`;
 // batch 2 ships `config default-apps list`, `config materialize`, and
-// `config gui`; preview 1 adds `config migrate`. The remaining
-// mutating/privileged siblings (package
-// upgrade/deps, backup create/restore, config default-apps set) stay
-// usage-error deferrals until a pinned backend lands (`set` has no
-// verified upstream verb: `dots-default-apps --set` never binds its
-// arguments, and handlr stays internal).
+// `config gui`; preview 1 adds `config migrate`. R1 (lifecycle +
+// privileged) adds `shell start|stop|restart|logs`, `package
+// upgrade|deps`, `backup create|restore`, `config default-apps set`,
+// and `hypr plugins install`. Still deferred: `shell preset apply`
+// and `shell config` (need a pinned merge backend), backup cron
+// install (interactive by design), and the dots-default-apps
+// gui/info/type modes (interactive).
 // Each future leaf needs the same treatment as below: a verified backend,
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
@@ -148,6 +149,30 @@ fn run_shell(args []string, mode hornero_core.RenderMode) int {
 	}
 	if opts.sub == 'status' {
 		return render(hornero_core.shell_status(), mode)
+	}
+	if opts.sub == 'start' {
+		return render(hornero_core.shell_start_report(hornero_core.ShellStartOptions{
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	if opts.sub == 'stop' {
+		return render(hornero_core.shell_stop_report(hornero_core.ShellStopOptions{
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	if opts.sub == 'restart' {
+		return render(hornero_core.shell_restart_report(hornero_core.ShellRestartOptions{
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	if opts.sub == 'logs' {
+		return render(hornero_core.shell_logs_report(hornero_core.ShellLogsOptions{
+			lines:   opts.lines
+			dry_run: opts.dry_run
+		}), mode)
 	}
 	return render(hornero_core.ipc_report(hornero_core.IpcOptions{
 		passthrough: opts.passthrough
@@ -374,6 +399,14 @@ fn run_config_default_apps(args []string, mode hornero_core.RenderMode) int {
 	opts := parse_default_apps_cmd(args) or {
 		return render_error(hornero_core.err_usage('default-apps.usage', err.msg()), mode)
 	}
+	if opts.leaf == 'set' {
+		return render(hornero_core.default_apps_set_report(hornero_core.DefaultAppsSetOptions{
+			mime:    opts.mime
+			app:     opts.app
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
 	return render(hornero_core.default_apps_list_report(hornero_core.DefaultAppsListOptions{
 		dry_run: opts.dry_run
 	}), mode)
@@ -417,6 +450,24 @@ fn run_package(args []string, mode hornero_core.RenderMode) int {
 	opts := parse_package_cmd(args) or {
 		return render_error(hornero_core.err_usage('package.usage', err.msg()), mode)
 	}
+	if opts.leaf == 'upgrade' {
+		return render(hornero_core.package_upgrade_report(hornero_core.PackageUpgradeOptions{
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	if opts.leaf == 'deps' {
+		deps := hornero_core.PackageDepsOptions{
+			optional: opts.optional
+			install:  opts.install
+			dry_run:  opts.dry_run
+			yes:      opts.yes
+		}
+		if opts.install {
+			return render(hornero_core.package_deps_install_report(deps), mode)
+		}
+		return render(hornero_core.package_deps_check_report(deps), mode)
+	}
 	check := hornero_core.PackageCheckOptions{
 		dry_run: opts.dry_run
 	}
@@ -432,6 +483,20 @@ fn run_backup(args []string, mode hornero_core.RenderMode) int {
 	}
 	if opts.leaf == 'schedule' {
 		return render(hornero_core.backup_schedule_report(), mode)
+	}
+	if opts.leaf == 'create' {
+		return render(hornero_core.backup_create_report(hornero_core.BackupCreateOptions{
+			name:    opts.id
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	if opts.leaf == 'restore' {
+		return render(hornero_core.backup_restore_report(hornero_core.BackupRestoreOptions{
+			id:      opts.id
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
 	}
 	return render(hornero_core.backup_list_report(), mode)
 }
@@ -588,6 +653,14 @@ fn run_hypr_plugins(args []string, mode hornero_core.RenderMode) int {
 	}
 	if opts.leaf == 'status' {
 		return render(hornero_core.plugins_status_report(), mode)
+	}
+	if opts.leaf == 'install' {
+		return render(hornero_core.plugins_install_report(hornero_core.PluginsInstallOptions{
+			force:     opts.force
+			no_update: opts.no_update
+			dry_run:   opts.dry_run
+			yes:       opts.yes
+		}), mode)
 	}
 	return render(hornero_core.plugins_list_report(), mode)
 }

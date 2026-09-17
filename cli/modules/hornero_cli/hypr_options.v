@@ -234,10 +234,15 @@ pub fn parse_hypr_workspace(args []string) !HyprWorkspaceOptions {
 	}
 }
 
-// HyprPluginsOptions covers `hypr plugins <list|status>`.
+// HyprPluginsOptions covers `hypr plugins <list|status|install>`.
+// `list`/`status` are read-only; `install` mutates (needs --yes).
 pub struct HyprPluginsOptions {
 pub:
-	leaf string // list | status
+	leaf      string // list | status | install
+	force     bool   // install: rebuild hyprpm headers
+	no_update bool   // install: skip the header update
+	dry_run   bool
+	yes       bool
 }
 
 pub fn parse_hypr_plugins(args []string) !HyprPluginsOptions {
@@ -245,17 +250,47 @@ pub fn parse_hypr_plugins(args []string) !HyprPluginsOptions {
 		return error('missing subcommand.\nExample: horneroctl hypr plugins status')
 	}
 	leaf := args[0]
-	if leaf !in ['list', 'status'] {
+	if leaf !in ['list', 'status', 'install'] {
 		return error('unknown plugins subcommand: ${leaf}.\nRun: horneroctl hypr plugins --help')
 	}
+	mut force := false
+	mut no_update := false
+	mut dry_run := false
+	mut yes := false
 	for i := 1; i < args.len; i++ {
 		a := args[i]
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a == '--force' {
+			force = true
+			continue
+		}
+		if a == '--no-update' {
+			no_update = true
+			continue
+		}
 		if a.starts_with('-') {
-			return error('unknown flag: ${a}.\nExample: horneroctl hypr plugins ${leaf}')
+			return error('unknown flag: ${a}.\nExample: horneroctl hypr plugins ${leaf} --dry-run')
 		}
 		return error('unexpected argument: ${a}.\nRun: horneroctl hypr plugins --help')
 	}
+	if leaf in ['list', 'status'] && (force || no_update || dry_run || yes) {
+		return error('hypr plugins ${leaf} takes no flags.\nExample: horneroctl hypr plugins ${leaf}')
+	}
+	if leaf == 'install' && force && no_update {
+		return error('hypr plugins install takes either --force or --no-update, not both.\nExample: horneroctl hypr plugins install --yes')
+	}
 	return HyprPluginsOptions{
-		leaf: leaf
+		leaf:      leaf
+		force:     force
+		no_update: no_update
+		dry_run:   dry_run
+		yes:       yes
 	}
 }

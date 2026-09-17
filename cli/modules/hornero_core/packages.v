@@ -8,9 +8,8 @@ import os
 // (dotfiles reference, read-only): it prints one pending update per line
 // using a throwaway sync database. `check` prints that list; `updates`
 // prints the notify-oriented count readout (`dots-updates` counts the
-// same lines). Privileged/mutating package work (`upgrade`, `deps`
-// install) has no pinned backend and stays out (see the dispatch
-// deferral + help "Later phases" note).
+// same lines). Privileged/mutating work lives in package_ops.v:
+// `upgrade` via polkit, `deps` check/install via pacman/paru.
 
 // resolve_checkupdates_bin locates the `dots-checkupdates` backend CLI.
 // Override with HORNERO_CHECKUPDATES_BIN; falls back to plain

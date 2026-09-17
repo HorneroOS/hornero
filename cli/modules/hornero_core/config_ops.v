@@ -6,10 +6,10 @@ import os
 // snapshots (see snapshots.v).
 //
 // `dots-default-apps` (dotfiles reference, read-only) owns `list`
-// (`--list` prints current XDG defaults via handlr); `set` has no
-// verified non-interactive verb upstream (`--set` never binds its
-// arguments under EasyOptions, so `set` stays a usage-error deferral
-// and handlr stays internal). `config gui` delegates to
+// (`--list` prints current XDG defaults via handlr); `set <mime>
+// <app>` writes via xdg-mime directly (the upstream `--set` verb
+// never binds its arguments under EasyOptions, and handlr stays
+// internal). `config gui` delegates to
 // `dots-settings-gui` (`--pane=<name>` selects the control-center
 // pane, bare invocation opens the hub). `config materialize`
 // delegates to the config repo's `scripts/materialize.sh`

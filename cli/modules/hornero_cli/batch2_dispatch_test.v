@@ -38,8 +38,13 @@ fn test_dispatch_config_default_apps() {
 	assert dispatch(['horneroctl', 'config', 'default-apps']) == 2
 	assert dispatch(['horneroctl', 'config', 'default-apps', 'list', '--bogus']) == 2
 	assert dispatch(['horneroctl', 'config', 'default-apps', 'list', 'extra']) == 2
-	// set stays an explicit deferral: no verified upstream verb.
-	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'text/plain', 'nvim.desktop']) == 2
+	// set writes via xdg-mime: refuses without --yes, previews clean.
+	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'text/plain', 'nvim.desktop']) == 1
+	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'text/plain', 'nvim.desktop',
+		'--dry-run']) == 0
+	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'text/plain']) == 2
+	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'not-a-mime', 'nvim.desktop',
+		'--dry-run']) == 1
 	assert dispatch(['horneroctl', 'config', 'default-apps', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'config', 'default-apps', '--help']) == 0
 	b2_dispatch_teardown()

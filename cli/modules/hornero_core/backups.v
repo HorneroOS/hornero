@@ -10,8 +10,8 @@ import os
 // directory (no backend process needed, mirroring `preset list`).
 // Scheduling (`schedule`) is documentation-only by design: horneroctl
 // prints the cron/systemd recipe and never installs it. Create/restore
-// stay out until a pinned non-interactive backend lands (the legacy
-// rollback/register flows prompt, which the CLI contract forbids).
+// are native tar file operations (the legacy interactive cron
+// register/unregister flows stay out, which the CLI contract forbids).
 
 // resolve_backup_dir locates materialized backups.
 // Override with HORNERO_BACKUP_DIR.
@@ -29,8 +29,9 @@ pub:
 	size string
 }
 
-// list_backups returns materialized `*.zip` backups sorted by name,
-// mirroring the `dots-backup --list` enumeration.
+// list_backups returns materialized backups sorted by name: `*.tar.gz`
+// written by `backup create` plus legacy `*.zip` archives from
+// `dots-backup --list`.
 pub fn list_backups() ![]BackupEntry {
 	dir := resolve_backup_dir()
 	if !os.is_dir(dir) {
@@ -39,7 +40,7 @@ pub fn list_backups() ![]BackupEntry {
 	files := os.ls(dir)!
 	mut names := []string{}
 	for f in files {
-		if !f.ends_with('.zip') {
+		if !f.ends_with('.tar.gz') && !f.ends_with('.zip') {
 			continue
 		}
 		if !os.is_file(os.join_path(dir, f)) {
@@ -86,11 +87,11 @@ pub fn backup_schedule_report() CommandResult {
 		'Pick one recipe and install it manually:',
 		'',
 		'cron (daily at 02:00):',
-		'  0 2 * * * bash ${os.home_dir()}/.local/bin/dots-backup --backup-dir ${dir}',
+		'  0 2 * * * horneroctl backup create --yes',
 		'',
 		'systemd user timer (~/.config/systemd/user/hornero-backup.timer + .service):',
 		'  [Unit] Description=hornero daily backup',
-		'  [Service] Type=oneshot ExecStart=${os.home_dir()}/.local/bin/dots-backup --backup-dir ${dir}',
+		'  [Service] Type=oneshot ExecStart=horneroctl backup create --yes',
 		'  [Timer] OnCalendar=daily Persistent=true',
 		'  [Install] WantedBy=timers.target',
 		'',

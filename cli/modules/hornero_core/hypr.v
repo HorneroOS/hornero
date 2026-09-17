@@ -19,8 +19,8 @@ import x.json2
 //   is i3-msg based: ordered `set $WS` names from the config, focused
 //   workspace from get_workspaces, with wrap-around).
 // - `dots-hyprland-plugins` ScrollOverview status via `hyprpm list`
-//   (read-only: install/enable/reload stay in the legacy script, which
-//   owns the hyprpm/AUR-helper flow).
+//   (read-only) plus the idempotent install/enable/reload bootstrap
+//   via `hyprpm update/add/enable/reload`.
 //
 // Reads (list/current/status) never fail on a missing compositor: they
 // report persisted state, defaults, or backend presence. Mutations need
@@ -930,9 +930,8 @@ pub fn workspace_cycle_report(opts WorkspaceCycleOptions) CommandResult {
 	return fail_result('hypr workspace', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }
 
-// ScrollOverview plugin identity (dots-hyprland-plugins): install/enable/
-// reload stay in the legacy script (hyprpm/AUR-helper flow); horneroctl
-// only reports status.
+// ScrollOverview plugin identity (dots-hyprland-plugins): status match
+// strings plus the install coordinates used by `plugins install`.
 const scrolloverview_repo_match = 'hyprland-scroll-overview'
 
 const scrolloverview_enable_match = 'scrolloverview'
@@ -998,5 +997,132 @@ pub fn plugins_list_report() CommandResult {
 	return ok_result('hypr plugins list', body, {
 		'installed': installed.str()
 		'enabled':   enabled.str()
+	})
+}
+
+// ScrollOverview install identity: the repository `hyprpm add` installs
+// and the handle `hyprpm enable` enables (dots-hyprland-plugins).
+const scrolloverview_repo_url = 'https://github.com/yayuuu/hyprland-scroll-overview.git'
+
+fn hyprpm_or_fail(leaf string, dry_run bool) !string {
+	bin := resolve_hyprpm_bin()
+	if bin.len == 0 {
+		if dry_run {
+			return 'hyprpm'
+		}
+		return error('hyprpm not found. This command requires Hyprland (hyprpm ships with it; on Arch: sudo pacman -S hyprland, or yay -S hyprland-git). Set HORNERO_HYPRPM_BIN.\nExample: horneroctl hypr ${leaf} --dry-run')
+	}
+	return bin
+}
+
+pub struct PluginsInstallOptions {
+pub:
+	force     bool // rebuild hyprpm headers (update -f)
+	no_update bool // skip the header update (fast autostart path)
+	dry_run   bool
+	yes       bool
+}
+
+// plugins_install_report implements `hypr plugins install`: ensure the
+// hyprpm headers, add/enable the ScrollOverview repository when needed,
+// and reload it into the running session — mirroring the idempotent
+// `dots-hyprland-plugins` bootstrap (safe no-op when everything is in
+// place). Mutating: needs --yes; --dry-run only previews.
+pub fn plugins_install_report(opts PluginsInstallOptions) CommandResult {
+	if !opts.yes && !opts.dry_run {
+		return fail_result('hypr plugins install', 'refusing to install plugins without --yes (preview with --dry-run).\nExample: horneroctl hypr plugins install --dry-run')
+	}
+	bin := hyprpm_or_fail('plugins install', opts.dry_run) or {
+		return fail_result('hypr plugins install', err.msg())
+	}
+	mut plan := [][]string{}
+	if !opts.no_update {
+		if opts.force {
+			plan << [bin, 'update', '-f']
+		} else {
+			plan << [bin, 'update']
+		}
+	}
+	plan << [bin, 'list']
+	plan << [bin, 'add', scrolloverview_repo_url]
+	plan << [bin, 'enable', scrolloverview_enable_match]
+	plan << [bin, 'reload', '-n']
+	if opts.dry_run {
+		mut lines := ['would bootstrap ScrollOverview via hyprpm:']
+		mut previews := []string{}
+		for s in plan {
+			p := command_line(s[0], s[1..])
+			previews << p
+			lines << 'would run: ${p}'
+		}
+		lines << 'add/enable/reload run only when the plugin list needs them.'
+		return ok_result('hypr plugins install', lines.join('\n'), {
+			'command_line': previews.join('; ')
+			'dry_run':      'true'
+		})
+	}
+	if !opts.no_update {
+		rep := if opts.force {
+			run_exec(ExecSpec{
+				prog: bin
+				args: ['update', '-f']
+			})
+		} else {
+			run_exec(ExecSpec{
+				prog: bin
+				args: ['update']
+			})
+		}
+		if !rep.ok {
+			return fail_result('hypr plugins install', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+		}
+	}
+	mut need_reload := false
+	list, reachable := hyprpm_list_output()
+	if !reachable {
+		return fail_result('hypr plugins install', 'could not read plugin list (is Hyprland running?).')
+	}
+	if !list.contains(scrolloverview_repo_match) {
+		add := run_exec(ExecSpec{
+			prog: bin
+			args: ['add', scrolloverview_repo_url]
+		})
+		if !add.ok {
+			return fail_result('hypr plugins install', 'backend failed (exit ${add.exit_code}):\n${add.output}')
+		}
+		need_reload = true
+	}
+	current, _ := hyprpm_list_output()
+	if !current.contains(scrolloverview_enable_match) {
+		en := run_exec(ExecSpec{
+			prog: bin
+			args: ['enable', scrolloverview_enable_match]
+		})
+		if !en.ok {
+			return fail_result('hypr plugins install', 'backend failed (exit ${en.exit_code}):\n${en.output}')
+		}
+		need_reload = true
+	} else if opts.force {
+		run_exec(ExecSpec{
+			prog: bin
+			args: ['enable', scrolloverview_enable_match]
+		})
+		need_reload = true
+	}
+	// The autostart --no-update path still reloads: a new Hyprland
+	// process needs it to load enabled plugins into the session.
+	if need_reload || opts.force || opts.no_update {
+		re := run_exec(ExecSpec{
+			prog: bin
+			args: ['reload', '-n']
+		})
+		if !re.ok {
+			return fail_result('hypr plugins install', 'hyprpm reload failed (not in a Hyprland session? run with status to verify)')
+		}
+	}
+	return ok_result('hypr plugins install', 'ScrollOverview plugins installed and enabled',
+		{
+		'installed': 'true'
+		'enabled':   'true'
 	})
 }

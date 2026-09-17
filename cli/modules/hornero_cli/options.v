@@ -47,6 +47,8 @@ pub struct ShellCmdOptions {
 pub:
 	sub         string
 	dry_run     bool
+	yes         bool
+	lines       int
 	passthrough []string
 }
 
@@ -55,10 +57,12 @@ pub fn parse_shell_cmd(args []string) !ShellCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl shell status')
 	}
 	sub := args[0]
-	if sub !in ['status', 'ipc'] {
+	if sub !in ['status', 'ipc', 'start', 'stop', 'restart', 'logs'] {
 		return error('unknown shell subcommand: ${sub}.\nRun: horneroctl shell --help')
 	}
 	mut dry_run := false
+	mut yes := false
+	mut lines := 0
 	mut passthrough := []string{}
 	mut i := 1
 	mut sep := false
@@ -79,14 +83,58 @@ pub fn parse_shell_cmd(args []string) !ShellCmdOptions {
 			i++
 			continue
 		}
+		if a == '--yes' {
+			yes = true
+			i++
+			continue
+		}
+		if a == '--lines' {
+			if sub != 'logs' {
+				return error('--lines belongs to shell logs.\nExample: horneroctl shell logs --lines 100')
+			}
+			if i + 1 >= args.len || args[i + 1].starts_with('-') || args[i + 1].len == 0 {
+				return error('missing value for --lines.\nExample: horneroctl shell logs --lines 100')
+			}
+			lines = args[i + 1].int()
+			if lines <= 0 {
+				return error('invalid value for --lines: ${args[i + 1]}.\nExample: horneroctl shell logs --lines 100')
+			}
+			i += 2
+			continue
+		}
+		if a.starts_with('--lines=') {
+			if sub != 'logs' {
+				return error('--lines belongs to shell logs.\nExample: horneroctl shell logs --lines 100')
+			}
+			lines = a.all_after('=').int()
+			if lines <= 0 {
+				return error('invalid value for --lines: ${a}.\nExample: horneroctl shell logs --lines 100')
+			}
+			i++
+			continue
+		}
 		if a.starts_with('-') {
 			return error('unknown flag: ${a}.\nExample: horneroctl shell ipc --dry-run -- show')
 		}
 		return error('unexpected argument: ${a}.\nRun: horneroctl shell --help')
 	}
+	if sub == 'ipc' && (yes || lines > 0) {
+		return error('shell ipc takes no --yes/--lines.\nExample: horneroctl shell ipc --dry-run -- show')
+	}
+	if sub == 'status' && (dry_run || yes || lines > 0 || passthrough.len > 0) {
+		return error('shell status takes no arguments.\nExample: horneroctl shell status')
+	}
+	if sub in ['start', 'stop', 'restart'] && passthrough.len > 0 {
+		return error('unexpected argument: ${passthrough[0]}.\nRun: horneroctl shell --help')
+	}
+	if sub == 'logs' && (yes || passthrough.len > 0) {
+		return error('shell logs takes no --yes or passthrough arguments.\nExample: horneroctl shell logs --lines 100')
+	}
 	return ShellCmdOptions{
 		sub:         sub
 		dry_run:     dry_run
+		yes:         yes
+		lines:       lines
 		passthrough: passthrough
 	}
 }

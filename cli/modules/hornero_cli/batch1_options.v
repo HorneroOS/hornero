@@ -63,11 +63,15 @@ pub fn parse_config_snapshot(args []string) !ConfigSnapshotOptions {
 	}
 }
 
-// PackageCmdOptions covers `package <check|updates>` (read-only).
+// PackageCmdOptions covers `package <check|updates|upgrade|deps>`.
+// `check`/`updates` are read-only; `upgrade`/`deps --install` mutate.
 pub struct PackageCmdOptions {
 pub:
-	leaf    string // check | updates
-	dry_run bool
+	leaf     string // check | updates | upgrade | deps
+	dry_run  bool
+	yes      bool
+	install  bool // deps --install
+	optional bool // deps --optional (include dev/media/AI groups)
 }
 
 pub fn parse_package_cmd(args []string) !PackageCmdOptions {
@@ -75,34 +79,63 @@ pub fn parse_package_cmd(args []string) !PackageCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl package check')
 	}
 	leaf := args[0]
-	if leaf in ['upgrade', 'deps'] {
-		return error('package ${leaf} needs a pinned backend (polkit privilege for upgrade, installer for deps).\nRun: horneroctl package --help')
-	}
-	if leaf !in ['check', 'updates'] {
+	if leaf !in ['check', 'updates', 'upgrade', 'deps'] {
 		return error('unknown package subcommand: ${leaf}.\nRun: horneroctl package --help')
 	}
 	mut dry_run := false
+	mut yes := false
+	mut install := false
+	mut optional := false
 	for i := 1; i < args.len; i++ {
 		a := args[i]
 		if a == '--dry-run' {
 			dry_run = true
 			continue
 		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a == '--install' {
+			install = true
+			continue
+		}
+		if a == '--optional' {
+			optional = true
+			continue
+		}
 		if a.starts_with('-') {
-			return error('unknown flag: ${a}.\nExample: horneroctl package check --dry-run')
+			return error('unknown flag: ${a}.\nExample: horneroctl package ${leaf} --dry-run')
 		}
 		return error('unexpected argument: ${a}.\nRun: horneroctl package --help')
 	}
+	if leaf in ['check', 'updates'] && (yes || install || optional) {
+		return error('package ${leaf} takes no --yes/--install/--optional.\nExample: horneroctl package ${leaf} --dry-run')
+	}
+	if leaf == 'upgrade' && (install || optional) {
+		return error('package upgrade takes no --install/--optional.\nExample: horneroctl package upgrade --dry-run')
+	}
+	if leaf == 'deps' && !install && yes {
+		return error('package deps check takes no --yes.\nExample: horneroctl package deps --optional')
+	}
 	return PackageCmdOptions{
-		leaf:    leaf
-		dry_run: dry_run
+		leaf:     leaf
+		dry_run:  dry_run
+		yes:      yes
+		install:  install
+		optional: optional
 	}
 }
 
-// BackupCmdOptions covers `backup <list|schedule>` (read-only).
+// BackupCmdOptions covers `backup <list|schedule|create|restore>`.
+// `list`/`schedule` are read-only; `create`/`restore` mutate.
 pub struct BackupCmdOptions {
 pub:
-	leaf string // list | schedule
+	leaf    string // list | schedule | create | restore
+	id      string // restore target | create --name value
+	is_name bool   // id came from --name (create) vs positional (restore)
+	dry_run bool
+	yes     bool
 }
 
 pub fn parse_backup_cmd(args []string) !BackupCmdOptions {
@@ -110,19 +143,81 @@ pub fn parse_backup_cmd(args []string) !BackupCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl backup list')
 	}
 	leaf := args[0]
-	if leaf in ['create', 'restore'] {
-		return error('backup ${leaf} needs a pinned non-interactive backend (legacy flows prompt).\nRun: horneroctl backup --help')
-	}
-	if leaf !in ['list', 'schedule'] {
+	if leaf !in ['list', 'schedule', 'create', 'restore'] {
 		return error('unknown backup subcommand: ${leaf}.\nRun: horneroctl backup --help')
 	}
-	if args.len > 1 {
-		if args[1].starts_with('-') {
-			return error('unknown flag: ${args[1]}.\nExample: horneroctl backup ${leaf}')
+	if leaf in ['list', 'schedule'] {
+		if args.len > 1 {
+			if args[1].starts_with('-') {
+				return error('unknown flag: ${args[1]}.\nExample: horneroctl backup ${leaf}')
+			}
+			return error('unexpected argument: ${args[1]}.\nExample: horneroctl backup ${leaf}')
 		}
-		return error('unexpected argument: ${args[1]}.\nExample: horneroctl backup ${leaf}')
+		return BackupCmdOptions{
+			leaf: leaf
+		}
+	}
+	mut id := ''
+	mut is_name := false
+	mut dry_run := false
+	mut yes := false
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		if a == '--dry-run' {
+			dry_run = true
+			i++
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			i++
+			continue
+		}
+		if a == '--name' {
+			if leaf != 'create' {
+				return error('--name belongs to backup create.\nExample: horneroctl backup create --name my_backup --dry-run')
+			}
+			if i + 1 >= args.len || args[i + 1].starts_with('-') || args[i + 1].len == 0 {
+				return error('missing value for --name.\nExample: horneroctl backup create --name my_backup --dry-run')
+			}
+			id = args[i + 1]
+			is_name = true
+			i += 2
+			continue
+		}
+		if a.starts_with('--name=') {
+			if leaf != 'create' {
+				return error('--name belongs to backup create.\nExample: horneroctl backup create --name my_backup --dry-run')
+			}
+			id = a.all_after('=')
+			if id.len == 0 {
+				return error('missing value for --name.\nExample: horneroctl backup create --name my_backup --dry-run')
+			}
+			is_name = true
+			i++
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl backup ${leaf} --dry-run')
+		}
+		if leaf == 'create' {
+			return error('backup create takes no positional arguments (use --name).\nExample: horneroctl backup create --name my_backup --dry-run')
+		}
+		if id.len > 0 {
+			return error('unexpected argument: ${a}.\nRun: horneroctl backup --help')
+		}
+		id = a
+		i++
+	}
+	if leaf == 'restore' && id.len == 0 {
+		return error('missing backup id.\nExample: horneroctl backup restore dotfiles_backup --dry-run')
 	}
 	return BackupCmdOptions{
-		leaf: leaf
+		leaf:    leaf
+		id:      id
+		is_name: is_name
+		dry_run: dry_run
+		yes:     yes
 	}
 }
