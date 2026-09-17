@@ -186,9 +186,9 @@ pub fn backup_restore_report(opts BackupRestoreOptions) CommandResult {
 	if rep.ok {
 		return ok_result('backup restore', 'Rollback complete: restored ${archive} into ${source}',
 			{
-			'command_line': rep.command_line
-			'archive':      archive
-		})
+				'command_line': rep.command_line
+				'archive':      archive
+			})
 	}
 	return fail_result('backup restore', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }

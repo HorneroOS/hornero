@@ -103,8 +103,7 @@ pub fn gtk_theme_search_dirs() []string {
 		home_share = os.join_path(base, 'themes')
 	}
 	return ['/usr/share/themes', '/usr/local/share/themes', os.join_path(os.home_dir(),
-		'.themes'),
-		home_share]
+		'.themes'), home_share]
 }
 
 // gtk_icon_search_dirs lists the directories scanned for icon themes.
@@ -231,11 +230,11 @@ pub fn apply_gtk_color_scheme_native(requested string, dry_run bool) CommandResu
 	if dry_run {
 		return ok_result('appearance gtk color-scheme', 'would run:\n' + lines.join('\n'),
 			{
-			'command_line': lines.join('\n')
-			'dry_run':      'true'
-			'policy':       policy
-			'effective':    effective
-		})
+				'command_line': lines.join('\n')
+				'dry_run':      'true'
+				'policy':       policy
+				'effective':    effective
+			})
 	}
 	update_state_json_fields({
 		'gtkColorScheme': policy
@@ -254,9 +253,9 @@ pub fn apply_gtk_color_scheme_native(requested string, dry_run bool) CommandResu
 	}
 	return ok_result('appearance gtk color-scheme', 'GTK color-scheme policy: ${policy} (effective ${effective})',
 		{
-		'policy':    policy
-		'effective': effective
-	})
+			'policy':    policy
+			'effective': effective
+		})
 }
 
 // sync_gtk_color_scheme_native re-applies the persisted policy (follow
@@ -412,10 +411,10 @@ pub fn apply_gtk_theme_native(theme string, icon string, policy_arg string, dry_
 	}
 	return ok_result('appearance gtk apply', 'Theme applied successfully: ${resolved}',
 		{
-		'theme':  resolved
-		'icons':  resolved_icon
-		'policy': policy_rep.data['policy']
-	})
+			'theme':  resolved
+			'icons':  resolved_icon
+			'policy': policy_rep.data['policy']
+		})
 }
 
 // gtk_list_report implements `appearance gtk list|icons` (read-only).
@@ -471,10 +470,10 @@ pub fn gtk_detect_report(wallpaper string) CommandResult {
 		false))
 	return ok_result('appearance gtk detect', 'Detected optimal theme: ${theme}\nDark preference: ${prefer_dark}',
 		{
-		'theme':       theme
-		'prefer_dark': prefer_dark
-		'wallpaper':   wall
-	})
+			'theme':       theme
+			'prefer_dark': prefer_dark
+			'wallpaper':   wall
+		})
 }
 
 // gtk_info_report implements `appearance gtk info <name>` (read-only).

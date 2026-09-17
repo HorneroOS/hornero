@@ -584,7 +584,8 @@ pub fn parse_appearance_gtk(args []string) !GtkCmdOptions {
 		}
 		i++
 	}
-	if leaf in ['list', 'icons', 'current', 'current-icon', 'current-color-scheme', 'sync-color-scheme', 'auto']
+	if leaf in ['list', 'icons', 'current', 'current-icon', 'current-color-scheme', 'sync-color-scheme',
+		'auto']
 		&& (value.len > 0 || extra.len > 0) {
 		return error('gtk ${leaf} takes no value.\nExample: horneroctl appearance gtk ${leaf} --dry-run')
 	}

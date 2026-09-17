@@ -199,8 +199,7 @@ pub:
 pub fn battery_status_report(opts BatteryStatusOptions) CommandResult {
 	if opts.dry_run {
 		probe := battery_probe_cmd()
-		return ok_result('hardware battery status', 'would run: ${command_line(probe.prog,
-			probe.args)}', {
+		return ok_result('hardware battery status', 'would run: ${command_line(probe.prog, probe.args)}', {
 			'command_line': command_line(probe.prog, probe.args)
 			'dry_run':      'true'
 		})
@@ -209,17 +208,17 @@ pub fn battery_status_report(opts BatteryStatusOptions) CommandResult {
 	if !info.present {
 		return ok_result('hardware battery status', 'battery: none detected (desktop?)',
 			{
-			'present': 'false'
-			'backend': info.backend
-		})
+				'present': 'false'
+				'backend': info.backend
+			})
 	}
 	return ok_result('hardware battery status', 'battery: ${info.pct}% (${info.state} via ${info.backend})',
 		{
-		'present':    'true'
-		'percentage': '${info.pct}'
-		'state':      info.state
-		'backend':    info.backend
-	})
+			'present':    'true'
+			'percentage': '${info.pct}'
+			'state':      info.state
+			'backend':    info.backend
+		})
 }
 
 // hardware_notify sends a best-effort desktop notification, silently
@@ -261,34 +260,33 @@ pub fn battery_monitor_report(opts BatteryMonitorOptions) CommandResult {
 		if opts.daemon {
 			return ok_result('hardware battery monitor', 'would run (detached): ${detached}',
 				{
-				'command_line': detached
-				'dry_run':      'true'
-			})
+					'command_line': detached
+					'dry_run':      'true'
+				})
 		}
 		probe := battery_probe_cmd()
-		return ok_result('hardware battery monitor', 'would monitor: poll ${command_line(probe.prog,
-			probe.args)} every ${opts.interval}s (low<=${opts.low}%, crit<=${opts.crit}%)',
+		return ok_result('hardware battery monitor', 'would monitor: poll ${command_line(probe.prog, probe.args)} every ${opts.interval}s (low<=${opts.low}%, crit<=${opts.crit}%)',
 			{
-			'command_line': command_line(probe.prog, probe.args)
-			'dry_run':      'true'
-		})
+				'command_line': command_line(probe.prog, probe.args)
+				'dry_run':      'true'
+			})
 	}
 	if resolve_poweralertd_bin().len > 0 {
 		hardware_notify('Battery Monitor', 'poweralertd active (horneroctl monitor idle)',
 			'low')
 		return ok_result('hardware battery monitor', 'poweralertd active (horneroctl monitor idle)',
 			{
-			'backend': 'poweralertd'
-		})
+				'backend': 'poweralertd'
+			})
 	}
 	if opts.daemon {
 		r := os.execute(detached)
 		if r.exit_code == 0 {
 			return ok_result('hardware battery monitor', 'battery monitor started in background (low<=${opts.low}%, crit<=${opts.crit}%, every ${opts.interval}s)',
 				{
-				'command_line': detached
-				'daemon':       'true'
-			})
+					'command_line': detached
+					'daemon':       'true'
+				})
 		}
 		return fail_result('hardware battery monitor', 'failed to detach monitor (exit ${r.exit_code}):\n${r.output}')
 	}

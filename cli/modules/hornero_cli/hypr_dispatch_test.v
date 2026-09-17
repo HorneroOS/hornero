@@ -102,8 +102,7 @@ fn test_dispatch_hypr_usage_errors() {
 	assert dispatch(['horneroctl', 'hypr', 'plugins']) == 2
 	assert dispatch(['horneroctl', 'hypr', 'plugins', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'hypr', 'plugins', 'status', '--dry-run']) == 2
-	assert dispatch(['horneroctl', 'hypr', 'plugins', 'install', '--force', '--no-update',
-		'--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'plugins', 'install', '--force', '--no-update', '--dry-run']) == 2
 	assert dispatch(['horneroctl', 'hypr', 'plugins', 'install', '--bogus']) == 2
 	hypr_dispatch_teardown()
 }

@@ -98,9 +98,9 @@ pub fn package_upgrade_report(opts PackageUpgradeOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('package upgrade', 'would run: ${rep.command_line}\nPrivilege: polkit (pkexec). AUR-helper flows (yay -Syu) stay manual.',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	if rep.ok {
 		return ok_result('package upgrade', rep.output, {
@@ -280,7 +280,7 @@ pub fn package_deps_install_report(opts PackageDepsOptions) CommandResult {
 	}
 	return ok_result('package deps', 'installed ${missing.len} missing dependencies',
 		{
-		'command_line': previews.join('; ')
-		'missing':      missing.map(it.check).join(',')
-	})
+			'command_line': previews.join('; ')
+			'missing':      missing.map(it.check).join(',')
+		})
 }

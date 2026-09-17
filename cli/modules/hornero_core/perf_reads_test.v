@@ -5,8 +5,7 @@ import os
 // Fixture-backed tests for the native performance reads: fake ps/zsh/
 // free binaries plus a scratch log dir keep every run hermetic and fast.
 
-const perf_test_keys = ['HORNERO_PERF_LOG_DIR', 'HORNERO_PS_BIN', 'HORNERO_ZSH_BIN',
-	'HORNERO_FREE_BIN']
+const perf_test_keys = ['HORNERO_PERF_LOG_DIR', 'HORNERO_PS_BIN', 'HORNERO_ZSH_BIN', 'HORNERO_FREE_BIN']
 
 fn perf_test_save_env() map[string]string {
 	mut saved := map[string]string{}

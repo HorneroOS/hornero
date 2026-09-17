@@ -128,9 +128,9 @@ pub fn theme_get_report(opts ThemeGetOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('appearance theme get', 'would run: ${override} status',
 				{
-				'command_line': '${override} status'
-				'dry_run':      'true'
-			})
+					'command_line': '${override} status'
+					'dry_run':      'true'
+				})
 		}
 		rep := strict_exec(override, ['status'], false)
 		if rep.ok {
@@ -143,9 +143,9 @@ pub fn theme_get_report(opts ThemeGetOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('appearance theme get', 'would run: read scheme state + gtk settings',
 			{
-			'command_line': 'read ${scheme_state_file_for_read()} + ${resolve_gtk3_file()}'
-			'dry_run':      'true'
-		})
+				'command_line': 'read ${scheme_state_file_for_read()} + ${resolve_gtk3_file()}'
+				'dry_run':      'true'
+			})
 	}
 	st := query_appearance_status() or { return fail_result('appearance theme get', err.msg()) }
 	data := {
@@ -208,10 +208,10 @@ pub fn theme_set_report_with(opts ThemeSetOptions, apply_fn fn (string, string, 
 	if opts.dry_run {
 		return ok_result('appearance theme set', 'would run: theme apply ${opts.id} (then verify mode=${mode} gtk=${pack.gtk_theme})',
 			{
-			'command_line': 'theme apply ${opts.id}'
-			'dry_run':      'true'
-			'id':           opts.id
-		})
+				'command_line': 'theme apply ${opts.id}'
+				'dry_run':      'true'
+				'id':           opts.id
+			})
 	}
 	pre := query_appearance_status() or { AppearanceStatus{} }
 	pre_id := match_official_theme(pre)
@@ -253,8 +253,8 @@ pub fn theme_set_report_with(opts ThemeSetOptions, apply_fn fn (string, string, 
 	}
 	return ok_result('appearance theme set', 'theme set to ${opts.id} (mode=${post.mode}, gtk=${post.gtk_theme})',
 		{
-		'id':        opts.id
-		'mode':      post.mode
-		'gtk_theme': post.gtk_theme
-	})
+			'id':        opts.id
+			'mode':      post.mode
+			'gtk_theme': post.gtk_theme
+		})
 }

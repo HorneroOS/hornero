@@ -165,8 +165,13 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell start', 'refusing to start the shell without --yes (preview with --dry-run).\nExample: horneroctl shell start --dry-run')
 	}
-	bin := if opts.bin.len > 0 { opts.bin } else { quickshell_or_fail('start', opts.dry_run) or {
-			return fail_result('shell start', err.msg())} }
+	bin := if opts.bin.len > 0 {
+		opts.bin
+	} else {
+		quickshell_or_fail('start', opts.dry_run) or {
+			return fail_result('shell start', err.msg())
+		}
+	}
 	conf := resolve_quickshell_config_dir()
 	logf := resolve_shell_log_file()
 	// Mirrors the legacy `nohup "$QUICKSHELL_BIN" >/dev/null 2>&1 &`,
@@ -175,11 +180,11 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('shell start', 'would run: ${line}\nconfig dir: ${conf}\nlog file: ${logf}',
 			{
-			'command_line': line
-			'config_dir':   conf
-			'log_file':     logf
-			'dry_run':      'true'
-		})
+				'command_line': line
+				'config_dir':   conf
+				'log_file':     logf
+				'dry_run':      'true'
+			})
 	}
 	if shell_is_running() {
 		return ok_result('shell start', 'Quickshell is already running', {
@@ -199,10 +204,10 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 		pids := shell_running_pids()
 		return ok_result('shell start', 'Quickshell started successfully (PID: ${pids.join(',')})',
 			{
-			'command_line': line
-			'pids':         pids.join(',')
-			'log_file':     logf
-		})
+				'command_line': line
+				'pids':         pids.join(',')
+				'log_file':     logf
+			})
 	}
 	return fail_result('shell start', 'Failed to start Quickshell')
 }
@@ -221,15 +226,20 @@ pub fn shell_stop_report(opts ShellStopOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell stop', 'refusing to stop the shell without --yes (preview with --dry-run).\nExample: horneroctl shell stop --dry-run')
 	}
-	bin := if opts.bin.len > 0 { opts.bin } else { quickshell_or_fail('stop', opts.dry_run) or {
-			return fail_result('shell stop', err.msg())} }
+	bin := if opts.bin.len > 0 {
+		opts.bin
+	} else {
+		quickshell_or_fail('stop', opts.dry_run) or {
+			return fail_result('shell stop', err.msg())
+		}
+	}
 	kill_line := command_line(bin, ['kill'])
 	if opts.dry_run {
 		return ok_result('shell stop', 'would run: ${kill_line}\nescalation: pkill -9 -x qs; pkill -9 -x quickshell',
 			{
-			'command_line': kill_line
-			'dry_run':      'true'
-		})
+				'command_line': kill_line
+				'dry_run':      'true'
+			})
 	}
 	if !shell_is_running() {
 		return ok_result('shell stop', 'Quickshell is not running', {
@@ -276,17 +286,22 @@ pub fn shell_restart_report(opts ShellRestartOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell restart', 'refusing to restart the shell without --yes (preview with --dry-run).\nExample: horneroctl shell restart --dry-run')
 	}
-	bin := if opts.bin.len > 0 { opts.bin } else { quickshell_or_fail('restart', opts.dry_run) or {
-			return fail_result('shell restart', err.msg())} }
+	bin := if opts.bin.len > 0 {
+		opts.bin
+	} else {
+		quickshell_or_fail('restart', opts.dry_run) or {
+			return fail_result('shell restart', err.msg())
+		}
+	}
 	kill_line := command_line(bin, ['kill'])
 	logf := resolve_shell_log_file()
 	start_line := 'nohup ${bin} >>${logf} 2>&1 &'
 	if opts.dry_run {
 		return ok_result('shell restart', 'would run: ${kill_line}\nwould run: sleep 1\nwould run: ${start_line}',
 			{
-			'command_line': '${kill_line}; sleep 1; ${start_line}'
-			'dry_run':      'true'
-		})
+				'command_line': '${kill_line}; sleep 1; ${start_line}'
+				'dry_run':      'true'
+			})
 	}
 	stop_rep := shell_stop_report(ShellStopOptions{
 		dry_run: false
@@ -307,8 +322,8 @@ pub fn shell_restart_report(opts ShellRestartOptions) CommandResult {
 	}
 	return ok_result('shell restart', 'Quickshell restarted\n${stop_rep.message}\n${start_rep.message}',
 		{
-		'command_line': '${kill_line}; sleep 1; ${start_line}'
-	})
+			'command_line': '${kill_line}; sleep 1; ${start_line}'
+		})
 }
 
 pub struct ShellLogsOptions {

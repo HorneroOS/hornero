@@ -60,8 +60,13 @@ pub fn default_apps_set_report(opts DefaultAppsSetOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('config default-apps set', 'refusing to set the default app without --yes (preview with --dry-run).\nExample: horneroctl config default-apps set ${opts.mime} ${opts.app} --dry-run')
 	}
-	bin := if opts.helper.len > 0 { opts.helper } else { xdg_mime_or_fail(opts.dry_run) or {
-			return fail_result('config default-apps set', err.msg())} }
+	bin := if opts.helper.len > 0 {
+		opts.helper
+	} else {
+		xdg_mime_or_fail(opts.dry_run) or {
+			return fail_result('config default-apps set', err.msg())
+		}
+	}
 	rep := run_exec(ExecSpec{
 		prog:    bin
 		args:    ['default', opts.app, opts.mime]
@@ -70,19 +75,19 @@ pub fn default_apps_set_report(opts DefaultAppsSetOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('config default-apps set', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'mime':         opts.mime
-			'app':          opts.app
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'mime':         opts.mime
+				'app':          opts.app
+				'dry_run':      'true'
+			})
 	}
 	if rep.ok {
 		return ok_result('config default-apps set', 'Set ${opts.app} as default for ${opts.mime}',
 			{
-			'command_line': rep.command_line
-			'mime':         opts.mime
-			'app':          opts.app
-		})
+				'command_line': rep.command_line
+				'mime':         opts.mime
+				'app':          opts.app
+			})
 	}
 	return fail_result('config default-apps set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }

@@ -224,9 +224,9 @@ pub fn snapshot_create_report(opts SnapshotCreateOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('config snapshot create', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		if rep.ok {
 			return ok_result('config snapshot create', rep.output, {
@@ -268,9 +268,9 @@ pub fn snapshot_restore_report(opts SnapshotRestoreOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('config snapshot restore', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		if rep.ok {
 			return ok_result('config snapshot restore', rep.output, {
@@ -316,8 +316,8 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would create ${base}/config_<timestamp> (metadata.json, dotfiles.tar.gz, package lists, processes.txt)',
 			{
-			'dry_run': 'true'
-		})
+				'dry_run': 'true'
+			})
 	}
 	stamp := perf_stamp(time.now())
 	// Same-second collisions (create + pre-restore backup in one run)
@@ -416,9 +416,9 @@ pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would back up current state, then restore ${id} over ${os.home_dir()}',
 			{
-			'dry_run': 'true'
-			'id':      id
-		})
+				'dry_run': 'true'
+				'id':      id
+			})
 	}
 	dir := snapshot_find_dir(id)
 	if dir.len == 0 {

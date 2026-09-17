@@ -240,9 +240,9 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('hardware keyboard layout', 'would run: ${layout_read_cmd(session)}',
 				{
-				'command_line': layout_read_cmd(session)
-				'dry_run':      'true'
-			})
+					'command_line': layout_read_cmd(session)
+					'dry_run':      'true'
+				})
 		}
 		cur := current_layout(session) or {
 			return fail_result('hardware keyboard layout', err.msg())
@@ -256,9 +256,9 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('hardware keyboard layout', 'would run: ${layout_read_cmd(session)}',
 				{
-				'command_line': layout_read_cmd(session)
-				'dry_run':      'true'
-			})
+					'command_line': layout_read_cmd(session)
+					'dry_run':      'true'
+				})
 		}
 		layout := current_layout(session) or {
 			return fail_result('hardware keyboard layout', err.msg())
@@ -293,10 +293,10 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('hardware keyboard layout', 'would run: ${layout_read_cmd(session)}, then apply next of us, latam',
 			{
-			'read_command': layout_read_cmd(session)
-			'session':      session
-			'dry_run':      'true'
-		})
+				'read_command': layout_read_cmd(session)
+				'session':      session
+				'dry_run':      'true'
+			})
 	}
 	layout := current_layout(session) or {
 		return fail_result('hardware keyboard layout', err.msg())
@@ -384,9 +384,9 @@ pub fn keyboard_settings_report(opts KeyboardSettingsOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('hardware keyboard settings', 'would run: lxqt-config-input',
 				{
-				'command_line': 'lxqt-config-input'
-				'dry_run':      'true'
-			})
+					'command_line': 'lxqt-config-input'
+					'dry_run':      'true'
+				})
 		}
 		return fail_result('hardware keyboard settings', 'lxqt-config-input not installed. Install it with: sudo pacman -S lxqt-config-input')
 	}
@@ -394,9 +394,9 @@ pub fn keyboard_settings_report(opts KeyboardSettingsOptions) CommandResult {
 		rep := spawn_detached(bin, [], true)
 		return ok_result('hardware keyboard settings', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	rep := spawn_detached(bin, [], false)
 	if rep.ok {
@@ -554,9 +554,9 @@ pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 			if opts.dry_run {
 				return ok_result('hardware keyboard keys', 'would run: dots-settings-gui --pane=system menu',
 					{
-					'command_line': 'dots-settings-gui --pane=system menu'
-					'dry_run':      'true'
-				})
+						'command_line': 'dots-settings-gui --pane=system menu'
+						'dry_run':      'true'
+					})
 			}
 			return fail_result('hardware keyboard keys', 'quickshell is running but the settings-gui backend is missing. Set HORNERO_SETTINGS_GUI_BIN or DOTS_BYPASS_QUICKSHELL=1.\nExample: horneroctl hardware keyboard keys --dry-run')
 		}
@@ -568,15 +568,15 @@ pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('hardware keyboard keys', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		if rep.ok {
 			return ok_result('hardware keyboard keys', 'settings opened (quickshell running)',
 				{
-				'command_line': rep.command_line
-			})
+					'command_line': rep.command_line
+				})
 		}
 		return fail_result('hardware keyboard keys', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 	}

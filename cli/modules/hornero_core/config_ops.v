@@ -160,9 +160,9 @@ pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
 		probe := command_line(handlr, ['get', 'inode/directory'])
 		return ok_result('config default-apps list', 'would query handlr for 8 default associations (--list)',
 			{
-			'command_line': probe
-			'dry_run':      'true'
-		})
+				'command_line': probe
+				'dry_run':      'true'
+			})
 	}
 	app_dirs := [os.join_path(os.home_dir(), '.local', 'share', 'applications'),
 		'/usr/share/applications']
