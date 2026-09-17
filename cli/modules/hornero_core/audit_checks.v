@@ -354,7 +354,7 @@ fn audit_system_native() ([]string, int) {
 // audit_utc_now formats UTC like `date -u +%Y-%m-%dT%H:%M:%SZ`.
 fn audit_utc_now() string {
 	t := time.now().local_to_utc()
-	return '${t.year}-${perf_pad2(t.month)}-${perf_pad2(t.day)}T${perf_pad2(t.hour)}:${perf_pad2(t.minute)}:${perf_pad2(t.second)}Z'
+	return t.custom_format('YYYY-MM-DDTHH:mm:ss') + 'Z'
 }
 
 // audit_full_native mirrors run_security_audit: header, the three

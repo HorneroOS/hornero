@@ -59,31 +59,18 @@ fn perf_format_time(ms i64) string {
 	m := ms / 60000
 	rem := ms % 60000
 	s := rem / 1000
-	frac := (rem % 1000).str()
-	mut pad := frac
-	for pad.len < 3 {
-		pad = '0' + pad
-	}
-	return '${m}m${s}.${pad}s'
+	frac := rem % 1000
+	return '${m}m${s}.${frac:03}s'
 }
 
-// perf_pad2 zero-pads a clock field.
-fn perf_pad2(n int) string {
-	s := n.str()
-	if s.len >= 2 {
-		return s
-	}
-	return '0' + s
-}
-
-// perf_stamp builds %Y%m%d_%H%M%S from Time fields (no strftime in stdlib).
+// perf_stamp builds %Y%m%d_%H%M%S via the stdlib custom_format.
 fn perf_stamp(t time.Time) string {
-	return '${t.year}${perf_pad2(t.month)}${perf_pad2(t.day)}_${perf_pad2(t.hour)}${perf_pad2(t.minute)}${perf_pad2(t.second)}'
+	return t.custom_format('YYYYMMDD_HHmmss')
 }
 
-// perf_datestamp builds %Y%m%d.
+// perf_datestamp builds %Y%m%d via the stdlib custom_format.
 fn perf_datestamp(t time.Time) string {
-	return '${t.year}${perf_pad2(t.month)}${perf_pad2(t.day)}'
+	return t.custom_format('YYYYMMDD')
 }
 
 // perf_stack_rows runs ps for the Wayland stack processes, like
@@ -283,13 +270,11 @@ fn perf_startup_report(dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would measure zsh startup (5 runs) and write ${dir}/startup_<timestamp>.log',
 			{
-				'dry_run': 'true'
-			})
+			'dry_run': 'true'
+		})
 	}
 	os.mkdir_all(dir) or {}
-	lines, times := perf_startup_lines() or {
-		return fail_result(name, err.msg())
-	}
+	lines, times := perf_startup_lines() or { return fail_result(name, err.msg()) }
 	stamp := perf_stamp(time.now())
 	log := os.join_path(dir, 'startup_${stamp}.log')
 	content := '# Shell Startup Performance - ${time.now()}\nStandard startup times: ${times.join(' ')}\nBaseline (no plugins): ${lines[lines.len - 1]}\n'
@@ -334,17 +319,15 @@ fn perf_benchmark_report(dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would run the benchmark suite and write ${dir}/benchmark_<timestamp>.log',
 			{
-				'dry_run': 'true'
-			})
+			'dry_run': 'true'
+		})
 	}
 	os.mkdir_all(dir) or {}
 	mut body := ['# HorneroConfig Performance Benchmark', 'Date: ${time.now()}',
 		'System: ${os.uname().sysname} ${os.uname().release} ${os.uname().machine}',
 		'Memory: ${perf_mem_total()}', 'CPU: ${perf_cpu_model()}', '']
 	body << 'Measuring shell startup...'
-	startup, _ := perf_startup_lines() or {
-		return fail_result(name, err.msg())
-	}
+	startup, _ := perf_startup_lines() or { return fail_result(name, err.msg()) }
 	body << startup.join('\n')
 	body << ''
 	body << 'Checking memory usage...'
@@ -384,9 +367,7 @@ fn perf_report_report(dry_run bool) CommandResult {
 		})
 	}
 	os.mkdir_all(dir) or {}
-	startup, _ := perf_startup_lines() or {
-		return fail_result(name, err.msg())
-	}
+	startup, _ := perf_startup_lines() or { return fail_result(name, err.msg()) }
 	mut kept := []string{}
 	for l in startup {
 		if l.contains('Run') || l.contains('Average') || l.contains('Without') {
@@ -440,7 +421,10 @@ fn perf_report_report(dry_run bool) CommandResult {
 		'N/A'
 	}
 	summary << '  Latest startup time: ${latest}'
-	summary << '  Current memory usage: ${perf_format_mb(perf_sum_rss(perf_stack_rows(), 'Hyprland') + perf_sum_rss(perf_stack_rows(), 'quickshell') + perf_sum_rss(perf_stack_rows(), 'mako') + perf_sum_rss(perf_stack_rows(), 'hyprlock') + perf_sum_rss(perf_stack_rows(), 'kitty'))}'
+	summary << '  Current memory usage: ${perf_format_mb(
+		perf_sum_rss(perf_stack_rows(), 'Hyprland') +
+		perf_sum_rss(perf_stack_rows(), 'quickshell') + perf_sum_rss(perf_stack_rows(), 'mako') +
+		perf_sum_rss(perf_stack_rows(), 'hyprlock') + perf_sum_rss(perf_stack_rows(), 'kitty'))}'
 	msg := '📄 Report generated: ${log}\n' + summary.join('\n')
 	return ok_result(name, msg, {
 		'log': log

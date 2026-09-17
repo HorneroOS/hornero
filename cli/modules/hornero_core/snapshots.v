@@ -2,7 +2,7 @@ module hornero_core
 
 import os
 import time
-import x.json2
+import json2
 
 // Snapshot backend: configuration snapshots materialized on disk.
 //
@@ -83,15 +83,28 @@ pub:
 	commit    string
 }
 
-fn snapshot_str_field(m map[string]json2.Any, key string) string {
-	if key !in m {
+// snapshot_metadata_file mirrors metadata.json; read and write share it
+// (decode ignores the extra write-side keys, missing keys decode to '').
+struct SnapshotSystemInfo {
+	os     string
+	kernel string
+	shell  string
+}
+
+struct SnapshotMetadataFile {
+	id              string
+	timestamp       string
+	hostname        string
+	user            string
+	dotfiles_commit string
+	system_info     SnapshotSystemInfo
+}
+
+fn snapshot_or_unknown(s string) string {
+	if s == '' {
 		return 'unknown'
 	}
-	v := m[key].str()
-	if v.len == 0 {
-		return 'unknown'
-	}
-	return v
+	return s
 }
 
 // valid_snapshot_id rejects path escapes and empty ids, mirroring the
@@ -108,16 +121,15 @@ fn valid_snapshot_id(id string) bool {
 // mirroring how unparseable theme packs are skipped.
 fn read_snapshot(dir string, id string) !SnapshotEntry {
 	raw := os.read_file(os.join_path(dir, id, 'metadata.json'))!
-	parsed := json2.decode[json2.Any](raw)!
-	if parsed is map[string]json2.Any {
-		return SnapshotEntry{
-			id:        id
-			timestamp: snapshot_str_field(parsed, 'timestamp')
-			hostname:  snapshot_str_field(parsed, 'hostname')
-			commit:    snapshot_str_field(parsed, 'dotfiles_commit')
-		}
+	meta := json2.decode[SnapshotMetadataFile](raw) or {
+		return error('snapshot is corrupt: ${id} (metadata.json is not an object)')
 	}
-	return error('snapshot is corrupt: ${id} (metadata.json is not an object)')
+	return SnapshotEntry{
+		id:        id
+		timestamp: snapshot_or_unknown(meta.timestamp)
+		hostname:  snapshot_or_unknown(meta.hostname)
+		commit:    snapshot_or_unknown(meta.dotfiles_commit)
+	}
 }
 
 // list_snapshots returns materialized snapshots sorted by id.
@@ -208,7 +220,8 @@ pub fn snapshot_create_report(opts SnapshotCreateOptions) CommandResult {
 			dry_run: opts.dry_run
 		})
 		if opts.dry_run {
-			return ok_result('config snapshot create', 'would run: ${rep.command_line}', {
+			return ok_result('config snapshot create', 'would run: ${rep.command_line}',
+				{
 				'command_line': rep.command_line
 				'dry_run':      'true'
 			})
@@ -253,9 +266,9 @@ pub fn snapshot_restore_report(opts SnapshotRestoreOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('config snapshot restore', 'would run: ${rep.command_line}',
 				{
-					'command_line': rep.command_line
-					'dry_run':      'true'
-				})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 		}
 		if rep.ok {
 			return ok_result('config snapshot restore', rep.output, {
@@ -269,13 +282,7 @@ pub fn snapshot_restore_report(opts SnapshotRestoreOptions) CommandResult {
 
 // snapshot_iso_now formats local time like `date -Iseconds`.
 fn snapshot_iso_now() string {
-	t := time.now()
-	return '${t.year}-${perf_pad2(t.month)}-${perf_pad2(t.day)}T${perf_pad2(t.hour)}:${perf_pad2(t.minute)}:${perf_pad2(t.second)}'
-}
-
-// snap_escape quotes one metadata value for the hand-built JSON.
-fn snap_escape(s string) string {
-	return s.replace('\\', '\\\\').replace('"', '\\"')
+	return time.now().custom_format('YYYY-MM-DDTHH:mm:ss')
 }
 
 // snapshot_dotfiles_commit reads the dotfiles HEAD, 'unknown' when the
@@ -307,8 +314,8 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would create ${base}/config_<timestamp> (metadata.json, dotfiles.tar.gz, package lists, processes.txt)',
 			{
-				'dry_run': 'true'
-			})
+			'dry_run': 'true'
+		})
 	}
 	stamp := perf_stamp(time.now())
 	// Same-second collisions (create + pre-restore backup in one run)
@@ -321,18 +328,25 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 		id = 'config_${stamp}_${n}'
 		dir = os.join_path(base, id)
 	}
-	os.mkdir_all(dir) or {
-		return fail_result(name, 'cannot create snapshot dir: ${err.msg()}')
-	}
+	os.mkdir_all(dir) or { return fail_result(name, 'cannot create snapshot dir: ${err.msg()}') }
 	host := os.hostname() or { 'unknown' }
-	meta := '{\n  "id": "${id}",\n  "timestamp": "${snapshot_iso_now()}",\n  "hostname": "${snap_escape(host)}",\n  "user": "${snap_escape(os.getenv('USER'))}",\n  "dotfiles_commit": "${snap_escape(snapshot_dotfiles_commit())}",\n  "system_info": {\n    "os": "${snap_escape(perf_os_pretty())}",\n    "kernel": "${os.uname().release}",\n    "shell": "${snap_escape(os.getenv('SHELL'))}"\n  }\n}\n'
+	meta := json2.encode(SnapshotMetadataFile{
+		id:              id
+		timestamp:       snapshot_iso_now()
+		hostname:        host
+		user:            os.getenv('USER')
+		dotfiles_commit: snapshot_dotfiles_commit()
+		system_info:     SnapshotSystemInfo{
+			os:     perf_os_pretty()
+			kernel: os.uname().release
+			shell:  os.getenv('SHELL')
+		}
+	})
 	os.write_file(os.join_path(dir, 'metadata.json'), meta) or {
 		return fail_result(name, 'cannot write metadata: ${err.msg()}')
 	}
 	home := os.home_dir()
-	tar := tar_or_fail('create', false) or {
-		return fail_result(name, err.msg())
-	}
+	tar := tar_or_fail('create', false) or { return fail_result(name, err.msg()) }
 	// Best-effort like the script's `|| true`: missing members must not
 	// fail the snapshot.
 	run_exec(ExecSpec{
@@ -400,9 +414,9 @@ pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would back up current state, then restore ${id} over ${os.home_dir()}',
 			{
-				'dry_run': 'true'
-				'id':      id
-			})
+			'dry_run': 'true'
+			'id':      id
+		})
 	}
 	dir := snapshot_find_dir(id)
 	if dir.len == 0 {
@@ -419,9 +433,7 @@ pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	tarball := os.join_path(dir, 'dotfiles.tar.gz')
 	if os.is_file(tarball) {
 		lines << '  Restoring dotfiles...'
-		tar := tar_or_fail('restore', false) or {
-			return fail_result(name, err.msg())
-		}
+		tar := tar_or_fail('restore', false) or { return fail_result(name, err.msg()) }
 		// Best-effort like the script's `|| true`.
 		run_exec(ExecSpec{
 			prog: tar

@@ -1,9 +1,9 @@
 module hornero_core
 
+import json2
 import net.http
 import os
 import time
-import x.json2
 
 // Native weather backend: mirrors the retired dots-weather-info legacy
 // body. Field reads serve the ~/.cache/dots/weather files directly
@@ -175,6 +175,31 @@ fn weather_mood(code string) WeatherMood {
 	}
 }
 
+// weather_geo_response mirrors the ip-api.com JSON body; regionName
+// needs the json attribute since V field names cannot hold capitals.
+struct WeatherGeoResponse {
+	lat     f64
+	lon     f64
+	city    string
+	region  string @[json: 'regionName']
+	country string
+}
+
+struct WeatherMain {
+	temp f64
+}
+
+struct WeatherCondition {
+	icon        string
+	description string
+}
+
+// weather_response mirrors the OpenWeatherMap JSON body.
+struct WeatherResponse {
+	main    WeatherMain
+	weather []WeatherCondition
+}
+
 // weather_cache_dir resolves the weather cache root.
 pub fn weather_cache_dir() string {
 	env := os.getenv('HORNERO_WEATHER_CACHE_DIR')
@@ -253,15 +278,6 @@ fn weather_title_case(s string) string {
 	return out.join(' ')
 }
 
-// weather_json_str reads one string field from a decoded object.
-fn weather_json_str(m map[string]json2.Any, key string) string {
-	if key !in m {
-		return ''
-	}
-	v := m[key] or { return '' }
-	return v.str()
-}
-
 // weather_http_get fetches one URL: file:// URLs (query stripped)
 // read straight from disk so tests stay hermetic with fixture JSON;
 // anything else goes through net.http.
@@ -278,15 +294,9 @@ fn weather_http_get(url string) !string {
 // cache files, returning the raw JSON (the --getdata contract).
 fn weather_fetch(dir string, key string) !string {
 	geo_body := weather_http_get(weather_geo_url())!
-	geo := json2.decode[json2.Any](geo_body)!
-	gm := geo as map[string]json2.Any
-	lat := weather_json_str(gm, 'lat')
-	lon := weather_json_str(gm, 'lon')
-	city := weather_json_str(gm, 'city')
-	region := weather_json_str(gm, 'regionName')
-	country := weather_json_str(gm, 'country')
-	weather_write_cache(dir, 'weather-location', '${city}, ${region}, ${country}')
-	url := '${weather_api_url()}?APPID=${key}&lat=${lat}&lon=${lon}&units=metric'
+	geo := json2.decode[WeatherGeoResponse](geo_body)!
+	weather_write_cache(dir, 'weather-location', '${geo.city}, ${geo.region}, ${geo.country}')
+	url := '${weather_api_url()}?APPID=${key}&lat=${geo.lat}&lon=${geo.lon}&units=metric'
 	raw := weather_http_get(url)!
 	if raw.trim_space().len == 0 {
 		weather_write_unavailable(dir)
@@ -294,17 +304,13 @@ fn weather_fetch(dir string, key string) !string {
 	}
 	weather_write_cache(dir, 'weather-raw', raw)
 	weather_write_cache(dir, 'weather-timestamp', time.now().unix().str())
-	doc := json2.decode[json2.Any](raw)!
-	dm := doc as map[string]json2.Any
-	main := (dm['main'] or { json2.Any('') }).as_map()
-	temp := (main['temp'] or { json2.Any(0.0) }).f64().str().split('.')[0]
-	arr := (dm['weather'] or { json2.Any('') }).as_array()
+	doc := json2.decode[WeatherResponse](raw)!
+	temp := doc.main.temp.str().split('.')[0]
 	mut code := ''
 	mut desc := ''
-	if arr.len > 0 {
-		first := arr[0].as_map()
-		code = weather_json_str(first, 'icon')
-		desc = weather_title_case(weather_json_str(first, 'description'))
+	if doc.weather.len > 0 {
+		code = doc.weather[0].icon
+		desc = weather_title_case(doc.weather[0].description)
 	}
 	mood := weather_mood(code)
 	weather_write_cache(dir, 'weather-icon', mood.icon)
