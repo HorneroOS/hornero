@@ -44,18 +44,13 @@ pub fn resolve_hyprlock_bin() string {
 	return find_on_path('hyprlock')
 }
 
-// resolve_lockscreen_bin locates the dots-lockscreen locker.
-// Override with HORNERO_LOCKSCREEN_BIN.
+// resolve_lockscreen_bin returns the explicit locker pin only
+// (HORNERO_LOCKSCREEN_BIN): the dots-lockscreen wrapper is retired,
+// so there is no auto-discovery — unpinned machines fall through to
+// hyprlock, then loginctl. The delegating shim pins this variable at
+// the real hyprlock binary when calling outward.
 pub fn resolve_lockscreen_bin() string {
-	env := os.getenv('HORNERO_LOCKSCREEN_BIN')
-	if env.len > 0 {
-		return env
-	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-lockscreen')
-	if os.is_file(home_helper) {
-		return home_helper
-	}
-	return find_on_path('dots-lockscreen')
+	return os.getenv('HORNERO_LOCKSCREEN_BIN')
 }
 
 struct LockPlan {
@@ -63,11 +58,11 @@ struct LockPlan {
 	args []string
 }
 
-// lock_plan picks the screen-lock invocation: dots-lockscreen with --lock,
-// else bare hyprlock, else `loginctl lock-session`. A HORNERO_LOCKSCREEN_BIN
-// pointing at a hyprlock binary (pinned by the delegating dots-lockscreen
-// shim) runs bare so the call cannot loop back into the shim. With dry_run
-// set a missing backend previews as a placeholder instead of failing.
+// lock_plan picks the screen-lock invocation: an explicit
+// HORNERO_LOCKSCREEN_BIN pin (hyprlock runs bare, anything else with
+// --lock), else bare hyprlock, else `loginctl lock-session`. With
+// dry_run set a missing backend previews as a placeholder instead of
+// failing.
 fn lock_plan(dry_run bool) !LockPlan {
 	ls := resolve_lockscreen_bin()
 	if ls.len > 0 {
@@ -98,11 +93,11 @@ fn lock_plan(dry_run bool) !LockPlan {
 	}
 	if dry_run {
 		return LockPlan{
-			prog: 'dots-lockscreen'
-			args: ['--lock']
+			prog: 'hyprlock'
+			args: []string{}
 		}
 	}
-	return error('no lock backend found (dots-lockscreen, hyprlock, or loginctl). Set HORNERO_LOCKSCREEN_BIN.\nExample: horneroctl lock now --dry-run')
+	return error('no lock backend found (hyprlock or loginctl). Set HORNERO_HYPRLOCK_BIN.\nExample: horneroctl lock now --dry-run')
 }
 
 fn systemctl_or_fail(action string, dry_run bool) !string {

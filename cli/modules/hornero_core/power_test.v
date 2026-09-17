@@ -115,6 +115,22 @@ fn test_lock_plan_hyprlock_pin_runs_bare() {
 	power_test_restore_env(saved)
 }
 
+fn test_lock_plan_prefers_hyprlock_without_pin() {
+	// Native port: no wrapper auto-discovery — unpinned machines go
+	// straight to bare hyprlock.
+	saved := power_test_save_env(['HORNERO_LOCKSCREEN_BIN', 'HORNERO_HYPRLOCK_BIN',
+		'HORNERO_LOGINCTL_BIN'])
+	os.unsetenv('HORNERO_LOCKSCREEN_BIN')
+	os.setenv('HORNERO_HYPRLOCK_BIN', '/fake/hyprlock', true)
+	plan := lock_plan(true) or {
+		assert false, err.msg()
+		return
+	}
+	assert plan.prog == '/fake/hyprlock'
+	assert plan.args.len == 0
+	power_test_restore_env(saved)
+}
+
 fn test_lock_now_needs_yes() {
 	r := lock_now_report(LockNowOptions{})
 	assert !r.ok

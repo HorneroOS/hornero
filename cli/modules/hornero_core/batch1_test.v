@@ -61,7 +61,7 @@ fn test_snapshot_create_needs_yes_and_previews() {
 	})
 	assert d.ok
 	assert d.data['dry_run'] == 'true'
-	assert d.message.contains('--create')
+	assert d.message.contains('metadata.json')
 	b1_teardown_snapshots()
 }
 
@@ -83,8 +83,60 @@ fn test_snapshot_restore_validates_and_previews() {
 		dry_run: true
 	})
 	assert d.ok
-	assert d.message.contains('--restore config_20260101_020000')
+	assert d.message.contains('config_20260101_020000')
 	b1_teardown_snapshots()
+}
+
+fn test_snapshot_create_native_round_trip() {
+	// Native port: create writes metadata + tarball + latest under a
+	// redirected HOME and snapshots dir; list sees the new snapshot.
+	old_home := os.getenv('HOME')
+	os.setenv('HOME', b1_root + '/fakehome', true)
+	os.mkdir_all(b1_root + '/fakehome/.config/app') or { assert false }
+	os.write_file(b1_root + '/fakehome/.config/app/conf', 'v1') or { assert false }
+	os.setenv('HORNERO_SNAPSHOTS_DIR', b1_root + '/native-snaps', true)
+	r := snapshot_create_report(SnapshotCreateOptions{ yes: true })
+	assert r.ok
+	assert r.message.contains('Snapshot created:')
+	meta := os.read_file(r.data['dir'] + '/metadata.json') or { '' }
+	assert meta.contains(r.data['id'])
+	assert os.is_file(r.data['dir'] + '/dotfiles.tar.gz')
+	assert os.is_link(b1_root + '/native-snaps/latest')
+	l := snapshot_list_report()
+	assert l.ok
+	assert l.message.contains(r.data['id'])
+	os.setenv('HOME', old_home, true)
+	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
+	os.rmdir_all(b1_root + '/fakehome') or {}
+	os.rmdir_all(b1_root + '/native-snaps') or {}
+}
+
+fn test_snapshot_restore_native_round_trip() {
+	// Native port: modify a file after create, restore brings the
+	// original back; a pre-restore backup snapshot is recorded too.
+	old_home := os.getenv('HOME')
+	os.setenv('HOME', b1_root + '/fakehome2', true)
+	os.mkdir_all(b1_root + '/fakehome2/.config/app') or { assert false }
+	os.write_file(b1_root + '/fakehome2/.config/app/conf', 'v1') or { assert false }
+	os.setenv('HORNERO_SNAPSHOTS_DIR', b1_root + '/native-snaps2', true)
+	c := snapshot_create_report(SnapshotCreateOptions{ yes: true })
+	assert c.ok
+	id := c.data['id']
+	os.write_file(b1_root + '/fakehome2/.config/app/conf', 'v2') or { assert false }
+	r := snapshot_restore_report(SnapshotRestoreOptions{
+		id:  id
+		yes: true
+	})
+	assert r.ok
+	assert r.message.contains('Restore completed!')
+	assert os.read_file(b1_root + '/fakehome2/.config/app/conf') or { '' } == 'v1'
+	l := snapshot_list_report()
+	assert l.ok
+	assert l.data['count'] == '2'
+	os.setenv('HOME', old_home, true)
+	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
+	os.rmdir_all(b1_root + '/fakehome2') or {}
+	os.rmdir_all(b1_root + '/native-snaps2') or {}
 }
 
 fn test_package_check_dry_run_needs_no_backend() {

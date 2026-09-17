@@ -468,7 +468,8 @@ Examples:
 
 Snapshot source: HORNERO_SNAPSHOTS_DIR, else the XDG cache catalogue
 (hornero/snapshots, legacy dots/snapshots as read-only fallback);
-create/restore delegate to dots-config-manager
+create/restore run natively (metadata, tarball, pre-backup), with an
+explicit helper override still delegating to dots-config-manager
 (HORNERO_CONFIG_MANAGER_BIN).
 
 Examples:
