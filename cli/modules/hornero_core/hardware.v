@@ -593,9 +593,9 @@ pub fn brightness_temp_of_gamma(gamma string) f64 {
 	return -1.0
 }
 
-// brightness_gamma_of_temp maps a temperature to its gamma triplet,
-// clamping into the 0.0-1.0 ramp range like dots-brightness.
-pub fn brightness_gamma_of_temp(temp f64) string {
+// brightness_ramp_idx maps a temperature to its ramp index, clamped
+// into range like dots-brightness.
+fn brightness_ramp_idx(temp f64) int {
 	mut idx := int(temp * 10.0)
 	if idx < 0 {
 		idx = 0
@@ -603,19 +603,17 @@ pub fn brightness_gamma_of_temp(temp f64) string {
 	if idx > 10 {
 		idx = 10
 	}
-	return brightness_gamma_ramps[idx]
+	return idx
+}
+
+// brightness_gamma_of_temp maps a temperature to its gamma triplet.
+pub fn brightness_gamma_of_temp(temp f64) string {
+	return brightness_gamma_ramps[brightness_ramp_idx(temp)]
 }
 
 // brightness_temp_kelvin_of maps a temperature to its label in kelvin.
 pub fn brightness_temp_kelvin_of(temp f64) int {
-	mut idx := int(temp * 10.0)
-	if idx < 0 {
-		idx = 0
-	}
-	if idx > 10 {
-		idx = 10
-	}
-	return brightness_temp_kelvin[idx]
+	return brightness_temp_kelvin[brightness_ramp_idx(temp)]
 }
 
 // brightness_invert_gamma corrects the xrandr --verbose Gamma readout,
@@ -648,12 +646,7 @@ fn brightness_read_gamma(xr string, display string) !string {
 	}
 	mut cur := ''
 	for line in rep.output.split_into_lines() {
-		mut fields := []string{}
-		for f in line.split(' ') {
-			if f.len > 0 {
-				fields << f
-			}
-		}
+		fields := line.fields()
 		if fields.len >= 2 && fields[1] == 'connected' {
 			cur = fields[0]
 			continue
@@ -742,9 +735,9 @@ pub fn brightness_temp_report(opts BrightnessTempOptions) CommandResult {
 	k := brightness_temp_kelvin_of(target)
 	return ok_result(name, 'temperature set to ${target.str()} (${k}K) on ${disp} via xrandr',
 		{
-			'command_line': rep.command_line
-			'value':        target.str()
-			'kelvin':       k.str()
-			'display':      disp
-		})
+		'command_line': rep.command_line
+		'value':        target.str()
+		'kelvin':       k.str()
+		'display':      disp
+	})
 }
