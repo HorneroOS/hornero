@@ -985,10 +985,9 @@ Examples:
                       working directory (view-open, no --yes)
   --info              Show the current default file manager (read-only)
 
-Backend chain (dots-file-manager): exo-open --launch FileManager,
-handlr open, xdg-open (HORNERO_EXO_OPEN_BIN / HORNERO_HANDLR_BIN /
-HORNERO_XDG_OPEN_BIN); --info reads via dots-file-manager
-(HORNERO_FILE_MANAGER_BIN).
+Backend chain: exo-open --launch FileManager, handlr open, xdg-open
+(HORNERO_EXO_OPEN_BIN / HORNERO_HANDLR_BIN / HORNERO_XDG_OPEN_BIN);
+--info reads natively via handlr (else xdg-mime).
 
 Examples:
   horneroctl apps files --dry-run

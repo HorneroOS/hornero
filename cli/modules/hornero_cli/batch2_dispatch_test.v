@@ -15,20 +15,26 @@ fn b2_dispatch_setup() {
 	os.write_file('/tmp/hx-batch2-dtest/bin/materialize.sh', '#!/bin/sh\necho "materialized \$*"\nexit 0\n') or {
 		assert false
 	}
+	os.write_file('/tmp/hx-batch2-dtest/bin/handlr', '#!/bin/sh\necho "hx-test-fake-12345.desktop"\nexit 0\n') or {
+		assert false
+	}
 	os.chmod('/tmp/hx-batch2-dtest/bin/dots-default-apps', 0o755) or { assert false }
 	os.chmod('/tmp/hx-batch2-dtest/bin/dots-settings-gui', 0o755) or { assert false }
 	os.chmod('/tmp/hx-batch2-dtest/bin/materialize.sh', 0o755) or { assert false }
+	os.chmod('/tmp/hx-batch2-dtest/bin/handlr', 0o755) or { assert false }
 	os.setenv('HORNERO_DEFAULT_APPS_BIN', '/tmp/hx-batch2-dtest/bin/dots-default-apps',
 		true)
 	os.setenv('HORNERO_SETTINGS_GUI_BIN', '/tmp/hx-batch2-dtest/bin/dots-settings-gui',
 		true)
 	os.setenv('HORNERO_MATERIALIZE_BIN', '/tmp/hx-batch2-dtest/bin/materialize.sh', true)
+	os.setenv('HORNERO_HANDLR_BIN', '/tmp/hx-batch2-dtest/bin/handlr', true)
 }
 
 fn b2_dispatch_teardown() {
 	os.unsetenv('HORNERO_DEFAULT_APPS_BIN')
 	os.unsetenv('HORNERO_SETTINGS_GUI_BIN')
 	os.unsetenv('HORNERO_MATERIALIZE_BIN')
+	os.unsetenv('HORNERO_HANDLR_BIN')
 }
 
 fn test_dispatch_config_default_apps() {

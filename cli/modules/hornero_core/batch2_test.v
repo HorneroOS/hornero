@@ -45,12 +45,25 @@ fn b2_restore_resolution(old_home string, old_path string) {
 	os.setenv('PATH', old_path, true)
 }
 
-fn test_default_apps_list_runs_backend() {
+fn test_default_apps_list_runs_native() {
+	// Native port: list reads helpers.rc + handlr directly; the legacy
+	// dots-default-apps backend is gone, so the fixture backend below
+	// must stay unused (a fake desktop id proves it: no .desktop file
+	// exists for it, and the id itself is reported).
 	b2_setup_backends()
+	b2_write('${b2_root}/bin/handlr', '#!/bin/sh\necho "hx-test-fake-12345.desktop"\nexit 0\n')
+	os.setenv('HORNERO_HANDLR_BIN', '${b2_root}/bin/handlr', true)
+	b2_write('${b2_root}/config/xfce4/helpers.rc', 'TerminalEmulator=kitty\n')
+	os.setenv('XDG_CONFIG_HOME', '${b2_root}/config', true)
 	r := default_apps_list_report(DefaultAppsListOptions{})
 	assert r.ok
 	assert r.command == 'config default-apps list'
-	assert r.message.contains('firefox.desktop')
+	assert r.message.contains('Current Default Applications:')
+	assert r.message.contains('Kitty Terminal')
+	assert r.data['terminal'] == 'Kitty Terminal'
+	assert r.data['web-browser'] == 'hx-test-fake-12345.desktop'
+	os.unsetenv('HORNERO_HANDLR_BIN')
+	os.unsetenv('XDG_CONFIG_HOME')
 	b2_teardown_backends()
 }
 
@@ -65,12 +78,13 @@ fn test_default_apps_list_dry_run_needs_no_backend() {
 	os.unsetenv('HORNERO_DEFAULT_APPS_BIN')
 }
 
-fn test_default_apps_list_missing_backend_fails_cleanly() {
+fn test_default_apps_list_missing_handlr_fails_cleanly() {
 	old_home, old_path := b2_isolate_resolution()
+	os.unsetenv('HORNERO_HANDLR_BIN')
 	r := default_apps_list_report(DefaultAppsListOptions{})
 	assert r.command == 'config default-apps list'
 	assert !r.ok
-	assert r.message.contains('HORNERO_DEFAULT_APPS_BIN')
+	assert r.message.contains('HORNERO_HANDLR_BIN')
 	b2_restore_resolution(old_home, old_path)
 }
 

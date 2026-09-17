@@ -42,12 +42,6 @@ fn leaf_bin(env_key string, prog string) string {
 	return find_on_path(prog)
 }
 
-// resolve_dots_file_manager_bin locates dots-file-manager.
-// Override with HORNERO_FILE_MANAGER_BIN.
-pub fn resolve_dots_file_manager_bin() string {
-	return dots_helper_bin('HORNERO_FILE_MANAGER_BIN', 'dots-file-manager')
-}
-
 // resolve_exo_open_bin locates exo-open. Override with HORNERO_EXO_OPEN_BIN.
 pub fn resolve_exo_open_bin() string {
 	return leaf_bin('HORNERO_EXO_OPEN_BIN', 'exo-open')
@@ -236,20 +230,86 @@ pub:
 // at --path (view-open, needs no --yes) or show the default with
 // --info (read-only). Backend chain mirrors dots-file-manager:
 // exo-open, handlr, xdg-open. --dry-run only previews.
+// files_info_native implements `apps files --info` natively,
+// mirroring the retired dots-file-manager: handlr default plus the
+// .desktop providers, xdg-mime fallback, graceful notice when neither
+// XDG tool exists. The configure hint points at horneroctl (the legacy
+// --gui/--type leaves have no CLI equivalent by design).
+fn files_info_native() CommandResult {
+	handlr := resolve_handlr_bin()
+	if handlr.len > 0 {
+		rep := run_exec(ExecSpec{
+			prog: handlr
+			args: ['get', 'inode/directory']
+		})
+		cur := if rep.ok && rep.output.trim_space().len > 0 {
+			rep.output.trim_space()
+		} else {
+			'Not set'
+		}
+		mut lines := ['File Manager Configuration', '==========================', '',
+			'Current default: ${cur}', '', 'Available file managers:']
+		mut seen := []string{}
+		for dir in [os.join_path(os.home_dir(), '.local', 'share', 'applications'),
+			'/usr/share/applications'] {
+			entries := os.ls(dir) or { continue }
+			for e in entries {
+				if !e.ends_with('.desktop') || e in seen {
+					continue
+				}
+				raw := os.read_file(os.join_path(dir, e)) or { continue }
+				mut handles := false
+				mut name := e
+				for line in raw.split_into_lines() {
+					low := line.to_lower()
+					if low.contains('mimetype=') && low.contains('inode/directory') {
+						handles = true
+					}
+					if line.starts_with('Name=') && name == e {
+						name = line['Name='.len..].trim_space()
+					}
+				}
+				if handles {
+					lines << '  - ${e} (${name})'
+					seen << e
+				}
+			}
+		}
+		lines << ''
+		lines << 'To configure:'
+		lines << '  - horneroctl config default-apps set inode/directory <app.desktop> --yes'
+		lines << '  - handlr set inode/directory thunar.desktop'
+		return ok_result('apps files --info', lines.join('\n'), {
+			'default': cur
+		})
+	}
+	xdg := xdg_mime_or_fail(false) or {
+		return ok_result('apps files --info', 'No XDG tools found (handlr or xdg-mime)', {
+			'default': 'Not set'
+		})
+	}
+	rep := run_exec(ExecSpec{
+		prog: xdg
+		args: ['query', 'default', 'inode/directory']
+	})
+	cur := if rep.ok && rep.output.trim_space().len > 0 {
+		rep.output.trim_space()
+	} else {
+		'Not set'
+	}
+	return ok_result('apps files --info', 'Current default: ${cur}', {
+		'default': cur
+	})
+}
+
 pub fn files_report(opts FilesOptions) CommandResult {
 	if opts.info {
-		bin := apps_backend_or_placeholder(resolve_dots_file_manager_bin(), 'dots-file-manager',
-			'HORNERO_FILE_MANAGER_BIN', opts.dry_run, 'horneroctl apps files --info --dry-run') or {
-			return fail_result('apps files --info', err.msg())
-		}
-		rep := apps_run_delegated(bin, ['--info'], opts.dry_run)
 		if opts.dry_run {
-			return ok_result('apps files --info', 'would run: ${rep.command_line}', {
-				'command_line': rep.command_line
-				'dry_run':      'true'
+			return ok_result('apps files --info', 'would read the inode/directory default via handlr (else xdg-mime)', {
+				'dry_run': 'true'
 			})
 		}
-		return apps_delegated_ok('apps files --info', rep, {})
+		return files_info_native()
 	}
 	target := if opts.path.len > 0 { opts.path } else { os.getwd() }
 	exo := resolve_exo_open_bin()
@@ -305,6 +365,66 @@ pub fn files_report(opts FilesOptions) CommandResult {
 	return fail_result('apps files', 'no file manager launcher found (exo-open, handlr, or xdg-open). Set HORNERO_EXO_OPEN_BIN.\nExample: horneroctl apps files --dry-run')
 }
 
+// yazi_fix_previews_native replicates the retired dots-yazi preview
+// diagnostics: required core deps, kitty check, optional preview and
+// power tools. Always succeeds like the script (exit 0); missing
+// required deps are flagged REQUIRED with install hints in the report.
+fn yazi_fix_previews_native() CommandResult {
+	mut lines := ['Yazi Preview Diagnostics', '']
+	mut issues := 0
+	lines << 'Core:'
+	for dep in [['yazi', 'yazi', 'File manager', 'required'],
+		['file', 'file', 'MIME detection', 'required']] {
+		if find_on_path(dep[0]).len > 0 {
+			lines << '  + ${dep[0]} - ${dep[2]}'
+		} else {
+			lines << '  x ${dep[0]} - ${dep[2]} (REQUIRED - install: ${dep[1]})'
+			issues++
+		}
+	}
+	lines << ''
+	lines << 'Terminal:'
+	if os.getenv('TERM') == 'xterm-kitty' || os.getenv('KITTY_PID').len > 0 {
+		lines << '  + Running in Kitty terminal (native image protocol)'
+	} else {
+		lines << '  o Not running in Kitty - image previews may be limited'
+	}
+	lines << ''
+	lines << 'Preview tools:'
+	for dep in [['bat', 'bat', 'Syntax highlighting'], ['pdftoppm', 'poppler', 'PDF previews'],
+		['ffmpegthumbnailer', 'ffmpegthumbnailer', 'Video thumbnails'],
+		['mediainfo', 'mediainfo', 'Media file info'], ['7z', 'p7zip', 'Archive listing'],
+		['exiftool', 'perl-image-exiftool', 'EXIF metadata'],
+		['glow', 'glow (AUR)', 'Markdown rendering'], ['jq', 'jq', 'JSON formatting'],
+		['rsvg-convert', 'librsvg', 'SVG conversion'], ['magick', 'imagemagick', 'Image conversion']] {
+		if find_on_path(dep[0]).len > 0 {
+			lines << '  + ${dep[0]} - ${dep[2]}'
+		} else {
+			lines << '  o ${dep[0]} - ${dep[2]} (optional - install: ${dep[1]})'
+		}
+	}
+	lines << ''
+	lines << 'Power features:'
+	for dep in [['fzf', 'fzf', 'Fuzzy search (Z key)'], ['rg', 'ripgrep', 'Content search'],
+		['fd', 'fd', 'Fast file finder'], ['trash-put', 'trash-cli', 'Safe delete (DD)'],
+		['wl-copy', 'wl-clipboard', 'Wayland clipboard (yp/yd/yn)'],
+		['zoxide', 'zoxide', 'Smart directory jumps (z key)']] {
+		if find_on_path(dep[0]).len > 0 {
+			lines << '  + ${dep[0]} - ${dep[2]}'
+		} else {
+			lines << '  o ${dep[0]} - ${dep[2]} (optional - install: ${dep[1]})'
+		}
+	}
+	lines << ''
+	if issues > 0 {
+		lines << 'Found ${issues} required issues. Fix them for best experience.'
+		lines << 'Quick fix: sudo pacman -S yazi'
+	} else {
+		lines << 'All required dependencies are installed!'
+	}
+	return ok_result('apps terminal-file --fix-previews', lines.join('\n'), {})
+}
+
 pub struct TerminalFileOptions {
 pub:
 	path         string
@@ -319,24 +439,69 @@ pub:
 // fix-previews read backend output (read-only); otherwise open yazi via
 // the dots-yazi wrapper (view-open, needs no --yes), falling back to
 // bare yazi. --dry-run only previews.
+// yazi_cheatsheet_lines is the keybinding reference, kept verbatim from
+// the retired dots-yazi script (box-drawing, no ANSI: CLI output is plain).
+const yazi_cheatsheet_lines = [
+	'╔══════════════════════════════════════════════════════════════════════════════════╗',
+	'║                          YAZI CHEATSHEET — HorneroConfig                      ║',
+	'╠══════════════════════════════════════════════════════════════════════════════════╣',
+	'║                                                                                ║',
+	'║  ─── NAVIGATION ─────────────────────────────────────────────────────────────  ║',
+	'║    h / ←         Go to parent directory                                        ║',
+	'║    l / → / Enter Enter directory or open file                                  ║',
+	'║    j / ↓ / k / ↑ Move down / up                                               ║',
+	'║    J / K         Page half-down / half-up                                      ║',
+	'║    H / L         Undo / Redo navigation                                        ║',
+	'║    ~             Go to home directory                                          ║',
+	'║    .             Toggle hidden files                                           ║',
+	'║                                                                                ║',
+	'║  ─── QUICK DIRS (g + key) ───────────────────────────────────────────────────  ║',
+	'║    gh Home    gp Projects    gd Downloads    gD Documents                      ║',
+	'║    gP Pics    gm Music       gv Videos       gc ~/.config                      ║',
+	'║    gl .local  gr Rices       gw Wallpapers   gb Scripts                        ║',
+	'║    gt /tmp                                                                     ║',
+	'║                                                                                ║',
+	'║  ─── FILE OPS ───────────────────────────────────────────────────────────────  ║',
+	'║    Space  Toggle select   v  Invert selection   V  Enter visual mode           ║',
+	'║    y  Copy (yank)   x  Cut   p  Paste   P  Paste (overwrite)                  ║',
+	'║    d  Trash    D D  Trash (safe delete)    D  Permanently delete               ║',
+	'║    a  Create file/dir (append / for dir)   r  Rename                           ║',
+	'║    yp/yd/yn  Yank path/dir/name to clipboard                                  ║',
+	'║                                                                                ║',
+	'║  ─── POWER ──────────────────────────────────────────────────────────────────  ║',
+	'║    f  Filter       /  Search        s  Shell command                           ║',
+	'║    z  Jump (zoxide)   Z  Jump (fzf)                                            ║',
+	'║    C  Compress selection          X  Extract archive                           ║',
+	'║    Alt-t  Open in Thunar          ?  Help                                      ║',
+	'║                                                                                ║',
+	'║  ─── SORTING (o + key) ─────────────────────────────────────────────────────   ║',
+	'║    os Size   on Name   om Modified   ot Type   oe Extension   or Reverse      ║',
+	'║                                                                                ║',
+	'║  ─── TABS ───────────────────────────────────────────────────────────────────  ║',
+	'║    t  New tab    T  Close tab   1-9 Switch tab   [ / ] Prev/Next tab          ║',
+	'║                                                                                ║',
+	'╚══════════════════════════════════════════════════════════════════════════════════╝',
+]
+
 pub fn terminal_file_report(opts TerminalFileOptions) CommandResult {
-	if opts.cheatsheet || opts.fix_previews {
-		flag := if opts.cheatsheet { '--cheatsheet' } else { '--fix-previews' }
-		name := if opts.cheatsheet {
-			'apps terminal-file --cheatsheet'
-		} else {
-			'apps terminal-file --fix-previews'
-		}
-		bin := apps_backend_or_placeholder(resolve_dots_yazi_bin(), 'dots-yazi', 'HORNERO_DOTS_YAZI_BIN',
-			opts.dry_run, 'horneroctl ${name} --dry-run') or { return fail_result(name, err.msg()) }
-		rep := apps_run_delegated(bin, [flag], opts.dry_run)
+	if opts.cheatsheet {
 		if opts.dry_run {
-			return ok_result(name, 'would run: ${rep.command_line}', {
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+			return ok_result('apps terminal-file --cheatsheet', 'would print the yazi keybinding reference',
+				{
+					'dry_run': 'true'
+				})
 		}
-		return apps_delegated_ok(name, rep, {})
+		return ok_result('apps terminal-file --cheatsheet', yazi_cheatsheet_lines.join('\n'),
+			{})
+	}
+	if opts.fix_previews {
+		if opts.dry_run {
+			return ok_result('apps terminal-file --fix-previews', 'would diagnose yazi preview dependencies',
+				{
+					'dry_run': 'true'
+				})
+		}
+		return yazi_fix_previews_native()
 	}
 	mut args := []string{}
 	if opts.last_dir {
@@ -404,10 +569,10 @@ pub fn weather_report(opts WeatherOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps weather --${opts.field}', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'field':        opts.field
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+				'field':        opts.field
+			})
 	}
 	return apps_delegated_ok('apps weather --${opts.field}', rep, {
 		'field': opts.field
@@ -443,9 +608,9 @@ pub fn git_status_report(opts GitStatusOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('apps git-status jobs', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		return apps_delegated_ok('apps git-status jobs', rep, {})
 	}
@@ -479,9 +644,9 @@ pub fn git_status_report(opts GitStatusOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps git-status ${opts.leaf}', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	return apps_delegated_ok('apps git-status ${opts.leaf}', rep, {})
 }
@@ -573,8 +738,8 @@ pub:
 // caffeine toggle once via --toggle (their monitor loops stay legacy).
 // Mutating: needs --yes; --dry-run only previews.
 pub fn toggle_report(opts ToggleOptions) CommandResult {
-	if opts.component !in ['bar', 'launcher', 'dashboard', 'sidebar', 'session', 'utilities',
-		'redshift', 'caffeine'] {
+	if opts.component !in ['bar', 'launcher', 'dashboard', 'sidebar', 'session', 'utilities', 'redshift',
+		'caffeine'] {
 		return fail_result('apps toggle', 'unknown toggle component: ${opts.component}.\nRun: horneroctl apps toggle --help')
 	}
 	if !opts.yes && !opts.dry_run {
@@ -592,10 +757,10 @@ pub fn toggle_report(opts ToggleOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps toggle ${opts.component}', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'component':    opts.component
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+				'component':    opts.component
+			})
 	}
 	return apps_delegated_ok('apps toggle ${opts.component}', rep, {
 		'component': opts.component
@@ -630,9 +795,9 @@ pub fn switcher_report(opts SwitcherOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('apps switcher status', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		return apps_delegated_ok('apps switcher status', rep, {})
 	}
@@ -647,9 +812,9 @@ pub fn switcher_report(opts SwitcherOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps switcher ${opts.leaf}', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	return apps_delegated_ok('apps switcher ${opts.leaf}', rep, {})
 }
@@ -682,9 +847,9 @@ pub fn performance_report(opts PerformanceOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps performance ${opts.leaf}', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	return apps_delegated_ok('apps performance ${opts.leaf}', rep, {})
 }
@@ -732,9 +897,9 @@ fn performance_mode_report(opts PerformanceOptions) CommandResult {
 			rep := apps_run_leaf('powerprofilesctl', ph, true)
 			return ok_result('apps performance mode', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		return fail_result('apps performance mode', 'powerprofilesctl not found. Set HORNERO_POWERPROFILESCTL_BIN.\nExample: horneroctl apps performance mode --dry-run')
 	}
@@ -766,10 +931,10 @@ fn performance_mode_report(opts PerformanceOptions) CommandResult {
 			rep := apps_run_leaf(bin, ['set', opts.profile], true)
 			return ok_result('apps performance mode set', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-				'profile':      opts.profile
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+					'profile':      opts.profile
+				})
 		}
 		return fail_result('apps performance mode set', 'cannot list profiles: ${err.msg()}')
 	}
@@ -781,10 +946,10 @@ fn performance_mode_report(opts PerformanceOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps performance mode set', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'profile':      opts.profile
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+				'profile':      opts.profile
+			})
 	}
 	return apps_delegated_ok('apps performance mode set', rep, {
 		'profile': opts.profile

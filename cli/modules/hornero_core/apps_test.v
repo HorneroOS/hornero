@@ -80,6 +80,20 @@ fn test_apps_dry_run_needs_no_backend() {
 	apps_test_restore_env(saved)
 }
 
+fn test_terminal_cheatsheet_native_needs_no_backend() {
+	// Native port: cheatsheet and fix-previews no longer shell out to
+	// dots-yazi; they must work with every backend broken.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	c := terminal_file_report(TerminalFileOptions{ cheatsheet: true })
+	assert c.ok
+	assert c.message.contains('YAZI CHEATSHEET')
+	p := terminal_file_report(TerminalFileOptions{ fix_previews: true })
+	assert p.ok
+	assert p.message.contains('Yazi Preview Diagnostics')
+	apps_test_restore_env(saved)
+}
+
 fn test_apps_dry_run_carries_delegation_guard() {
 	saved := apps_test_save_env(apps_test_keys)
 	apps_test_break_backends()
@@ -175,6 +189,27 @@ fn test_apps_files_open_chain_prefers_exo() {
 	r2 := files_report(FilesOptions{ path: '/tmp' })
 	assert r2.ok
 	assert r2.message.contains('opened')
+	apps_test_restore_env(saved)
+}
+
+fn test_files_info_native_needs_no_dots_backend() {
+	// Native port: --info reads handlr + .desktop files directly; the
+	// legacy dots-file-manager backend is gone (a fake desktop id proves
+	// it: no .desktop file exists for it, and the id is reported).
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	base := '/tmp/hx-apps-info-test/bin'
+	os.mkdir_all(base) or { assert false }
+	os.write_file(base + '/handlr', '#!/bin/sh\necho "hx-test-fm-12345.desktop"\nexit 0\n') or {
+		assert false
+	}
+	os.chmod(base + '/handlr', 0o755) or { assert false }
+	os.setenv('HORNERO_HANDLR_BIN', base + '/handlr', true)
+	r := files_report(FilesOptions{ info: true })
+	assert r.ok
+	assert r.message.contains('File Manager Configuration')
+	assert r.message.contains('hx-test-fm-12345.desktop')
+	assert r.data['default'] == 'hx-test-fm-12345.desktop'
 	apps_test_restore_env(saved)
 }
 
