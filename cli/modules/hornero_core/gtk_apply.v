@@ -298,7 +298,9 @@ pub fn resolve_icon_with_fallbacks(wanted string, installed []string) string {
 
 const gtk2_config_template = '# DO NOT EDIT! This file will be overwritten by LXAppearance.\n# Any customization should be done in ~/.gtkrc-2.0.mine instead.\n\ninclude "/home/\$USER/.gtkrc-2.0.mine"\n'
 
-const gtk3_config_template = '[Settings]\n'
+// gtk3_config_template mirrors the fresh-install body the retired
+// gtk-theme-manager.sh writes (theme/icon lines are set right after).
+const gtk3_config_template = '[Settings]\ngtk-theme-name=\ngtk-icon-theme-name=\ngtk-font-name=sans 11\ngtk-cursor-theme-name=elementary\ngtk-cursor-theme-size=24\ngtk-toolbar-style=GTK_TOOLBAR_ICONS\ngtk-toolbar-icon-size=GTK_ICON_SIZE_SMALL_TOOLBAR\ngtk-button-images=1\ngtk-menu-images=1\ngtk-enable-event-sounds=1\ngtk-enable-input-feedback-sounds=0\ngtk-xft-antialias=1\ngtk-xft-hinting=1\ngtk-xft-hintstyle=hintslight\ngtk-xft-rgba=rgb\ngtk-modules=colorreload-gtk-module\n'
 
 // patch_gtk2_config rewrites theme/icon lines in an existing gtkrc, or
 // renders the created-file template. Pure: takes file content, returns
@@ -324,7 +326,11 @@ pub fn patch_gtk2_config(existing string, theme string, icon string) string {
 			out << line
 		}
 	}
-	return out.join('\n')
+	joined := out.join('\n')
+	if existing.ends_with('\n') {
+		return joined + '\n'
+	}
+	return joined
 }
 
 // apply_gtk_theme_native applies a GTK + icon theme end to end: INI
@@ -473,14 +479,7 @@ pub fn gtk_detect_report(wallpaper string) CommandResult {
 
 // gtk_info_report implements `appearance gtk info <name>` (read-only).
 pub fn gtk_info_report(name string) CommandResult {
-	mut home_share := os.join_path(os.home_dir(), '.local', 'share', 'themes')
-	xdg_data := os.getenv('XDG_DATA_HOME')
-	if xdg_data.len > 0 {
-		home_share = os.join_path(xdg_data, 'themes')
-	}
-	dirs := ['/usr/share/themes', '/usr/local/share/themes', os.join_path(os.home_dir(),
-		'.themes'),
-		home_share]
+	dirs := gtk_theme_search_dirs()
 	mut found := ''
 	for dir in dirs {
 		if os.is_dir(os.join_path(dir, name)) {
@@ -558,4 +557,88 @@ pub fn current_icon_theme() string {
 		}
 	}
 	return ''
+}
+
+pub struct GtkSelectOptions {
+pub:
+	dry_run bool
+	yes     bool
+}
+
+// select_theme_by_index maps a 1-based menu choice to a 0-based index.
+// Empty choice means cancelled (handled by the caller as a clean ok).
+pub fn select_theme_by_index(names []string, choice string) !int {
+	t := choice.trim_space()
+	mut digits := t.len > 0
+	for ch in t {
+		if !ch.is_digit() {
+			digits = false
+		}
+	}
+	n := t.int()
+	if !digits || n < 1 || n > names.len {
+		return error('invalid selection `${t}` (want 1-${names.len}).\nExample: horneroctl appearance gtk select --dry-run')
+	}
+	return n - 1
+}
+
+// gtk_select_menu renders the numbered theme menu (read-only helper).
+pub fn gtk_select_menu(names []string) string {
+	mut lines := ['GTK themes:']
+	for i, name in names {
+		lines << '${i + 1}) ${name}'
+	}
+	lines << 'Select theme [1-${names.len}, empty to cancel]:'
+	return lines.join('\n')
+}
+
+// gtk_stdin_choice is the production stdin reader for gtk select.
+pub fn gtk_stdin_choice() string {
+	return os.get_line()
+}
+
+// gtk_select_report implements `appearance gtk select`, the native
+// dots-theme-selector: with quickshell up it opens the control center
+// via shell IPC; otherwise it shows a numbered menu and applies the
+// chosen theme natively. Needs --yes; --dry-run only previews.
+// read_choice is the stdin seam (tests inject it).
+pub fn gtk_select_report(opts GtkSelectOptions, read_choice fn () string) CommandResult {
+	names := list_names_in_dirs(gtk_theme_search_dirs(), false)
+	return gtk_select_report_with(opts, names, read_choice)
+}
+
+// gtk_select_report_with is the testable select core over an explicit
+// theme list (read_choice is the stdin seam).
+pub fn gtk_select_report_with(opts GtkSelectOptions, names []string, read_choice fn () string) CommandResult {
+	if names.len == 0 {
+		return fail_result('appearance gtk select', 'No GTK themes found.')
+	}
+	if shell_running() {
+		return ipc_report(IpcOptions{
+			passthrough: ['utilities', 'toggle']
+			dry_run:     opts.dry_run
+		})
+	}
+	menu := gtk_select_menu(names)
+	if opts.dry_run {
+		return ok_result('appearance gtk select', menu + '\nwould run: apply chosen theme natively',
+			{
+			'command_line': 'appearance gtk select'
+			'dry_run':      'true'
+			'count':        '${names.len}'
+		})
+	}
+	if !opts.yes {
+		return fail_result('appearance gtk select', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk select --dry-run')
+	}
+	choice := read_choice()
+	if choice.trim_space().len == 0 {
+		return ok_result('appearance gtk select', 'selection cancelled.', {
+			'cancelled': 'true'
+		})
+	}
+	idx := select_theme_by_index(names, choice) or {
+		return fail_result('appearance gtk select', err.msg())
+	}
+	return apply_gtk_theme_native(names[idx], '', '', false)
 }

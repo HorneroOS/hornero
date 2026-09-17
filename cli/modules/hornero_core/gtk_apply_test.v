@@ -135,3 +135,144 @@ fn test_patch_gtk2_config_vectors() {
 	assert edited.contains('gtk-icon-theme-name="NewIcons"')
 	assert !edited.contains('Old')
 }
+
+fn test_select_theme_by_index_vectors() {
+	names := ['Alpha', 'Beta']
+	assert select_theme_by_index(names, '1') or { -1 } == 0
+	assert select_theme_by_index(names, '2') or { -1 } == 1
+	assert select_theme_by_index(names, ' 2 ') or { -1 } == 1
+	assert select_theme_by_index(names, '02') or { -1 } == 1
+	if _ := select_theme_by_index(names, '') {
+		assert false, 'empty must fail'
+	} else {
+		assert err.msg().contains('invalid selection')
+	}
+	if _ := select_theme_by_index(names, '0') {
+		assert false, 'zero must fail'
+	} else {
+		assert true
+	}
+	if _ := select_theme_by_index(names, '3') {
+		assert false, 'overflow must fail'
+	} else {
+		assert true
+	}
+	if _ := select_theme_by_index(names, 'x') {
+		assert false, 'nondigits must fail'
+	} else {
+		assert true
+	}
+}
+
+fn test_gtk_select_menu_renders() {
+	menu := gtk_select_menu(['Alpha', 'Beta'])
+	assert menu.contains('GTK themes:')
+	assert menu.contains('1) Alpha')
+	assert menu.contains('2) Beta')
+	assert menu.contains('[1-2, empty to cancel]')
+}
+
+fn gtk_select_fixture(tmp string) {
+	os.mkdir_all(os.join_path(tmp, 'data', 'themes', 'Alpha', 'gtk-3.0')) or { assert false }
+	os.mkdir_all(os.join_path(tmp, 'data', 'themes', 'Beta', 'gtk-3.0')) or { assert false }
+	os.setenv('HORNERO_SHELL_RUNNING', '0', true)
+	// Never touch live gsettings: the override fails soft inside apply.
+	os.setenv('HORNERO_GSETTINGS_BIN', '/nonexistent-gsettings-hornero-test', true)
+}
+
+fn test_gtk_select_report_flows() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-gtk-select-test')
+	os.rmdir_all(tmp) or {}
+	names := ['Alpha', 'Beta']
+	with_xdg(tmp, fn [tmp, names] () {
+		gtk_select_fixture(tmp)
+		empty := gtk_select_report_with(GtkSelectOptions{}, []string{}, fn [names] () string {
+			return '1'
+		})
+		assert !empty.ok
+		assert empty.message.contains('No GTK themes')
+		dry := gtk_select_report_with(GtkSelectOptions{
+			dry_run: true
+		}, names, fn [names] () string {
+			return '1'
+		})
+		assert dry.ok
+		assert dry.data['dry_run'] == 'true'
+		assert dry.message.contains('1) Alpha')
+		refused := gtk_select_report_with(GtkSelectOptions{}, names, fn [names] () string {
+			return '1'
+		})
+		assert !refused.ok
+		assert refused.message.contains('--yes')
+		cancelled := gtk_select_report_with(GtkSelectOptions{
+			yes: true
+		}, names, fn [names] () string {
+			return ''
+		})
+		assert cancelled.ok
+		assert cancelled.data['cancelled'] == 'true'
+		bad := gtk_select_report_with(GtkSelectOptions{
+			yes: true
+		}, names, fn [names] () string {
+			return '9'
+		})
+		assert !bad.ok
+		assert bad.message.contains('invalid selection')
+		applied := gtk_select_report_with(GtkSelectOptions{
+			yes: true
+		}, names, fn [names] () string {
+			return '2'
+		})
+		assert applied.ok, applied.message
+		assert gtk_ini_get(resolve_gtk3_file(), 'gtk-theme-name') == 'Beta'
+	})
+	os.unsetenv('HORNERO_SHELL_RUNNING')
+	os.unsetenv('HORNERO_GSETTINGS_BIN')
+	os.rmdir_all(tmp) or {}
+}
+
+fn test_gtk_select_quickshell_path_previews() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-gtk-select-qs-test')
+	os.rmdir_all(tmp) or {}
+	names := ['Alpha', 'Beta']
+	with_xdg(tmp, fn [tmp, names] () {
+		gtk_select_fixture(tmp)
+		os.setenv('HORNERO_SHELL_RUNNING', '1', true)
+		os.setenv('HORNERO_QS_BIN', '/nonexistent-qs-hornero-test', true)
+		dry := gtk_select_report_with(GtkSelectOptions{
+			dry_run: true
+		}, names, fn [names] () string {
+			return '1'
+		})
+		assert dry.ok
+		assert dry.message.contains('would run')
+		live := gtk_select_report_with(GtkSelectOptions{
+			yes: true
+		}, names, fn [names] () string {
+			return '1'
+		})
+		assert !live.ok
+		os.unsetenv('HORNERO_QS_BIN')
+	})
+	os.unsetenv('HORNERO_SHELL_RUNNING')
+	os.unsetenv('HORNERO_GSETTINGS_BIN')
+	os.rmdir_all(tmp) or {}
+}
+
+fn test_gtk3_fresh_template_matches_bash_keys() {
+	// Fresh-install settings.ini must carry the full key set the retired
+	// gtk-theme-manager.sh wrote (not just [Settings] + theme/icon).
+	for key in ['gtk-font-name=sans 11', 'gtk-cursor-theme-size=24',
+		'gtk-toolbar-style=GTK_TOOLBAR_ICONS', 'gtk-xft-rgba=rgb',
+		'gtk-modules=colorreload-gtk-module', 'gtk-enable-event-sounds=1'] {
+		assert gtk3_config_template.contains(key)
+	}
+}
+
+fn test_patch_gtk2_config_preserves_trailing_newline() {
+	edited := patch_gtk2_config('gtk-theme-name="Old"\n', 'New', 'NewIcons')
+	assert edited.contains('gtk-theme-name="New"')
+	assert edited.ends_with('\n')
+	plain := patch_gtk2_config('gtk-theme-name="Old"', 'New', 'NewIcons')
+	assert !plain.ends_with('\n')
+}

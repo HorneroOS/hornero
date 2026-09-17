@@ -554,7 +554,7 @@ pub fn parse_appearance_gtk(args []string) !GtkCmdOptions {
 	}
 	leaf := args[0]
 	if leaf !in ['list', 'current', 'current-icon', 'current-color-scheme', 'apply', 'set-icons',
-		'color-scheme', 'sync-color-scheme', 'detect', 'theme', 'auto', 'icons', 'info'] {
+		'color-scheme', 'sync-color-scheme', 'detect', 'theme', 'auto', 'icons', 'info', 'select'] {
 		return error('unknown gtk subcommand: ${leaf}.\nRun: horneroctl appearance gtk --help')
 	}
 	mut value := ''
@@ -587,6 +587,9 @@ pub fn parse_appearance_gtk(args []string) !GtkCmdOptions {
 	if leaf in ['list', 'icons', 'current', 'current-icon', 'current-color-scheme', 'sync-color-scheme', 'auto']
 		&& (value.len > 0 || extra.len > 0) {
 		return error('gtk ${leaf} takes no value.\nExample: horneroctl appearance gtk ${leaf} --dry-run')
+	}
+	if leaf == 'select' && (value.len > 0 || extra.len > 0) {
+		return error('gtk select takes no value.\nExample: horneroctl appearance gtk select --dry-run')
 	}
 	if leaf in ['apply', 'set-icons', 'color-scheme', 'info'] && value.len == 0 {
 		return error('missing value.\nExample: horneroctl appearance gtk ${leaf} <value> --dry-run')

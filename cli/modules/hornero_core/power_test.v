@@ -91,7 +91,7 @@ fn test_lock_plan_prefers_lockscreen() {
 	saved := power_test_save_env(['HORNERO_LOCKSCREEN_BIN', 'HORNERO_HYPRLOCK_BIN',
 		'HORNERO_LOGINCTL_BIN'])
 	os.setenv('HORNERO_LOCKSCREEN_BIN', '/fake/dots-lockscreen', true)
-	plan := lock_plan(true) or {
+	plan := lock_plan(true, '') or {
 		assert false, err.msg()
 		return
 	}
@@ -106,7 +106,7 @@ fn test_lock_plan_hyprlock_pin_runs_bare() {
 	saved := power_test_save_env(['HORNERO_LOCKSCREEN_BIN', 'HORNERO_HYPRLOCK_BIN',
 		'HORNERO_LOGINCTL_BIN'])
 	os.setenv('HORNERO_LOCKSCREEN_BIN', '/usr/bin/hyprlock', true)
-	plan := lock_plan(true) or {
+	plan := lock_plan(true, '') or {
 		assert false, err.msg()
 		return
 	}
@@ -122,7 +122,7 @@ fn test_lock_plan_prefers_hyprlock_without_pin() {
 		'HORNERO_LOGINCTL_BIN'])
 	os.unsetenv('HORNERO_LOCKSCREEN_BIN')
 	os.setenv('HORNERO_HYPRLOCK_BIN', '/fake/hyprlock', true)
-	plan := lock_plan(true) or {
+	plan := lock_plan(true, '') or {
 		assert false, err.msg()
 		return
 	}

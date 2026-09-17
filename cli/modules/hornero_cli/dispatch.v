@@ -312,6 +312,12 @@ fn run_appearance_gtk(args []string, mode hornero_core.RenderMode) int {
 		'info' {
 			return render(hornero_core.gtk_info_report(opts.value), mode)
 		}
+		'select' {
+			return render(hornero_core.gtk_select_report(hornero_core.GtkSelectOptions{
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}, hornero_core.gtk_stdin_choice), mode)
+		}
 		'apply' {
 			if !opts.yes && !opts.dry_run {
 				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk apply Orchis-Dark --dry-run'),
@@ -670,9 +676,20 @@ fn run_lock(args []string, mode hornero_core.RenderMode) int {
 	if opts.leaf == 'status' {
 		return render(hornero_core.lock_status_report(), mode)
 	}
+	if opts.leaf == 'update' {
+		return render(hornero_core.lock_update_report(hornero_core.LockUpdateOptions{
+			wallpaper: opts.path
+			dim:       opts.dim
+			blur:      opts.blur
+			pixel:     opts.pixel
+			dry_run:   opts.dry_run
+			yes:       opts.yes
+		}), mode)
+	}
 	return render(hornero_core.lock_now_report(hornero_core.LockNowOptions{
 		dry_run: opts.dry_run
 		yes:     opts.yes
+		effect:  opts.effect
 	}), mode)
 }
 
