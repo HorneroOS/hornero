@@ -52,6 +52,26 @@ pub fn resolve_handlr_bin() string {
 	return leaf_bin('HORNERO_HANDLR_BIN', 'handlr')
 }
 
+// resolve_pidof_bin locates pidof (daemon toggle checks).
+// Override with HORNERO_PIDOF_BIN.
+pub fn resolve_pidof_bin() string {
+	env := os.getenv('HORNERO_PIDOF_BIN')
+	if env.len > 0 {
+		return env
+	}
+	return find_on_path('pidof')
+}
+
+// resolve_killall_bin locates killall (caffeine toggle stop).
+// Override with HORNERO_KILLALL_BIN.
+pub fn resolve_killall_bin() string {
+	env := os.getenv('HORNERO_KILLALL_BIN')
+	if env.len > 0 {
+		return env
+	}
+	return find_on_path('killall')
+}
+
 // resolve_xdg_open_bin locates xdg-open. Override with HORNERO_XDG_OPEN_BIN.
 pub fn resolve_xdg_open_bin() string {
 	return leaf_bin('HORNERO_XDG_OPEN_BIN', 'xdg-open')
@@ -90,12 +110,6 @@ pub fn resolve_dots_security_audit_bin() string {
 // Override with HORNERO_LAUNCHER_BIN.
 pub fn resolve_dots_launcher_bin() string {
 	return dots_helper_bin('HORNERO_LAUNCHER_BIN', 'dots-launcher')
-}
-
-// resolve_dots_toggle_bin locates dots-toggle.
-// Override with HORNERO_TOGGLE_BIN.
-pub fn resolve_dots_toggle_bin() string {
-	return dots_helper_bin('HORNERO_TOGGLE_BIN', 'dots-toggle')
 }
 
 // resolve_dots_snappy_bin locates dots-snappy-switcher.
@@ -733,10 +747,105 @@ pub:
 	yes       bool
 }
 
-// toggle_report implements `apps toggle` over dots-toggle: quickshell
-// component toggles go through `ipc <component> toggle`; redshift and
-// caffeine toggle once via --toggle (their monitor loops stay legacy).
-// Mutating: needs --yes; --dry-run only previews.
+// toggle_native implements `apps toggle` without the dots-toggle
+// wrapper (retired): quickshell components go through
+// `quickshell ipc call drawers toggle <component>`; redshift and
+// caffeine toggle one-shot via pidof plus pkill/killall or a detached
+// start — the dots-toggle --toggle contract.
+fn toggle_native(opts ToggleOptions) CommandResult {
+	name := 'apps toggle ${opts.component}'
+	if opts.component in ['redshift', 'caffeine'] {
+		return toggle_daemon_native(name, opts.component, opts.dry_run)
+	}
+	if !quickshell_running() {
+		return fail_result(name, 'Quickshell is not running')
+	}
+	qs := resolve_quickshell_bin()
+	if qs.len == 0 {
+		return fail_result(name, 'quickshell not found on PATH. Set HORNERO_QUICKSHELL_BIN.\nExample: horneroctl ${name} --dry-run')
+	}
+	rep := run_exec(ExecSpec{
+		prog: qs
+		args: ['ipc', 'call', 'drawers', 'toggle', opts.component]
+	})
+	if !rep.ok {
+		return fail_result(name, 'failed to toggle ${opts.component} (exit ${rep.exit_code}):\n${rep.output}')
+	}
+	return ok_result(name, rep.output, {
+		'component': opts.component
+	})
+}
+
+// toggle_daemon_native toggles one redshift/caffeine instance:
+// running (pidof) -> stop via pkill/killall; stopped -> detached start.
+fn toggle_daemon_native(name string, daemon string, dry_run bool) CommandResult {
+	pidof := resolve_pidof_bin()
+	mut running := false
+	if pidof.len > 0 {
+		chk := run_exec(ExecSpec{
+			prog: pidof
+			args: [daemon]
+		})
+		running = chk.ok
+	}
+	if running {
+		mut stopper := if daemon == 'caffeine' {
+			resolve_killall_bin()
+		} else {
+			resolve_pkill_bin()
+		}
+		if stopper.len == 0 {
+			stopper = if daemon == 'caffeine' { 'killall' } else { 'pkill' }
+		}
+		rep := run_exec(ExecSpec{
+			prog: stopper
+			args: [daemon]
+		})
+		if !rep.ok {
+			return fail_result(name, 'failed to stop ${daemon} (exit ${rep.exit_code}):\n${rep.output}')
+		}
+		return ok_result(name, 'stopped ${daemon}', {
+			'component': daemon
+			'action':    'stop'
+		})
+	}
+	leaf := backend_or_empty(if daemon == 'caffeine' {
+		'HORNERO_CAFFEINE_BIN'
+	} else {
+		'HORNERO_REDSHIFT_BIN'
+	},
+		daemon)
+	if leaf.len == 0 {
+		return fail_result(name, '${daemon} not found on PATH. Set ${if daemon == 'caffeine' {
+			'HORNERO_CAFFEINE_BIN'
+		} else {
+			'HORNERO_REDSHIFT_BIN'
+		}}.\nExample: horneroctl ${name} --dry-run')
+	}
+	rep := spawn_detached(leaf, [], dry_run)
+	if dry_run {
+		return ok_result(name, 'would run: ${rep.command_line}', {
+			'command_line': rep.command_line
+			'dry_run':      'true'
+			'component':    daemon
+			'action':       'start'
+		})
+	}
+	if !rep.ok {
+		return fail_result(name, 'failed to start ${daemon} (exit ${rep.exit_code}):\n${rep.output}')
+	}
+	return ok_result(name, 'started ${daemon}', {
+		'component': daemon
+		'action':    'start'
+	})
+}
+
+// toggle_report implements `apps toggle` natively (no dots-toggle):
+// quickshell component toggles go through
+// `quickshell ipc call drawers toggle <component>`; redshift and
+// caffeine toggle once via pidof plus pkill/killall or a detached start
+// (their monitor loops stay legacy).
+// Mutating: needs --yes; --dry-run only previews the legacy delegation.
 pub fn toggle_report(opts ToggleOptions) CommandResult {
 	if opts.component !in ['bar', 'launcher', 'dashboard', 'sidebar', 'session', 'utilities', 'redshift',
 		'caffeine'] {
@@ -745,25 +854,18 @@ pub fn toggle_report(opts ToggleOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('apps toggle ${opts.component}', 'refusing to toggle without --yes (preview with --dry-run).\nExample: horneroctl apps toggle ${opts.component} --dry-run')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_toggle_bin(), 'dots-toggle', 'HORNERO_TOGGLE_BIN',
-		opts.dry_run, 'horneroctl apps toggle ${opts.component} --dry-run') or {
-		return fail_result('apps toggle ${opts.component}', err.msg())
-	}
 	mut args := ['--' + opts.component]
 	if opts.component in ['redshift', 'caffeine'] {
 		args = ['--' + opts.component, '--toggle']
 	}
-	rep := apps_run_delegated(bin, args, opts.dry_run)
-	if opts.dry_run {
-		return ok_result('apps toggle ${opts.component}', 'would run: ${rep.command_line}',
-			{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-				'component':    opts.component
-			})
+	if !opts.dry_run {
+		return toggle_native(opts)
 	}
-	return apps_delegated_ok('apps toggle ${opts.component}', rep, {
-		'component': opts.component
+	rep := apps_run_delegated('dots-toggle', args, true)
+	return ok_result('apps toggle ${opts.component}', 'would run: ${rep.command_line}', {
+		'command_line': rep.command_line
+		'dry_run':      'true'
+		'component':    opts.component
 	})
 }
 

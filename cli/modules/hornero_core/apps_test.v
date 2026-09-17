@@ -22,8 +22,9 @@ fn apps_test_restore_env(saved map[string]string) {
 
 const apps_test_keys = ['HORNERO_FILE_MANAGER_BIN', 'HORNERO_EXO_OPEN_BIN', 'HORNERO_HANDLR_BIN',
 	'HORNERO_XDG_OPEN_BIN', 'HORNERO_DOTS_YAZI_BIN', 'HORNERO_YAZI_BIN', 'HORNERO_WEATHER_BIN',
-	'HORNERO_GIT_NOTIFY_BIN', 'HORNERO_SECURITY_AUDIT_BIN', 'HORNERO_LAUNCHER_BIN',
-	'HORNERO_TOGGLE_BIN', 'HORNERO_SNAPPY_BIN', 'HORNERO_PERFORMANCE_BIN',
+	'HORNERO_GIT_NOTIFY_BIN', 'HORNERO_SECURITY_AUDIT_BIN', 'HORNERO_LAUNCHER_BIN', 'HORNERO_SNAPPY_BIN',
+	'HORNERO_PERFORMANCE_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN',
+	'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN', 'HORNERO_CAFFEINE_BIN',
 	'HORNERO_POWERPROFILESCTL_BIN']
 
 fn apps_test_break_backends() {
@@ -37,7 +38,6 @@ fn apps_test_break_backends() {
 	os.setenv('HORNERO_GIT_NOTIFY_BIN', '/nonexistent-git-notify-hornero-test', true)
 	os.setenv('HORNERO_SECURITY_AUDIT_BIN', '/nonexistent-audit-hornero-test', true)
 	os.setenv('HORNERO_LAUNCHER_BIN', '/nonexistent-launcher-hornero-test', true)
-	os.setenv('HORNERO_TOGGLE_BIN', '/nonexistent-toggle-hornero-test', true)
 	os.setenv('HORNERO_SNAPPY_BIN', '/nonexistent-snappy-hornero-test', true)
 	os.setenv('HORNERO_PERFORMANCE_BIN', '/nonexistent-performance-hornero-test', true)
 	os.setenv('HORNERO_POWERPROFILESCTL_BIN', '/nonexistent-ppctl-hornero-test', true)
@@ -91,6 +91,49 @@ fn test_terminal_cheatsheet_native_needs_no_backend() {
 	p := terminal_file_report(TerminalFileOptions{ fix_previews: true })
 	assert p.ok
 	assert p.message.contains('Yazi Preview Diagnostics')
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_toggle_native_daemon_stop() {
+	// Native port: a running daemon (pidof=true fixture) stops via the
+	// pkill/killall seams; dots-toggle is never consulted.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	os.setenv('HORNERO_PIDOF_BIN', '/bin/true', true)
+	os.setenv('HORNERO_PKILL_BIN', '/bin/true', true)
+	os.setenv('HORNERO_KILLALL_BIN', '/bin/true', true)
+	r := toggle_report(ToggleOptions{ component: 'redshift', yes: true })
+	assert r.ok
+	assert r.message.contains('stopped redshift')
+	r2 := toggle_report(ToggleOptions{ component: 'caffeine', yes: true })
+	assert r2.ok
+	assert r2.message.contains('stopped caffeine')
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_toggle_native_daemon_start() {
+	// Stopped daemon (pidof=false fixture) starts detached via the leaf
+	// seam; /bin/true keeps the start harmless. Detached spawn mirrors
+	// bash `&` (launch reports ok; failures are async), so the
+	// missing-leaf branch only triggers when nothing resolves.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	os.setenv('HORNERO_PIDOF_BIN', '/bin/false', true)
+	os.setenv('HORNERO_REDSHIFT_BIN', '/bin/true', true)
+	r := toggle_report(ToggleOptions{ component: 'redshift', yes: true })
+	assert r.ok
+	assert r.message.contains('started redshift')
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_toggle_native_quickshell_fails_closed() {
+	// Quickshell branch with an unresolvable quickshell binary fails
+	// closed without touching dots-toggle.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/nonexistent-qs-hornero-test', true)
+	r := toggle_report(ToggleOptions{ component: 'bar', yes: true })
+	assert !r.ok
 	apps_test_restore_env(saved)
 }
 

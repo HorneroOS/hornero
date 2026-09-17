@@ -1097,10 +1097,10 @@ Examples:
 
   bar launcher dashboard sidebar session utilities
                       Toggle one quickshell component via ipc (needs --yes)
-  redshift caffeine   Toggle the daemon once via --toggle (needs --yes);
-                      the monitor loops stay in dots-toggle
+  redshift caffeine   Toggle the daemon once (needs --yes); the monitor
+                      loops stay in dots-toggle
 
-Backend: dots-toggle (HORNERO_TOGGLE_BIN).
+Backend: native (quickshell ipc; pidof + pkill/killall for daemons).
 
 Examples:
   horneroctl apps toggle bar --dry-run
