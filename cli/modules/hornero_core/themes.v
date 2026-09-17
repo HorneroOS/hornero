@@ -9,11 +9,10 @@ import x.json2
 // and are installed to `$XDG_DATA_HOME/hornero/themes/<id>/theme.json`
 // (canonical WRITE TARGET, docs/PATH_CONTRACT.md row 1). Legacy installs
 // hold them under `$XDG_DATA_HOME/dots/themes/<id>/theme.json`, which these
-// readers keep as a read-only fallback (canonical-first). `dots-appearance
-// theme list/show` read the same files; these native readers stay
-// byte-compatible with that output for reads. Mutation (`apply`) delegates
-// to `dots-appearance` (see theme_apply_report); wallpaper/theme repository
-// splits stay out of scope per docs/theme-split-plan.md.
+// readers keep as a read-only fallback (canonical-first). Mutation
+// (`apply`) runs the native shell pipeline in appearance_apply.v;
+// wallpaper/theme repository splits stay out of scope per
+// docs/theme-split-plan.md.
 
 // resolve_themes_dir locates installed theme packs: the canonical
 // `hornero/*` location (docs/PATH_CONTRACT.md row 1) and the WRITE TARGET.
@@ -59,21 +58,6 @@ pub fn resolve_themes_dirs_for_read() []string {
 		dirs << fallback
 	}
 	return dirs
-}
-
-// resolve_dots_appearance locates the `dots-appearance` backend CLI shipped
-// by HorneroOS/config (theme apply, scheme setters).
-// Override with HORNERO_DOTS_APPEARANCE_BIN.
-pub fn resolve_dots_appearance() string {
-	env := os.getenv('HORNERO_DOTS_APPEARANCE_BIN')
-	if env.len > 0 {
-		return env
-	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-appearance')
-	if os.is_file(home_helper) {
-		return home_helper
-	}
-	return find_on_path('dots-appearance')
 }
 
 pub struct ThemeEntry {
@@ -270,51 +254,15 @@ pub:
 	helper    string
 }
 
-fn dots_appearance_or_fail(helper string) !string {
-	bin := if helper.len > 0 { helper } else { resolve_dots_appearance() }
-	if bin.len == 0 {
-		return error('dots-appearance backend not found. Set HORNERO_DOTS_APPEARANCE_BIN.\nExample: horneroctl appearance theme apply vapor-dreams --dry-run')
-	}
-	return bin
-}
-
-// theme_apply_report implements `appearance theme apply <id>` by delegating
-// to `dots-appearance theme apply` (verified backend verb). Mutating: needs
-// --yes; --dry-run only previews.
+// theme_apply_report implements `appearance theme apply <id>` natively
+// (shell IPC fast path, else the wal + M3 + GTK pipeline). Mutating:
+// needs --yes; --dry-run only previews.
 pub fn theme_apply_report(opts ThemeApplyOptions) CommandResult {
 	if opts.id.len == 0 || opts.id.contains('/') || opts.id == '.' || opts.id == '..' {
 		return fail_result('appearance theme apply', 'invalid theme id.\nExample: horneroctl appearance theme apply vapor-dreams --dry-run')
 	}
-	bin := dots_appearance_or_fail(opts.helper) or {
-		if opts.dry_run {
-			'dots-appearance'
-		} else {
-			return fail_result('appearance theme apply', err.msg())
-		}
-	}
 	if !opts.yes && !opts.dry_run {
 		return fail_result('appearance theme apply', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance theme apply ${opts.id} --dry-run')
 	}
-	mut args := ['theme', 'apply', opts.id]
-	if opts.wallpaper.len > 0 {
-		args << '--wallpaper'
-		args << opts.wallpaper
-	}
-	rep := delegated_run(ExecSpec{
-		prog:    bin
-		args:    args
-		dry_run: opts.dry_run
-	})
-	if opts.dry_run {
-		return ok_result('appearance theme apply', 'would run: ${rep.command_line}', {
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
-	}
-	if rep.ok {
-		return ok_result('appearance theme apply', rep.output, {
-			'command_line': rep.command_line
-		})
-	}
-	return fail_result('appearance theme apply', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	return theme_apply_native(opts.id, opts.wallpaper, opts.dry_run)
 }

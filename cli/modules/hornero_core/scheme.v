@@ -198,9 +198,9 @@ pub:
 	helper  string
 }
 
-// scheme_set_report implements `appearance scheme set-mode|set-variant` by
-// delegating to `dots-appearance` (verified backend verbs). Mutating: needs
-// --yes; --dry-run only previews.
+// scheme_set_report implements `appearance scheme set-mode|set-variant`
+// natively (persist + M3 regenerate, GTK follow-push for mode).
+// Mutating: needs --yes; --dry-run only previews.
 pub fn scheme_set_report(opts SchemeSetOptions) CommandResult {
 	if opts.kind == 'mode' && opts.value !in ['dark', 'light'] {
 		return fail_result('appearance scheme set-mode', 'invalid mode: ${opts.value} (want dark|light).\nExample: horneroctl appearance scheme set-mode dark --dry-run')
@@ -211,32 +211,11 @@ pub fn scheme_set_report(opts SchemeSetOptions) CommandResult {
 	if opts.kind !in ['mode', 'variant'] {
 		return fail_result('appearance scheme', 'unknown action: ${opts.kind}.\nRun: horneroctl appearance scheme --help')
 	}
-	bin := dots_appearance_or_fail(opts.helper) or {
-		if opts.dry_run {
-			'dots-appearance'
-		} else {
-			return fail_result('appearance scheme', err.msg())
-		}
-	}
 	if !opts.yes && !opts.dry_run {
 		return fail_result('appearance scheme', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance scheme set-${opts.kind} ${opts.value} --dry-run')
 	}
-	verb := if opts.kind == 'mode' { 'set-mode' } else { 'set-variant' }
-	rep := delegated_run(ExecSpec{
-		prog:    bin
-		args:    [verb, opts.value]
-		dry_run: opts.dry_run
-	})
-	if opts.dry_run {
-		return ok_result('appearance scheme', 'would run: ${rep.command_line}', {
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+	if opts.kind == 'mode' {
+		return scheme_set_mode_native(opts.value, opts.dry_run)
 	}
-	if rep.ok {
-		return ok_result('appearance scheme', rep.output, {
-			'command_line': rep.command_line
-		})
-	}
-	return fail_result('appearance scheme', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	return scheme_set_variant_native(opts.value, opts.dry_run)
 }

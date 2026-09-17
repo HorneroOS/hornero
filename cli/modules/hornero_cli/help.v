@@ -12,7 +12,7 @@ Commands:
   version       Print version
   doctor        Read-only environment health checks
   shell         Desktop shell integration (status, ipc, preset, lifecycle, logs)
-  appearance    Appearance backend (status, sync, call, theme, scheme)
+  appearance    Appearance controls (status, sync, theme, scheme, colors, accent, night-mode, gtk, hyprlock)
   scheme        Alias of appearance scheme (compat shortcut)
   config        Configuration paths, values, validation, snapshots
   package       System packages (check, updates, upgrade, deps)
@@ -137,17 +137,35 @@ Examples:
 '
 		}
 		'appearance' {
-			return 'Usage: horneroctl appearance <status|sync|call|theme|scheme|colors|accent|night-mode> [options]
+			return 'Usage: horneroctl appearance <status|sync|doctor|set-*|theme|scheme|colors|accent|night-mode|gtk|hyprlock> [options]
 
   status              Show current appearance state (read-only)
-  sync [--dry-run]    Apply the pending color scheme (needs --yes)
-  call [--dry-run] -- <backend-args...>
-                      Pass arguments to the appearance backend directly
+  sync [--dry-run]    Adopt the live scheme meta into state (needs --yes)
+  doctor              Check appearance consistency (read-only)
+  set-wallpaper <path> [--dry-run]
+                      Rebuild the palette from one wallpaper (needs --yes)
+  set-gtk <theme> [--dry-run]
+                      Set the GTK theme, keep live policy (needs --yes)
+  set-icons <theme> [--dry-run]
+                      Set the icon theme (needs --yes)
+  set-gtk-color-scheme <policy> [--dry-run]
+                      Set the GTK color-scheme policy (needs --yes)
   theme ...           Installed theme packs (list, show, get, apply, set)
-  scheme ...          Color scheme state and setters (status, set-mode, set-variant)
-  colors ...          Smart-color palette (status, generate, m3)
+  scheme ...          Color scheme state (status, list, current, set-mode,
+                      set-variant, regenerate, sync-state)
+  colors ...          Smart-color palette (status, generate, m3, concept, export)
   accent ...          Accent override seed (show, set, clear)
-  night-mode ...      Display temperature backend (status)
+  night-mode ...      Display temperature (status, toggle, on, off,
+                      status-icon, status-text, backends)
+  gtk ...             GTK themes (list, current, apply, set-icons,
+                      color-scheme, sync-color-scheme, detect, theme,
+                      auto, icons, info)
+  hyprlock [--dry-run] Regenerate colors-hyprlock.conf (needs --yes)
+
+Native: every verb runs in V. Only external tools stay backends
+(wal, xrdb, gsettings, hyprctl, quickshell IPC, the M3 python
+synthesizer, night-mode temperature tools), each with a
+HORNERO_*_BIN override.
 
 Options:
   --dry-run           Preview without changing anything
@@ -157,12 +175,14 @@ Examples:
   horneroctl appearance status
   horneroctl appearance sync --dry-run
   horneroctl appearance sync --yes
-  horneroctl appearance call -- theme list
+  horneroctl appearance doctor
   horneroctl appearance theme list
   horneroctl appearance scheme status
   horneroctl appearance colors status --dry-run
   horneroctl appearance accent show
   horneroctl appearance night-mode status
+  horneroctl appearance gtk list
+  horneroctl appearance hyprlock --dry-run
 '
 		}
 		'appearance theme' {
@@ -178,12 +198,12 @@ Examples:
 
 Pack source: HORNERO_THEMES_DIR, else the XDG data catalogue
 (hornero/themes, legacy dots/themes as read-only fallback).
-Reads parse the installed theme.json manifests;
-apply delegates to dots-appearance (HORNERO_DOTS_APPEARANCE_BIN).
-get matches the live backend state against the official
-hornero-dark/hornero-light/pampa trio; set validates, applies via
-dots-appearance, then verifies GTK/scheme agree (best-effort
-rollback to the previous official theme on failure).
+Reads parse the installed theme.json manifests; apply runs
+the native shell pipeline (wal + M3 + GTK). get matches the live
+native state against the official hornero-dark/hornero-light/pampa
+trio; set validates, applies natively, then verifies GTK/scheme
+agree (best-effort rollback to the previous official theme on
+failure).
 
 Examples:
   horneroctl appearance theme list
@@ -196,42 +216,51 @@ Examples:
 '
 		}
 		'appearance scheme' {
-			return 'Usage: horneroctl appearance scheme <status|set-mode|set-variant> [options]
+			return 'Usage: horneroctl appearance scheme <status|list|current|set-mode|set-variant|regenerate|sync-state> [options]
 
   status              Show mode/flavour/variant (read-only)
+  list                Show live colours under every flavour (read-only)
+  current             Show name/flavour/variant (read-only)
   set-mode <dark|light> [--dry-run]
                       Set the color-scheme mode (needs --yes)
   set-variant <name> [--dry-run]
                       Set the color-scheme variant (needs --yes)
+  regenerate [--dry-run]
+                      Rewrite scheme.json from the wallpaper (needs --yes)
+  sync-state [--dry-run]
+                      Adopt scheme.json meta into state (needs --yes)
 
-State source: the materialized scheme files under XDG state/cache;
-setters delegate to dots-appearance (HORNERO_DOTS_APPEARANCE_BIN).
+State source: the materialized scheme files under XDG state/cache,
+all read and written natively.
 
 Later phases: device brightness and other hardware controls (no
 verified IPC path yet).
 
 Examples:
   horneroctl appearance scheme status
+  horneroctl appearance scheme list
   horneroctl appearance scheme set-mode dark --dry-run
   horneroctl appearance scheme set-mode dark --yes
   horneroctl appearance scheme set-variant tonalspot --yes
+  horneroctl appearance scheme regenerate --dry-run
 '
 		}
 		'appearance colors' {
-			return 'Usage: horneroctl appearance colors <status|generate|m3> [options]
+			return 'Usage: horneroctl appearance colors <status|generate|m3|concept|export> [options]
 
   status [--dry-run]  Preview the generated palette (read-only)
   generate [--m3] [--dry-run]
                       Rewrite the smart-color files (needs --yes;
                       --m3 also refreshes scheme.json)
   m3 [--dry-run] -- <backend-args...>
-                      Pass arguments to dots-m3-colors directly (needs --yes)
+                      Pass arguments to the M3 synthesizer (needs --yes)
+  concept <name>      Resolve one semantic color (read-only)
+  export              Print shell variables for every color (read-only)
 
-Backend: dots-smart-colors (HORNERO_SMART_COLORS_BIN); m3 passes
-through to dots-m3-colors (HORNERO_M3_COLORS_BIN). The palette
-generation engine itself stays in the backend; V only delegates.
-Every backend call runs under HORNEROCTL_DELEGATED=1 so the
-delegating dots-* shims run their legacy body.
+Native: the palette engine (luminance, semantic table, contrast,
+harmonization) runs in V from xrdb input (HORNERO_XRDB_BIN). Only
+the M3 synthesis stays a backend (python + generate-m3-colors.py
+via HORNERO_M3_PYTHON_BIN / HORNERO_M3_SCRIPT).
 
 Examples:
   horneroctl appearance colors status
@@ -239,6 +268,8 @@ Examples:
   horneroctl appearance colors generate --dry-run
   horneroctl appearance colors generate --m3 --yes
   horneroctl appearance colors m3 --dry-run -- --help
+  horneroctl appearance colors concept error
+  horneroctl appearance colors export
 '
 		}
 		'appearance accent' {
@@ -249,10 +280,8 @@ Examples:
                       Set the accent seed (needs --yes)
   clear [--dry-run]   Clear the override, regenerate from wallpaper (needs --yes)
 
-Backend: dots-accent-override (HORNERO_ACCENT_OVERRIDE_BIN).
-Set/clear trigger a scheme regenerate downstream. Every backend
-call runs under HORNEROCTL_DELEGATED=1 so the delegating dots-*
-shims run their legacy body.
+Native: the seed file plus the scheme regenerate run in V.
+Set/clear trigger a scheme regenerate downstream.
 
 Examples:
   horneroctl appearance accent show
@@ -262,22 +291,72 @@ Examples:
 '
 		}
 		'appearance night-mode' {
-			return 'Usage: horneroctl appearance night-mode <status> [options]
+			return 'Usage: horneroctl appearance night-mode <status|toggle|on|off|status-icon|status-text|backends> [options]
 
   status [--dry-run]  Show whether the temperature backend is active (read-only)
+  toggle [--dry-run]  Toggle night mode (needs --yes)
+  on [--dry-run]      Force enable night mode (needs --yes)
+  off [--dry-run]     Force disable night mode (needs --yes)
+  status-icon         Bar icon for the current state (read-only)
+  status-text         Bar tooltip for the current state (read-only)
+  backends            List available backends (read-only)
 
-Backend: dots-night-mode (HORNERO_NIGHT_MODE_BIN). Toggles
-(on/off) stay in the backend for now: no verified portable
-surface yet. Every backend call runs under HORNEROCTL_DELEGATED=1
-so the delegating dots-* shims run their legacy body.
+Native: process-table detection plus the redshift/gammastep/
+wlsunset/xrandr backends (HORNERO_REDSHIFT_BIN and friends).
 
 Examples:
   horneroctl appearance night-mode status
   horneroctl appearance night-mode status --dry-run
+  horneroctl appearance night-mode toggle --dry-run
+  horneroctl appearance night-mode backends
+'
+		}
+		'appearance gtk' {
+			return 'Usage: horneroctl appearance gtk <verb> [options]
+
+  list                List installed GTK themes (read-only)
+  current             Show the current GTK theme (read-only)
+  current-icon        Show the current icon theme (read-only)
+  current-color-scheme
+                      Show the persisted color-scheme policy (read-only)
+  apply <theme> [icon] [policy] [--dry-run]
+                      Apply GTK + icon theme (needs --yes)
+  set-icons <icon> [--dry-run]
+                      Update the icon theme in place (needs --yes)
+  color-scheme <policy> [--dry-run]
+                      Set the GTK color-scheme policy (needs --yes)
+  sync-color-scheme [--dry-run]
+                      Re-apply the persisted policy (needs --yes)
+  detect [wallpaper]  Suggest the optimal theme (read-only)
+  theme [id]          Apply GTK settings from a theme pack (needs --yes)
+  auto [--dry-run]    Auto-detect and apply (needs --yes)
+  icons               List installed icon themes (read-only)
+  info <theme>        Show theme components and metadata (read-only)
+
+Native: INI edits and policy decisions run in V; gsettings stays
+a backend (HORNERO_GSETTINGS_BIN).
+
+Examples:
+  horneroctl appearance gtk list
+  horneroctl appearance gtk current
+  horneroctl appearance gtk apply Orchis-Dark --dry-run
+  horneroctl appearance gtk color-scheme prefer-light --dry-run
+  horneroctl appearance gtk sync-color-scheme --dry-run
+'
+		}
+		'appearance hyprlock' {
+			return 'Usage: horneroctl appearance hyprlock [--wallpaper <path>] [options]
+
+  Regenerate colors-hyprlock.conf from the live scheme.json
+  colours (needs --yes); --dry-run only previews.
+
+Examples:
+  horneroctl appearance hyprlock --dry-run
+  horneroctl appearance hyprlock --yes
 '
 		}
 		'scheme' {
-			return 'Usage: horneroctl scheme <status|set-mode|set-variant> [options]
+			return 'Usage: horneroctl scheme <status|list|current|set-mode|set-variant|regenerate|sync-state> [options]
 
 Compat shortcut for `horneroctl appearance scheme`.
 
@@ -1206,7 +1285,7 @@ pub fn fish_completion() string {
 complete -c horneroctl -f -n __fish_use_subcommand -a version -d "Print version"
 complete -c horneroctl -f -n __fish_use_subcommand -a doctor -d "Health checks"
 complete -c horneroctl -f -n __fish_use_subcommand -a shell -d "Shell integration"
-complete -c horneroctl -f -n __fish_use_subcommand -a appearance -d "Appearance backend"
+complete -c horneroctl -f -n __fish_use_subcommand -a appearance -d "Appearance controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a scheme -d "Color scheme shortcut"
 complete -c horneroctl -f -n __fish_use_subcommand -a config -d "Configuration"
 complete -c horneroctl -f -n __fish_use_subcommand -a package -d "Package updates"

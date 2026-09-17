@@ -195,7 +195,7 @@ fn test_dispatch_appearance_plus() {
 	assert dispatch(['horneroctl', 'appearance', 'accent', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'status']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'status', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'toggle']) == 2
+	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'toggle']) == 1
 	os.unsetenv('HORNERO_SMART_COLORS_BIN')
 	os.unsetenv('HORNERO_M3_COLORS_BIN')
 	os.unsetenv('HORNERO_NIGHT_MODE_BIN')

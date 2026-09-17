@@ -21,15 +21,8 @@ import time
 // Mutations need --yes; --dry-run only previews (and never touches the
 // process table, so dry-run tests stay CI-hermetic).
 
-// resolve_quickshell_bin locates the quickshell daemon binary (used for
-// start/stop signalling). Override with HORNERO_QUICKSHELL_BIN.
-pub fn resolve_quickshell_bin() string {
-	env := os.getenv('HORNERO_QUICKSHELL_BIN')
-	if env.len > 0 {
-		return env
-	}
-	return find_on_path('quickshell')
-}
+// resolve_quickshell_bin lives in appearance_apply.v (single definition:
+// HORNERO_QUICKSHELL_BIN, else quickshell, else qs).
 
 // resolve_pgrep_bin locates pgrep for process-table checks.
 // Override with HORNERO_PGREP_BIN (tests point it at /bin/true|false).
@@ -267,20 +260,6 @@ pub fn shell_stop_report(opts ShellStopOptions) CommandResult {
 		})
 	}
 	return fail_result('shell stop', 'Quickshell did not stop')
-}
-
-// resolve_pkill_bin locates pkill for stop escalation.
-// Override with HORNERO_PKILL_BIN.
-fn resolve_pkill_bin() string {
-	env := os.getenv('HORNERO_PKILL_BIN')
-	if env.len > 0 {
-		return env
-	}
-	bin := find_on_path('pkill')
-	if bin.len > 0 {
-		return bin
-	}
-	return 'pkill'
 }
 
 pub struct ShellRestartOptions {

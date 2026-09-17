@@ -182,7 +182,9 @@ fn test_apps_delegated_success_path() {
 	saved := apps_test_save_env(apps_test_keys)
 	base := '/tmp/hx-apps-test/bin2'
 	os.mkdir_all(base) or { assert false }
-	os.write_file(base + '/dots-security-audit', '#!/bin/sh\n[ -n "\${HORNEROCTL_DELEGATED}" ] || { echo missing delegation guard >&2; exit 3; }\necho "audit ok"\nexit 0\n') or {
+	os.write_file(base + '/dots-security-audit', '#!/bin/sh\n[ -n "' + '$' +
+		'{HORNEROCTL_DELEGATED}' +
+		'" ] || { echo missing delegation guard >&2; exit 3; }\necho "audit ok"\nexit 0\n') or {
 		assert false
 	}
 	os.chmod(base + '/dots-security-audit', 0o755) or { assert false }
