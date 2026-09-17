@@ -111,12 +111,12 @@ pub fn shell_running() bool {
 // external step is injectable so verify/rollback stay hermetic (no wal,
 // no M3, no compositor). Production uses default_palette_backends().
 pub struct PaletteBackends {
-	wal_exec    fn (prog string, args []string, dry_run bool) ExecReport
-	m3_exec     fn (image string, output string, flavour string, mode string, accent string, dry_run bool) ExecReport
-	gtk_sync    fn (dry_run bool) CommandResult
-	gtk_apply   fn (theme string, icon string, policy string, dry_run bool) CommandResult
-	hyprlock    fn (wallpaper string, dry_run bool) CommandResult
-	hyprctl_run fn (dry_run bool)
+	wal_exec    fn (prog string, args []string, dry_run bool) ExecReport @[required]
+	m3_exec     fn (image string, output string, flavour string, mode string, accent string, dry_run bool) ExecReport @[required]
+	gtk_sync    fn (dry_run bool) CommandResult @[required]
+	gtk_apply   fn (theme string, icon string, policy string, dry_run bool) CommandResult @[required]
+	hyprlock    fn (wallpaper string, dry_run bool) CommandResult @[required]
+	hyprctl_run fn (dry_run bool) @[required]
 }
 
 fn default_wal_exec(prog string, args []string, dry_run bool) ExecReport {

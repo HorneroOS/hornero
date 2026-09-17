@@ -435,7 +435,7 @@ pub fn gtk_current_report() CommandResult {
 
 // gtk_current_icon_report implements `appearance gtk current-icon`.
 pub fn gtk_current_icon_report() CommandResult {
-	icon := current_icon_theme()
+	mut icon := current_icon_theme()
 	if icon.len == 0 {
 		icon = 'Unknown'
 	}

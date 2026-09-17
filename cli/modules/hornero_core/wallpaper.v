@@ -250,6 +250,26 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			if !opts.yes && !opts.dry_run {
 				return fail_result('wallpaper reload', 'refusing to reload without --yes (preview with --dry-run).\nExample: horneroctl wallpaper reload --dry-run')
 			}
+			if opts.reload_helper.len > 0 {
+				bin := wallpaper_backend_or_placeholder(opts.reload_helper, resolve_wal_reload_bin,
+					'dots-wal-reload', opts.dry_run) or {
+					return fail_result('wallpaper reload', err.msg() +
+						'\nExample: horneroctl wallpaper reload --dry-run')
+				}
+				rep := wallpaper_run_backend(bin, [], opts.dry_run)
+				if opts.dry_run {
+					return ok_result('wallpaper reload', 'would run: ${rep.command_line}', {
+						'command_line': rep.command_line
+						'dry_run':      'true'
+					})
+				}
+				if rep.ok {
+					return ok_result('wallpaper reload', rep.output, {
+						'command_line': rep.command_line
+					})
+				}
+				return fail_result('wallpaper reload', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
 			return wallpaper_reload_native(opts.dry_run)
 		}
 		else {

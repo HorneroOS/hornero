@@ -90,9 +90,18 @@ pub fn resolve_wal_bin() string {
 }
 
 // resolve_pkill_bin locates pkill (backend process control).
-// Override with HORNERO_PKILL_BIN.
+// Override with HORNERO_PKILL_BIN. Falls back to the bare name so
+// stop-escalation call sites always have something to exec.
 pub fn resolve_pkill_bin() string {
-	return backend_or_empty('HORNERO_PKILL_BIN', 'pkill')
+	env := os.getenv('HORNERO_PKILL_BIN')
+	if env.len > 0 {
+		return env
+	}
+	bin := find_on_path('pkill')
+	if bin.len > 0 {
+		return bin
+	}
+	return 'pkill'
 }
 
 // resolve_m3_script locates the M3 synthesis script

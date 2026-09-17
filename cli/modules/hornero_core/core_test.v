@@ -81,7 +81,6 @@ fn test_ipc_dry_run_ok_without_binary() {
 fn test_appearance_requires_yes_for_sync() {
 	r := appearance_report(AppearanceOptions{
 		action:  'sync'
-		helper:  '/nonexistent-helper-hornero-test'
 		dry_run: false
 		yes:     false
 	})
@@ -177,17 +176,22 @@ fn test_theme_show_detail_and_rejections() {
 }
 
 fn test_theme_apply_needs_yes_and_previews() {
+	// Native apply resolves the pack even for a preview: use a fixture pack.
+	os.mkdir_all('/tmp/hx-core-apply-test/themes/pampa') or { assert false }
+	os.write_file('/tmp/hx-core-apply-test/themes/pampa/theme.json', '{"schemaVersion":1,"id":"pampa","name":"Pampa","gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","mode":"dark"}') or {
+		assert false
+	}
+	os.setenv('HORNERO_THEMES_DIR', '/tmp/hx-core-apply-test/themes', true)
 	dry := theme_apply_report(ThemeApplyOptions{
-		id:      'alpha'
-		helper:  '/nonexistent-helper-hornero-test'
+		id:      'pampa'
 		dry_run: true
 	})
 	assert dry.ok
 	assert dry.data['dry_run'] == 'true'
-	assert dry.message.contains('theme apply alpha')
+	assert dry.data['id'] == 'pampa'
+	assert dry.message.contains('would run:')
 	refused := theme_apply_report(ThemeApplyOptions{
-		id:     'alpha'
-		helper: '/nonexistent-helper-hornero-test'
+		id: 'pampa'
 	})
 	assert !refused.ok
 	assert refused.message.contains('--yes')
@@ -196,6 +200,7 @@ fn test_theme_apply_needs_yes_and_previews() {
 		dry_run: true
 	})
 	assert !bad.ok
+	os.unsetenv('HORNERO_THEMES_DIR')
 }
 
 fn test_scheme_status_prefers_state_file() {
@@ -237,14 +242,13 @@ fn test_scheme_set_validates_and_previews() {
 		kind:    'mode'
 		value:   'dark'
 		dry_run: true
-		helper:  '/nonexistent-helper-hornero-test'
 	})
 	assert dry.ok
-	assert dry.message.contains('set-mode dark')
+	assert dry.message.contains('would run:')
+	assert dry.data['mode'] == 'dark'
 	refused := scheme_set_report(SchemeSetOptions{
-		kind:   'variant'
-		value:  'tonalspot'
-		helper: '/nonexistent-helper-hornero-test'
+		kind:  'variant'
+		value: 'tonalspot'
 	})
 	assert !refused.ok
 	assert refused.message.contains('--yes')

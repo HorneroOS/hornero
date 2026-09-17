@@ -23,43 +23,114 @@ fn sw_setup_packs() {
 	os.setenv('HORNERO_THEMES_DIR', '${sw_root}/themes', true)
 }
 
-// sw_setup_stub installs a fake dots-appearance. `before` is the
-// `status --json` payload until `theme apply` runs, `after` the payload
-// once it has (empty `after` keeps `before`). HX_APPLY_RC fails the first
-// apply, HX_ROLLBACK_RC the rollback re-apply, HX_STATUS_RC the status
-// read; every invocation appends to argv.log.
-fn sw_setup_stub(before string, after string) {
-	sw_write('${sw_root}/bin/dots-appearance', '#!/bin/sh\n' + 'echo "\$@" >> "' + sw_root +
-		'/argv.log"\n' + 'if [ "\$1" = "status" ] && [ "\$2" = "--json" ]; then\n' +
-		'  if grep -q "theme apply" "' + sw_root +
-		'/argv.log" 2>/dev/null && [ -n "\$HX_STATUS_AFTER" ]; then\n' +
-		'    printf "%s\\n" "\$HX_STATUS_AFTER"\n' + '  else\n' +
-		'    printf "%s\\n" "\$HX_STATUS_BEFORE"\n' + '  fi\n' + '  exit "\${HX_STATUS_RC:-0}"\n' +
-		'fi\n' + 'if [ "\$1" = "theme" ] && [ "\$2" = "apply" ]; then\n' +
-		'  printf "%s\\n" "applied \$3"\n' + '  n=\$(grep -c "theme apply" "' + sw_root +
-		'/argv.log")\n' + '  if [ "\$n" -le 1 ]; then exit "\${HX_APPLY_RC:-0}"; fi\n' +
-		'  exit "\${HX_ROLLBACK_RC:-0}"\n' + 'fi\n' + 'echo "stub: unknown: \$@" >&2\n' + 'exit 1\n')
-	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '${sw_root}/bin/dots-appearance', true)
-	os.setenv('HX_STATUS_BEFORE', before, true)
-	os.setenv('HX_STATUS_AFTER', after, true)
-	os.setenv('HX_STATUS_RC', '0', true)
-	os.setenv('HX_APPLY_RC', '0', true)
-	os.setenv('HX_ROLLBACK_RC', '0', true)
-	os.rm('${sw_root}/argv.log') or {}
+// sw_setup_state materializes a status payload as live state files: the
+// scheme state.json (mode/flavour/gtkColorScheme), the gtk3 ini
+// (gtk-theme-name/gtk-icon-theme-name), and the wallpaper pointer.
+// Payload keys: wallpaper, mode, flavour, gtkTheme, iconTheme,
+// gtkColorScheme. Env is pointed at sw_root; sw_teardown restores it.
+// (The old fake-dots-appearance backend this replaced is gone: reads are
+// native now, so fixtures are files, not a stub process.)
+fn sw_setup_state(payload string) {
+	doc := json2.decode[json2.Any](payload) or {
+		assert false
+		return
+	}
+	if doc is map[string]json2.Any {
+		mode := doc['mode'].str()
+		flavour := doc['flavour'].str()
+		mut policy := doc['gtkColorScheme'].str()
+		if policy.len == 0 {
+			policy = 'follow'
+		}
+		gtk := doc['gtkTheme'].str()
+		icon := doc['iconTheme'].str()
+		sw_write('${sw_root}/state/hornero/scheme/state.json', '{"mode":"' + mode + '","flavour":"' + flavour + '","gtkColorScheme":"' + policy + '"}')
+		mut ini := '[Settings]\n'
+		if gtk.len > 0 {
+			ini += 'gtk-theme-name=' + gtk + '\n'
+		}
+		if icon.len > 0 {
+			ini += 'gtk-icon-theme-name=' + icon + '\n'
+		}
+		sw_write('${sw_root}/gtk.ini', ini)
+		wp := doc['wallpaper'].str()
+		if wp.len > 0 {
+			sw_write('${sw_root}/state/hornero/wallpaper/path', wp + '\n')
+		} else {
+			os.rm('${sw_root}/state/hornero/wallpaper/path') or {}
+		}
+	} else {
+		assert false
+	}
+	os.setenv('XDG_STATE_HOME', '${sw_root}/state', true)
+	os.setenv('XDG_CACHE_HOME', '${sw_root}/cache', true)
+	os.setenv('HORNERO_GTK3_FILE', '${sw_root}/gtk.ini', true)
+}
+
+// sw_materialize_pack_state writes the fixture-pack state for an official
+// id (mirrors sw_setup_packs gtk/mode/icon values).
+fn sw_materialize_pack_state(id string) {
+	match id {
+		'hornero-dark' {
+			sw_setup_state('{"wallpaper":"w.jpg","mode":"dark","flavour":"vibrant","gtkTheme":"Orchis-Dark-Compact","iconTheme":"Papirus-Dark","gtkColorScheme":"follow"}')
+		}
+		'hornero-light' {
+			sw_setup_state('{"wallpaper":"w.jpg","mode":"light","flavour":"vibrant","gtkTheme":"Orchis-Light-Compact","iconTheme":"Numix-Circle","gtkColorScheme":"follow"}')
+		}
+		'pampa' {
+			sw_setup_state('{"wallpaper":"pampa-01.png","mode":"dark","flavour":"tonal-spot","gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark","gtkColorScheme":"follow"}')
+		}
+		else {}
+	}
+}
+
+// Apply recorder for the theme_set_report_with seam, kept in files (not
+// globals: the gates run without -enable-globals). sw_apply_reset arms
+// behavior: mode 'ok-update' materializes the target pack state,
+// 'ok-stale' succeeds without touching files; fail_first forces that
+// many leading failures (rollback paths exercise fail-then-ok and
+// fail-then-fail). Every invocation appends its id to calls.log.
+fn sw_apply_reset(mode string, fail_first int) {
+	sw_write('${sw_root}/apply-mode', mode)
+	sw_write('${sw_root}/apply-fail-left', '${fail_first}\n')
+	os.write_file('${sw_root}/apply-calls.log', '') or { assert false }
+}
+
+fn sw_apply_calls() []string {
+	raw := os.read_file('${sw_root}/apply-calls.log') or { return []string{} }
+	mut out := []string{}
+	for line in raw.split_into_lines() {
+		if line.len > 0 {
+			out << line
+		}
+	}
+	return out
+}
+
+fn sw_apply_stub(id string, wallpaper string, dry_run bool) CommandResult {
+	os.write_file('${sw_root}/apply-calls.log', os.read_file('${sw_root}/apply-calls.log') or { '' } + id + '\n') or {
+		assert false
+	}
+	left := (os.read_file('${sw_root}/apply-fail-left') or { '0' }).int()
+	if left > 0 {
+		os.write_file('${sw_root}/apply-fail-left', '${left - 1}\n') or { assert false }
+		return fail_result('appearance theme apply', 'stub apply failed for ${id}')
+	}
+	mode := (os.read_file('${sw_root}/apply-mode') or { '' }).trim_space()
+	if mode == 'ok-update' {
+		sw_materialize_pack_state(id)
+	}
+	return ok_result('appearance theme apply', 'stub applied ${id}', {
+		'id': id
+	})
 }
 
 fn sw_teardown() {
 	os.unsetenv('HORNERO_THEMES_DIR')
 	os.unsetenv('HORNERO_DOTS_APPEARANCE_BIN')
-	os.unsetenv('HX_STATUS_BEFORE')
-	os.unsetenv('HX_STATUS_AFTER')
-	os.unsetenv('HX_STATUS_RC')
-	os.unsetenv('HX_APPLY_RC')
-	os.unsetenv('HX_ROLLBACK_RC')
-}
-
-fn sw_argv_log() string {
-	return os.read_file('${sw_root}/argv.log') or { '' }
+	os.unsetenv('XDG_STATE_HOME')
+	os.unsetenv('XDG_CACHE_HOME')
+	os.unsetenv('HORNERO_GTK3_FILE')
 }
 
 const sw_dark_status = '{"wallpaper":"w.jpg","mode":"dark","flavour":"vibrant","gtkTheme":"Orchis-Dark-Compact","iconTheme":"Papirus-Dark","gtkColorScheme":"follow"}'
@@ -106,7 +177,7 @@ fn test_pack_expected_mode_tokens() {
 
 fn test_theme_get_matches_official() {
 	sw_setup_packs()
-	sw_setup_stub(sw_dark_status, '')
+	sw_setup_state(sw_dark_status)
 	r := theme_get_report(ThemeGetOptions{})
 	assert r.ok
 	assert r.command == 'appearance theme get'
@@ -122,7 +193,7 @@ const sw_pampa_status = '{"wallpaper":"pampa-01.png","mode":"dark","flavour":"to
 fn test_theme_get_matches_pampa_via_gtk_discriminator() {
 	sw_setup_packs()
 	// mode=dark is shared with hornero-dark: only the GTK signal picks pampa.
-	sw_setup_stub(sw_pampa_status, '')
+	sw_setup_state(sw_pampa_status)
 	r := theme_get_report(ThemeGetOptions{})
 	assert r.ok
 	assert r.data['id'] == 'pampa'
@@ -135,8 +206,7 @@ fn test_theme_get_matches_pampa_via_gtk_discriminator() {
 fn test_theme_get_mode_only_dark_prefers_first_official() {
 	sw_setup_packs()
 	// No GTK signal: both dark packs match on mode, first id wins.
-	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"","iconTheme":"","gtkColorScheme":"follow"}',
-		'')
+	sw_setup_state('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"","iconTheme":"","gtkColorScheme":"follow"}')
 	r := theme_get_report(ThemeGetOptions{})
 	assert r.ok
 	assert r.data['id'] == 'hornero-dark'
@@ -145,8 +215,7 @@ fn test_theme_get_mode_only_dark_prefers_first_official() {
 
 fn test_theme_get_custom_state_stays_ok() {
 	sw_setup_packs()
-	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}',
-		'')
+	sw_setup_state('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}')
 	r := theme_get_report(ThemeGetOptions{})
 	assert r.ok
 	assert r.data['id'] == ''
@@ -157,8 +226,7 @@ fn test_theme_get_custom_state_stays_ok() {
 
 fn test_theme_get_empty_state_matches_nothing() {
 	sw_setup_packs()
-	sw_setup_stub('{"wallpaper":"","mode":"","flavour":"","gtkTheme":"","iconTheme":"","gtkColorScheme":"follow"}',
-		'')
+	sw_setup_state('{"wallpaper":"","mode":"","flavour":"","gtkTheme":"","iconTheme":"","gtkColorScheme":"follow"}')
 	r := theme_get_report(ThemeGetOptions{})
 	assert r.ok
 	assert r.data['id'] == ''
@@ -166,7 +234,6 @@ fn test_theme_get_empty_state_matches_nothing() {
 }
 
 fn test_theme_get_dry_run_needs_no_backend() {
-	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
 	r := theme_get_report(ThemeGetOptions{
 		dry_run: true
 	})
@@ -176,13 +243,16 @@ fn test_theme_get_dry_run_needs_no_backend() {
 	os.unsetenv('HORNERO_DOTS_APPEARANCE_BIN')
 }
 
-fn test_theme_get_backend_failure() {
-	sw_setup_packs()
-	sw_setup_stub(sw_dark_status, '')
-	os.setenv('HX_STATUS_RC', '3', true)
+fn test_theme_get_without_state_files_stays_ok() {
+	// Reads are native now: with no state files anywhere the status is
+	// unknown/custom, but get still succeeds (there is no backend left
+	// to fail).
+	os.setenv('XDG_STATE_HOME', '/nonexistent-state-hornero-test', true)
+	os.setenv('XDG_CACHE_HOME', '/nonexistent-cache-hornero-test', true)
+	os.setenv('HORNERO_GTK3_FILE', '/nonexistent-gtk-hornero-test.ini', true)
 	r := theme_get_report(ThemeGetOptions{})
-	assert !r.ok
-	assert r.message.contains('backend failed')
+	assert r.ok
+	assert r.data['id'] == ''
 	sw_teardown()
 }
 
@@ -202,8 +272,7 @@ fn test_theme_set_rejects_non_official() {
 
 fn test_theme_set_needs_yes() {
 	refused := theme_set_report(ThemeSetOptions{
-		id:     'hornero-dark'
-		helper: '/nonexistent-helper-hornero-test'
+		id: 'hornero-dark'
 	})
 	assert !refused.ok
 	assert refused.message.contains('--yes')
@@ -211,7 +280,6 @@ fn test_theme_set_needs_yes() {
 
 fn test_theme_set_dry_run_previews_and_needs_no_backend() {
 	sw_setup_packs()
-	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
 	r := theme_set_report(ThemeSetOptions{
 		id:      'hornero-dark'
 		dry_run: true
@@ -226,124 +294,126 @@ fn test_theme_set_dry_run_previews_and_needs_no_backend() {
 
 fn test_theme_set_missing_pack_fails_before_mutation() {
 	os.setenv('HORNERO_THEMES_DIR', '/nonexistent-themes-hornero-test', true)
-	sw_setup_stub(sw_light_status, sw_dark_status)
-	r := theme_set_report(ThemeSetOptions{
+	sw_apply_reset('ok-update', 0)
+	r := theme_set_report_with(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true
-	})
+	}, sw_apply_stub)
 	assert !r.ok
 	assert r.message.contains('Theme not found')
-	assert !sw_argv_log().contains('theme apply')
+	assert sw_apply_calls().len == 0
 	sw_teardown()
 }
 
 fn test_theme_set_happy_path_verifies() {
 	sw_setup_packs()
-	sw_setup_stub(sw_light_status, sw_dark_status)
-	r := theme_set_report(ThemeSetOptions{
+	sw_setup_state(sw_light_status)
+	sw_apply_reset('ok-update', 0)
+	r := theme_set_report_with(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true
-	})
+	}, sw_apply_stub)
 	assert r.ok, r.message
 	assert r.command == 'appearance theme set'
 	assert r.data['id'] == 'hornero-dark'
 	assert r.data['mode'] == 'dark'
 	assert r.data['gtk_theme'] == 'Orchis-Dark-Compact'
-	assert sw_argv_log().contains('theme apply hornero-dark')
+	assert sw_apply_calls() == ['hornero-dark']
 	sw_teardown()
 }
 
 fn test_theme_set_pampa_happy_path_verifies() {
 	sw_setup_packs()
-	sw_setup_stub(sw_dark_status, sw_pampa_status)
-	r := theme_set_report(ThemeSetOptions{
+	sw_setup_state(sw_dark_status)
+	sw_apply_reset('ok-update', 0)
+	r := theme_set_report_with(ThemeSetOptions{
 		id:  'pampa'
 		yes: true
-	})
+	}, sw_apply_stub)
 	assert r.ok, r.message
 	assert r.command == 'appearance theme set'
 	assert r.data['id'] == 'pampa'
 	assert r.data['mode'] == 'dark'
 	assert r.data['gtk_theme'] == 'Hornero-Pampa'
-	assert sw_argv_log().contains('theme apply pampa')
+	assert sw_apply_calls() == ['pampa']
 	sw_teardown()
 }
 
 fn test_theme_set_verify_failure_rolls_back() {
 	sw_setup_packs()
-	// Backend applies but leaves the old GTK behind: a split state.
-	sw_setup_stub(sw_light_status, '{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Orchis-Light-Compact","iconTheme":"","gtkColorScheme":"follow"}')
-	r := theme_set_report(ThemeSetOptions{
+	// Apply succeeds but leaves the old GTK behind: a split state.
+	sw_setup_state(sw_light_status)
+	sw_apply_reset('ok-stale', 0)
+	r := theme_set_report_with(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true
-	})
+	}, sw_apply_stub)
 	assert !r.ok
 	assert r.message.contains('verify failed')
 	assert r.message.contains('gtk is Orchis-Light-Compact (want Orchis-Dark-Compact)')
 	assert r.message.contains('rolled back to hornero-light')
-	log := sw_argv_log()
-	assert log.contains('theme apply hornero-dark')
-	assert log.contains('theme apply hornero-light')
+	assert sw_apply_calls() == ['hornero-dark', 'hornero-light']
 	sw_teardown()
 }
 
 fn test_theme_set_apply_failure_rolls_back() {
 	sw_setup_packs()
-	sw_setup_stub(sw_light_status, sw_dark_status)
-	os.setenv('HX_APPLY_RC', '1', true)
-	r := theme_set_report(ThemeSetOptions{
+	sw_setup_state(sw_light_status)
+	sw_apply_reset('ok-update', 1)
+	r := theme_set_report_with(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true
-	})
+	}, sw_apply_stub)
 	assert !r.ok
 	assert r.message.contains('backend failed')
 	assert r.message.contains('rolled back to hornero-light')
+	assert sw_apply_calls() == ['hornero-dark', 'hornero-light']
 	sw_teardown()
 }
 
 fn test_theme_set_failed_rollback_is_reported() {
 	sw_setup_packs()
-	sw_setup_stub(sw_light_status, sw_dark_status)
-	os.setenv('HX_APPLY_RC', '1', true)
-	os.setenv('HX_ROLLBACK_RC', '1', true)
-	r := theme_set_report(ThemeSetOptions{
+	sw_setup_state(sw_light_status)
+	sw_apply_reset('ok-update', 99)
+	r := theme_set_report_with(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true
-	})
+	}, sw_apply_stub)
 	assert !r.ok
 	assert r.message.contains('backend failed')
 	assert r.message.contains('rollback to hornero-light failed')
+	assert sw_apply_calls() == ['hornero-dark', 'hornero-light']
 	sw_teardown()
 }
 
 fn test_theme_set_verify_failure_without_clean_pre_state() {
 	sw_setup_packs()
-	// Custom pre-state, backend leaves it untouched: verify fails and
+	// Custom pre-state, apply leaves it untouched: verify fails and
 	// there is nothing coherent to roll back to.
-	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}',
-		'{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}')
-	r := theme_set_report(ThemeSetOptions{
+	sw_setup_state('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}')
+	sw_apply_reset('ok-stale', 0)
+	r := theme_set_report_with(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true
-	})
+	}, sw_apply_stub)
 	assert !r.ok
 	assert r.message.contains('verify failed')
 	assert r.message.contains('Run: horneroctl appearance theme get')
 	assert !r.message.contains('rolled back')
-	assert !sw_argv_log().contains('theme apply hornero-light')
+	assert sw_apply_calls() == ['hornero-dark']
 	sw_teardown()
 }
 
 fn test_theme_set_from_custom_pre_state_succeeds_without_rollback() {
 	sw_setup_packs()
-	sw_setup_stub('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}',
-		sw_dark_status)
-	r := theme_set_report(ThemeSetOptions{
+	sw_setup_state('{"wallpaper":"","mode":"dark","flavour":"","gtkTheme":"Foreign-GTK","iconTheme":"","gtkColorScheme":"follow"}')
+	sw_apply_reset('ok-update', 0)
+	r := theme_set_report_with(ThemeSetOptions{
 		id:  'hornero-dark'
 		yes: true
-	})
+	}, sw_apply_stub)
 	assert r.ok, r.message
 	assert r.data['id'] == 'hornero-dark'
-	assert !sw_argv_log().contains('theme apply hornero-light')
+	assert sw_apply_calls() == ['hornero-dark']
 	sw_teardown()
 }
