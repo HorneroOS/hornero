@@ -298,7 +298,9 @@ pub fn resolve_icon_with_fallbacks(wanted string, installed []string) string {
 
 const gtk2_config_template = '# DO NOT EDIT! This file will be overwritten by LXAppearance.\n# Any customization should be done in ~/.gtkrc-2.0.mine instead.\n\ninclude "/home/\$USER/.gtkrc-2.0.mine"\n'
 
-const gtk3_config_template = '[Settings]\n'
+// gtk3_config_template mirrors the fresh-install body the retired
+// gtk-theme-manager.sh writes (theme/icon lines are set right after).
+const gtk3_config_template = '[Settings]\ngtk-theme-name=\ngtk-icon-theme-name=\ngtk-font-name=sans 11\ngtk-cursor-theme-name=elementary\ngtk-cursor-theme-size=24\ngtk-toolbar-style=GTK_TOOLBAR_ICONS\ngtk-toolbar-icon-size=GTK_ICON_SIZE_SMALL_TOOLBAR\ngtk-button-images=1\ngtk-menu-images=1\ngtk-enable-event-sounds=1\ngtk-enable-input-feedback-sounds=0\ngtk-xft-antialias=1\ngtk-xft-hinting=1\ngtk-xft-hintstyle=hintslight\ngtk-xft-rgba=rgb\ngtk-modules=colorreload-gtk-module\n'
 
 // patch_gtk2_config rewrites theme/icon lines in an existing gtkrc, or
 // renders the created-file template. Pure: takes file content, returns
@@ -324,7 +326,11 @@ pub fn patch_gtk2_config(existing string, theme string, icon string) string {
 			out << line
 		}
 	}
-	return out.join('\n')
+	joined := out.join('\n')
+	if existing.ends_with('\n') {
+		return joined + '\n'
+	}
+	return joined
 }
 
 // apply_gtk_theme_native applies a GTK + icon theme end to end: INI
@@ -473,14 +479,7 @@ pub fn gtk_detect_report(wallpaper string) CommandResult {
 
 // gtk_info_report implements `appearance gtk info <name>` (read-only).
 pub fn gtk_info_report(name string) CommandResult {
-	mut home_share := os.join_path(os.home_dir(), '.local', 'share', 'themes')
-	xdg_data := os.getenv('XDG_DATA_HOME')
-	if xdg_data.len > 0 {
-		home_share = os.join_path(xdg_data, 'themes')
-	}
-	dirs := ['/usr/share/themes', '/usr/local/share/themes', os.join_path(os.home_dir(),
-		'.themes'),
-		home_share]
+	dirs := gtk_theme_search_dirs()
 	mut found := ''
 	for dir in dirs {
 		if os.is_dir(os.join_path(dir, name)) {

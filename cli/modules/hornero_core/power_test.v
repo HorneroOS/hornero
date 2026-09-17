@@ -122,7 +122,7 @@ fn test_lock_plan_prefers_hyprlock_without_pin() {
 		'HORNERO_LOGINCTL_BIN'])
 	os.unsetenv('HORNERO_LOCKSCREEN_BIN')
 	os.setenv('HORNERO_HYPRLOCK_BIN', '/fake/hyprlock', true)
-	plan := lock_plan(true) or {
+	plan := lock_plan(true, '') or {
 		assert false, err.msg()
 		return
 	}

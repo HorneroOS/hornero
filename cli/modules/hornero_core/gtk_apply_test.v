@@ -258,3 +258,21 @@ fn test_gtk_select_quickshell_path_previews() {
 	os.unsetenv('HORNERO_GSETTINGS_BIN')
 	os.rmdir_all(tmp) or {}
 }
+
+fn test_gtk3_fresh_template_matches_bash_keys() {
+	// Fresh-install settings.ini must carry the full key set the retired
+	// gtk-theme-manager.sh wrote (not just [Settings] + theme/icon).
+	for key in ['gtk-font-name=sans 11', 'gtk-cursor-theme-size=24',
+		'gtk-toolbar-style=GTK_TOOLBAR_ICONS', 'gtk-xft-rgba=rgb',
+		'gtk-modules=colorreload-gtk-module', 'gtk-enable-event-sounds=1'] {
+		assert gtk3_config_template.contains(key)
+	}
+}
+
+fn test_patch_gtk2_config_preserves_trailing_newline() {
+	edited := patch_gtk2_config('gtk-theme-name="Old"\n', 'New', 'NewIcons')
+	assert edited.contains('gtk-theme-name="New"')
+	assert edited.ends_with('\n')
+	plain := patch_gtk2_config('gtk-theme-name="Old"', 'New', 'NewIcons')
+	assert !plain.ends_with('\n')
+}

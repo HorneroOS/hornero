@@ -143,6 +143,18 @@ fn lock_magick_bin(dry_run bool) !string {
 	return error('ImageMagick not found (magick or convert). Set HORNERO_MAGICK_BIN.\nExample: horneroctl lock update ~/wall.jpg --dry-run')
 }
 
+// sway_current_mode mirrors one swaymsg get_outputs[].current_mode.
+pub struct SwayCurrentMode {
+pub:
+	width  int
+	height int
+}
+
+pub struct SwayOutput {
+pub:
+	current_mode SwayCurrentMode
+}
+
 // lock_screen_resolution detects the output resolution for the base
 // resize: explicit HORNERO_LOCKSCREEN_RESOLUTION wins (deterministic),
 // then swaymsg on Wayland, then xrandr, then 1920x1080.
@@ -157,6 +169,10 @@ fn lock_screen_resolution() string {
 			args: ['-t', 'get_outputs']
 		})
 		if out.ok {
+			outs := json2.decode[[]SwayOutput](out.output) or { []SwayOutput{} }
+			if outs.len > 0 && outs[0].current_mode.width > 0 && outs[0].current_mode.height > 0 {
+				return '${outs[0].current_mode.width}x${outs[0].current_mode.height}'
+			}
 			mut w := ''
 			for line in out.output.split_into_lines() {
 				if line.contains('"width"') {
@@ -883,7 +899,8 @@ pub:
 
 // lock_now_native_report implements the native `lock now` flow: pick the
 // cached effect image, infer the layout, render a temporary hyprlock
-// config, and lock with it. Mutating: needs --yes; --dry-run previews.
+// config, and lock with it. Mutating: --yes is enforced by the
+// lock_now_report caller; --dry-run previews.
 pub fn lock_now_native_report(opts LockNowNativeOptions) CommandResult {
 	effect := if opts.effect.len > 0 { opts.effect } else { 'blur' }
 	if !lock_effect_valid(effect) {

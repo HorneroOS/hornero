@@ -304,3 +304,34 @@ fn test_lock_now_native_missing_hyprlock_fails() {
 	assert !r.ok
 	lock_tteardown()
 }
+
+fn test_lock_screen_resolution_prefers_current_mode() {
+	// A modes[] decoy must not win over current_mode (the retired jq read
+	// .[0].current_mode; the old line scan could match modes[] first).
+	root := os.join_path(os.temp_dir(), 'hx-sway-test')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(os.join_path(root, 'bin')) or { assert false }
+	os.write_file(os.join_path(root, 'outputs.json'), '[\n  {\n    "name": "DP-1",\n    "modes": [\n      {"width": 640, "height": 480}\n    ],\n    "current_mode": {"width": 1920, "height": 1080}\n  }\n]') or {
+		assert false
+	}
+	os.write_file(os.join_path(root, 'bin/swaymsg'), '#!/bin/sh\ncat ' +
+		os.join_path(root, 'outputs.json') + '\n') or { assert false }
+	os.chmod(os.join_path(root, 'bin/swaymsg'), 0o755) or { assert false }
+	old_path := os.getenv('PATH')
+	old_wayland := os.getenv('WAYLAND_DISPLAY')
+	old_res := os.getenv('HORNERO_LOCKSCREEN_RESOLUTION')
+	os.setenv('WAYLAND_DISPLAY', 'wayland-9', true)
+	os.unsetenv('HORNERO_LOCKSCREEN_RESOLUTION')
+	os.setenv('PATH', os.join_path(root, 'bin') + ':' + old_path, true)
+	assert lock_screen_resolution() == '1920x1080'
+	os.setenv('PATH', old_path, true)
+	if old_wayland.len > 0 {
+		os.setenv('WAYLAND_DISPLAY', old_wayland, true)
+	} else {
+		os.unsetenv('WAYLAND_DISPLAY')
+	}
+	if old_res.len > 0 {
+		os.setenv('HORNERO_LOCKSCREEN_RESOLUTION', old_res, true)
+	}
+	os.rmdir_all(root) or {}
+}
