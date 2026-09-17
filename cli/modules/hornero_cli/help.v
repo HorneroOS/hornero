@@ -742,12 +742,11 @@ Examples:
   reload [--dry-run]        Re-apply the color pipeline (needs --yes)
 
 Reads resolve canonical-first: the hornero/* pointer, then the legacy
-dots/* pointer, then the pywal link. Mutations delegate to the verified
-dots-wallpaper-set / dots-wal-reload backends (HORNERO_WALLPAPER_SET_BIN,
-HORNERO_WAL_RELOAD_BIN), which own the Quickshell appearance IPC verbs
-plus the wal+M3 fallback; every backend call carries
-HORNEROCTL_DELEGATED=1 so the delegating dots-* shims run their legacy
-body instead of calling back.
+dots/* pointer, then the pywal link. `set` runs natively (shell setWallpaper IPC, else the wal+M3
+pipeline); `reload` delegates to the verified dots-wal-reload backend
+(HORNERO_WAL_RELOAD_BIN) or runs the native pipeline; every backend
+call carries HORNEROCTL_DELEGATED=1 so the delegating dots-* shims run
+their legacy body instead of calling back.
 
 Mutations need --yes; --dry-run only previews.
 

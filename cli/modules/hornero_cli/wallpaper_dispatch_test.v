@@ -15,8 +15,6 @@ fn wp_dispatch_setup() {
 		true)
 	os.setenv('XDG_STATE_HOME', base + '/state', true)
 	os.setenv('XDG_CACHE_HOME', base + '/cache', true)
-	os.setenv('HORNERO_WALLPAPER_SET_BIN', '/nonexistent-wallpaper-set-hornero-test',
-		true)
 	os.setenv('HORNERO_WAL_RELOAD_BIN', '/nonexistent-wal-reload-hornero-test', true)
 }
 
@@ -24,7 +22,6 @@ fn wp_dispatch_teardown() {
 	os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
-	os.unsetenv('HORNERO_WALLPAPER_SET_BIN')
 	os.unsetenv('HORNERO_WAL_RELOAD_BIN')
 }
 
@@ -41,8 +38,7 @@ fn test_dispatch_wallpaper_current() {
 
 fn test_dispatch_wallpaper_set() {
 	wp_dispatch_setup()
-	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg',
-		'--dry-run']) == 0
+	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg']) == 1
 	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/missing.jpg',
 		'--dry-run']) == 1
@@ -78,8 +74,7 @@ fn test_wallpaper_help_has_examples() {
 fn test_wallpaper_dry_run_needs_no_backend() {
 	// Hermetic: nonexistent backends; dry-run previews must still pass.
 	wp_dispatch_setup()
-	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg',
-		'--dry-run']) == 0
+	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'wallpaper', 'reload', '--dry-run']) == 0
 	wp_dispatch_teardown()
 }
