@@ -332,6 +332,8 @@ Examples:
   auto [--dry-run]    Auto-detect and apply (needs --yes)
   icons               List installed icon themes (read-only)
   info <theme>        Show theme components and metadata (read-only)
+  select [--dry-run]  Numbered menu to pick and apply a theme
+                      (needs --yes; pipe the choice on stdin)
 
 Native: INI edits and policy decisions run in V; gsettings stays
 a backend (HORNERO_GSETTINGS_BIN).
@@ -720,19 +722,26 @@ Examples:
 '
 		}
 		'lock' {
-			return 'Usage: horneroctl lock <now|status> [--dry-run|--yes]
+			return 'Usage: horneroctl lock <now|status|update> [--dry-run|--yes]
 
-  now [--dry-run]     Lock the screen now (needs --yes)
+  now [--effect NAME] [--dry-run]
+                      Lock the screen now (needs --yes)
   status              Show lock backend state (read-only)
+  update [path] [--dim N] [--blur N] [--pixel N] [--dry-run]
+                      Rebuild cached effect images (needs --yes)
 
-Backend: dots-lockscreen --lock (HORNERO_LOCKSCREEN_BIN), else bare
-hyprlock (HORNERO_HYPRLOCK_BIN), else loginctl lock-session
-(HORNERO_LOGINCTL_BIN).
+Effects: dim, blur, dimblur, pixel (default blur). With no lockscreen
+backend configured, `now` uses the native effect flow when an effect
+is requested or cached images exist, else bare hyprlock
+(HORNERO_HYPRLOCK_BIN), else loginctl lock-session
+(HORNERO_LOGINCTL_BIN). Images live in \$XDG_CACHE_HOME/hornero/lockscreen.
 
 Examples:
   horneroctl lock status
   horneroctl lock now --dry-run
-  horneroctl lock now --yes
+  horneroctl lock now --effect pixel --dry-run
+  horneroctl lock update --dry-run
+  horneroctl lock update ~/wall.jpg --yes
 '
 		}
 		'wallpaper' {

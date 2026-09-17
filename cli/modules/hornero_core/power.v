@@ -60,16 +60,22 @@ struct LockPlan {
 
 // lock_plan picks the screen-lock invocation: an explicit
 // HORNERO_LOCKSCREEN_BIN pin (hyprlock runs bare, anything else with
-// --lock), else bare hyprlock, else `loginctl lock-session`. With
-// dry_run set a missing backend previews as a placeholder instead of
-// failing.
-fn lock_plan(dry_run bool) !LockPlan {
+// --lock or --lock-effect), else bare hyprlock, else
+// `loginctl lock-session`. With dry_run set a missing backend previews
+// as a placeholder instead of failing.
+fn lock_plan(dry_run bool, effect string) !LockPlan {
 	ls := resolve_lockscreen_bin()
 	if ls.len > 0 {
 		if os.file_name(ls) == 'hyprlock' {
 			return LockPlan{
 				prog: ls
 				args: []string{}
+			}
+		}
+		if effect.len > 0 {
+			return LockPlan{
+				prog: ls
+				args: ['--lock-effect', effect]
 			}
 		}
 		return LockPlan{
@@ -194,7 +200,7 @@ pub fn power_action_report(opts PowerActionOptions) CommandResult {
 	mut args := []string{}
 	match opts.action {
 		'lock' {
-			plan := lock_plan(opts.dry_run) or { return fail_result('power lock', err.msg()) }
+			plan := lock_plan(opts.dry_run, '') or { return fail_result('power lock', err.msg()) }
 			prog = plan.prog
 			args = plan.args.clone()
 		}
@@ -253,15 +259,26 @@ pub struct LockNowOptions {
 pub:
 	dry_run bool
 	yes     bool
+	effect  string // '' = default flow; dim | blur | dimblur | pixel
 }
 
-// lock_now_report implements `lock now` via the shared lock plan.
-// Mutating: needs --yes; --dry-run only previews.
+// lock_now_report implements `lock now`. A configured lockscreen
+// backend (explicit HORNERO_LOCKSCREEN_BIN override or an installed
+// dots-lockscreen) owns the call; otherwise the native effect flow
+// runs when an effect is requested or cached images exist, else the
+// legacy bare-hyprlock/loginctl plan. Mutating: needs --yes;
+// --dry-run only previews.
 pub fn lock_now_report(opts LockNowOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('lock now', 'refusing to lock without --yes (preview with --dry-run).\nExample: horneroctl lock now --dry-run')
 	}
-	plan := lock_plan(opts.dry_run) or { return fail_result('lock now', err.msg()) }
+	if resolve_lockscreen_bin().len == 0 && (opts.effect.len > 0 || lock_has_images()) {
+		return lock_now_native_report(LockNowNativeOptions{
+			effect:  opts.effect
+			dry_run: opts.dry_run
+		})
+	}
+	plan := lock_plan(opts.dry_run, opts.effect) or { return fail_result('lock now', err.msg()) }
 	rep := run_exec(ExecSpec{
 		prog:    plan.prog
 		args:    plan.args
@@ -288,7 +305,7 @@ pub fn lock_status_report() CommandResult {
 	hl := resolve_hyprlock_bin()
 	session := os.getenv('XDG_SESSION_ID')
 	wayland := os.getenv('WAYLAND_DISPLAY')
-	plan := lock_plan(true) or { return fail_result('lock status', err.msg()) }
+	plan := lock_plan(true, '') or { return fail_result('lock status', err.msg()) }
 	mut lines := []string{}
 	mut data := map[string]string{}
 	lines << 'lockscreen: ${describe_bin(ls)}'
