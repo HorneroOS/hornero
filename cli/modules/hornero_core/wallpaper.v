@@ -225,8 +225,10 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			if !opts.yes && !opts.dry_run {
 				return fail_result('wallpaper set', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl wallpaper set ~/wall.jpg --dry-run')
 			}
-			bin := wallpaper_backend_or_placeholder(opts.set_helper, resolve_wallpaper_set_bin, 'dots-wallpaper-set', opts.dry_run) or {
-				return fail_result('wallpaper set', err.msg() + '\nExample: horneroctl wallpaper set ~/wall.jpg --dry-run')
+			bin := wallpaper_backend_or_placeholder(opts.set_helper, resolve_wallpaper_set_bin,
+				'dots-wallpaper-set', opts.dry_run) or {
+				return fail_result('wallpaper set', err.msg() +
+					'\nExample: horneroctl wallpaper set ~/wall.jpg --dry-run')
 			}
 			rep := wallpaper_run_backend(bin, [opts.path], opts.dry_run)
 			if opts.dry_run {
@@ -261,7 +263,8 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			}
 			rep := wallpaper_run_backend(helper, [], opts.dry_run)
 			if opts.dry_run {
-				return ok_result('wallpaper reload', 'would run: ${rep.command_line}', {
+				return ok_result('wallpaper reload', 'would run: ${rep.command_line}',
+					{
 					'command_line': rep.command_line
 					'dry_run':      'true'
 				})

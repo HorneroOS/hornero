@@ -115,7 +115,7 @@ pub struct PaletteBackends {
 	m3_exec     fn (image string, output string, flavour string, mode string, accent string, dry_run bool) ExecReport @[required]
 	gtk_sync    fn (dry_run bool) CommandResult @[required]
 	gtk_apply   fn (theme string, icon string, policy string, dry_run bool) CommandResult @[required]
-	hyprlock    fn (wallpaper string, dry_run bool) CommandResult @[required]
+	hyprlock    fn (wallpaper string, dry_run bool) CommandResult                         @[required]
 	hyprctl_run fn (dry_run bool) @[required]
 }
 

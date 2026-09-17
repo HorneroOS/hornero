@@ -49,7 +49,8 @@ fn hex2(n int) string {
 	} else {
 		n
 	}
-	return '0123456789abcdef'[clamped >> 4].ascii_str() + '0123456789abcdef'[clamped & 15].ascii_str()
+	return '0123456789abcdef'[clamped >> 4].ascii_str() +
+		'0123456789abcdef'[clamped & 15].ascii_str()
 }
 
 // rgb_to_hex formats channels as a lowercase `#rrggbb` string.
@@ -93,7 +94,8 @@ pub fn blend_hex(color1 string, color2 string, blend_percent int) string {
 			v
 		}
 	}
-	return rgb_to_hex(clamp((r1 * q + r2 * p) / 100), clamp((g1 * q + g2 * p) / 100), clamp((b1 * q + b2 * p) / 100))
+	return rgb_to_hex(clamp((r1 * q + r2 * p) / 100), clamp((g1 * q + g2 * p) / 100),
+		clamp((b1 * q + b2 * p) / 100))
 }
 
 // enhance_contrast_for_theme darkens too-light colors on light themes
@@ -442,7 +444,8 @@ pub fn normalize_variant(raw string) string {
 		'tonal-spot', 'tonalspot' {
 			return 'tonalspot'
 		}
-		'vibrant', 'expressive', 'fidelity', 'content', 'neutral', 'monochrome', 'fruitsalad', 'rainbow' {
+		'vibrant', 'expressive', 'fidelity', 'content', 'neutral', 'monochrome', 'fruitsalad',
+		'rainbow' {
 			return n
 		}
 		else {
@@ -858,9 +861,13 @@ pub fn render_copyq(p SmartPalette) string {
 	out += '# Item styling\nitem_css=padding:0.5em\nalt_item_css=\n\n'
 	out += '# Selection item styling with gradient\nsel_item_css="\n'
 	out += '    ;background: qlineargradient(\n        x1: 0, y1: 0,\n        x2: 1, y2: 0,\n'
-	out += '        stop: 0 ' + '$' + '{sel_bg}' + ',\n        stop: 1 ' + '$' + '{sel_bg}' + ' + #111\n        )"\n\n'
-	out += '# Search bar styling\nsearch_bar="\n    ;background: ' + '$' + '{edit_bg}' + '\n    ;color: ' + '$' + '{edit_fg}' + '\n'
-	out += '    ;border: 1px solid ' + '$' + '{alt_bg}' + '\n    ;margin: 2px\n    ;border-radius: 4px"\n\n'
+	out += '        stop: 0 ' + '$' + '{sel_bg}' + ',\n        stop: 1 ' + '$' + '{sel_bg}' +
+		' +
+		#111\n        )"\n\n'
+	out += '# Search bar styling\nsearch_bar="\n    ;background: ' + '$' + '{edit_bg}' +
+		'\n    ;color: ' + '$' + '{edit_fg}' + '\n'
+	out += '    ;border: 1px solid ' + '$' + '{alt_bg}' +
+		'\n    ;margin: 2px\n    ;border-radius: 4px"\n\n'
 	out += 'search_bar_focused="\n    ;border: 1px solid ' + '$' + '{sel_bg}' + '"\n\n'
 	// pick returns the light or dark adjustment suffix.
 	pick := fn [p] (light_adj string, dark_adj string) string {
@@ -868,13 +875,17 @@ pub fn render_copyq(p SmartPalette) string {
 	}
 	tab_adj := pick('- #1a1a1a', '+ #1a1a1a')
 	out += '# Tab bar styling\ntab_bar_css="\n    ;background: ' + '$' + '{bg}' + ' ${tab_adj}"\n\n'
-	out += 'tab_bar_tab_selected_css="\n    ;padding: 0.5em\n    ;background: ' + '$' + '{bg}' + '\n'
-	out += '    ;border: 0.05em solid ' + '$' + '{bg}' + '\n    ;color: ' + '$' + '{fg}' + '\n    ;border-bottom: 2px solid ' + '$' + '{sel_bg}' + '"\n\n'
-	out += 'tab_bar_tab_unselected_css="\n    ;border: 0.05em solid ' + '$' + '{bg}' + '\n    ;padding: 0.5em\n'
+	out += 'tab_bar_tab_selected_css="\n    ;padding: 0.5em\n    ;background: ' + '$' + '{bg}' +
+		'\n'
+	out += '    ;border: 0.05em solid ' + '$' + '{bg}' + '\n    ;color: ' + '$' + '{fg}' +
+		'\n    ;border-bottom: 2px solid ' + '$' + '{sel_bg}' + '"\n\n'
+	out += 'tab_bar_tab_unselected_css="\n    ;border: 0.05em solid ' + '$' + '{bg}' +
+		'\n    ;padding: 0.5em\n'
 	out += '    ;background: ' + '$' + '{bg}' + ' ${tab_adj}\n'
 	out += '    ;color: ' + '$' + '{fg}' + ' ${pick('- #2a2a2a', '+ #2a2a2a')}"\n\n'
 	out += 'tab_bar_item_counter="\n    ;color: ' + '$' + '{num_fg}' + ' ${tab_adj}\n'
-	out += '    ;font-size: 7pt"\n\ntab_bar_sel_item_counter="\n    ;color: ' + '$' + '{num_fg}' + '"\n\n'
+	out += '    ;font-size: 7pt"\n\ntab_bar_sel_item_counter="\n    ;color: ' + '$' + '{num_fg}' +
+		'"\n\n'
 	out += 'tab_bar_scroll_buttons_css="\n    ;background: ' + '$' + '{bg}' + ' ${tab_adj}\n'
 	out += '    ;color: ' + '$' + '{fg}' + '\n    ;border: 0"\n\n'
 	out += 'tab_tree_css="\n    ;font-family: sans-serif\n    ;font-size: 10pt\n    ;padding: .20em\n'
@@ -883,17 +894,23 @@ pub fn render_copyq(p SmartPalette) string {
 	out += 'tab_tree_sel_item_css="\n'
 	out += '    ;color: ' + '$' + '{fg}' + ' ${pick('+ #1a1a1a', '- #1a1a1a')}\n'
 	out += '    ;background: ' + '$' + '{bg}' + ' ${pick('- #0f0f0f', '+ #0f0f0f')}"\n\n'
-	out += 'tab_tree_item_counter="\n    ;padding:.33em\n    ;color: ' + '$' + '{num_fg}' + ' ${tab_adj}\n'
-	out += '    ;font-size: 7pt"\n\ntab_tree_sel_item_counter="\n    ;color: ' + '$' + '{num_fg}' + '"\n\n'
-	out += 'tool_bar_css="\n    ;color: ' + '$' + '{fg}' + '\n    ;background-color: ' + '$' + '{bg}' + '\n    ;border: 0"\n\n'
+	out += 'tab_tree_item_counter="\n    ;padding:.33em\n    ;color: ' + '$' + '{num_fg}' +
+		' ${tab_adj}\n'
+	out += '    ;font-size: 7pt"\n\ntab_tree_sel_item_counter="\n    ;color: ' + '$' + '{num_fg}' +
+		'"\n\n'
+	out += 'tool_bar_css="\n    ;color: ' + '$' + '{fg}' + '\n    ;background-color: ' + '$' +
+		'{bg}' + '\n    ;border: 0"\n\n'
 	out += 'tool_button_css="\n    ;background-color: transparent"\n\n'
-	out += 'tool_button_selected_css="\n    ;background-color: ' + '$' + '{bg}' + ' ${pick('- #0a0a0a', '+ #0a0a0a')}"\n\n'
-	out += 'tool_button_pressed_css="\n    ;background-color: ' + '$' + '{sel_bg}' + '\n    ;color: ' + '$' + '{sel_fg}' + '"\n\n'
+	out += 'tool_button_selected_css="\n    ;background-color: ' + '$' + '{bg}' +
+		' ${pick('- #0a0a0a', '+ #0a0a0a')}"\n\n'
+	out += 'tool_button_pressed_css="\n    ;background-color: ' + '$' + '{sel_bg}' +
+		'\n    ;color: ' + '$' + '{sel_fg}' + '"\n\n'
 	out += 'menu_bar_css="\n    ;background: ' + '$' + '{bg}' + '\n'
 	out += '    ;color: ' + '$' + '{fg}' + ' ${pick('+ #2a2a2a', '- #2a2a2a')}"\n\n'
 	out += 'menu_bar_disabled_css="\n'
 	out += '    ;color: ' + '$' + '{bg}' + ' ${pick('- #4a4a4a', '+ #4a4a4a')}"\n\n'
-	out += 'menu_bar_selected_css="\n    ;background: ' + '$' + '{sel_bg}' + '\n    ;color: ' + '$' + '{sel_fg}' + '"\n\n'
+	out += 'menu_bar_selected_css="\n    ;background: ' + '$' + '{sel_bg}' + '\n    ;color: ' +
+		'$' + '{sel_fg}' + '"\n\n'
 	out += 'menu_css="\n'
 	edge_a := pick('+ #2a2a2a', '- #2a2a2a')
 	edge_b := pick('- #2a2a2a', '+ #2a2a2a')
@@ -901,8 +918,10 @@ pub fn render_copyq(p SmartPalette) string {
 	out += '    ;border-left: 0.08em solid ' + '$' + '{bg}' + ' ${edge_a}\n'
 	out += '    ;border-bottom: 0.08em solid ' + '$' + '{bg}' + ' ${edge_b}\n'
 	out += '    ;border-right: 0.08em solid ' + '$' + '{bg}' + ' ${edge_b}"\n\n'
-	out += 'css="\n    ClipboardBrowser::item{\n        border-bottom: 1px solid ' + '$' + '{alt_bg}' + '\n    }\n'
-	out += '    ClipboardBrowser::item:hover{\n        background: ' + '$' + '{bg}' + ' ${pick('- #0a0a0a', '+ #0a0a0a')}\n'
+	out += 'css="\n    ClipboardBrowser::item{\n        border-bottom: 1px solid ' + '$' +
+		'{alt_bg}' + '\n    }\n'
+	out += '    ClipboardBrowser::item:hover{\n        background: ' + '$' + '{bg}' +
+		' ${pick('- #0a0a0a', '+ #0a0a0a')}\n'
 	out += '    }"\n\nnotes_css=\n'
 	return out
 }

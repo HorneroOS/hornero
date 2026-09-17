@@ -30,7 +30,8 @@ pub fn colors_report(opts ColorsOptions) CommandResult {
 	match opts.action {
 		'status' {
 			if opts.dry_run {
-				return ok_result('appearance colors status', 'would run: read xrdb palette and preview smart colors', {
+				return ok_result('appearance colors status', 'would run: read xrdb palette and preview smart colors',
+					{
 					'dry_run': 'true'
 				})
 			}

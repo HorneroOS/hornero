@@ -44,7 +44,8 @@ fn sw_setup_state(payload string) {
 		}
 		gtk := doc['gtkTheme'].str()
 		icon := doc['iconTheme'].str()
-		sw_write('${sw_root}/state/hornero/scheme/state.json', '{"mode":"' + mode + '","flavour":"' + flavour + '","gtkColorScheme":"' + policy + '"}')
+		sw_write('${sw_root}/state/hornero/scheme/state.json', '{"mode":"' + mode +
+			'","flavour":"' + flavour + '","gtkColorScheme":"' + policy + '"}')
 		mut ini := '[Settings]\n'
 		if gtk.len > 0 {
 			ini += 'gtk-theme-name=' + gtk + '\n'
@@ -108,9 +109,8 @@ fn sw_apply_calls() []string {
 }
 
 fn sw_apply_stub(id string, wallpaper string, dry_run bool) CommandResult {
-	os.write_file('${sw_root}/apply-calls.log', os.read_file('${sw_root}/apply-calls.log') or { '' } + id + '\n') or {
-		assert false
-	}
+	os.write_file('${sw_root}/apply-calls.log',
+		os.read_file('${sw_root}/apply-calls.log') or { '' } + id + '\n') or { assert false }
 	left := (os.read_file('${sw_root}/apply-fail-left') or { '0' }).int()
 	if left > 0 {
 		os.write_file('${sw_root}/apply-fail-left', '${left - 1}\n') or { assert false }
