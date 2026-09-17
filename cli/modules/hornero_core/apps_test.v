@@ -22,7 +22,7 @@ fn apps_test_restore_env(saved map[string]string) {
 
 const apps_test_keys = ['HORNERO_FILE_MANAGER_BIN', 'HORNERO_EXO_OPEN_BIN', 'HORNERO_HANDLR_BIN',
 	'HORNERO_XDG_OPEN_BIN', 'HORNERO_DOTS_YAZI_BIN', 'HORNERO_YAZI_BIN', 'HORNERO_WEATHER_BIN',
-	'HORNERO_GIT_NOTIFY_BIN', 'HORNERO_SECURITY_AUDIT_BIN', 'HORNERO_LAUNCHER_BIN', 'HORNERO_SNAPPY_BIN',
+	'HORNERO_GIT_NOTIFY_BIN', 'HORNERO_SECURITY_AUDIT_BIN', 'HORNERO_SNAPPY_BIN',
 	'HORNERO_PERFORMANCE_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN',
 	'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN', 'HORNERO_CAFFEINE_BIN',
 	'HORNERO_POWERPROFILESCTL_BIN']
@@ -37,7 +37,6 @@ fn apps_test_break_backends() {
 	os.setenv('HORNERO_WEATHER_BIN', '/nonexistent-weather-hornero-test', true)
 	os.setenv('HORNERO_GIT_NOTIFY_BIN', '/nonexistent-git-notify-hornero-test', true)
 	os.setenv('HORNERO_SECURITY_AUDIT_BIN', '/nonexistent-audit-hornero-test', true)
-	os.setenv('HORNERO_LAUNCHER_BIN', '/nonexistent-launcher-hornero-test', true)
 	os.setenv('HORNERO_SNAPPY_BIN', '/nonexistent-snappy-hornero-test', true)
 	os.setenv('HORNERO_PERFORMANCE_BIN', '/nonexistent-performance-hornero-test', true)
 	os.setenv('HORNERO_POWERPROFILESCTL_BIN', '/nonexistent-ppctl-hornero-test', true)
@@ -137,6 +136,34 @@ fn test_apps_toggle_native_quickshell_fails_closed() {
 	apps_test_restore_env(saved)
 }
 
+fn test_apps_launch_native_list() {
+	// Native port: --list always ends with minimal and keeps priority
+	// order; no dots-launcher involved.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/true', true)
+	r := launch_report(LaunchOptions{ list: true })
+	assert r.ok
+	assert r.message.contains('minimal')
+	qi := r.message.index('quickshell') or { -1 }
+	mi := r.message.index('minimal') or { -1 }
+	assert qi >= 0 && qi < mi
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_launch_native_quickshell_bypass_fails_closed() {
+	// DOTS_BYPASS_QUICKSHELL=1 skips the quickshell attempt hermetically:
+	// explicit quickshell fails closed, never touching stdin.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	os.setenv('DOTS_BYPASS_QUICKSHELL', '1', true)
+	r := launch_report(LaunchOptions{ backend: 'quickshell' })
+	assert !r.ok
+	assert r.message.contains('not running')
+	os.unsetenv('DOTS_BYPASS_QUICKSHELL')
+	apps_test_restore_env(saved)
+}
+
 fn test_apps_dry_run_carries_delegation_guard() {
 	saved := apps_test_save_env(apps_test_keys)
 	apps_test_break_backends()
@@ -207,7 +234,7 @@ fn test_apps_real_run_without_backend_fails() {
 	assert !files_report(FilesOptions{}).ok
 	assert !weather_report(WeatherOptions{ field: 'temp' }).ok
 	assert !audit_report(AuditOptions{ check: 'full' }).ok
-	assert !launch_report(LaunchOptions{}).ok
+	assert launch_report(LaunchOptions{ list: true }).ok
 	// Mode show is a never-fail status read: a missing backend reports
 	// unknown instead of failing.
 	mode_show := performance_report(PerformanceOptions{ leaf: 'mode' })

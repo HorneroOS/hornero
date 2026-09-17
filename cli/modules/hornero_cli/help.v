@@ -1083,8 +1083,8 @@ Examples:
   launch (default)    Open the app launcher (view-open, no --yes)
   --list              Print detected backends in priority order (read-only)
 
-Backends: quickshell, minimal (else auto). Backend: dots-launcher
-(HORNERO_LAUNCHER_BIN).
+Backends: quickshell, minimal (else auto). Backend: native
+(quickshell ipc, else a minimal stdin prompt).
 
 Examples:
   horneroctl apps launch --dry-run

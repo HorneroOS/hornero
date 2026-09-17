@@ -108,10 +108,6 @@ pub fn resolve_dots_security_audit_bin() string {
 
 // resolve_dots_launcher_bin locates dots-launcher.
 // Override with HORNERO_LAUNCHER_BIN.
-pub fn resolve_dots_launcher_bin() string {
-	return dots_helper_bin('HORNERO_LAUNCHER_BIN', 'dots-launcher')
-}
-
 // resolve_dots_snappy_bin locates dots-snappy-switcher.
 // Override with HORNERO_SNAPPY_BIN.
 pub fn resolve_dots_snappy_bin() string {
@@ -704,40 +700,88 @@ pub:
 	dry_run bool
 }
 
-// launch_report implements `apps launch`: list detected backends
-// (read-only) or open the launcher via dots-launcher (view-open, needs
-// no --yes) — the dots-launcher contract. --dry-run only previews.
+// launch_report implements `apps launch` natively (no dots-launcher):
+// list detected backends in priority order (read-only) or open the launcher via quickshell ipc (auto falls back to a minimal stdin
+// prompt) — the dots-launcher contract. View-open, needs no --yes;
+// --dry-run only previews the legacy delegation.
+// launch_native implements `apps launch` without the dots-launcher
+// wrapper (retired): --list prints quickshell (when its binary
+// resolves) then minimal; quickshell launch runs
+// `quickshell ipc call drawers toggle launcher`; auto falls back to a
+// minimal `command> ` stdin prompt that execs one line.
+fn launch_native(opts LaunchOptions) CommandResult {
+	if opts.list {
+		mut avail := []string{}
+		if resolve_quickshell_bin().len > 0 {
+			avail << 'quickshell'
+		}
+		avail << 'minimal'
+		return ok_result('apps launch --list', avail.join('\n'), {
+			'backends': avail.join(',')
+		})
+	}
+	backend := if opts.backend.len == 0 { 'auto' } else { opts.backend }
+	qs_allowed := os.getenv('DOTS_BYPASS_QUICKSHELL') != '1' && quickshell_running()
+	if (backend == 'quickshell' || backend == 'auto') && qs_allowed {
+		qs := resolve_quickshell_bin()
+		if qs.len > 0 {
+			rep := run_exec(ExecSpec{
+				prog: qs
+				args: ['ipc', 'call', 'drawers', 'toggle', 'launcher']
+			})
+			if rep.ok {
+				return ok_result('apps launch', rep.output, {
+					'backend': 'quickshell'
+				})
+			}
+			if backend == 'quickshell' {
+				return fail_result('apps launch', 'quickshell launcher failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
+		}
+	} else if backend == 'quickshell' {
+		return fail_result('apps launch', 'quickshell is not running')
+	}
+	if opts.dry_run {
+		return ok_result('apps launch', 'would prompt for a command (minimal fallback)', {
+			'dry_run': 'true'
+			'backend': 'minimal'
+		})
+	}
+	cmd := os.input('command> ').trim_space()
+	if cmd.len == 0 {
+		return ok_result('apps launch', 'no command entered', {
+			'backend': 'minimal'
+		})
+	}
+	r := os.execute(cmd)
+	if r.exit_code != 0 {
+		return fail_result('apps launch', 'command failed (exit ${r.exit_code}):\n${r.output}')
+	}
+	return ok_result('apps launch', r.output, {
+		'backend': 'minimal'
+	})
+}
+
 pub fn launch_report(opts LaunchOptions) CommandResult {
 	if opts.backend !in ['', 'auto', 'quickshell', 'minimal'] {
 		return fail_result('apps launch', 'unknown backend: ${opts.backend} (auto, quickshell, minimal).\nExample: horneroctl apps launch --backend quickshell --dry-run')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_launcher_bin(), 'dots-launcher', 'HORNERO_LAUNCHER_BIN',
-		opts.dry_run, 'horneroctl apps launch --dry-run') or {
-		return fail_result('apps launch', err.msg())
-	}
-	if opts.list {
-		rep := apps_run_delegated(bin, ['--list'], opts.dry_run)
-		if opts.dry_run {
-			return ok_result('apps launch --list', 'would run: ${rep.command_line}', {
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
-		}
-		return apps_delegated_ok('apps launch --list', rep, {})
+	if !opts.dry_run {
+		return launch_native(opts)
 	}
 	mut args := []string{}
-	if opts.backend.len > 0 && opts.backend != 'auto' {
+	if opts.list {
+		args << '--list'
+	} else if opts.backend.len > 0 && opts.backend != 'auto' {
 		args << '--backend'
 		args << opts.backend
 	}
-	rep := apps_run_delegated(bin, args, opts.dry_run)
-	if opts.dry_run {
-		return ok_result('apps launch', 'would run: ${rep.command_line}', {
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
-	}
-	return apps_delegated_ok('apps launch', rep, {})
+	rep := apps_run_delegated('dots-launcher', args, true)
+	name := if opts.list { 'apps launch --list' } else { 'apps launch' }
+	return ok_result(name, 'would run: ${rep.command_line}', {
+		'command_line': rep.command_line
+		'dry_run':      'true'
+	})
 }
 
 pub struct ToggleOptions {
