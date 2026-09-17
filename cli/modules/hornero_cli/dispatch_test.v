@@ -39,6 +39,38 @@ fn test_dispatch_shell_ipc_dry_run() {
 	assert code == 0
 }
 
+fn test_dispatch_shell_lifecycle() {
+	// Hermetic: broken backends; dry-run previews must still pass and
+	// never touch the process table.
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/nonexistent-quickshell-hornero-test', true)
+	os.setenv('HORNERO_PGREP_BIN', '/nonexistent-pgrep-hornero-test', true)
+	os.setenv('HORNERO_QUICKSHELL_CONFIG_DIR', '/nonexistent-conf-hornero-test', true)
+	os.setenv('HORNERO_SHELL_LOG_FILE', '/nonexistent-log-hornero-test.log', true)
+	assert dispatch(['horneroctl', 'shell', 'start', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'shell', 'stop', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'shell', 'restart', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'shell', 'logs', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'shell', 'logs', '--lines', '10', '--dry-run']) == 0
+	// Mutations without --yes refuse (exit 1), never signal anything.
+	assert dispatch(['horneroctl', 'shell', 'start']) == 1
+	assert dispatch(['horneroctl', 'shell', 'stop']) == 1
+	assert dispatch(['horneroctl', 'shell', 'restart']) == 1
+	// Usage errors (exit 2).
+	assert dispatch(['horneroctl', 'shell', 'bogus']) == 2
+	assert dispatch(['horneroctl', 'shell', 'logs', '--lines']) == 2
+	assert dispatch(['horneroctl', 'shell', 'logs', '--lines', 'zero']) == 2
+	assert dispatch(['horneroctl', 'shell', 'status', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'shell', 'start', '--lines', '10']) == 2
+	os.unsetenv('HORNERO_QUICKSHELL_BIN')
+	os.unsetenv('HORNERO_PGREP_BIN')
+	os.unsetenv('HORNERO_QUICKSHELL_CONFIG_DIR')
+	os.unsetenv('HORNERO_SHELL_LOG_FILE')
+}
+
+fn test_dispatch_shell_help_has_examples() {
+	assert command_help('shell').contains('Examples:')
+}
+
 fn test_dry_run_needs_no_backend() {
 	// Hermetic: point both backends at nonexistent paths; dry-run must
 	// still preview successfully on any machine (CI has no qs/dots-*).

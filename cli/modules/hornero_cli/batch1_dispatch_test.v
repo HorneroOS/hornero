@@ -54,11 +54,17 @@ fn test_dispatch_package() {
 	assert dispatch(['horneroctl', 'package', 'check', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'package', 'updates']) == 0
 	assert dispatch(['horneroctl', 'package', '--help']) == 0
-	// Privileged/unpinned siblings stay explicit deferrals, never invented.
-	assert dispatch(['horneroctl', 'package', 'upgrade']) == 2
-	assert dispatch(['horneroctl', 'package', 'deps']) == 2
+	// Privileged siblings: mutations refuse without --yes, preview clean.
+	assert dispatch(['horneroctl', 'package', 'upgrade']) == 1
+	assert dispatch(['horneroctl', 'package', 'upgrade', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'package', 'deps']) == 0
+	assert dispatch(['horneroctl', 'package', 'deps', '--optional']) == 0
+	assert dispatch(['horneroctl', 'package', 'deps', '--install']) == 1
+	assert dispatch(['horneroctl', 'package', 'deps', '--install', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'package', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'package', 'check', '--bogus']) == 2
+	assert dispatch(['horneroctl', 'package', 'check', '--yes']) == 2
+	assert dispatch(['horneroctl', 'package', 'upgrade', '--install']) == 2
 	b1_dispatch_teardown()
 }
 
@@ -67,9 +73,14 @@ fn test_dispatch_backup() {
 	assert dispatch(['horneroctl', 'backup', 'list']) == 0
 	assert dispatch(['horneroctl', 'backup', 'schedule']) == 0
 	assert dispatch(['horneroctl', 'backup', '--help']) == 0
-	// Unpinned siblings stay explicit deferrals, never invented.
-	assert dispatch(['horneroctl', 'backup', 'create']) == 2
+	// File-op siblings: mutations refuse without --yes, preview clean.
+	assert dispatch(['horneroctl', 'backup', 'create']) == 1
+	assert dispatch(['horneroctl', 'backup', 'create', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'backup', 'create', '--name', 'dtest', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'backup', 'restore']) == 2
+	assert dispatch(['horneroctl', 'backup', 'restore', 'dotfiles_backup_01.zip']) == 1
+	assert dispatch(['horneroctl', 'backup', 'restore', 'dotfiles_backup_01.zip', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'backup', 'restore', 'no-such-backup', '--dry-run']) == 1
 	assert dispatch(['horneroctl', 'backup', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'backup', 'list', '--bogus']) == 2
 	b1_dispatch_teardown()
@@ -87,6 +98,17 @@ fn test_batch1_dry_run_needs_no_backend() {
 	assert dispatch(['horneroctl', 'package', 'check', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'package', 'updates', '--dry-run']) == 0
 	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+	os.setenv('HORNERO_PKEXEC_BIN', '/nonexistent-pkexec-hornero-test', true)
+	os.setenv('HORNERO_PACMAN_BIN', '/nonexistent-pacman-hornero-test', true)
+	os.setenv('HORNERO_PARU_BIN', '/nonexistent-paru-hornero-test', true)
+	assert dispatch(['horneroctl', 'package', 'upgrade', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'package', 'deps', '--install', '--dry-run']) == 0
+	os.unsetenv('HORNERO_PKEXEC_BIN')
+	os.unsetenv('HORNERO_PACMAN_BIN')
+	os.unsetenv('HORNERO_PARU_BIN')
+	os.setenv('HORNERO_TAR_BIN', '/nonexistent-tar-hornero-test', true)
+	assert dispatch(['horneroctl', 'backup', 'create', '--dry-run']) == 0
+	os.unsetenv('HORNERO_TAR_BIN')
 }
 
 fn test_batch1_help_has_examples() {

@@ -7,12 +7,15 @@ module hornero_cli
 // stays internal per docs/cli-architecture.md section 5.
 
 // DefaultAppsCmdOptions covers `config default-apps <list|set>`.
-// Only `list` delegates today; `set` parses (for the deferral error)
-// but never reaches a backend.
+// `list` delegates to dots-default-apps; `set <mime> <app>` writes via
+// xdg-mime (mutating: needs --yes).
 pub struct DefaultAppsCmdOptions {
 pub:
 	leaf    string // list | set
+	mime    string // set target
+	app     string // set value
 	dry_run bool
+	yes     bool
 }
 
 pub fn parse_default_apps_cmd(args []string) !DefaultAppsCmdOptions {
@@ -20,27 +23,51 @@ pub fn parse_default_apps_cmd(args []string) !DefaultAppsCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl config default-apps list')
 	}
 	leaf := args[0]
-	if leaf == 'set' {
-		return error('default-apps set needs a pinned backend (dots-default-apps exposes no verified non-interactive set verb; handlr stays internal).\nRun: horneroctl config default-apps --help')
-	}
-	if leaf != 'list' {
+	if leaf !in ['list', 'set'] {
 		return error('unknown default-apps subcommand: ${leaf}.\nRun: horneroctl config default-apps --help')
 	}
+	mut mime := ''
+	mut app := ''
 	mut dry_run := false
+	mut yes := false
 	for i := 1; i < args.len; i++ {
 		a := args[i]
 		if a == '--dry-run' {
 			dry_run = true
 			continue
 		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
 		if a.starts_with('-') {
-			return error('unknown flag: ${a}.\nExample: horneroctl config default-apps list --dry-run')
+			return error('unknown flag: ${a}.\nExample: horneroctl config default-apps ${leaf} --dry-run')
+		}
+		if leaf == 'list' {
+			return error('unexpected argument: ${a}.\nRun: horneroctl config default-apps --help')
+		}
+		if mime.len == 0 {
+			mime = a
+			continue
+		}
+		if app.len == 0 {
+			app = a
+			continue
 		}
 		return error('unexpected argument: ${a}.\nRun: horneroctl config default-apps --help')
 	}
+	if leaf == 'list' && yes {
+		return error('default-apps list takes no --yes.\nExample: horneroctl config default-apps list --dry-run')
+	}
+	if leaf == 'set' && (mime.len == 0 || app.len == 0) {
+		return error('missing MIME type or application.\nExample: horneroctl config default-apps set text/plain nvim.desktop --dry-run')
+	}
 	return DefaultAppsCmdOptions{
 		leaf:    leaf
+		mime:    mime
+		app:     app
 		dry_run: dry_run
+		yes:     yes
 	}
 }
 

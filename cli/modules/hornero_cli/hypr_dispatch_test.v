@@ -51,6 +51,8 @@ fn test_dispatch_hypr_mutations_need_yes() {
 	assert dispatch(['horneroctl', 'hypr', 'monitors', 'set', 'mirror', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'hypr', 'workspace', 'next', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'hypr', 'workspace', 'prev', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'plugins', 'install', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'plugins', 'install', '--no-update', '--dry-run']) == 0
 	// Mutations without --yes fail (exit 1), even as dry-runnable previews.
 	assert dispatch(['horneroctl', 'hypr', 'animations', 'set', 'cozy']) == 1
 	assert dispatch(['horneroctl', 'hypr', 'animations', 'next']) == 1
@@ -58,6 +60,7 @@ fn test_dispatch_hypr_mutations_need_yes() {
 	assert dispatch(['horneroctl', 'hypr', 'layout', 'toggle']) == 1
 	assert dispatch(['horneroctl', 'hypr', 'monitors', 'set', 'mirror']) == 1
 	assert dispatch(['horneroctl', 'hypr', 'workspace', 'next']) == 1
+	assert dispatch(['horneroctl', 'hypr', 'plugins', 'install']) == 1
 	// Unknown values fail as command errors (exit 1).
 	assert dispatch(['horneroctl', 'hypr', 'animations', 'set', 'neon', '--dry-run']) == 1
 	assert dispatch(['horneroctl', 'hypr', 'layout', 'set', 'tiling', '--dry-run']) == 1
@@ -87,6 +90,9 @@ fn test_dispatch_hypr_usage_errors() {
 	assert dispatch(['horneroctl', 'hypr', 'plugins']) == 2
 	assert dispatch(['horneroctl', 'hypr', 'plugins', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'hypr', 'plugins', 'status', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'plugins', 'install', '--force', '--no-update',
+		'--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'plugins', 'install', '--bogus']) == 2
 	hypr_dispatch_teardown()
 }
 

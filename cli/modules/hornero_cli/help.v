@@ -11,12 +11,12 @@ Usage: horneroctl [--json|--quiet] <command> [options]
 Commands:
   version       Print version
   doctor        Read-only environment health checks
-  shell         Desktop shell integration (status, ipc, preset)
+  shell         Desktop shell integration (status, ipc, preset, lifecycle, logs)
   appearance    Appearance backend (status, sync, call, theme, scheme)
   scheme        Alias of appearance scheme (compat shortcut)
   config        Configuration paths, values, validation, snapshots
-  package       Pending system updates (check, updates)
-  backup        Config backups (list, schedule)
+  package       System packages (check, updates, upgrade, deps)
+  backup        Config backups (list, schedule, create, restore)
   power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
   lock          Screen lock (now, status)
   hypr          Hyprland controls (animations, layout, monitors, workspace, plugins)
@@ -77,16 +77,32 @@ Examples:
 '
 		}
 		'shell' {
-			return 'Usage: horneroctl shell <status|ipc|preset> [options]
+			return 'Usage: horneroctl shell <status|ipc|preset|start|stop|restart|logs> [options]
 
   status              Summarize shell session reachability
   ipc [--dry-run] -- <qs-args...>
                       Pass arguments through to `qs ipc`
   preset list         List installed shell presets (read-only)
   preset current      Show the active preset (read-only)
+  start [--dry-run|--yes]
+                      Start the quickshell daemon (needs --yes)
+  stop [--dry-run|--yes]
+                      Stop the quickshell daemon (needs --yes)
+  restart [--dry-run|--yes]
+                      Restart the quickshell daemon: stop, wait, start
+                      (needs --yes)
+  logs [--lines N] [--dry-run]
+                      Tail the shell log (read-only)
 
 Options:
-  --dry-run           Preview the qs invocation without running it
+  --dry-run           Preview without changing anything
+  --yes               Confirm a mutating action
+  --lines N           Tail line count for logs (default 50)
+
+Lifecycle notes: start refuses when the shell already runs and needs
+the quickshell config dir; stop tries `quickshell kill` first, then
+SIGKILL. Output goes to the shell log (HORNERO_SHELL_LOG_FILE);
+binaries via HORNERO_QUICKSHELL_BIN / HORNERO_QS_BIN.
 
 Later phases: preset apply (needs a pinned merge backend).
 
@@ -96,6 +112,10 @@ Examples:
   horneroctl shell ipc --dry-run -- call bar toggleLauncher
   horneroctl shell preset list
   horneroctl shell preset current --json
+  horneroctl shell start --dry-run
+  horneroctl shell start --yes
+  horneroctl shell restart --yes
+  horneroctl shell logs --lines 100
 '
 		}
 		'shell preset' {
@@ -274,12 +294,10 @@ Examples:
   show [key]          Show materialized shell.json values (read-only);
                       with a dot-notation key (bar.position) show one value
   snapshot ...        Configuration snapshots (create, list, restore)
-  default-apps ...    Default applications (list; set needs a backend)
+  default-apps ...    Default applications (list, set)
   materialize ...     Install curated defaults into --dest (needs --yes)
   gui [--pane <name>] Open the settings hub
   migrate ...         One-shot dots/* to hornero/* move (needs --yes)
-
-Later phases: default-apps set (no verified backend yet).
 
 Examples:
   horneroctl config paths
@@ -298,17 +316,21 @@ Examples:
 			return 'Usage: horneroctl config default-apps <list|set> [options]
 
   list [--dry-run]  List current default applications (read-only)
-  set <mime> <app>  Not yet available: needs a pinned backend
-                    (dots-default-apps exposes no verified
-                    non-interactive set verb; handlr stays internal)
+  set <mime> <app> [--dry-run|--yes]
+                    Set the default .desktop app for a MIME type
+                    via xdg-mime (needs --yes)
 
-Default source: handlr/XDG MIME associations via dots-default-apps
-(HORNERO_DEFAULT_APPS_BIN).
+List source: handlr/XDG MIME associations via dots-default-apps
+(HORNERO_DEFAULT_APPS_BIN). Set backend: xdg-mime
+(HORNERO_XDG_MIME_BIN); handlr stays internal. The terminal
+emulator stays out: it lives in the exo config, not in MIME.
 
 Examples:
   horneroctl config default-apps list
   horneroctl config default-apps list --dry-run
   horneroctl config default-apps list --json
+  horneroctl config default-apps set text/plain nvim.desktop --dry-run
+  horneroctl config default-apps set text/plain nvim.desktop --yes
 '
 		}
 		'config materialize' {
@@ -379,40 +401,64 @@ Examples:
 '
 		}
 		'package' {
-			return 'Usage: horneroctl package <check|updates> [options]
+			return 'Usage: horneroctl package <check|updates|upgrade|deps> [options]
 
   check [--dry-run]   List pending system updates (read-only)
   updates [--dry-run] Pending-update count readout (read-only)
+  upgrade [--dry-run|--yes]
+                      Full system upgrade via polkit (needs --yes)
+  deps [--optional]   Check pinned dependencies (read-only)
+  deps --install [--optional] [--dry-run|--yes]
+                      Install missing dependencies (needs --yes)
 
 Update source: dots-checkupdates or checkupdates on PATH
-(HORNERO_CHECKUPDATES_BIN override). Read-only and unprivileged.
-
-Later phases: upgrade (needs a polkit backend), deps (installer-owned).
+(HORNERO_CHECKUPDATES_BIN override). Upgrade runs
+`pkexec pacman -Syu` (HORNERO_PKEXEC_BIN/HORNERO_PACMAN_BIN);
+without pkexec it fails with guidance: installs need polkit.
+Deps checks the core + Wayland table (git, curl, wget, chezmoi,
+zsh, hyprland, quickshell, hyprlock, hypridle, cliphist; dev,
+media, and AI groups with --optional) and installs repo
+packages via pacman plus AUR-only ones via paru.
 
 Examples:
   horneroctl package check
   horneroctl package check --dry-run
   horneroctl package updates
   horneroctl package updates --json
+  horneroctl package upgrade --dry-run
+  horneroctl package upgrade --yes
+  horneroctl package deps
+  horneroctl package deps --optional
+  horneroctl package deps --install --dry-run
+  horneroctl package deps --install --yes
 '
 		}
 		'backup' {
-			return 'Usage: horneroctl backup <list|schedule>
+			return 'Usage: horneroctl backup <list|schedule|create|restore> [options]
 
   list                List materialized backups (read-only)
   schedule            Print the cron/systemd recipe (documented, not installed)
+  create [--name <name>] [--dry-run|--yes]
+                      Archive the source tree into a timestamped
+                      tarball (needs --yes)
+  restore <id> [--dry-run|--yes]
+                      Extract one archive back into the source tree
+                      (needs --yes)
 
-Backup source: HORNERO_BACKUP_DIR, else the dotfiles backup directory
-(~/.dotfiles/backup). Scheduling is never installed by horneroctl:
-copy-paste the printed recipe instead (legacy dots-backup
---register-cron flow).
-
-Later phases: create/restore (need a pinned non-interactive backend).
+Backup dir: HORNERO_BACKUP_DIR, else the dotfiles backup directory
+(~/.dotfiles/backup); source tree: HORNERO_BACKUP_SOURCE, else
+~/.dotfiles. `list` reads both .tar.gz and legacy .zip archives.
+Scheduling is never installed by horneroctl: copy-paste the
+printed recipe instead.
 
 Examples:
   horneroctl backup list
   horneroctl backup list --json
   horneroctl backup schedule
+  horneroctl backup create --dry-run
+  horneroctl backup create --yes
+  horneroctl backup create --name pre_upgrade --yes
+  horneroctl backup restore pre_upgrade --dry-run
 '
 		}
 		'power' {
@@ -448,12 +494,12 @@ Examples:
   layout            Layout profiles (current, status, set, toggle, restore)
   monitors          Monitor arrangements (list, status, set)
   workspace         Next/prev workspace cycling (next, prev)
-  plugins           Hyprland plugin status (list, status; install stays legacy)
+  plugins           Hyprland plugins (list, status, install)
 
 Reads (list/current/status) never touch the compositor state;
-mutations need --yes and --dry-run only previews. Plugin install,
-enable, and reload stay in dots-hyprland-plugins (hyprpm/AUR-helper
-flow): horneroctl only reports plugin status.
+mutations need --yes and --dry-run only previews. Plugin install
+runs the idempotent hyprpm bootstrap (update, add, enable, reload)
+for ScrollOverview; AUR-helper flows stay manual.
 
 Examples:
   horneroctl hypr animations list
@@ -571,20 +617,26 @@ Examples:
 '
 		}
 		'hypr plugins' {
-			return 'Usage: horneroctl hypr plugins <list|status>
+			return 'Usage: horneroctl hypr plugins <list|status|install> [options]
 
   list                Print the hyprpm plugin list (read-only)
   status              hyprpm presence plus ScrollOverview installed/enabled
                       (read-only, never fails)
+  install [--force|--no-update] [--dry-run|--yes]
+                      Idempotent ScrollOverview bootstrap via hyprpm
+                      (update, add, enable, reload; needs --yes)
 
-Plugin install, enable, and reload stay in dots-hyprland-plugins
-(hyprpm/AUR-helper flow) and are intentionally not ported: there is
-no verified non-interactive install backend for horneroctl to own.
+Backend: hyprpm (HORNERO_HYPRPM_BIN). --force rebuilds the hyprpm
+headers; --no-update skips the header update for the fast
+autostart path (reload still runs).
 
 Examples:
   horneroctl hypr plugins status
   horneroctl hypr plugins list
   horneroctl hypr plugins status --json
+  horneroctl hypr plugins install --dry-run
+  horneroctl hypr plugins install --yes
+  horneroctl hypr plugins install --yes --no-update
 '
 		}
 		'lock' {
