@@ -1,9 +1,9 @@
 module hornero_core
 
-import json2
 import net.http
 import os
 import time
+import x.json2
 
 // Native weather backend: mirrors the retired dots-weather-info legacy
 // body. Field reads serve the ~/.cache/dots/weather files directly
@@ -177,7 +177,8 @@ fn weather_mood(code string) WeatherMood {
 
 // weather_geo_response mirrors the ip-api.com JSON body; regionName
 // needs the json attribute since V field names cannot hold capitals.
-struct WeatherGeoResponse {
+pub struct WeatherGeoResponse {
+pub:
 	lat     f64
 	lon     f64
 	city    string
@@ -185,17 +186,20 @@ struct WeatherGeoResponse {
 	country string
 }
 
-struct WeatherMain {
+pub struct WeatherMain {
+pub:
 	temp f64
 }
 
-struct WeatherCondition {
+pub struct WeatherCondition {
+pub:
 	icon        string
 	description string
 }
 
 // weather_response mirrors the OpenWeatherMap JSON body.
-struct WeatherResponse {
+pub struct WeatherResponse {
+pub:
 	main    WeatherMain
 	weather []WeatherCondition
 }

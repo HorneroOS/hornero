@@ -2,7 +2,7 @@ module hornero_core
 
 import os
 import time
-import json2
+import x.json2
 
 // Snapshot backend: configuration snapshots materialized on disk.
 //
@@ -85,13 +85,15 @@ pub:
 
 // snapshot_metadata_file mirrors metadata.json; read and write share it
 // (decode ignores the extra write-side keys, missing keys decode to '').
-struct SnapshotSystemInfo {
+pub struct SnapshotSystemInfo {
+pub:
 	os     string
 	kernel string
 	shell  string
 }
 
-struct SnapshotMetadataFile {
+pub struct SnapshotMetadataFile {
+pub:
 	id              string
 	timestamp       string
 	hostname        string
