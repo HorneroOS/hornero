@@ -9,7 +9,7 @@ fn hw_dispatch_setup() {
 	os.write_file('/tmp/hx-hw-dtest/bin/brightnessctl', '#!/bin/sh\nif [ "$1" = "-m" ]; then echo "intel_backlight,backlight,60000,50%,120000"; exit 0; fi\nexit 0\n') or {
 		assert false
 	}
-	os.write_file('/tmp/hx-hw-dtest/bin/xrandr', '#!/bin/sh\nif [ "$1" = "--verbose" ]; then printf "eDP-1 connected primary 1920x1080+0+0\\n\\tBrightness: 0.8\\nHDMI-1 disconnected\\n"; exit 0; fi\necho "eDP-1 connected primary 1920x1080+0+0"\nexit 0\n') or {
+	os.write_file('/tmp/hx-hw-dtest/bin/xrandr', '#!/bin/sh\nif [ "$1" = "--verbose" ]; then printf "eDP-1 connected primary 1920x1080+0+0\\n\\tBrightness: 0.8\\n\\tGamma: 1.0:1.4:2.5\\nHDMI-1 disconnected\\n"; exit 0; fi\necho "eDP-1 connected primary 1920x1080+0+0"\nexit 0\n') or {
 		assert false
 	}
 	os.write_file('/tmp/hx-hw-dtest/bin/acpi', '#!/bin/sh\necho "Battery 0: Discharging, 42%, 01:20:00 remaining"\nexit 0\n') or {
@@ -117,6 +117,33 @@ fn test_dispatch_hardware_brightness() {
 	assert dispatch(['horneroctl', 'hardware', 'brightness', 'set', '0.8', '--bogus']) == 2
 	assert dispatch(['horneroctl', 'hardware', 'brightness', 'status', '--yes']) == 2
 	assert dispatch(['horneroctl', 'hardware', 'brightness', 'up', '--step', 'abc', '--dry-run']) == 2
+	hw_dispatch_teardown()
+}
+
+fn test_dispatch_hardware_brightness_temp() {
+	hw_dispatch_setup()
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'set', '0.6', '--temp', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'up', '--temp', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'down', '--temp', '--step', '0.2',
+		'--dry-run']) == 0
+	// Live against the xrandr fixture (raw Gamma 1.0:1.4:2.5 reads back
+	// as the 3000K ramp); the fixture exits 0 on the --gamma call.
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'set', '0.6', '--temp', '--display',
+		'eDP-1', '--yes']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'up', '--temp', '--display', 'eDP-1',
+		'--yes']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'down', '--temp', '--display', 'eDP-1',
+		'--yes']) == 0
+	// Mutations without --yes fail (exit 1).
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'set', '0.6', '--temp']) == 1
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'up', '--temp']) == 1
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'down', '--temp']) == 1
+	// Usage errors (exit 2).
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'status', '--temp']) == 2
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'set', '--temp']) == 2
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'set', 'abc', '--temp', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hardware', 'brightness', 'set', '0.6', '--temp', '--step',
+		'0.2', '--dry-run']) == 2
 	hw_dispatch_teardown()
 }
 

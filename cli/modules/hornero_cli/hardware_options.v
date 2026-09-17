@@ -37,13 +37,16 @@ fn hw_is_int(s string) bool {
 }
 
 // HardwareBrightnessOptions covers
-// `hardware brightness <status|set|up|down>`.
+// `hardware brightness <status|set|up|down>`. With temp set, set/up/down
+// adjust color temperature on the 0.0-1.0 ramp scale (dots-brightness
+// --temp) instead of the brightness fraction.
 pub struct HardwareBrightnessOptions {
 pub:
 	leaf    string // status | set | up | down
 	display string
 	value   f64
 	step    f64
+	temp    bool
 	dry_run bool
 	yes     bool
 }
@@ -59,6 +62,7 @@ pub fn parse_hardware_brightness(args []string) !HardwareBrightnessOptions {
 	mut display := ''
 	mut value := 0.0
 	mut step := 0.1
+	mut temp := false
 	mut dry_run := false
 	mut yes := false
 	mut positional := []string{}
@@ -72,6 +76,11 @@ pub fn parse_hardware_brightness(args []string) !HardwareBrightnessOptions {
 		}
 		if a == '--yes' {
 			yes = true
+			i++
+			continue
+		}
+		if a == '--temp' {
+			temp = true
 			i++
 			continue
 		}
@@ -109,16 +118,20 @@ pub fn parse_hardware_brightness(args []string) !HardwareBrightnessOptions {
 		if yes {
 			return error('brightness status takes no --yes (it only reads).\nExample: horneroctl hardware brightness status')
 		}
+		if temp {
+			return error('brightness status takes no --temp (temperature is set via set/up/down).\nExample: horneroctl hardware brightness status')
+		}
 	}
 	if leaf == 'set' {
+		unit := if temp { 'temperature' } else { 'fraction' }
 		if positional.len == 0 {
-			return error('missing value (0.0-1.0 fraction).\nExample: horneroctl hardware brightness set 0.8 --dry-run')
+			return error('missing value (0.0-1.0 ${unit}).\nExample: horneroctl hardware brightness set 0.8 --dry-run')
 		}
 		if positional.len > 1 {
 			return error('unexpected argument: ${positional[1]}.\nRun: horneroctl hardware brightness --help')
 		}
 		if !hornero_core.is_decimal_number(positional[0]) {
-			return error('invalid value: ${positional[0]} (use a 0.0-1.0 fraction).\nExample: horneroctl hardware brightness set 0.8 --dry-run')
+			return error('invalid value: ${positional[0]} (use a 0.0-1.0 ${unit}).\nExample: horneroctl hardware brightness set 0.8 --dry-run')
 		}
 		value = positional[0].f64()
 		if step != 0.1 {
@@ -135,6 +148,7 @@ pub fn parse_hardware_brightness(args []string) !HardwareBrightnessOptions {
 		display: display
 		value:   value
 		step:    step
+		temp:    temp
 		dry_run: dry_run
 		yes:     yes
 	}
