@@ -48,6 +48,26 @@ fn test_dispatch_config_snapshot() {
 	b1_dispatch_teardown()
 }
 
+fn test_dispatch_config_snapshot_live() {
+	b1_dispatch_setup()
+	os.write_file('/tmp/hx-batch1-dtest/bin/dots-config-manager', '#!/bin/sh\necho "config-manager \$*"\nexit 0\n') or {
+		assert false
+	}
+	os.chmod('/tmp/hx-batch1-dtest/bin/dots-config-manager', 0o755) or { assert false }
+	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '/tmp/hx-batch1-dtest/bin/dots-config-manager',
+		true)
+	// The exact calls dots-config-manager --create/--restore delegate to.
+	assert dispatch(['horneroctl', 'config', 'snapshot', 'create', '--yes']) == 0
+	assert dispatch(['horneroctl', 'config', 'snapshot', 'restore', 'config_20260101_020000', '--yes']) == 0
+	b1_dispatch_teardown()
+}
+
+fn test_config_snapshot_help_carries_delegation_probe() {
+	// dots-config-manager delegates only when `config snapshot --help`
+	// contains this usage line; pin it so the probe can never break.
+	assert command_help('config snapshot').contains('Usage: horneroctl config snapshot')
+}
+
 fn test_dispatch_package() {
 	b1_dispatch_setup()
 	assert dispatch(['horneroctl', 'package', 'check']) == 0

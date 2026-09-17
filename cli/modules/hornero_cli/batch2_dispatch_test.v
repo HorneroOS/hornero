@@ -56,6 +56,27 @@ fn test_dispatch_config_default_apps() {
 	b2_dispatch_teardown()
 }
 
+fn test_dispatch_config_default_apps_live() {
+	b2_dispatch_setup()
+	os.write_file('/tmp/hx-batch2-dtest/bin/xdg-mime', '#!/bin/sh\necho "xdg-mime \$*"\nexit 0\n') or {
+		assert false
+	}
+	os.chmod('/tmp/hx-batch2-dtest/bin/xdg-mime', 0o755) or { assert false }
+	os.setenv('HORNERO_XDG_MIME_BIN', '/tmp/hx-batch2-dtest/bin/xdg-mime', true)
+	// The exact call dots-default-apps --set delegates to.
+	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'text/plain', 'nvim.desktop',
+		'--yes']) == 0
+	os.unsetenv('HORNERO_XDG_MIME_BIN')
+	b2_dispatch_teardown()
+}
+
+fn test_config_default_apps_help_carries_delegation_probe() {
+	// dots-default-apps delegates only when `config default-apps --help`
+	// contains these lines; pin them so the probes can never break.
+	assert command_help('config default-apps').contains('Usage: horneroctl config default-apps')
+	assert command_help('config default-apps').contains('set <mime> <app>')
+}
+
 fn test_dispatch_config_materialize() {
 	b2_dispatch_setup()
 	assert dispatch(['horneroctl', 'config', 'materialize', '--dest', '/tmp/hx-batch2-dtest/dest',

@@ -57,6 +57,21 @@ fn test_dispatch_apps_reads_dry_run() {
 	apps_dispatch_teardown()
 }
 
+fn test_dispatch_apps_files_open_live() {
+	apps_dispatch_setup()
+	os.mkdir_all('/tmp/hx-apps-dtest/bin') or { assert false }
+	os.write_file('/tmp/hx-apps-dtest/bin/exo-open', '#!/bin/sh\necho "exo-open \$*"\nexit 0\n') or {
+		assert false
+	}
+	os.chmod('/tmp/hx-apps-dtest/bin/exo-open', 0o755) or { assert false }
+	os.setenv('HORNERO_EXO_OPEN_BIN', '/tmp/hx-apps-dtest/bin/exo-open', true)
+	// The exact calls dots-file-manager delegates to (open needs no
+	// --yes; the launch itself is the action).
+	assert dispatch(['horneroctl', 'apps', 'files']) == 0
+	assert dispatch(['horneroctl', 'apps', 'files', '--path', '/tmp']) == 0
+	apps_dispatch_teardown()
+}
+
 fn test_dispatch_apps_mutations_need_yes() {
 	apps_dispatch_setup()
 	assert dispatch(['horneroctl', 'apps', 'toggle', 'bar']) == 1
