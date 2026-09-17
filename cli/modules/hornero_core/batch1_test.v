@@ -87,6 +87,39 @@ fn test_snapshot_restore_validates_and_previews() {
 	b1_teardown_snapshots()
 }
 
+fn test_snapshot_create_live() {
+	b1_setup_snapshots()
+	b1_write('${b1_root}/bin/dots-config-manager', '#!/bin/sh\necho "config-manager \$*"\nexit 0\n')
+	os.chmod('${b1_root}/bin/dots-config-manager', 0o755) or { assert false }
+	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '${b1_root}/bin/dots-config-manager', true)
+	// The exact call dots-config-manager --create delegates to (explicit
+	// helper; without it the native port takes over).
+	r := snapshot_create_report(SnapshotCreateOptions{
+		yes:    true
+		helper: '${b1_root}/bin/dots-config-manager'
+	})
+	assert r.ok
+	assert r.message.contains('--create')
+	b1_teardown_snapshots()
+}
+
+fn test_snapshot_restore_live() {
+	b1_setup_snapshots()
+	b1_write('${b1_root}/bin/dots-config-manager', '#!/bin/sh\necho "config-manager \$*"\nexit 0\n')
+	os.chmod('${b1_root}/bin/dots-config-manager', 0o755) or { assert false }
+	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '${b1_root}/bin/dots-config-manager', true)
+	// The exact call dots-config-manager --restore delegates to (explicit
+	// helper; without it the native port takes over).
+	r := snapshot_restore_report(SnapshotRestoreOptions{
+		id:     'config_20260101_020000'
+		yes:    true
+		helper: '${b1_root}/bin/dots-config-manager'
+	})
+	assert r.ok
+	assert r.message.contains('--restore config_20260101_020000')
+	b1_teardown_snapshots()
+}
+
 fn test_snapshot_create_native_round_trip() {
 	// Native port: create writes metadata + tarball + latest under a
 	// redirected HOME and snapshots dir; list sees the new snapshot.

@@ -68,6 +68,17 @@ pub fn dispatch(args []string) int {
 		return 1
 	}
 	if wants_help(rest) {
+		// Prefer the nested help (`config snapshot --help` prints the
+		// snapshot text the dots delegation probes grep for); fall back
+		// to the group help when no nested text exists, preserving the
+		// old output for leaf paths like `power lock --help`.
+		if rest.len > 2 {
+			nested := command_help(first + ' ' + rest[1])
+			if nested.len > 0 {
+				print(nested)
+				return 0
+			}
+		}
 		print(command_help(first))
 		return 0
 	}

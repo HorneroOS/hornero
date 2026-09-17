@@ -87,3 +87,23 @@ fn test_default_apps_set_missing_backend() {
 	assert r.message.contains('xdg-mime not found')
 	default_apps_set_test_restore_env(saved)
 }
+
+fn test_default_apps_set_live() {
+	// Live set through a fixture xdg-mime (the dots-default-apps
+	// delegation path): validates the pair, then runs xdg-mime.
+	saved := default_apps_set_test_save_env(['HORNERO_XDG_MIME_BIN'])
+	os.mkdir_all('/tmp/hx-default-apps-set-test/bin') or { assert false }
+	os.write_file('/tmp/hx-default-apps-set-test/bin/xdg-mime', '#!/bin/sh\necho "xdg-mime \$*"\nexit 0\n') or {
+		assert false
+	}
+	os.chmod('/tmp/hx-default-apps-set-test/bin/xdg-mime', 0o755) or { assert false }
+	os.setenv('HORNERO_XDG_MIME_BIN', '/tmp/hx-default-apps-set-test/bin/xdg-mime', true)
+	r := default_apps_set_report(DefaultAppsSetOptions{
+		mime: 'text/plain'
+		app:  'nvim.desktop'
+		yes:  true
+	})
+	assert r.ok
+	assert r.message.contains('Set nvim.desktop as default for text/plain')
+	default_apps_set_test_restore_env(saved)
+}
