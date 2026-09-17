@@ -1,86 +1,60 @@
 module hornero_core
 
-import os
-
-// resolve_appearance_helper locates the appearance backend CLI shipped by
-// HorneroOS/config. Override with HORNERO_APPEARANCE_BIN.
-pub fn resolve_appearance_helper() string {
-	env := os.getenv('HORNERO_APPEARANCE_BIN')
-	if env.len > 0 {
-		return env
-	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-gtk-theme')
-	if os.is_file(home_helper) {
-		return home_helper
-	}
-	return find_on_path('dots-gtk-theme')
-}
+// Native appearance top level: status reads the live state, sync adopts
+// the live scheme meta, doctor checks consistency, and the set-* verbs
+// drive the shell pipeline. No backend delegation remains.
 
 pub struct AppearanceOptions {
 pub:
-	action  string // status | sync | call
-	call    []string
+	action  string // status | sync | doctor | set-wallpaper | set-gtk | set-icons | set-gtk-color-scheme
+	value   string
 	dry_run bool
 	yes     bool
-	helper  string
-}
-
-fn helper_or_fail(helper string) !string {
-	bin := if helper.len > 0 { helper } else { resolve_appearance_helper() }
-	if bin.len == 0 {
-		return error('appearance backend not found. Set HORNERO_APPEARANCE_BIN.\nExample: horneroctl appearance status --dry-run')
-	}
-	return bin
 }
 
 // appearance_report implements the appearance subcommands. `status` and
-// `sync` map to stable backend verbs; `call -- <args>` passes anything else
-// through untouched. Mutating verbs require --yes; --dry-run only previews.
+// `doctor` are read-only; every mutation needs --yes while --dry-run
+// only previews.
 pub fn appearance_report(opts AppearanceOptions) CommandResult {
-	// Dry-run previews the planned call and never needs the backend installed.
-	bin := helper_or_fail(opts.helper) or {
-		if opts.dry_run {
-			'dots-gtk-theme'
-		} else {
-			return fail_result('appearance', err.msg())
-		}
-	}
-	mut args := []string{}
 	match opts.action {
 		'status' {
-			args = ['current']
+			return appearance_status_report(false)
 		}
 		'sync' {
 			if !opts.yes && !opts.dry_run {
 				return fail_result('appearance sync', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance sync --dry-run')
 			}
-			args = ['sync-color-scheme']
+			return appearance_sync_native(opts.dry_run)
 		}
-		'call' {
-			if opts.call.len == 0 {
-				return fail_result('appearance call', 'nothing to call.\nExample: horneroctl appearance call --dry-run -- theme list')
+		'doctor' {
+			return appearance_doctor_native()
+		}
+		'set-wallpaper' {
+			if !opts.yes && !opts.dry_run {
+				return fail_result('appearance set-wallpaper', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance set-wallpaper ~/wall.jpg --dry-run')
 			}
-			args = opts.call.clone()
+			return appearance_set_wallpaper_native(opts.value, opts.dry_run)
+		}
+		'set-gtk' {
+			if !opts.yes && !opts.dry_run {
+				return fail_result('appearance set-gtk', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance set-gtk Orchis-Dark --dry-run')
+			}
+			return appearance_set_gtk_native(opts.value, opts.dry_run)
+		}
+		'set-icons' {
+			if !opts.yes && !opts.dry_run {
+				return fail_result('appearance set-icons', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance set-icons Papirus-Dark --dry-run')
+			}
+			return appearance_set_icons_native(opts.value, opts.dry_run)
+		}
+		'set-gtk-color-scheme' {
+			if !opts.yes && !opts.dry_run {
+				return fail_result('appearance set-gtk-color-scheme', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance set-gtk-color-scheme follow --dry-run')
+			}
+			return appearance_set_gtk_policy_native(opts.value, opts.dry_run)
 		}
 		else {
 			return fail_result('appearance', 'unknown action: ${opts.action}.\nRun: horneroctl appearance --help')
 		}
 	}
-	rep := delegated_run(ExecSpec{
-		prog:    bin
-		args:    args
-		dry_run: opts.dry_run
-	})
-	if opts.dry_run {
-		return ok_result('appearance', 'would run: ${rep.command_line}', {
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
-	}
-	if rep.ok {
-		return ok_result('appearance', rep.output, {
-			'command_line': rep.command_line
-		})
-	}
-	return fail_result('appearance', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }

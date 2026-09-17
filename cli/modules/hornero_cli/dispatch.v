@@ -191,7 +191,8 @@ fn run_shell_preset(args []string, mode hornero_core.RenderMode) int {
 }
 
 fn run_appearance(args []string, mode hornero_core.RenderMode) int {
-	if args.len > 0 && args[0] in ['theme', 'scheme', 'colors', 'accent', 'night-mode'] {
+	if args.len > 0
+		&& args[0] in ['theme', 'scheme', 'colors', 'accent', 'night-mode', 'gtk', 'hyprlock'] {
 		if wants_help(args) {
 			print(command_help('appearance ' + args[0]))
 			return 0
@@ -208,6 +209,12 @@ fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 		if args[0] == 'night-mode' {
 			return run_appearance_night_mode(args[1..], mode)
 		}
+		if args[0] == 'gtk' {
+			return run_appearance_gtk(args[1..], mode)
+		}
+		if args[0] == 'hyprlock' {
+			return run_appearance_hyprlock(args[1..], mode)
+		}
 		return run_appearance_scheme(args[1..], mode)
 	}
 	opts := parse_appearance_cmd(args) or {
@@ -215,7 +222,7 @@ fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 	}
 	return render(hornero_core.appearance_report(hornero_core.AppearanceOptions{
 		action:  opts.sub
-		call:    opts.call_args
+		value:   opts.value
 		dry_run: opts.dry_run
 		yes:     opts.yes
 	}), mode)
@@ -259,11 +266,107 @@ fn run_appearance_colors(args []string, mode hornero_core.RenderMode) int {
 	}
 	return render(hornero_core.colors_report(hornero_core.ColorsOptions{
 		action:  opts.leaf
+		value:   opts.value
 		m3:      opts.m3
 		call:    opts.call_args
 		dry_run: opts.dry_run
 		yes:     opts.yes
 	}), mode)
+}
+
+fn run_appearance_gtk(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_appearance_gtk(args) or {
+		return render_error(hornero_core.err_usage('appearance.gtk.usage', err.msg()),
+			mode)
+	}
+	match opts.leaf {
+		'list' {
+			return render(hornero_core.gtk_list_report(false), mode)
+		}
+		'icons' {
+			return render(hornero_core.gtk_list_report(true), mode)
+		}
+		'current' {
+			return render(hornero_core.gtk_current_report(), mode)
+		}
+		'current-icon' {
+			return render(hornero_core.gtk_current_icon_report(), mode)
+		}
+		'current-color-scheme' {
+			return render(hornero_core.gtk_current_policy_report(), mode)
+		}
+		'detect' {
+			return render(hornero_core.gtk_detect_report(opts.value), mode)
+		}
+		'info' {
+			return render(hornero_core.gtk_info_report(opts.value), mode)
+		}
+		'apply' {
+			if !opts.yes && !opts.dry_run {
+				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk apply Orchis-Dark --dry-run'),
+					mode)
+			}
+			icon := if opts.extra.len > 0 { opts.extra[0] } else { '' }
+			policy := if opts.extra.len > 1 { opts.extra[1] } else { '' }
+			return render(hornero_core.apply_gtk_theme_native(opts.value, icon, policy,
+				opts.dry_run), mode)
+		}
+		'set-icons' {
+			if !opts.yes && !opts.dry_run {
+				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk set-icons Papirus-Dark --dry-run'),
+					mode)
+			}
+			return render(hornero_core.appearance_set_icons_native(opts.value, opts.dry_run),
+				mode)
+		}
+		'color-scheme' {
+			if !opts.yes && !opts.dry_run {
+				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk color-scheme prefer-light --dry-run'),
+					mode)
+			}
+			return render(hornero_core.apply_gtk_color_scheme_native(opts.value, opts.dry_run),
+				mode)
+		}
+		'sync-color-scheme' {
+			if !opts.yes && !opts.dry_run {
+				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to sync without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk sync-color-scheme --dry-run'),
+					mode)
+			}
+			return render(hornero_core.sync_gtk_color_scheme_native(opts.dry_run), mode)
+		}
+		'theme' {
+			if !opts.yes && !opts.dry_run {
+				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk theme vapor-dreams --dry-run'),
+					mode)
+			}
+			return render(hornero_core.theme_pack_gtk_apply(opts.value, opts.dry_run),
+				mode)
+		}
+		'auto' {
+			if !opts.yes && !opts.dry_run {
+				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk auto --dry-run'),
+					mode)
+			}
+			return render(hornero_core.theme_pack_gtk_apply('', opts.dry_run), mode)
+		}
+		else {
+			return render_error(hornero_core.err_usage('appearance.gtk.usage', 'unknown gtk subcommand: ${opts.leaf}.\nRun: horneroctl appearance gtk --help'),
+				mode)
+		}
+	}
+}
+
+fn run_appearance_hyprlock(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_appearance_hyprlock(args) or {
+		return render_error(hornero_core.err_usage('appearance.hyprlock.usage', err.msg()),
+			mode)
+	}
+	if !opts.yes && !opts.dry_run {
+		return render_error(hornero_core.err_usage('appearance.hyprlock.usage', 'refusing to regenerate without --yes (preview with --dry-run).\nExample: horneroctl appearance hyprlock --dry-run'),
+			mode)
+	}
+	return render(hornero_core.regenerate_hyprlock_native(opts.wallpaper, opts.dry_run),
+		mode)
 }
 
 fn run_appearance_accent(args []string, mode hornero_core.RenderMode) int {
@@ -298,6 +401,40 @@ fn run_appearance_scheme(args []string, mode hornero_core.RenderMode) int {
 	}
 	if opts.leaf == 'status' {
 		return render(hornero_core.scheme_status_report(), mode)
+	}
+	if opts.leaf == 'list' {
+		return render(hornero_core.scheme_list_report(), mode)
+	}
+	if opts.leaf == 'current' {
+		return render(hornero_core.scheme_current_report(), mode)
+	}
+	if opts.leaf == 'regenerate' {
+		if !opts.yes && !opts.dry_run {
+			return render_error(hornero_core.err_usage('appearance.scheme.usage', 'refusing to regenerate without --yes (preview with --dry-run).\nExample: horneroctl appearance scheme regenerate --dry-run'),
+				mode)
+		}
+		return render(hornero_core.regenerate_scheme_native(hornero_core.read_wallpaper_pointer(),
+			opts.dry_run), mode)
+	}
+	if opts.leaf == 'sync-state' {
+		if !opts.yes && !opts.dry_run {
+			return render_error(hornero_core.err_usage('appearance.scheme.usage', 'refusing to sync without --yes (preview with --dry-run).\nExample: horneroctl appearance scheme sync-state --dry-run'),
+				mode)
+		}
+		if opts.dry_run {
+			return render(hornero_core.ok_result('appearance scheme sync-state', 'would run: sync state.json from scheme.json',
+				{
+				'dry_run': 'true'
+			}), mode)
+		}
+		path := hornero_core.sync_state_from_scheme() or {
+			return render_error(hornero_core.err_usage('appearance.scheme.usage', err.msg()),
+				mode)
+		}
+		return render(hornero_core.ok_result('appearance scheme sync-state', 'state synced from scheme.json',
+			{
+			'state_file': path
+		}), mode)
 	}
 	kind := if opts.leaf == 'set-mode' { 'mode' } else { 'variant' }
 	return render(hornero_core.scheme_set_report(hornero_core.SchemeSetOptions{
