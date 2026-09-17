@@ -88,12 +88,6 @@ pub fn resolve_yazi_bin() string {
 	return leaf_bin('HORNERO_YAZI_BIN', 'yazi')
 }
 
-// resolve_dots_weather_bin locates dots-weather-info.
-// Override with HORNERO_WEATHER_BIN.
-pub fn resolve_dots_weather_bin() string {
-	return dots_helper_bin('HORNERO_WEATHER_BIN', 'dots-weather-info')
-}
-
 // resolve_dots_git_notify_bin locates dots-git-notify.
 // Override with HORNERO_GIT_NOTIFY_BIN.
 pub fn resolve_dots_git_notify_bin() string {
@@ -571,21 +565,17 @@ pub fn weather_report(opts WeatherOptions) CommandResult {
 	if opts.field !in ['getdata', 'icon', 'temp', 'hex', 'stat', 'loc', 'quote', 'quote2'] {
 		return fail_result('apps weather', 'unknown weather field: ${opts.field}.\nRun: horneroctl apps weather --help')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_weather_bin(), 'dots-weather-info',
-		'HORNERO_WEATHER_BIN', opts.dry_run, 'horneroctl apps weather --${opts.field} --dry-run') or {
-		return fail_result('apps weather --${opts.field}', err.msg())
+	if !opts.dry_run {
+		if opts.field == 'getdata' {
+			return weather_getdata_native()
+		}
+		return weather_field_native(opts.field)
 	}
-	rep := apps_run_delegated(bin, ['--${opts.field}'], opts.dry_run)
-	if opts.dry_run {
-		return ok_result('apps weather --${opts.field}', 'would run: ${rep.command_line}',
-			{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-				'field':        opts.field
-			})
-	}
-	return apps_delegated_ok('apps weather --${opts.field}', rep, {
-		'field': opts.field
+	rep := apps_run_delegated('dots-weather-info', ['--${opts.field}'], true)
+	return ok_result('apps weather --${opts.field}', 'would run: ${rep.command_line}', {
+		'command_line': rep.command_line
+		'dry_run':      'true'
+		'field':        opts.field
 	})
 }
 

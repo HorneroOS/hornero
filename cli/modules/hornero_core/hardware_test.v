@@ -173,6 +173,31 @@ fn test_hw_missing_backends_fail() {
 	hw_test_restore_env(saved)
 }
 
+fn test_hw_keyboard_settings_native_opens() {
+	// Native port: the pinned opener (/bin/true fixture) launches
+	// detached; dots-keyboard-settings is never consulted.
+	saved := hw_test_save_env(hw_test_keys())
+	hw_test_break_backends()
+	os.setenv('HORNERO_KEYBOARD_SETTINGS_BIN', '/bin/true', true)
+	r := keyboard_settings_report(KeyboardSettingsOptions{})
+	assert r.ok
+	assert r.message.contains('keyboard settings opened')
+	hw_test_restore_env(saved)
+}
+
+fn test_hw_keyboard_settings_native_fails_closed() {
+	// Broken overrides (nonexistent paths) fail closed naming the
+	// installer instead of spawning async.
+	saved := hw_test_save_env(hw_test_keys())
+	hw_test_break_backends()
+	os.setenv('HORNERO_KEYBOARD_SETTINGS_BIN', '/nonexistent-kbsettings-hw-test', true)
+	os.setenv('HORNERO_LXQT_CONFIG_INPUT_BIN', '/nonexistent-lxqt-hw-test', true)
+	r := keyboard_settings_report(KeyboardSettingsOptions{})
+	assert !r.ok
+	assert r.message.contains('lxqt-config-input')
+	hw_test_restore_env(saved)
+}
+
 fn test_hw_dry_run_needs_no_backend() {
 	saved := hw_test_save_env(hw_test_keys())
 	hw_test_break_backends()

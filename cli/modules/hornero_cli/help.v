@@ -859,7 +859,8 @@ Examples:
 
 Layout backend: hyprctl on Hyprland, else setxkbmap
 (HORNERO_HYPRCTL_BIN / HORNERO_SETXKBMAP_BIN). settings opens
-dots-keyboard-settings, else lxqt-config-input. keys parses the
+lxqt-config-input detached (HORNERO_KEYBOARD_SETTINGS_BIN pin).
+keys parses the
 Hyprland keybindings file (HORNERO_KEYBINDINGS_FILE override),
 rewriting \$mainMod to SUPER; with quickshell running it asks the
 settings GUI instead (DOTS_BYPASS_QUICKSHELL=1 forces parsing).
@@ -1022,8 +1023,8 @@ Examples:
   --icon --temp --hex --stat --loc --quote --quote2
                       Read one cached field (read-only)
 
-Exactly one field per invocation. Reads resolve via dots-weather-info
-(HORNERO_WEATHER_BIN); refresh needs a WEATHER_API_KEY like the script.
+Exactly one field per invocation. Reads serve the cache natively
+(HORNERO_WEATHER_CACHE_DIR); refresh needs a WEATHER_API_KEY like the script.
 
 Examples:
   horneroctl apps weather --temp

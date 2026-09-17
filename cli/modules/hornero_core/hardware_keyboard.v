@@ -30,18 +30,31 @@ pub fn resolve_lxqt_bin() string {
 	return find_on_path('lxqt-config-input')
 }
 
-// resolve_keyboard_settings_bin locates the dots-keyboard-settings GUI
-// opener. Override with HORNERO_KEYBOARD_SETTINGS_BIN.
+// resolve_keyboard_settings_bin locates the keyboard settings GUI:
+// the HORNERO_KEYBOARD_SETTINGS_BIN pin (the dots-keyboard-settings
+// cycle guard pins it at the real lxqt-config-input binary), else
+// lxqt-config-input. The dots-keyboard-settings wrapper is retired.
 pub fn resolve_keyboard_settings_bin() string {
 	env := os.getenv('HORNERO_KEYBOARD_SETTINGS_BIN')
 	if env.len > 0 {
 		return env
 	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-keyboard-settings')
-	if os.is_file(home_helper) {
-		return home_helper
+	return resolve_lxqt_bin()
+}
+
+// keyboard_settings_native_bin validates the opener: explicit paths
+// must exist (a broken override fails closed instead of spawning
+// async, which would hide the failure like bash `&` does).
+fn keyboard_settings_native_bin() string {
+	for cand in [resolve_keyboard_settings_bin(), resolve_lxqt_bin()] {
+		if cand.len == 0 {
+			continue
+		}
+		if !cand.contains('/') || os.is_file(cand) {
+			return cand
+		}
 	}
-	return find_on_path('dots-keyboard-settings')
+	return ''
 }
 
 // detect_session mirrors dots-keyboard-layout session detection:
@@ -212,9 +225,9 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('hardware keyboard layout', 'would run: ${layout_read_cmd(session)}',
 				{
-				'command_line': layout_read_cmd(session)
-				'dry_run':      'true'
-			})
+					'command_line': layout_read_cmd(session)
+					'dry_run':      'true'
+				})
 		}
 		cur := current_layout(session) or {
 			return fail_result('hardware keyboard layout', err.msg())
@@ -228,9 +241,9 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('hardware keyboard layout', 'would run: ${layout_read_cmd(session)}',
 				{
-				'command_line': layout_read_cmd(session)
-				'dry_run':      'true'
-			})
+					'command_line': layout_read_cmd(session)
+					'dry_run':      'true'
+				})
 		}
 		layout := current_layout(session) or {
 			return fail_result('hardware keyboard layout', err.msg())
@@ -263,10 +276,10 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('hardware keyboard layout', 'would run: ${layout_read_cmd(session)}, then apply next of us, latam',
 			{
-			'read_command': layout_read_cmd(session)
-			'session':      session
-			'dry_run':      'true'
-		})
+				'read_command': layout_read_cmd(session)
+				'session':      session
+				'dry_run':      'true'
+			})
 	}
 	layout := current_layout(session) or {
 		return fail_result('hardware keyboard layout', err.msg())
@@ -343,34 +356,28 @@ pub:
 }
 
 // keyboard_settings_report implements `hardware keyboard settings`: open
-// the LXQt keyboard configuration GUI via dots-keyboard-settings, else
-// bare lxqt-config-input. Opening a GUI needs no --yes (config gui
-// precedent); --dry-run only previews.
+// the LXQt keyboard configuration GUI natively (detached, like the
+// script's `lxqt-config-input &`). Opening a GUI needs no --yes
+// (config gui precedent); --dry-run only previews.
 pub fn keyboard_settings_report(opts KeyboardSettingsOptions) CommandResult {
-	mut bin := resolve_keyboard_settings_bin()
-	args := []string{}
+	bin := keyboard_settings_native_bin()
 	if bin.len == 0 {
-		lx := resolve_lxqt_bin()
-		if lx.len > 0 {
-			bin = lx
-		} else if opts.dry_run {
-			bin = 'dots-keyboard-settings'
-		} else {
-			return fail_result('hardware keyboard settings', 'no keyboard settings GUI found (needs dots-keyboard-settings or lxqt-config-input). Set HORNERO_KEYBOARD_SETTINGS_BIN.\nExample: horneroctl hardware keyboard settings --dry-run')
+		if opts.dry_run {
+			return ok_result('hardware keyboard settings', 'would run: lxqt-config-input', {
+				'command_line': 'lxqt-config-input'
+				'dry_run':      'true'
+			})
 		}
+		return fail_result('hardware keyboard settings', 'lxqt-config-input not installed. Install it with: sudo pacman -S lxqt-config-input')
 	}
-	rep := run_exec(ExecSpec{
-		prog:    bin
-		args:    args
-		dry_run: opts.dry_run
-	})
 	if opts.dry_run {
-		return ok_result('hardware keyboard settings', 'would run: ${rep.command_line}',
-			{
+		rep := spawn_detached(bin, [], true)
+		return ok_result('hardware keyboard settings', 'would run: ${rep.command_line}', {
 			'command_line': rep.command_line
 			'dry_run':      'true'
 		})
 	}
+	rep := spawn_detached(bin, [], false)
 	if rep.ok {
 		return ok_result('hardware keyboard settings', 'keyboard settings opened', {
 			'command_line': rep.command_line
@@ -526,9 +533,9 @@ pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 			if opts.dry_run {
 				return ok_result('hardware keyboard keys', 'would run: dots-settings-gui --pane=system menu',
 					{
-					'command_line': 'dots-settings-gui --pane=system menu'
-					'dry_run':      'true'
-				})
+						'command_line': 'dots-settings-gui --pane=system menu'
+						'dry_run':      'true'
+					})
 			}
 			return fail_result('hardware keyboard keys', 'quickshell is running but the settings-gui backend is missing. Set HORNERO_SETTINGS_GUI_BIN or DOTS_BYPASS_QUICKSHELL=1.\nExample: horneroctl hardware keyboard keys --dry-run')
 		}
@@ -540,15 +547,15 @@ pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('hardware keyboard keys', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		if rep.ok {
 			return ok_result('hardware keyboard keys', 'settings opened (quickshell running)',
 				{
-				'command_line': rep.command_line
-			})
+					'command_line': rep.command_line
+				})
 		}
 		return fail_result('hardware keyboard keys', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 	}

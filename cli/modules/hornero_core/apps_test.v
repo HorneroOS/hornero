@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import time
 
 fn apps_test_save_env(keys []string) map[string]string {
 	mut saved := map[string]string{}
@@ -21,10 +22,11 @@ fn apps_test_restore_env(saved map[string]string) {
 }
 
 const apps_test_keys = ['HORNERO_FILE_MANAGER_BIN', 'HORNERO_EXO_OPEN_BIN', 'HORNERO_HANDLR_BIN',
-	'HORNERO_XDG_OPEN_BIN', 'HORNERO_DOTS_YAZI_BIN', 'HORNERO_YAZI_BIN', 'HORNERO_WEATHER_BIN',
-	'HORNERO_GIT_NOTIFY_BIN', 'HORNERO_SECURITY_AUDIT_BIN', 'HORNERO_SNAPPY_BIN',
-	'HORNERO_PERFORMANCE_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN',
-	'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN', 'HORNERO_CAFFEINE_BIN',
+	'HORNERO_XDG_OPEN_BIN', 'HORNERO_DOTS_YAZI_BIN', 'HORNERO_YAZI_BIN', 'HORNERO_GIT_NOTIFY_BIN',
+	'HORNERO_SECURITY_AUDIT_BIN', 'HORNERO_SNAPPY_BIN', 'HORNERO_PERFORMANCE_BIN', 'HORNERO_PIDOF_BIN',
+	'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN', 'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN',
+	'HORNERO_CAFFEINE_BIN', 'HORNERO_WEATHER_CACHE_DIR', 'HORNERO_WEATHER_GEO_URL',
+	'HORNERO_WEATHER_API_URL', 'WEATHER_API_KEY', 'XDG_CONFIG_HOME', 'DOTS_BYPASS_QUICKSHELL',
 	'HORNERO_POWERPROFILESCTL_BIN']
 
 fn apps_test_break_backends() {
@@ -34,7 +36,6 @@ fn apps_test_break_backends() {
 	os.setenv('HORNERO_XDG_OPEN_BIN', '/nonexistent-xdg-open-hornero-test', true)
 	os.setenv('HORNERO_DOTS_YAZI_BIN', '/nonexistent-dots-yazi-hornero-test', true)
 	os.setenv('HORNERO_YAZI_BIN', '/nonexistent-yazi-hornero-test', true)
-	os.setenv('HORNERO_WEATHER_BIN', '/nonexistent-weather-hornero-test', true)
 	os.setenv('HORNERO_GIT_NOTIFY_BIN', '/nonexistent-git-notify-hornero-test', true)
 	os.setenv('HORNERO_SECURITY_AUDIT_BIN', '/nonexistent-audit-hornero-test', true)
 	os.setenv('HORNERO_SNAPPY_BIN', '/nonexistent-snappy-hornero-test', true)
@@ -164,6 +165,111 @@ fn test_apps_launch_native_quickshell_bypass_fails_closed() {
 	apps_test_restore_env(saved)
 }
 
+fn test_apps_weather_native_fields_from_seeded_cache() {
+	// Native port: field reads serve seeded cache files directly —
+	// no wrapper, no key, no network.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	dir := '/tmp/hx-weather-test-seed'
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false }
+	os.setenv('HORNERO_WEATHER_CACHE_DIR', dir, true)
+	os.setenv('WEATHER_API_KEY', '', true)
+	os.write_file(dir + '/weather-degree', '21°C') or { assert false }
+	os.write_file(dir + '/weather-icon', 'ICON') or { assert false }
+	os.write_file(dir + '/weather-stat', 'Clear Sky') or { assert false }
+	os.write_file(dir + '/weather-location', 'Lima, Lima, Peru') or { assert false }
+	os.write_file(dir + '/weather-hex', '#ffd86b') or { assert false }
+	os.write_file(dir + '/weather-quote', 'line one\nline two') or { assert false }
+	assert weather_report(WeatherOptions{ field: 'temp' }).message == '21°C'
+	assert weather_report(WeatherOptions{ field: 'icon' }).message == 'ICON'
+	assert weather_report(WeatherOptions{ field: 'stat' }).message == 'Clear Sky'
+	assert weather_report(WeatherOptions{ field: 'loc' }).message == 'Lima, Lima, Peru'
+	assert weather_report(WeatherOptions{ field: 'hex' }).message == '#ffd86b'
+	assert weather_report(WeatherOptions{ field: 'quote' }).message == 'line one'
+	assert weather_report(WeatherOptions{ field: 'quote2' }).message == 'line two'
+	os.rmdir_all(dir) or {}
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_weather_native_getdata_serves_fresh_cache() {
+	// Fresh cache (current timestamp) is served without any key.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	dir := '/tmp/hx-weather-test-fresh'
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false }
+	os.setenv('HORNERO_WEATHER_CACHE_DIR', dir, true)
+	os.setenv('WEATHER_API_KEY', '', true)
+	raw := '{"main":{"temp":18.2}}'
+	os.write_file(dir + '/weather-raw', raw) or { assert false }
+	os.write_file(dir + '/weather-timestamp', '${time.now().unix()}') or { assert false }
+	r := weather_report(WeatherOptions{ field: 'getdata' })
+	assert r.ok
+	assert r.message == raw
+	os.rmdir_all(dir) or {}
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_weather_native_getdata_stale_needs_key() {
+	// Stale cache without a key fails closed naming WEATHER_API_KEY.
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	dir := '/tmp/hx-weather-test-stale'
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false }
+	os.setenv('HORNERO_WEATHER_CACHE_DIR', dir, true)
+	os.setenv('WEATHER_API_KEY', '', true)
+	os.setenv('XDG_CONFIG_HOME', '/nonexistent-xdg-hornero-test', true)
+	os.write_file(dir + '/weather-raw', '{"stale":true}') or { assert false }
+	os.write_file(dir + '/weather-timestamp', '1') or { assert false }
+	r := weather_report(WeatherOptions{ field: 'getdata' })
+	assert !r.ok
+	assert r.message.contains('WEATHER_API_KEY')
+	os.rmdir_all(dir) or {}
+	apps_test_restore_env(saved)
+}
+
+fn test_apps_weather_native_refresh_writes_cache() {
+	// Full refresh against fixture files (file:// seam, no network):
+	// geo + api JSON flow into the cache files exactly like the script
+	// (temp cut, title case, quote lines, location).
+	saved := apps_test_save_env(apps_test_keys)
+	apps_test_break_backends()
+	fix := '/tmp/hx-weather-test-fix'
+	os.rmdir_all(fix) or {}
+	os.mkdir_all(fix) or { assert false }
+	os.write_file(fix + '/geo.json', '{"lat":10.5,"lon":-20.25,"city":"Lima","regionName":"Lima","country":"Peru"}') or {
+		assert false
+	}
+	os.write_file(fix + '/api.json', '{"main":{"temp":21.7},"weather":[{"icon":"01d","description":"clear sky"}]}') or {
+		assert false
+	}
+	dir := '/tmp/hx-weather-test-refresh'
+	os.rmdir_all(dir) or {}
+	os.setenv('HORNERO_WEATHER_CACHE_DIR', dir, true)
+	os.setenv('WEATHER_API_KEY', 'test-key', true)
+	os.setenv('HORNERO_WEATHER_GEO_URL', 'file://${fix}/geo.json', true)
+	os.setenv('HORNERO_WEATHER_API_URL', 'file://${fix}/api.json', true)
+	r := weather_report(WeatherOptions{ field: 'getdata' })
+	assert r.ok
+	assert r.message.contains('"temp":21.7')
+	degree := os.read_file(dir + '/weather-degree') or { '' }
+	assert degree == '21°C'
+	stat := os.read_file(dir + '/weather-stat') or { '' }
+	assert stat == 'Clear Sky'
+	loc := os.read_file(dir + '/weather-location') or { '' }
+	assert loc == 'Lima, Lima, Peru'
+	hex := os.read_file(dir + '/weather-hex') or { '' }
+	assert hex == '#ffd86b'
+	quote_raw := os.read_file(dir + '/weather-quote') or { '' }
+	assert quote_raw.split_into_lines()[0] == "It's a sunny day, gonna be fun! "
+	assert weather_report(WeatherOptions{ field: 'quote2' }).message == "Don't go wandering all by yourself though..."
+	os.rmdir_all(dir) or {}
+	os.rmdir_all(fix) or {}
+	apps_test_restore_env(saved)
+}
+
 fn test_apps_dry_run_carries_delegation_guard() {
 	saved := apps_test_save_env(apps_test_keys)
 	apps_test_break_backends()
@@ -232,7 +338,6 @@ fn test_apps_real_run_without_backend_fails() {
 	saved := apps_test_save_env(apps_test_keys)
 	apps_test_break_backends()
 	assert !files_report(FilesOptions{}).ok
-	assert !weather_report(WeatherOptions{ field: 'temp' }).ok
 	assert !audit_report(AuditOptions{ check: 'full' }).ok
 	assert launch_report(LaunchOptions{ list: true }).ok
 	// Mode show is a never-fail status read: a missing backend reports
