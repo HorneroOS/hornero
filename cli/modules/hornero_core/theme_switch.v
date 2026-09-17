@@ -119,10 +119,28 @@ pub:
 // theme_get_report implements `appearance theme get` (read-only): the
 // live native state matched against the official trio. Unknown/custom
 // states still succeed; they report id '' with the observed values.
+// An explicit HORNERO_DOTS_APPEARANCE_BIN override short-circuits to
+// that backend (opaque passthrough, fails when broken); unset means
+// fully native with zero dots-* calls.
 pub fn theme_get_report(opts ThemeGetOptions) CommandResult {
+	override := os.getenv('HORNERO_DOTS_APPEARANCE_BIN')
+	if override.len > 0 {
+		if opts.dry_run {
+			return ok_result('appearance theme get', 'would run: ${override} status', {
+				'command_line': '${override} status'
+				'dry_run':      'true'
+			})
+		}
+		rep := strict_exec(override, ['status'], false)
+		if rep.ok {
+			return ok_result('appearance theme get', rep.output, {
+				'command_line': rep.command_line
+			})
+		}
+		return fail_result('appearance theme get', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	}
 	if opts.dry_run {
-		return ok_result('appearance theme get', 'would run: read scheme state + gtk settings',
-			{
+		return ok_result('appearance theme get', 'would run: read scheme state + gtk settings', {
 			'command_line': 'read ${scheme_state_file_for_read()} + ${resolve_gtk3_file()}'
 			'dry_run':      'true'
 		})
@@ -137,11 +155,9 @@ pub fn theme_get_report(opts ThemeGetOptions) CommandResult {
 		'gtk_color_scheme': st.gtk_color_scheme
 	}
 	if data['id'].len > 0 {
-		return ok_result('appearance theme get', 'current theme: ${data['id']} (mode=${st.mode}, gtk=${st.gtk_theme})',
-			data)
+		return ok_result('appearance theme get', 'current theme: ${data['id']} (mode=${st.mode}, gtk=${st.gtk_theme})', data)
 	}
-	return ok_result('appearance theme get', 'current theme: (custom) mode=${st.mode}, gtk=${st.gtk_theme}',
-		data)
+	return ok_result('appearance theme get', 'current theme: (custom) mode=${st.mode}, gtk=${st.gtk_theme}', data)
 }
 
 pub struct ThemeSetOptions {
@@ -186,8 +202,7 @@ pub fn theme_set_report_with(opts ThemeSetOptions, apply_fn fn (string, string, 
 	pack := show_theme_pack(opts.id) or { return fail_result('appearance theme set', err.msg()) }
 	mode := official_pack_mode(opts.id)
 	if opts.dry_run {
-		return ok_result('appearance theme set', 'would run: theme apply ${opts.id} (then verify mode=${mode} gtk=${pack.gtk_theme})',
-			{
+		return ok_result('appearance theme set', 'would run: theme apply ${opts.id} (then verify mode=${mode} gtk=${pack.gtk_theme})', {
 			'command_line': 'theme apply ${opts.id}'
 			'dry_run':      'true'
 			'id':           opts.id
@@ -231,8 +246,7 @@ pub fn theme_set_report_with(opts ThemeSetOptions, apply_fn fn (string, string, 
 		}
 		return fail_result('appearance theme set', msg)
 	}
-	return ok_result('appearance theme set', 'theme set to ${opts.id} (mode=${post.mode}, gtk=${post.gtk_theme})',
-		{
+	return ok_result('appearance theme set', 'theme set to ${opts.id} (mode=${post.mode}, gtk=${post.gtk_theme})', {
 		'id':        opts.id
 		'mode':      post.mode
 		'gtk_theme': post.gtk_theme

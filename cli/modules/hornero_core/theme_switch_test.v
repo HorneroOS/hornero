@@ -239,8 +239,23 @@ fn test_theme_get_dry_run_needs_no_backend() {
 	})
 	assert r.ok
 	assert r.data['dry_run'] == 'true'
-	assert r.message.contains('status --json')
-	os.unsetenv('HORNERO_DOTS_APPEARANCE_BIN')
+	assert r.message.contains('read scheme state')
+	sw_teardown()
+}
+
+fn test_theme_get_honors_explicit_backend_override() {
+	// An explicit HORNERO_DOTS_APPEARANCE_BIN override short-circuits
+	// to that backend: dry-run previews it, a broken one fails loudly.
+	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
+	dry := theme_get_report(ThemeGetOptions{
+		dry_run: true
+	})
+	assert dry.ok
+	assert dry.message.contains('/nonexistent-appearance-hornero-test')
+	live := theme_get_report(ThemeGetOptions{})
+	assert !live.ok
+	assert live.message.contains('backend failed')
+	sw_teardown()
 }
 
 fn test_theme_get_without_state_files_stays_ok() {

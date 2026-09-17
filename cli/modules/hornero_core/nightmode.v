@@ -291,6 +291,19 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 			})
 		}
 		'status' {
+			// An explicit override short-circuits to that backend
+			// (opaque passthrough, fails when broken); unset means
+			// fully native with zero dots-* calls.
+			override := os.getenv('HORNERO_NIGHT_MODE_BIN')
+			if override.len > 0 && !cmd.dry_run {
+				rep := strict_exec(override, ['status'], false)
+				if rep.ok {
+					return ok_result('appearance night-mode status', rep.output, {
+						'command_line': rep.command_line
+					})
+				}
+				return fail_result('appearance night-mode status', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
 			active, backend := night_probe_live(cmd.dry_run)
 			state := if cmd.dry_run { '(preview)' } else { read_night_state_file() }
 			mut msg := if active {
@@ -318,8 +331,7 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 	mut lines := []string{}
 	if cmd.verb in ['on', 'enable'] {
 		if active && !cmd.dry_run {
-			return ok_result('appearance night-mode on', 'Night mode is already active.',
-				{
+			return ok_result('appearance night-mode on', 'Night mode is already active.', {
 				'active': 'true'
 			})
 		}
@@ -327,8 +339,7 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 	}
 	if cmd.verb in ['off', 'disable'] {
 		if !active && !cmd.dry_run {
-			return ok_result('appearance night-mode off', 'Night mode is already inactive.',
-				{
+			return ok_result('appearance night-mode off', 'Night mode is already inactive.', {
 				'active': 'false'
 			})
 		}
@@ -366,33 +377,27 @@ fn night_enable_native(dry_run bool, mut lines []string) CommandResult {
 		} else if xr.len > 0 {
 			list := os.execute(strict_command_line(xr, [])).output
 			for display in parse_xrandr_displays(list) {
-				strict_exec(xr, ['--output', display, '--gamma', '1:0.85:0.6', '--brightness',
-					'0.9'], false)
+				strict_exec(xr, ['--output', display, '--gamma', '1:0.85:0.6', '--brightness', '0.9'], false)
 				lines << 'xrandr ${display} gamma 1:0.85:0.6 brightness 0.9'
 			}
 		}
 	} else if backend == 'wlsunset' {
 		wl := backend_or_empty('HORNERO_WLSUNSET_BIN', 'wlsunset')
-		rep := spawn_detached(if wl.len > 0 { wl } else { 'wlsunset' }, ['-T', '4000'],
-			dry_run)
+		rep := spawn_detached(if wl.len > 0 { wl } else { 'wlsunset' }, ['-T', '4000'], dry_run)
 		lines << rep.command_line
 	} else if backend == 'gammastep' {
 		gs := backend_or_empty('HORNERO_GAMMASSTEP_BIN', 'gammastep')
-		rep := spawn_detached(if gs.len > 0 { gs } else { 'gammastep' }, ['-O', '4000K'],
-			dry_run)
+		rep := spawn_detached(if gs.len > 0 { gs } else { 'gammastep' }, ['-O', '4000K'], dry_run)
 		lines << rep.command_line
 	} else {
 		rs := backend_or_empty('HORNERO_REDSHIFT_BIN', 'redshift')
-		rep := spawn_detached(if rs.len > 0 { rs } else { 'redshift' }, ['-O', '4000K'],
-			dry_run)
+		rep := spawn_detached(if rs.len > 0 { rs } else { 'redshift' }, ['-O', '4000K'], dry_run)
 		lines << rep.command_line
 	}
-	night_notify_best_effort('Night Mode', '${backend} enabled at 4000K', 'weather-clear-night-symbolic',
-		dry_run, mut lines)
+	night_notify_best_effort('Night Mode', '${backend} enabled at 4000K', 'weather-clear-night-symbolic', dry_run, mut lines)
 	lines << 'write enabled to ${resolve_night_state_file()}'
 	if dry_run {
-		return ok_result('appearance night-mode on', 'would run:\n' + lines.join('\n'),
-			{
+		return ok_result('appearance night-mode on', 'would run:\n' + lines.join('\n'), {
 			'command_line': lines.join('\n')
 			'dry_run':      'true'
 			'backend':      backend
@@ -401,8 +406,7 @@ fn night_enable_native(dry_run bool, mut lines []string) CommandResult {
 	write_night_state_file('enabled') or {
 		return fail_result('appearance night-mode on', 'backend started but state persist failed: ${err.msg()}')
 	}
-	return ok_result('appearance night-mode on', '${backend} enabled (night mode - 4000K)',
-		{
+	return ok_result('appearance night-mode on', '${backend} enabled (night mode - 4000K)', {
 		'backend': backend
 	})
 }
@@ -436,18 +440,15 @@ fn night_disable_native(dry_run bool, mut lines []string) CommandResult {
 		} else {
 			list := os.execute(strict_command_line(xr, [])).output
 			for display in parse_xrandr_displays(list) {
-				strict_exec(xr, ['--output', display, '--gamma', '1:1:1', '--brightness', '1.0'],
-					false)
+				strict_exec(xr, ['--output', display, '--gamma', '1:1:1', '--brightness', '1.0'], false)
 				lines << 'xrandr ${display} gamma reset'
 			}
 		}
 	}
-	night_notify_best_effort('Day Mode', 'Night mode force disabled', 'weather-clear-symbolic',
-		dry_run, mut lines)
+	night_notify_best_effort('Day Mode', 'Night mode force disabled', 'weather-clear-symbolic', dry_run, mut lines)
 	lines << 'write disabled to ${resolve_night_state_file()}'
 	if dry_run {
-		return ok_result('appearance night-mode off', 'would run:\n' + lines.join('\n'),
-			{
+		return ok_result('appearance night-mode off', 'would run:\n' + lines.join('\n'), {
 			'command_line': lines.join('\n')
 			'dry_run':      'true'
 		})
@@ -455,6 +456,5 @@ fn night_disable_native(dry_run bool, mut lines []string) CommandResult {
 	write_night_state_file('disabled') or {
 		return fail_result('appearance night-mode off', 'backends reset but state persist failed: ${err.msg()}')
 	}
-	return ok_result('appearance night-mode off', 'Night mode disabled on all backends',
-		{})
+	return ok_result('appearance night-mode off', 'Night mode disabled on all backends', {})
 }

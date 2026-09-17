@@ -1,5 +1,7 @@
 module hornero_core
 
+import os
+
 // Appearance-plus: smart-color generation, accent seeds, and night-mode
 // control, all native V. The dots-smart-colors palette engine, the
 // dots-accent-override seed file, and the dots-night-mode backend
@@ -28,10 +30,22 @@ pub fn colors_report(opts ColorsOptions) CommandResult {
 	match opts.action {
 		'status' {
 			if opts.dry_run {
-				return ok_result('appearance colors status', 'would run: read xrdb palette and preview smart colors',
-					{
+				return ok_result('appearance colors status', 'would run: read xrdb palette and preview smart colors', {
 					'dry_run': 'true'
 				})
+			}
+			// An explicit override short-circuits to that backend
+			// (opaque passthrough, fails when broken); unset means
+			// fully native with zero dots-* calls.
+			override := os.getenv('HORNERO_SMART_COLORS_BIN')
+			if override.len > 0 {
+				rep := strict_exec(override, [], false)
+				if rep.ok {
+					return ok_result('appearance colors status', rep.output, {
+						'command_line': rep.command_line
+					})
+				}
+				return fail_result('appearance colors status', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 			}
 			return colors_status_native()
 		}
