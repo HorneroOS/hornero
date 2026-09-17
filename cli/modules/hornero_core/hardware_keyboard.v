@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import x.json2
 
 // Keyboard backend: layout toggle/readout (Hyprland or X11, mirroring
 // dots-keyboard-layout), the LXQt settings GUI opener (mirroring
@@ -30,18 +31,31 @@ pub fn resolve_lxqt_bin() string {
 	return find_on_path('lxqt-config-input')
 }
 
-// resolve_keyboard_settings_bin locates the dots-keyboard-settings GUI
-// opener. Override with HORNERO_KEYBOARD_SETTINGS_BIN.
+// resolve_keyboard_settings_bin locates the keyboard settings GUI:
+// the HORNERO_KEYBOARD_SETTINGS_BIN pin (the dots-keyboard-settings
+// cycle guard pins it at the real lxqt-config-input binary), else
+// lxqt-config-input. The dots-keyboard-settings wrapper is retired.
 pub fn resolve_keyboard_settings_bin() string {
 	env := os.getenv('HORNERO_KEYBOARD_SETTINGS_BIN')
 	if env.len > 0 {
 		return env
 	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-keyboard-settings')
-	if os.is_file(home_helper) {
-		return home_helper
+	return resolve_lxqt_bin()
+}
+
+// keyboard_settings_native_bin validates the opener: explicit paths
+// must exist (a broken override fails closed instead of spawning
+// async, which would hide the failure like bash `&` does).
+fn keyboard_settings_native_bin() string {
+	for cand in [resolve_keyboard_settings_bin(), resolve_lxqt_bin()] {
+		if cand.len == 0 {
+			continue
+		}
+		if !cand.contains('/') || os.is_file(cand) {
+			return cand
+		}
 	}
-	return find_on_path('dots-keyboard-settings')
+	return ''
 }
 
 // detect_session mirrors dots-keyboard-layout session detection:
@@ -79,9 +93,23 @@ fn kb_preferred_layouts() []string {
 	return ['us:', 'latam:']
 }
 
+// hypr_option_str mirrors one `hyprctl getoption -j` response object;
+// unknown keys decode-ignored, so only `str` is declared.
+pub struct HyprOptionStr {
+pub:
+	str string
+}
+
 // hypr_opt_str extracts the `str` value from `hyprctl getoption -j`
 // output (or the plain `str: value` form).
 fn hypr_opt_str(output string) string {
+	trimmed := output.trim_space()
+	if trimmed.starts_with('{') {
+		opt := json2.decode[HyprOptionStr](trimmed) or { HyprOptionStr{} }
+		if opt.str.len > 0 {
+			return opt.str
+		}
+	}
 	key := '"str"'
 	i := output.index(key) or {
 		j := output.index('str:') or { return '' }
@@ -239,7 +267,9 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 			return fail_result('hardware keyboard layout', err.msg())
 		}
 		full := '${layout}:${variant}'
-		display := kb_layout_names()[full] or { layout }
+		display := kb_layout_names()[full] or {
+			if variant.len > 0 { '${layout} (${variant})}' } else { layout }
+		}
 		mut lines := []string{}
 		mut data := map[string]string{}
 		lines << 'Session: ${session}'
@@ -321,7 +351,9 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 		}
 	}
 	names := kb_layout_names()
-	display := names[next] or { nlayout }
+	display := names[next] or {
+		if nvariant.len > 0 { '${nlayout} (${nvariant})' } else { nlayout }
+	}
 	nb := resolve_notify_bin()
 	if nb.len > 0 {
 		run_exec(ExecSpec{
@@ -343,34 +375,30 @@ pub:
 }
 
 // keyboard_settings_report implements `hardware keyboard settings`: open
-// the LXQt keyboard configuration GUI via dots-keyboard-settings, else
-// bare lxqt-config-input. Opening a GUI needs no --yes (config gui
-// precedent); --dry-run only previews.
+// the LXQt keyboard configuration GUI natively (detached, like the
+// script's `lxqt-config-input &`). Opening a GUI needs no --yes
+// (config gui precedent); --dry-run only previews.
 pub fn keyboard_settings_report(opts KeyboardSettingsOptions) CommandResult {
-	mut bin := resolve_keyboard_settings_bin()
-	args := []string{}
+	bin := keyboard_settings_native_bin()
 	if bin.len == 0 {
-		lx := resolve_lxqt_bin()
-		if lx.len > 0 {
-			bin = lx
-		} else if opts.dry_run {
-			bin = 'dots-keyboard-settings'
-		} else {
-			return fail_result('hardware keyboard settings', 'no keyboard settings GUI found (needs dots-keyboard-settings or lxqt-config-input). Set HORNERO_KEYBOARD_SETTINGS_BIN.\nExample: horneroctl hardware keyboard settings --dry-run')
+		if opts.dry_run {
+			return ok_result('hardware keyboard settings', 'would run: lxqt-config-input',
+				{
+				'command_line': 'lxqt-config-input'
+				'dry_run':      'true'
+			})
 		}
+		return fail_result('hardware keyboard settings', 'lxqt-config-input not installed. Install it with: sudo pacman -S lxqt-config-input')
 	}
-	rep := run_exec(ExecSpec{
-		prog:    bin
-		args:    args
-		dry_run: opts.dry_run
-	})
 	if opts.dry_run {
+		rep := spawn_detached(bin, [], true)
 		return ok_result('hardware keyboard settings', 'would run: ${rep.command_line}',
 			{
 			'command_line': rep.command_line
 			'dry_run':      'true'
 		})
 	}
+	rep := spawn_detached(bin, [], false)
 	if rep.ok {
 		return ok_result('hardware keyboard settings', 'keyboard settings opened', {
 			'command_line': rep.command_line

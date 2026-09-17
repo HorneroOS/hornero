@@ -468,7 +468,8 @@ Examples:
 
 Snapshot source: HORNERO_SNAPSHOTS_DIR, else the XDG cache catalogue
 (hornero/snapshots, legacy dots/snapshots as read-only fallback);
-create/restore delegate to dots-config-manager
+create/restore run natively (metadata, tarball, pre-backup), with an
+explicit helper override still delegating to dots-config-manager
 (HORNERO_CONFIG_MANAGER_BIN).
 
 Examples:
@@ -742,12 +743,11 @@ Examples:
   reload [--dry-run]        Re-apply the color pipeline (needs --yes)
 
 Reads resolve canonical-first: the hornero/* pointer, then the legacy
-dots/* pointer, then the pywal link. Mutations delegate to the verified
-dots-wallpaper-set / dots-wal-reload backends (HORNERO_WALLPAPER_SET_BIN,
-HORNERO_WAL_RELOAD_BIN), which own the Quickshell appearance IPC verbs
-plus the wal+M3 fallback; every backend call carries
-HORNEROCTL_DELEGATED=1 so the delegating dots-* shims run their legacy
-body instead of calling back.
+dots/* pointer, then the pywal link. `set` runs natively (shell setWallpaper IPC, else the wal+M3
+pipeline); `reload` delegates to the verified dots-wal-reload backend
+(HORNERO_WAL_RELOAD_BIN) or runs the native pipeline; every backend
+call carries HORNEROCTL_DELEGATED=1 so the delegating dots-* shims run
+their legacy body instead of calling back.
 
 Mutations need --yes; --dry-run only previews.
 
@@ -859,7 +859,8 @@ Examples:
 
 Layout backend: hyprctl on Hyprland, else setxkbmap
 (HORNERO_HYPRCTL_BIN / HORNERO_SETXKBMAP_BIN). settings opens
-dots-keyboard-settings, else lxqt-config-input. keys parses the
+lxqt-config-input detached (HORNERO_KEYBOARD_SETTINGS_BIN pin).
+keys parses the
 Hyprland keybindings file (HORNERO_KEYBINDINGS_FILE override),
 rewriting \$mainMod to SUPER; with quickshell running it asks the
 settings GUI instead (DOTS_BYPASS_QUICKSHELL=1 forces parsing).
@@ -985,10 +986,9 @@ Examples:
                       working directory (view-open, no --yes)
   --info              Show the current default file manager (read-only)
 
-Backend chain (dots-file-manager): exo-open --launch FileManager,
-handlr open, xdg-open (HORNERO_EXO_OPEN_BIN / HORNERO_HANDLR_BIN /
-HORNERO_XDG_OPEN_BIN); --info reads via dots-file-manager
-(HORNERO_FILE_MANAGER_BIN).
+Backend chain: exo-open --launch FileManager, handlr open, xdg-open
+(HORNERO_EXO_OPEN_BIN / HORNERO_HANDLR_BIN / HORNERO_XDG_OPEN_BIN);
+--info reads natively via handlr (else xdg-mime).
 
 Examples:
   horneroctl apps files --dry-run
@@ -1023,8 +1023,8 @@ Examples:
   --icon --temp --hex --stat --loc --quote --quote2
                       Read one cached field (read-only)
 
-Exactly one field per invocation. Reads resolve via dots-weather-info
-(HORNERO_WEATHER_BIN); refresh needs a WEATHER_API_KEY like the script.
+Exactly one field per invocation. Reads serve the cache natively
+(HORNERO_WEATHER_CACHE_DIR); refresh needs a WEATHER_API_KEY like the script.
 
 Examples:
   horneroctl apps weather --temp
@@ -1066,8 +1066,8 @@ Examples:
   --secrets           Exposed-secret scan only (read-only)
   --system            Firewall, updates, SSH, MAC checks only (read-only)
 
-At most one check per invocation. Backend: dots-security-audit
-(HORNERO_SECURITY_AUDIT_BIN). --fix (permission changes, history
+At most one check per invocation. Backend: native (stat/find HOME
+scan, system leaf checks). --fix (permission changes, history
 scrub) and --report stay in dots-security-audit and are intentionally
 not ported.
 
@@ -1084,8 +1084,8 @@ Examples:
   launch (default)    Open the app launcher (view-open, no --yes)
   --list              Print detected backends in priority order (read-only)
 
-Backends: quickshell, minimal (else auto). Backend: dots-launcher
-(HORNERO_LAUNCHER_BIN).
+Backends: quickshell, minimal (else auto). Backend: native
+(quickshell ipc, else a minimal stdin prompt).
 
 Examples:
   horneroctl apps launch --dry-run
@@ -1098,10 +1098,10 @@ Examples:
 
   bar launcher dashboard sidebar session utilities
                       Toggle one quickshell component via ipc (needs --yes)
-  redshift caffeine   Toggle the daemon once via --toggle (needs --yes);
-                      the monitor loops stay in dots-toggle
+  redshift caffeine   Toggle the daemon once (needs --yes); the monitor
+                      loops stay in dots-toggle
 
-Backend: dots-toggle (HORNERO_TOGGLE_BIN).
+Backend: native (quickshell ipc; pidof + pkill/killall for daemons).
 
 Examples:
   horneroctl apps toggle bar --dry-run
@@ -1121,8 +1121,9 @@ Examples:
   apply-theme-pack [id]
                       Apply a theme from the appearance pack (needs --yes)
 
-Default leaf is toggle. Backend: dots-snappy-switcher
-(HORNERO_SNAPPY_BIN).
+Default leaf is toggle. Backend: native snappy-switcher control
+(HORNERO_SNAPPY_SWITCHER_BIN); apply-theme* still delegate to
+dots-snappy-switcher (HORNERO_SNAPPY_BIN).
 
 Examples:
   horneroctl apps switcher status
@@ -1143,7 +1144,7 @@ Examples:
   mode set <profile>  Switch the power profile via powerprofilesctl
                       (needs --yes)
 
-Reads delegate to dots-performance (HORNERO_PERFORMANCE_BIN); mode
+Reads run natively (ps/zsh/free seams); mode
 uses powerprofilesctl get/list/set
 (HORNERO_POWERPROFILESCTL_BIN). The interactive menu, quickshell
 pane, and auto-cpufreq GUI stay in dots-performance-mode.

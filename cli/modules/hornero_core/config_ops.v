@@ -5,8 +5,8 @@ import os
 // Config operations backend: the remaining `config` leaves beyond
 // snapshots (see snapshots.v).
 //
-// `dots-default-apps` (dotfiles reference, read-only) owns `list`
-// (`--list` prints current XDG defaults via handlr); `set <mime>
+// `list` prints current XDG defaults natively (terminal via
+// xfce4/helpers.rc, the rest via handlr); `set <mime>
 // <app>` writes via xdg-mime directly (the upstream `--set` verb
 // never binds its arguments under EasyOptions, and handlr stays
 // internal). `config gui` delegates to
@@ -60,17 +60,6 @@ pub fn resolve_materialize_bin() string {
 	return find_on_path('materialize.sh')
 }
 
-fn default_apps_or_fail(helper string, dry_run bool) !string {
-	bin := if helper.len > 0 { helper } else { resolve_default_apps_bin() }
-	if bin.len == 0 {
-		if dry_run {
-			return 'dots-default-apps'
-		}
-		return error('default-apps backend not found. Set HORNERO_DEFAULT_APPS_BIN.\nExample: horneroctl config default-apps list --dry-run')
-	}
-	return bin
-}
-
 fn settings_gui_or_fail(helper string, dry_run bool) !string {
 	bin := if helper.len > 0 { helper } else { resolve_settings_gui_bin() }
 	if bin.len == 0 {
@@ -99,31 +88,111 @@ pub:
 	helper  string
 }
 
-// default_apps_list_report implements `config default-apps list`
-// (read-only) by delegating to `dots-default-apps --list` (verified
-// backend verb).
-pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
-	bin := default_apps_or_fail(opts.helper, opts.dry_run) or {
-		return fail_result('config default-apps list', err.msg())
+// default_apps_categories mirrors the retired dots-default-apps table:
+// category id, display label, probe MIME (terminal reads helpers.rc).
+const default_apps_categories = [
+	['file-manager', '📁 File Manager', 'inode/directory'],
+	['terminal', '💻 Terminal', 'x-scheme-handler/terminal'],
+	['web-browser', '🌐 Web Browser', 'x-scheme-handler/http'],
+	['text-editor', '📝 Text Editor', 'text/plain'],
+	['image-viewer', '🖼️  Image Viewer', 'image/png'],
+	['video-player', '🎬 Video Player', 'video/mp4'],
+	['audio-player', '🎵 Audio Player', 'audio/mpeg'],
+	['pdf-viewer', '📄 PDF Viewer', 'application/pdf'],
+]
+
+// default_apps_terminal_default reads the terminal emulator from
+// xfce4/helpers.rc, mirroring the retired script (kitty/alacritty/xterm
+// get friendly names), or 'Not set' when absent.
+fn default_apps_terminal_default() string {
+	mut base := os.getenv('XDG_CONFIG_HOME')
+	if base.len == 0 {
+		base = os.join_path(os.home_dir(), '.config')
 	}
-	rep := run_exec(ExecSpec{
-		prog:    bin
-		args:    ['--list']
-		dry_run: opts.dry_run
-	})
+	raw := os.read_file(os.join_path(base, 'xfce4', 'helpers.rc')) or { return 'Not set' }
+	for line in raw.split_into_lines() {
+		if line.starts_with('TerminalEmulator=') {
+			v := line['TerminalEmulator='.len..].trim_space()
+			if v.len == 0 {
+				return 'Not set'
+			}
+			return match v {
+				'kitty' { 'Kitty Terminal' }
+				'alacritty' { 'Alacritty' }
+				'xterm' { 'XTerm' }
+				else { v }
+			}
+		}
+	}
+	return 'Not set'
+}
+
+// default_apps_friendly_name resolves a desktop id to its Name= entry,
+// searching the XDG application dirs like the retired script, falling
+// back to the id itself when no .desktop file exists.
+fn default_apps_friendly_name(id string, app_dirs []string) string {
+	for dir in app_dirs {
+		p := os.join_path(dir, id)
+		raw := os.read_file(p) or { continue }
+		for line in raw.split_into_lines() {
+			if line.starts_with('Name=') {
+				return line['Name='.len..].trim_space()
+			}
+		}
+	}
+	return id
+}
+
+// default_apps_list_report implements `config default-apps list`
+// (read-only) natively: terminal via helpers.rc, MIME categories via
+// handlr, friendly names via .desktop lookup. Needs no dots backend;
+// --dry-run previews the handlr probe command.
+pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
+	mut handlr := resolve_handlr_bin()
+	if handlr.len == 0 {
+		if opts.dry_run {
+			handlr = 'handlr'
+		} else {
+			return fail_result('config default-apps list', 'handlr not found (needed for MIME lookups). Set HORNERO_HANDLR_BIN.\nExample: horneroctl config default-apps list --dry-run')
+		}
+	}
 	if opts.dry_run {
-		return ok_result('config default-apps list', 'would run: ${rep.command_line}',
+		probe := command_line(handlr, ['get', 'inode/directory'])
+		return ok_result('config default-apps list', 'would query handlr for 8 default associations (--list)',
 			{
-			'command_line': rep.command_line
+			'command_line': probe
 			'dry_run':      'true'
 		})
 	}
-	if rep.ok {
-		return ok_result('config default-apps list', rep.output, {
-			'command_line': rep.command_line
-		})
+	app_dirs := [os.join_path(os.home_dir(), '.local', 'share', 'applications'),
+		'/usr/share/applications']
+	mut lines := ['Current Default Applications:', '==============================', '']
+	mut data := map[string]string{}
+	for cat in default_apps_categories {
+		id := cat[0]
+		label := cat[1]
+		name := if id == 'terminal' {
+			default_apps_terminal_default()
+		} else {
+			rep := run_exec(ExecSpec{
+				prog: handlr
+				args: ['get', cat[2]]
+			})
+			app := rep.output.trim_space()
+			if !rep.ok || app.len == 0 {
+				'Not set'
+			} else {
+				default_apps_friendly_name(app, app_dirs)
+			}
+		}
+		mut row := label
+		for row.len < 20 {
+			row += ' '
+		}
+		lines << '${row} ${name}'
+		data[id] = if name == 'Not set' { 'Not set' } else { name }
 	}
-	return fail_result('config default-apps list', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	return ok_result('config default-apps list', lines.join('\n'), data)
 }
 
 pub struct MaterializeOptions {

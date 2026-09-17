@@ -22,6 +22,9 @@ fn wp_teardown() {
 	os.unsetenv('XDG_CACHE_HOME')
 	os.unsetenv('HORNERO_WALLPAPER_SET_BIN')
 	os.unsetenv('HORNERO_WAL_RELOAD_BIN')
+	os.unsetenv('HORNERO_SHELL_RUNNING')
+	os.unsetenv('HORNERO_QUICKSHELL_BIN')
+	os.unsetenv('HORNERO_WAL_BIN')
 }
 
 fn test_wallpaper_current_from_canonical_pointer() {
@@ -121,6 +124,55 @@ fn test_wallpaper_set_dry_run_needs_no_backend() {
 	assert r.message.contains('/nonexistent-wallpaper-set-hornero-test')
 	assert r.message.contains('HORNEROCTL_DELEGATED=1')
 	assert r.data['path'] == base + '/wall.jpg'
+	wp_teardown()
+}
+
+fn test_wallpaper_set_native_dry_run_previews_pipeline() {
+	// Native port: dry-run without helper previews the wal+M3 pipeline
+	// (no shell, no side effects) and carries the resolved path.
+	base := wp_setup()
+	os.setenv('HORNERO_SHELL_RUNNING', '0', true)
+	r := wallpaper_report(WallpaperOptions{
+		action:  'set'
+		path:    base + '/wall.jpg'
+		dry_run: true
+	})
+	assert r.ok
+	assert r.message.contains('wal')
+	assert r.data['path'] == base + '/wall.jpg'
+	wp_teardown()
+}
+
+fn test_wallpaper_set_native_shell_ipc() {
+	// Shell up with a fixture quickshell (/bin/true): IPC succeeds and
+	// the wait loop settles at once; no real compositor is touched.
+	base := wp_setup()
+	os.setenv('HORNERO_SHELL_RUNNING', '1', true)
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/true', true)
+	r := wallpaper_report(WallpaperOptions{
+		action: 'set'
+		path:   base + '/wall.jpg'
+		yes:    true
+	})
+	assert r.ok
+	assert r.message.contains('applied via shell')
+	wp_teardown()
+}
+
+fn test_wallpaper_set_native_falls_back_without_wal() {
+	// Shell IPC fails (fixture quickshell exits nonzero) and wal is
+	// missing: the pipeline fails closed naming wal, writing nothing.
+	base := wp_setup()
+	os.setenv('HORNERO_SHELL_RUNNING', '1', true)
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/false', true)
+	os.setenv('HORNERO_WAL_BIN', '/nonexistent-wal-hornero-test', true)
+	r := wallpaper_report(WallpaperOptions{
+		action: 'set'
+		path:   base + '/wall.jpg'
+		yes:    true
+	})
+	assert !r.ok
+	assert r.message.contains('wal')
 	wp_teardown()
 }
 
@@ -239,9 +291,7 @@ fn test_wallpaper_unknown_action_fails() {
 }
 
 fn test_resolve_wallpaper_backends_override() {
-	os.setenv('HORNERO_WALLPAPER_SET_BIN', '/tmp/hx-wallpaper-test/setter', true)
 	os.setenv('HORNERO_WAL_RELOAD_BIN', '/tmp/hx-wallpaper-test/reloader', true)
-	assert resolve_wallpaper_set_bin() == '/tmp/hx-wallpaper-test/setter'
 	assert resolve_wal_reload_bin() == '/tmp/hx-wallpaper-test/reloader'
 	wp_teardown()
 }

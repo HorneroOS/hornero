@@ -42,12 +42,6 @@ fn leaf_bin(env_key string, prog string) string {
 	return find_on_path(prog)
 }
 
-// resolve_dots_file_manager_bin locates dots-file-manager.
-// Override with HORNERO_FILE_MANAGER_BIN.
-pub fn resolve_dots_file_manager_bin() string {
-	return dots_helper_bin('HORNERO_FILE_MANAGER_BIN', 'dots-file-manager')
-}
-
 // resolve_exo_open_bin locates exo-open. Override with HORNERO_EXO_OPEN_BIN.
 pub fn resolve_exo_open_bin() string {
 	return leaf_bin('HORNERO_EXO_OPEN_BIN', 'exo-open')
@@ -56,6 +50,26 @@ pub fn resolve_exo_open_bin() string {
 // resolve_handlr_bin locates handlr. Override with HORNERO_HANDLR_BIN.
 pub fn resolve_handlr_bin() string {
 	return leaf_bin('HORNERO_HANDLR_BIN', 'handlr')
+}
+
+// resolve_pidof_bin locates pidof (daemon toggle checks).
+// Override with HORNERO_PIDOF_BIN.
+pub fn resolve_pidof_bin() string {
+	env := os.getenv('HORNERO_PIDOF_BIN')
+	if env.len > 0 {
+		return env
+	}
+	return find_on_path('pidof')
+}
+
+// resolve_killall_bin locates killall (caffeine toggle stop).
+// Override with HORNERO_KILLALL_BIN.
+pub fn resolve_killall_bin() string {
+	env := os.getenv('HORNERO_KILLALL_BIN')
+	if env.len > 0 {
+		return env
+	}
+	return find_on_path('killall')
 }
 
 // resolve_xdg_open_bin locates xdg-open. Override with HORNERO_XDG_OPEN_BIN.
@@ -74,46 +88,28 @@ pub fn resolve_yazi_bin() string {
 	return leaf_bin('HORNERO_YAZI_BIN', 'yazi')
 }
 
-// resolve_dots_weather_bin locates dots-weather-info.
-// Override with HORNERO_WEATHER_BIN.
-pub fn resolve_dots_weather_bin() string {
-	return dots_helper_bin('HORNERO_WEATHER_BIN', 'dots-weather-info')
-}
-
 // resolve_dots_git_notify_bin locates dots-git-notify.
 // Override with HORNERO_GIT_NOTIFY_BIN.
 pub fn resolve_dots_git_notify_bin() string {
 	return dots_helper_bin('HORNERO_GIT_NOTIFY_BIN', 'dots-git-notify')
 }
 
-// resolve_dots_security_audit_bin locates dots-security-audit.
-// Override with HORNERO_SECURITY_AUDIT_BIN.
-pub fn resolve_dots_security_audit_bin() string {
-	return dots_helper_bin('HORNERO_SECURITY_AUDIT_BIN', 'dots-security-audit')
-}
-
 // resolve_dots_launcher_bin locates dots-launcher.
 // Override with HORNERO_LAUNCHER_BIN.
-pub fn resolve_dots_launcher_bin() string {
-	return dots_helper_bin('HORNERO_LAUNCHER_BIN', 'dots-launcher')
-}
-
-// resolve_dots_toggle_bin locates dots-toggle.
-// Override with HORNERO_TOGGLE_BIN.
-pub fn resolve_dots_toggle_bin() string {
-	return dots_helper_bin('HORNERO_TOGGLE_BIN', 'dots-toggle')
-}
-
 // resolve_dots_snappy_bin locates dots-snappy-switcher.
 // Override with HORNERO_SNAPPY_BIN.
 pub fn resolve_dots_snappy_bin() string {
 	return dots_helper_bin('HORNERO_SNAPPY_BIN', 'dots-snappy-switcher')
 }
 
-// resolve_dots_performance_bin locates dots-performance.
-// Override with HORNERO_PERFORMANCE_BIN.
-pub fn resolve_dots_performance_bin() string {
-	return dots_helper_bin('HORNERO_PERFORMANCE_BIN', 'dots-performance')
+// resolve_snappy_switcher_bin locates the snappy-switcher binary itself
+// (daemon + window commands). Override with HORNERO_SNAPPY_SWITCHER_BIN.
+pub fn resolve_snappy_switcher_bin() string {
+	env := os.getenv('HORNERO_SNAPPY_SWITCHER_BIN')
+	if env.len > 0 {
+		return env
+	}
+	return find_on_path('snappy-switcher')
 }
 
 // resolve_powerprofilesctl_bin locates powerprofilesctl.
@@ -236,20 +232,88 @@ pub:
 // at --path (view-open, needs no --yes) or show the default with
 // --info (read-only). Backend chain mirrors dots-file-manager:
 // exo-open, handlr, xdg-open. --dry-run only previews.
+// files_info_native implements `apps files --info` natively,
+// mirroring the retired dots-file-manager: handlr default plus the
+// .desktop providers, xdg-mime fallback, graceful notice when neither
+// XDG tool exists. The configure hint points at horneroctl (the legacy
+// --gui/--type leaves have no CLI equivalent by design).
+fn files_info_native() CommandResult {
+	handlr := resolve_handlr_bin()
+	if handlr.len > 0 {
+		rep := run_exec(ExecSpec{
+			prog: handlr
+			args: ['get', 'inode/directory']
+		})
+		cur := if rep.ok && rep.output.trim_space().len > 0 {
+			rep.output.trim_space()
+		} else {
+			'Not set'
+		}
+		mut lines := ['File Manager Configuration', '==========================', '',
+			'Current default: ${cur}', '', 'Available file managers:']
+		mut seen := []string{}
+		for dir in [os.join_path(os.home_dir(), '.local', 'share', 'applications'),
+			'/usr/share/applications'] {
+			entries := os.ls(dir) or { continue }
+			for e in entries {
+				if !e.ends_with('.desktop') || e in seen {
+					continue
+				}
+				raw := os.read_file(os.join_path(dir, e)) or { continue }
+				mut handles := false
+				mut name := e
+				for line in raw.split_into_lines() {
+					low := line.to_lower()
+					if low.contains('mimetype=') && low.contains('inode/directory') {
+						handles = true
+					}
+					if line.starts_with('Name=') && name == e {
+						name = line['Name='.len..].trim_space()
+					}
+				}
+				if handles {
+					lines << '  - ${e} (${name})'
+					seen << e
+				}
+			}
+		}
+		lines << ''
+		lines << 'To configure:'
+		lines << '  - horneroctl config default-apps set inode/directory <app.desktop> --yes'
+		lines << '  - handlr set inode/directory thunar.desktop'
+		return ok_result('apps files --info', lines.join('\n'), {
+			'default': cur
+		})
+	}
+	xdg := xdg_mime_or_fail(false) or {
+		return ok_result('apps files --info', 'No XDG tools found (handlr or xdg-mime)',
+			{
+			'default': 'Not set'
+		})
+	}
+	rep := run_exec(ExecSpec{
+		prog: xdg
+		args: ['query', 'default', 'inode/directory']
+	})
+	cur := if rep.ok && rep.output.trim_space().len > 0 {
+		rep.output.trim_space()
+	} else {
+		'Not set'
+	}
+	return ok_result('apps files --info', 'Current default: ${cur}', {
+		'default': cur
+	})
+}
+
 pub fn files_report(opts FilesOptions) CommandResult {
 	if opts.info {
-		bin := apps_backend_or_placeholder(resolve_dots_file_manager_bin(), 'dots-file-manager',
-			'HORNERO_FILE_MANAGER_BIN', opts.dry_run, 'horneroctl apps files --info --dry-run') or {
-			return fail_result('apps files --info', err.msg())
-		}
-		rep := apps_run_delegated(bin, ['--info'], opts.dry_run)
 		if opts.dry_run {
-			return ok_result('apps files --info', 'would run: ${rep.command_line}', {
-				'command_line': rep.command_line
-				'dry_run':      'true'
+			return ok_result('apps files --info', 'would read the inode/directory default via handlr (else xdg-mime)',
+				{
+				'dry_run': 'true'
 			})
 		}
-		return apps_delegated_ok('apps files --info', rep, {})
+		return files_info_native()
 	}
 	target := if opts.path.len > 0 { opts.path } else { os.getwd() }
 	exo := resolve_exo_open_bin()
@@ -305,6 +369,66 @@ pub fn files_report(opts FilesOptions) CommandResult {
 	return fail_result('apps files', 'no file manager launcher found (exo-open, handlr, or xdg-open). Set HORNERO_EXO_OPEN_BIN.\nExample: horneroctl apps files --dry-run')
 }
 
+// yazi_fix_previews_native replicates the retired dots-yazi preview
+// diagnostics: required core deps, kitty check, optional preview and
+// power tools. Always succeeds like the script (exit 0); missing
+// required deps are flagged REQUIRED with install hints in the report.
+fn yazi_fix_previews_native() CommandResult {
+	mut lines := ['Yazi Preview Diagnostics', '']
+	mut issues := 0
+	lines << 'Core:'
+	for dep in [['yazi', 'yazi', 'File manager', 'required'],
+		['file', 'file', 'MIME detection', 'required']] {
+		if find_on_path(dep[0]).len > 0 {
+			lines << '  + ${dep[0]} - ${dep[2]}'
+		} else {
+			lines << '  x ${dep[0]} - ${dep[2]} (REQUIRED - install: ${dep[1]})'
+			issues++
+		}
+	}
+	lines << ''
+	lines << 'Terminal:'
+	if os.getenv('TERM') == 'xterm-kitty' || os.getenv('KITTY_PID').len > 0 {
+		lines << '  + Running in Kitty terminal (native image protocol)'
+	} else {
+		lines << '  o Not running in Kitty - image previews may be limited'
+	}
+	lines << ''
+	lines << 'Preview tools:'
+	for dep in [['bat', 'bat', 'Syntax highlighting'], ['pdftoppm', 'poppler', 'PDF previews'],
+		['ffmpegthumbnailer', 'ffmpegthumbnailer', 'Video thumbnails'],
+		['mediainfo', 'mediainfo', 'Media file info'], ['7z', 'p7zip', 'Archive listing'],
+		['exiftool', 'perl-image-exiftool', 'EXIF metadata'],
+		['glow', 'glow (AUR)', 'Markdown rendering'], ['jq', 'jq', 'JSON formatting'],
+		['rsvg-convert', 'librsvg', 'SVG conversion'], ['magick', 'imagemagick', 'Image conversion']] {
+		if find_on_path(dep[0]).len > 0 {
+			lines << '  + ${dep[0]} - ${dep[2]}'
+		} else {
+			lines << '  o ${dep[0]} - ${dep[2]} (optional - install: ${dep[1]})'
+		}
+	}
+	lines << ''
+	lines << 'Power features:'
+	for dep in [['fzf', 'fzf', 'Fuzzy search (Z key)'], ['rg', 'ripgrep', 'Content search'],
+		['fd', 'fd', 'Fast file finder'], ['trash-put', 'trash-cli', 'Safe delete (DD)'],
+		['wl-copy', 'wl-clipboard', 'Wayland clipboard (yp/yd/yn)'],
+		['zoxide', 'zoxide', 'Smart directory jumps (z key)']] {
+		if find_on_path(dep[0]).len > 0 {
+			lines << '  + ${dep[0]} - ${dep[2]}'
+		} else {
+			lines << '  o ${dep[0]} - ${dep[2]} (optional - install: ${dep[1]})'
+		}
+	}
+	lines << ''
+	if issues > 0 {
+		lines << 'Found ${issues} required issues. Fix them for best experience.'
+		lines << 'Quick fix: sudo pacman -S yazi'
+	} else {
+		lines << 'All required dependencies are installed!'
+	}
+	return ok_result('apps terminal-file --fix-previews', lines.join('\n'), {})
+}
+
 pub struct TerminalFileOptions {
 pub:
 	path         string
@@ -319,24 +443,69 @@ pub:
 // fix-previews read backend output (read-only); otherwise open yazi via
 // the dots-yazi wrapper (view-open, needs no --yes), falling back to
 // bare yazi. --dry-run only previews.
+// yazi_cheatsheet_lines is the keybinding reference, kept verbatim from
+// the retired dots-yazi script (box-drawing, no ANSI: CLI output is plain).
+const yazi_cheatsheet_lines = [
+	'╔══════════════════════════════════════════════════════════════════════════════════╗',
+	'║                          YAZI CHEATSHEET — HorneroConfig                      ║',
+	'╠══════════════════════════════════════════════════════════════════════════════════╣',
+	'║                                                                                ║',
+	'║  ─── NAVIGATION ─────────────────────────────────────────────────────────────  ║',
+	'║    h / ←         Go to parent directory                                        ║',
+	'║    l / → / Enter Enter directory or open file                                  ║',
+	'║    j / ↓ / k / ↑ Move down / up                                               ║',
+	'║    J / K         Page half-down / half-up                                      ║',
+	'║    H / L         Undo / Redo navigation                                        ║',
+	'║    ~             Go to home directory                                          ║',
+	'║    .             Toggle hidden files                                           ║',
+	'║                                                                                ║',
+	'║  ─── QUICK DIRS (g + key) ───────────────────────────────────────────────────  ║',
+	'║    gh Home    gp Projects    gd Downloads    gD Documents                      ║',
+	'║    gP Pics    gm Music       gv Videos       gc ~/.config                      ║',
+	'║    gl .local  gr Rices       gw Wallpapers   gb Scripts                        ║',
+	'║    gt /tmp                                                                     ║',
+	'║                                                                                ║',
+	'║  ─── FILE OPS ───────────────────────────────────────────────────────────────  ║',
+	'║    Space  Toggle select   v  Invert selection   V  Enter visual mode           ║',
+	'║    y  Copy (yank)   x  Cut   p  Paste   P  Paste (overwrite)                  ║',
+	'║    d  Trash    D D  Trash (safe delete)    D  Permanently delete               ║',
+	'║    a  Create file/dir (append / for dir)   r  Rename                           ║',
+	'║    yp/yd/yn  Yank path/dir/name to clipboard                                  ║',
+	'║                                                                                ║',
+	'║  ─── POWER ──────────────────────────────────────────────────────────────────  ║',
+	'║    f  Filter       /  Search        s  Shell command                           ║',
+	'║    z  Jump (zoxide)   Z  Jump (fzf)                                            ║',
+	'║    C  Compress selection          X  Extract archive                           ║',
+	'║    Alt-t  Open in Thunar          ?  Help                                      ║',
+	'║                                                                                ║',
+	'║  ─── SORTING (o + key) ─────────────────────────────────────────────────────   ║',
+	'║    os Size   on Name   om Modified   ot Type   oe Extension   or Reverse      ║',
+	'║                                                                                ║',
+	'║  ─── TABS ───────────────────────────────────────────────────────────────────  ║',
+	'║    t  New tab    T  Close tab   1-9 Switch tab   [ / ] Prev/Next tab          ║',
+	'║                                                                                ║',
+	'╚══════════════════════════════════════════════════════════════════════════════════╝',
+]
+
 pub fn terminal_file_report(opts TerminalFileOptions) CommandResult {
-	if opts.cheatsheet || opts.fix_previews {
-		flag := if opts.cheatsheet { '--cheatsheet' } else { '--fix-previews' }
-		name := if opts.cheatsheet {
-			'apps terminal-file --cheatsheet'
-		} else {
-			'apps terminal-file --fix-previews'
-		}
-		bin := apps_backend_or_placeholder(resolve_dots_yazi_bin(), 'dots-yazi', 'HORNERO_DOTS_YAZI_BIN',
-			opts.dry_run, 'horneroctl ${name} --dry-run') or { return fail_result(name, err.msg()) }
-		rep := apps_run_delegated(bin, [flag], opts.dry_run)
+	if opts.cheatsheet {
 		if opts.dry_run {
-			return ok_result(name, 'would run: ${rep.command_line}', {
-				'command_line': rep.command_line
-				'dry_run':      'true'
+			return ok_result('apps terminal-file --cheatsheet', 'would print the yazi keybinding reference',
+				{
+				'dry_run': 'true'
 			})
 		}
-		return apps_delegated_ok(name, rep, {})
+		return ok_result('apps terminal-file --cheatsheet', yazi_cheatsheet_lines.join('\n'),
+			{})
+	}
+	if opts.fix_previews {
+		if opts.dry_run {
+			return ok_result('apps terminal-file --fix-previews', 'would diagnose yazi preview dependencies',
+				{
+				'dry_run': 'true'
+			})
+		}
+		return yazi_fix_previews_native()
 	}
 	mut args := []string{}
 	if opts.last_dir {
@@ -396,21 +565,18 @@ pub fn weather_report(opts WeatherOptions) CommandResult {
 	if opts.field !in ['getdata', 'icon', 'temp', 'hex', 'stat', 'loc', 'quote', 'quote2'] {
 		return fail_result('apps weather', 'unknown weather field: ${opts.field}.\nRun: horneroctl apps weather --help')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_weather_bin(), 'dots-weather-info',
-		'HORNERO_WEATHER_BIN', opts.dry_run, 'horneroctl apps weather --${opts.field} --dry-run') or {
-		return fail_result('apps weather --${opts.field}', err.msg())
+	if !opts.dry_run {
+		if opts.field == 'getdata' {
+			return weather_getdata_native()
+		}
+		return weather_field_native(opts.field)
 	}
-	rep := apps_run_delegated(bin, ['--${opts.field}'], opts.dry_run)
-	if opts.dry_run {
-		return ok_result('apps weather --${opts.field}', 'would run: ${rep.command_line}',
-			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'field':        opts.field
-		})
-	}
-	return apps_delegated_ok('apps weather --${opts.field}', rep, {
-		'field': opts.field
+	rep := apps_run_delegated('dots-weather-info', ['--${opts.field}'], true)
+	return ok_result('apps weather --${opts.field}', 'would run: ${rep.command_line}',
+		{
+		'command_line': rep.command_line
+		'dry_run':      'true'
+		'field':        opts.field
 	})
 }
 
@@ -492,30 +658,27 @@ pub:
 	dry_run bool
 }
 
-// audit_report implements `apps audit`: the dots-security-audit
-// read-only checks (full audit by default). --fix (permission changes,
-// history scrub) and --report stay legacy and are intentionally not
-// ported. --dry-run only previews.
+// audit_report implements `apps audit` natively (no dots-security-audit):
+// the read-only checks (full audit by default) run in-process. --fix
+// (permission changes, history scrub) and --report stay legacy and are
+// intentionally not ported. --dry-run only previews the delegation.
 pub fn audit_report(opts AuditOptions) CommandResult {
 	if opts.check !in ['full', 'permissions', 'secrets', 'system'] {
 		return fail_result('apps audit', 'unknown audit check: ${opts.check}.\nRun: horneroctl apps audit --help')
 	}
 	flag := if opts.check == 'full' { '--audit' } else { '--' + opts.check }
-	bin := apps_backend_or_placeholder(resolve_dots_security_audit_bin(), 'dots-security-audit',
-		'HORNERO_SECURITY_AUDIT_BIN', opts.dry_run, 'horneroctl apps audit --dry-run') or {
-		return fail_result('apps audit', err.msg())
-	}
-	rep := apps_run_delegated(bin, [flag], opts.dry_run)
 	if opts.dry_run {
+		rep := apps_run_delegated('dots-security-audit', [flag], true)
 		return ok_result('apps audit', 'would run: ${rep.command_line}', {
 			'command_line': rep.command_line
 			'dry_run':      'true'
 			'check':        opts.check
 		})
 	}
-	return apps_delegated_ok('apps audit', rep, {
-		'check': opts.check
-	})
+	if opts.check == 'full' {
+		return audit_full_native()
+	}
+	return audit_section_native(opts.check)
 }
 
 pub struct LaunchOptions {
@@ -525,40 +688,89 @@ pub:
 	dry_run bool
 }
 
-// launch_report implements `apps launch`: list detected backends
-// (read-only) or open the launcher via dots-launcher (view-open, needs
-// no --yes) — the dots-launcher contract. --dry-run only previews.
+// launch_report implements `apps launch` natively (no dots-launcher):
+// list detected backends in priority order (read-only) or open the launcher via quickshell ipc (auto falls back to a minimal stdin
+// prompt) — the dots-launcher contract. View-open, needs no --yes;
+// --dry-run only previews the legacy delegation.
+// launch_native implements `apps launch` without the dots-launcher
+// wrapper (retired): --list prints quickshell (when its binary
+// resolves) then minimal; quickshell launch runs
+// `quickshell ipc call drawers toggle launcher`; auto falls back to a
+// minimal `command> ` stdin prompt that execs one line.
+fn launch_native(opts LaunchOptions) CommandResult {
+	if opts.list {
+		mut avail := []string{}
+		if resolve_quickshell_bin().len > 0 {
+			avail << 'quickshell'
+		}
+		avail << 'minimal'
+		return ok_result('apps launch --list', avail.join('\n'), {
+			'backends': avail.join(',')
+		})
+	}
+	backend := if opts.backend.len == 0 { 'auto' } else { opts.backend }
+	qs_allowed := os.getenv('DOTS_BYPASS_QUICKSHELL') != '1' && quickshell_running()
+	if (backend == 'quickshell' || backend == 'auto') && qs_allowed {
+		qs := resolve_quickshell_bin()
+		if qs.len > 0 {
+			rep := run_exec(ExecSpec{
+				prog: qs
+				args: ['ipc', 'call', 'drawers', 'toggle', 'launcher']
+			})
+			if rep.ok {
+				return ok_result('apps launch', rep.output, {
+					'backend': 'quickshell'
+				})
+			}
+			if backend == 'quickshell' {
+				return fail_result('apps launch', 'quickshell launcher failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
+		}
+	} else if backend == 'quickshell' {
+		return fail_result('apps launch', 'quickshell is not running')
+	}
+	if opts.dry_run {
+		return ok_result('apps launch', 'would prompt for a command (minimal fallback)',
+			{
+			'dry_run': 'true'
+			'backend': 'minimal'
+		})
+	}
+	cmd := os.input('command> ').trim_space()
+	if cmd.len == 0 {
+		return ok_result('apps launch', 'no command entered', {
+			'backend': 'minimal'
+		})
+	}
+	r := os.execute(cmd)
+	if r.exit_code != 0 {
+		return fail_result('apps launch', 'command failed (exit ${r.exit_code}):\n${r.output}')
+	}
+	return ok_result('apps launch', r.output, {
+		'backend': 'minimal'
+	})
+}
+
 pub fn launch_report(opts LaunchOptions) CommandResult {
 	if opts.backend !in ['', 'auto', 'quickshell', 'minimal'] {
 		return fail_result('apps launch', 'unknown backend: ${opts.backend} (auto, quickshell, minimal).\nExample: horneroctl apps launch --backend quickshell --dry-run')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_launcher_bin(), 'dots-launcher', 'HORNERO_LAUNCHER_BIN',
-		opts.dry_run, 'horneroctl apps launch --dry-run') or {
-		return fail_result('apps launch', err.msg())
-	}
-	if opts.list {
-		rep := apps_run_delegated(bin, ['--list'], opts.dry_run)
-		if opts.dry_run {
-			return ok_result('apps launch --list', 'would run: ${rep.command_line}', {
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
-		}
-		return apps_delegated_ok('apps launch --list', rep, {})
+	if !opts.dry_run {
+		return launch_native(opts)
 	}
 	mut args := []string{}
-	if opts.backend.len > 0 && opts.backend != 'auto' {
+	if opts.list {
+		args << '--list'
+	} else if opts.backend.len > 0 && opts.backend != 'auto' {
 		args << '--backend'
 		args << opts.backend
 	}
-	rep := apps_run_delegated(bin, args, opts.dry_run)
-	if opts.dry_run {
-		return ok_result('apps launch', 'would run: ${rep.command_line}', {
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
-	}
-	return apps_delegated_ok('apps launch', rep, {})
+	rep := apps_run_delegated('dots-launcher', args, true)
+	name := if opts.list { 'apps launch --list' } else { 'apps launch' }
+	return ok_result(name, 'would run: ${rep.command_line}', {
+		'command_line': rep.command_line
+		'dry_run':      'true'
+	})
 }
 
 pub struct ToggleOptions {
@@ -568,10 +780,104 @@ pub:
 	yes       bool
 }
 
-// toggle_report implements `apps toggle` over dots-toggle: quickshell
-// component toggles go through `ipc <component> toggle`; redshift and
-// caffeine toggle once via --toggle (their monitor loops stay legacy).
-// Mutating: needs --yes; --dry-run only previews.
+// toggle_native implements `apps toggle` without the dots-toggle
+// wrapper (retired): quickshell components go through
+// `quickshell ipc call drawers toggle <component>`; redshift and
+// caffeine toggle one-shot via pidof plus pkill/killall or a detached
+// start — the dots-toggle --toggle contract.
+fn toggle_native(opts ToggleOptions) CommandResult {
+	name := 'apps toggle ${opts.component}'
+	if opts.component in ['redshift', 'caffeine'] {
+		return toggle_daemon_native(name, opts.component, opts.dry_run)
+	}
+	if !quickshell_running() {
+		return fail_result(name, 'Quickshell is not running')
+	}
+	qs := resolve_quickshell_bin()
+	if qs.len == 0 {
+		return fail_result(name, 'quickshell not found on PATH. Set HORNERO_QUICKSHELL_BIN.\nExample: horneroctl ${name} --dry-run')
+	}
+	rep := run_exec(ExecSpec{
+		prog: qs
+		args: ['ipc', 'call', 'drawers', 'toggle', opts.component]
+	})
+	if !rep.ok {
+		return fail_result(name, 'failed to toggle ${opts.component} (exit ${rep.exit_code}):\n${rep.output}')
+	}
+	return ok_result(name, rep.output, {
+		'component': opts.component
+	})
+}
+
+// toggle_daemon_native toggles one redshift/caffeine instance:
+// running (pidof) -> stop via pkill/killall; stopped -> detached start.
+fn toggle_daemon_native(name string, daemon string, dry_run bool) CommandResult {
+	pidof := resolve_pidof_bin()
+	mut running := false
+	if pidof.len > 0 {
+		chk := run_exec(ExecSpec{
+			prog: pidof
+			args: [daemon]
+		})
+		running = chk.ok
+	}
+	if running {
+		mut stopper := if daemon == 'caffeine' {
+			resolve_killall_bin()
+		} else {
+			resolve_pkill_bin()
+		}
+		if stopper.len == 0 {
+			stopper = if daemon == 'caffeine' { 'killall' } else { 'pkill' }
+		}
+		rep := run_exec(ExecSpec{
+			prog: stopper
+			args: [daemon]
+		})
+		if !rep.ok {
+			return fail_result(name, 'failed to stop ${daemon} (exit ${rep.exit_code}):\n${rep.output}')
+		}
+		return ok_result(name, 'stopped ${daemon}', {
+			'component': daemon
+			'action':    'stop'
+		})
+	}
+	leaf := backend_or_empty(if daemon == 'caffeine' {
+		'HORNERO_CAFFEINE_BIN'
+	} else {
+		'HORNERO_REDSHIFT_BIN'
+	}, daemon)
+	if leaf.len == 0 {
+		return fail_result(name, '${daemon} not found on PATH. Set ${if daemon == 'caffeine' {
+			'HORNERO_CAFFEINE_BIN'
+		} else {
+			'HORNERO_REDSHIFT_BIN'
+		}}.\nExample: horneroctl ${name} --dry-run')
+	}
+	rep := spawn_detached(leaf, [], dry_run)
+	if dry_run {
+		return ok_result(name, 'would run: ${rep.command_line}', {
+			'command_line': rep.command_line
+			'dry_run':      'true'
+			'component':    daemon
+			'action':       'start'
+		})
+	}
+	if !rep.ok {
+		return fail_result(name, 'failed to start ${daemon} (exit ${rep.exit_code}):\n${rep.output}')
+	}
+	return ok_result(name, 'started ${daemon}', {
+		'component': daemon
+		'action':    'start'
+	})
+}
+
+// toggle_report implements `apps toggle` natively (no dots-toggle):
+// quickshell component toggles go through
+// `quickshell ipc call drawers toggle <component>`; redshift and
+// caffeine toggle once via pidof plus pkill/killall or a detached start
+// (their monitor loops stay legacy).
+// Mutating: needs --yes; --dry-run only previews the legacy delegation.
 pub fn toggle_report(opts ToggleOptions) CommandResult {
 	if opts.component !in ['bar', 'launcher', 'dashboard', 'sidebar', 'session', 'utilities',
 		'redshift', 'caffeine'] {
@@ -580,25 +886,19 @@ pub fn toggle_report(opts ToggleOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('apps toggle ${opts.component}', 'refusing to toggle without --yes (preview with --dry-run).\nExample: horneroctl apps toggle ${opts.component} --dry-run')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_toggle_bin(), 'dots-toggle', 'HORNERO_TOGGLE_BIN',
-		opts.dry_run, 'horneroctl apps toggle ${opts.component} --dry-run') or {
-		return fail_result('apps toggle ${opts.component}', err.msg())
-	}
 	mut args := ['--' + opts.component]
 	if opts.component in ['redshift', 'caffeine'] {
 		args = ['--' + opts.component, '--toggle']
 	}
-	rep := apps_run_delegated(bin, args, opts.dry_run)
-	if opts.dry_run {
-		return ok_result('apps toggle ${opts.component}', 'would run: ${rep.command_line}',
-			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'component':    opts.component
-		})
+	if !opts.dry_run {
+		return toggle_native(opts)
 	}
-	return apps_delegated_ok('apps toggle ${opts.component}', rep, {
-		'component': opts.component
+	rep := apps_run_delegated('dots-toggle', args, true)
+	return ok_result('apps toggle ${opts.component}', 'would run: ${rep.command_line}',
+		{
+		'command_line': rep.command_line
+		'dry_run':      'true'
+		'component':    opts.component
 	})
 }
 
@@ -610,7 +910,55 @@ pub:
 	yes     bool
 }
 
-// switcher_report implements `apps switcher` over dots-snappy-switcher:
+// switcher_daemon_native runs one snappy-switcher daemon/window command
+// without the dots-snappy-switcher wrapper (retired for control verbs):
+// the snappy-switcher binary runs foreground, like run_snappy. Missing
+// binary fails closed with the AUR install hint.
+fn switcher_daemon_native(leaf string) CommandResult {
+	name := 'apps switcher ${leaf}'
+	mut bin := resolve_snappy_switcher_bin()
+	if bin.len > 0 && bin.contains('/') && !os.is_file(bin) {
+		bin = ''
+	}
+	if bin.len == 0 {
+		return fail_result(name, 'snappy-switcher is not installed.\nInstall it with your package manager (AUR: snappy-switcher).')
+	}
+	rep := run_exec(ExecSpec{
+		prog: bin
+		args: [leaf]
+	})
+	if !rep.ok {
+		return fail_result(name, 'snappy-switcher ${leaf} failed (exit ${rep.exit_code}):\n${rep.output}')
+	}
+	return ok_result(name, rep.output, {
+		'leaf': leaf
+	})
+}
+
+// switcher_status_native mirrors the status branch: pgrep for the daemon.
+fn switcher_status_native() CommandResult {
+	pg := resolve_pgrep_bin()
+	mut running := false
+	if pg.len > 0 {
+		rep := run_exec(ExecSpec{
+			prog: pg
+			args: ['-x', 'snappy-switcher']
+		})
+		running = rep.ok
+	}
+	if running {
+		return ok_result('apps switcher status', 'snappy-switcher daemon: running', {
+			'status': 'running'
+		})
+	}
+	return ok_result('apps switcher status', 'snappy-switcher daemon: not running', {
+		'status': 'stopped'
+	})
+}
+
+// switcher_report implements `apps switcher`: daemon/window commands and
+// status run natively; apply-theme* still delegate to dots-snappy-switcher
+// (theme synthesis lives in the dots lib, like audit --fix):
 // `status` is read-only; every control leaf mutates (windows, daemon,
 // theme) and needs --yes. --dry-run only previews.
 pub fn switcher_report(opts SwitcherOptions) CommandResult {
@@ -621,23 +969,21 @@ pub fn switcher_report(opts SwitcherOptions) CommandResult {
 	if opts.leaf == 'apply-theme' && opts.arg.len == 0 {
 		return fail_result('apps switcher apply-theme', 'missing theme file.\nExample: horneroctl apps switcher apply-theme nord.ini --dry-run')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_snappy_bin(), 'dots-snappy-switcher',
-		'HORNERO_SNAPPY_BIN', opts.dry_run, 'horneroctl apps switcher status --dry-run') or {
-		return fail_result('apps switcher ${opts.leaf}', err.msg())
-	}
 	if opts.leaf == 'status' {
-		rep := apps_run_delegated(bin, ['status'], opts.dry_run)
-		if opts.dry_run {
-			return ok_result('apps switcher status', 'would run: ${rep.command_line}',
-				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+		return switcher_status_native()
+	}
+	if opts.leaf in ['daemon', 'next', 'prev', 'toggle', 'hide', 'select', 'quit'] && !opts.dry_run {
+		if !opts.yes {
+			return fail_result('apps switcher ${opts.leaf}', 'refusing to ${opts.leaf} without --yes (preview with --dry-run).\nExample: horneroctl apps switcher ${opts.leaf} --dry-run')
 		}
-		return apps_delegated_ok('apps switcher status', rep, {})
+		return switcher_daemon_native(opts.leaf)
 	}
 	if !opts.yes && !opts.dry_run {
 		return fail_result('apps switcher ${opts.leaf}', 'refusing to ${opts.leaf} without --yes (preview with --dry-run).\nExample: horneroctl apps switcher ${opts.leaf} --dry-run')
+	}
+	bin := apps_backend_or_placeholder(resolve_dots_snappy_bin(), 'dots-snappy-switcher',
+		'HORNERO_SNAPPY_BIN', opts.dry_run, 'horneroctl apps switcher status --dry-run') or {
+		return fail_result('apps switcher ${opts.leaf}', err.msg())
 	}
 	mut args := [opts.leaf]
 	if opts.arg.len > 0 && opts.leaf in ['apply-theme', 'apply-theme-pack', 'apply-rice-theme'] {
@@ -663,10 +1009,11 @@ pub:
 	yes     bool
 }
 
-// performance_report implements `apps performance`: shell startup,
-// memory, benchmark, and report read through dots-performance
-// (read-only); `mode` shows the powerprofilesctl profile and `mode set`
-// switches it (needs --yes). --dry-run only previews.
+// performance_report implements `apps performance` natively (no
+// dots-performance): shell startup, memory, benchmark, and report
+// reads run in-process (read-only); `mode` shows the powerprofilesctl
+// profile and `mode set` switches it (needs --yes).
+// --dry-run only previews the legacy delegation.
 pub fn performance_report(opts PerformanceOptions) CommandResult {
 	if opts.leaf !in ['startup', 'memory', 'benchmark', 'report', 'mode'] {
 		return fail_result('apps performance', 'unknown performance leaf: ${opts.leaf}.\nRun: horneroctl apps performance --help')
@@ -674,19 +1021,19 @@ pub fn performance_report(opts PerformanceOptions) CommandResult {
 	if opts.leaf == 'mode' {
 		return performance_mode_report(opts)
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_performance_bin(), 'dots-performance',
-		'HORNERO_PERFORMANCE_BIN', opts.dry_run, 'horneroctl apps performance ${opts.leaf} --dry-run') or {
-		return fail_result('apps performance ${opts.leaf}', err.msg())
+	if opts.leaf == 'startup' {
+		return perf_startup_report(opts.dry_run)
 	}
-	rep := apps_run_delegated(bin, ['--' + opts.leaf], opts.dry_run)
-	if opts.dry_run {
-		return ok_result('apps performance ${opts.leaf}', 'would run: ${rep.command_line}',
-			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+	if opts.leaf == 'memory' {
+		return perf_memory_report(opts.dry_run)
 	}
-	return apps_delegated_ok('apps performance ${opts.leaf}', rep, {})
+	if opts.leaf == 'benchmark' {
+		return perf_benchmark_report(opts.dry_run)
+	}
+	if opts.leaf == 'report' {
+		return perf_report_report(opts.dry_run)
+	}
+	return fail_result('apps performance', 'unknown performance leaf: ${opts.leaf}.\nRun: horneroctl apps performance --help')
 }
 
 // performance_mode_profiles lists powerprofilesctl profiles natively.

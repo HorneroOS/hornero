@@ -7,26 +7,11 @@ import os
 // `current` reads the wallpaper pointer natively (canonical hornero/*
 // pointer first, legacy dots/* fallback, then the pywal link — the same
 // priority as dots_current_wallpaper in wallpaper-resolver.sh). `set` and
-// `reload` delegate to the verified dots-wallpaper-set / dots-wal-reload
-// backends, which own the Quickshell appearance IPC verbs plus the wal+M3
-// fallback pipeline; nothing here reimplements that pipeline. Every backend
+// `reload` delegates to the verified dots-wal-reload backend; `set`
+// runs natively (shell IPC, else the wal+M3 pipeline). Every backend
 // invocation carries HORNEROCTL_DELEGATED=1 so the delegating dots-* shims
 // run their legacy body instead of calling back into horneroctl.
 // Mutating verbs require --yes; --dry-run only previews.
-
-// resolve_wallpaper_set_bin locates the dots-wallpaper-set backend.
-// Override with HORNERO_WALLPAPER_SET_BIN.
-pub fn resolve_wallpaper_set_bin() string {
-	env := os.getenv('HORNERO_WALLPAPER_SET_BIN')
-	if env.len > 0 {
-		return env
-	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-wallpaper-set')
-	if os.is_file(home_helper) {
-		return home_helper
-	}
-	return find_on_path('dots-wallpaper-set')
-}
 
 // resolve_wal_reload_bin locates the dots-wal-reload backend.
 // Override with HORNERO_WAL_RELOAD_BIN.
@@ -203,6 +188,35 @@ fn wallpaper_run_backend(bin string, args []string, dry_run bool) ExecReport {
 // wallpaper_report implements the wallpaper subcommands. `current` reads the
 // pointer natively; `set`/`reload` delegate to the dots-* backends.
 // Mutating verbs require --yes; --dry-run only previews.
+// wallpaper_set_native applies one wallpaper without the
+// dots-wallpaper-set wrapper (retired): quickshell IPC setWallpaper
+// first (when the shell runs), else the wal+M3 palette pipeline for
+// the new path — the dots_apply_wallpaper_only contract. An explicit
+// set_helper still delegates (caller override).
+fn wallpaper_set_native(path string, dry_run bool) CommandResult {
+	if !dry_run && shell_running() {
+		ipc := ipc_appearance_call(['setWallpaper', path], false)
+		if ipc.ok && !ipc.output.contains('Target not found') {
+			wait_appearance_ipc(false) or { return fail_result('wallpaper set', err.msg()) }
+			return ok_result('wallpaper set', 'wallpaper applied via shell: ${path}',
+				{
+				'path':    path
+				'backend': 'shell'
+			})
+		}
+	}
+	st := read_scheme_state()
+	flavour := normalize_scheme_type(if st.flavour.len > 0 { st.flavour } else { 'tonal-spot' })
+	mode := if st.mode == 'light' || st.mode == 'dark' { st.mode } else { 'dark' }
+	res := run_palette_pipeline_with(path, flavour, mode, dry_run, default_palette_backends())
+	if !res.ok {
+		return res
+	}
+	mut data := res.data.clone()
+	data['path'] = path
+	return ok_result('wallpaper set', res.message, data)
+}
+
 pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 	match opts.action {
 		'current' {
@@ -225,26 +239,26 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			if !opts.yes && !opts.dry_run {
 				return fail_result('wallpaper set', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl wallpaper set ~/wall.jpg --dry-run')
 			}
-			bin := wallpaper_backend_or_placeholder(opts.set_helper, resolve_wallpaper_set_bin,
-				'dots-wallpaper-set', opts.dry_run) or {
-				return fail_result('wallpaper set', err.msg() +
-					'\nExample: horneroctl wallpaper set ~/wall.jpg --dry-run')
+			if opts.set_helper.len > 0 {
+				bin := opts.set_helper
+				rep := wallpaper_run_backend(bin, [opts.path], opts.dry_run)
+				if opts.dry_run {
+					return ok_result('wallpaper set', 'would run: ${rep.command_line}',
+						{
+						'command_line': rep.command_line
+						'dry_run':      'true'
+						'path':         resolved
+					})
+				}
+				if rep.ok {
+					return ok_result('wallpaper set', rep.output, {
+						'command_line': rep.command_line
+						'path':         resolved
+					})
+				}
+				return fail_result('wallpaper set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 			}
-			rep := wallpaper_run_backend(bin, [opts.path], opts.dry_run)
-			if opts.dry_run {
-				return ok_result('wallpaper set', 'would run: ${rep.command_line}', {
-					'command_line': rep.command_line
-					'dry_run':      'true'
-					'path':         resolved
-				})
-			}
-			if rep.ok {
-				return ok_result('wallpaper set', rep.output, {
-					'command_line': rep.command_line
-					'path':         resolved
-				})
-			}
-			return fail_result('wallpaper set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			return wallpaper_set_native(resolved, opts.dry_run)
 		}
 		'reload' {
 			if !opts.yes && !opts.dry_run {

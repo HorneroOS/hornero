@@ -12,13 +12,8 @@ fn apps_dispatch_setup() {
 	os.setenv('HORNERO_XDG_OPEN_BIN', '/nonexistent-xdg-open-hornero-test', true)
 	os.setenv('HORNERO_DOTS_YAZI_BIN', '/nonexistent-dots-yazi-hornero-test', true)
 	os.setenv('HORNERO_YAZI_BIN', '/nonexistent-yazi-hornero-test', true)
-	os.setenv('HORNERO_WEATHER_BIN', '/nonexistent-weather-hornero-test', true)
 	os.setenv('HORNERO_GIT_NOTIFY_BIN', '/nonexistent-git-notify-hornero-test', true)
-	os.setenv('HORNERO_SECURITY_AUDIT_BIN', '/nonexistent-audit-hornero-test', true)
-	os.setenv('HORNERO_LAUNCHER_BIN', '/nonexistent-launcher-hornero-test', true)
-	os.setenv('HORNERO_TOGGLE_BIN', '/nonexistent-toggle-hornero-test', true)
 	os.setenv('HORNERO_SNAPPY_BIN', '/nonexistent-snappy-hornero-test', true)
-	os.setenv('HORNERO_PERFORMANCE_BIN', '/nonexistent-performance-hornero-test', true)
 	os.setenv('HORNERO_POWERPROFILESCTL_BIN', '/nonexistent-ppctl-hornero-test', true)
 }
 
@@ -29,13 +24,8 @@ fn apps_dispatch_teardown() {
 	os.unsetenv('HORNERO_XDG_OPEN_BIN')
 	os.unsetenv('HORNERO_DOTS_YAZI_BIN')
 	os.unsetenv('HORNERO_YAZI_BIN')
-	os.unsetenv('HORNERO_WEATHER_BIN')
 	os.unsetenv('HORNERO_GIT_NOTIFY_BIN')
-	os.unsetenv('HORNERO_SECURITY_AUDIT_BIN')
-	os.unsetenv('HORNERO_LAUNCHER_BIN')
-	os.unsetenv('HORNERO_TOGGLE_BIN')
 	os.unsetenv('HORNERO_SNAPPY_BIN')
-	os.unsetenv('HORNERO_PERFORMANCE_BIN')
 	os.unsetenv('HORNERO_POWERPROFILESCTL_BIN')
 }
 

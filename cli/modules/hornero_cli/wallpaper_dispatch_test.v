@@ -15,8 +15,6 @@ fn wp_dispatch_setup() {
 		true)
 	os.setenv('XDG_STATE_HOME', base + '/state', true)
 	os.setenv('XDG_CACHE_HOME', base + '/cache', true)
-	os.setenv('HORNERO_WALLPAPER_SET_BIN', '/nonexistent-wallpaper-set-hornero-test',
-		true)
 	os.setenv('HORNERO_WAL_RELOAD_BIN', '/nonexistent-wal-reload-hornero-test', true)
 }
 
@@ -24,7 +22,6 @@ fn wp_dispatch_teardown() {
 	os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
-	os.unsetenv('HORNERO_WALLPAPER_SET_BIN')
 	os.unsetenv('HORNERO_WAL_RELOAD_BIN')
 }
 
