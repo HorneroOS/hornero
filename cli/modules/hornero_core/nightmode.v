@@ -333,8 +333,8 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 		if active && !cmd.dry_run {
 			return ok_result('appearance night-mode on', 'Night mode is already active.',
 				{
-				'active': 'true'
-			})
+					'active': 'true'
+				})
 		}
 		return night_enable_native(cmd.dry_run, mut lines)
 	}
@@ -342,8 +342,8 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 		if !active && !cmd.dry_run {
 			return ok_result('appearance night-mode off', 'Night mode is already inactive.',
 				{
-				'active': 'false'
-			})
+					'active': 'false'
+				})
 		}
 		return night_disable_native(cmd.dry_run, mut lines)
 	}
@@ -406,18 +406,18 @@ fn night_enable_native(dry_run bool, mut lines []string) CommandResult {
 	if dry_run {
 		return ok_result('appearance night-mode on', 'would run:\n' + lines.join('\n'),
 			{
-			'command_line': lines.join('\n')
-			'dry_run':      'true'
-			'backend':      backend
-		})
+				'command_line': lines.join('\n')
+				'dry_run':      'true'
+				'backend':      backend
+			})
 	}
 	write_night_state_file('enabled') or {
 		return fail_result('appearance night-mode on', 'backend started but state persist failed: ${err.msg()}')
 	}
 	return ok_result('appearance night-mode on', '${backend} enabled (night mode - 4000K)',
 		{
-		'backend': backend
-	})
+			'backend': backend
+		})
 }
 
 // night_disable_native force-disables every backend.
@@ -461,9 +461,9 @@ fn night_disable_native(dry_run bool, mut lines []string) CommandResult {
 	if dry_run {
 		return ok_result('appearance night-mode off', 'would run:\n' + lines.join('\n'),
 			{
-			'command_line': lines.join('\n')
-			'dry_run':      'true'
-		})
+				'command_line': lines.join('\n')
+				'dry_run':      'true'
+			})
 	}
 	write_night_state_file('disabled') or {
 		return fail_result('appearance night-mode off', 'backends reset but state persist failed: ${err.msg()}')

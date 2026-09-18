@@ -401,8 +401,8 @@ pub fn theme_apply_native_with(id string, wallpaper_override string, dry_run boo
 	name := pack_str(pack, 'name')
 	return ok_result('appearance theme apply', '${if name.len > 0 { name } else { id }} theme applied',
 		{
-		'id': id
-	})
+			'id': id
+		})
 }
 
 // theme_pack_gtk_apply resolves GTK/icons from a pack (wallpaper
@@ -467,7 +467,7 @@ pub fn sync_kitty_include(theme_id string) {
 	for line in raw.split_into_lines() {
 		if line.starts_with('include ')
 			&& (line.ends_with('hornero-dark.conf') || line.ends_with('hornero-light.conf')
-			|| line.ends_with('pampa.conf')) {
+				|| line.ends_with('pampa.conf')) {
 			out << 'include ${theme_id}.conf'
 		} else {
 			out << line
@@ -582,9 +582,9 @@ pub fn regenerate_hyprlock_native(wallpaper_arg string, dry_run bool) CommandRes
 	if dry_run {
 		return ok_result('appearance hyprlock', 'would run: write ${out} from ${scheme}',
 			{
-			'command_line': 'write ${out}'
-			'dry_run':      'true'
-		})
+				'command_line': 'write ${out}'
+				'dry_run':      'true'
+			})
 	}
 	raw := os.read_file(scheme) or {
 		return fail_result('appearance hyprlock', 'cannot read ${scheme}: ${err.msg()}')
@@ -687,8 +687,8 @@ pub fn appearance_set_gtk_native(theme string, dry_run bool) CommandResult {
 			wait_appearance_ipc(false) or { return fail_result('appearance set-gtk', err.msg()) }
 			return ok_result('appearance set-gtk', 'GTK theme set via shell: ${theme}',
 				{
-				'theme': theme
-			})
+					'theme': theme
+				})
 		}
 	}
 	mut icon := current_icon_theme()
@@ -710,8 +710,8 @@ pub fn appearance_set_icons_native(theme string, dry_run bool) CommandResult {
 			wait_appearance_ipc(false) or { return fail_result('appearance set-icons', err.msg()) }
 			return ok_result('appearance set-icons', 'Icon theme set via shell: ${theme}',
 				{
-				'theme': theme
-			})
+					'theme': theme
+				})
 		}
 	}
 	current := current_gtk_theme()
@@ -735,8 +735,8 @@ pub fn appearance_set_gtk_policy_native(policy string, dry_run bool) CommandResu
 			}
 			return ok_result('appearance set-gtk-color-scheme', 'GTK color-scheme set via shell: ${policy}',
 				{
-				'policy': policy
-			})
+					'policy': policy
+				})
 		}
 	}
 	return apply_gtk_color_scheme_native(policy, dry_run)
@@ -770,8 +770,8 @@ pub fn appearance_sync_native(dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result('appearance sync', 'would run: sync state.json from scheme.json',
 			{
-			'dry_run': 'true'
-		})
+				'dry_run': 'true'
+			})
 	}
 	sync_state_from_scheme() or { return fail_result('appearance sync', err.msg()) }
 	return ok_result('appearance sync', 'appearance state synced from scheme.json', {})
@@ -981,8 +981,8 @@ pub fn wallpaper_reload_native(dry_run bool) CommandResult {
 	regenerate_hyprlock_native('', false)
 	return ok_result('wallpaper reload', 'wallpaper pipeline reloaded from ${wallpaper}',
 		{
-		'wallpaper': wallpaper
-	})
+			'wallpaper': wallpaper
+		})
 }
 
 // smart_file_outputs lists every file `colors generate` writes.

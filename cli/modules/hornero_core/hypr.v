@@ -1122,7 +1122,7 @@ pub fn plugins_install_report(opts PluginsInstallOptions) CommandResult {
 	}
 	return ok_result('hypr plugins install', 'ScrollOverview plugins installed and enabled',
 		{
-		'installed': 'true'
-		'enabled':   'true'
-	})
+			'installed': 'true'
+			'enabled':   'true'
+		})
 }

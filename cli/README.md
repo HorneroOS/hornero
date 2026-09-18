@@ -110,7 +110,7 @@ Contract: `docs/cli-architecture.md` section 4.
 
 ## Build / test
 
-Requires V (see `.v-version`):
+Requires V (latest master — run `v up` to update):
 
 ```sh
 ./make.vsh build-cli   # build/horneroctl
@@ -140,7 +140,7 @@ cli/
 │   ├── batch2_options.v migrate_options.v
 │   └── dispatch_test.v batch1_dispatch_test.v batch2_dispatch_test.v
 │       migrate_dispatch_test.v theme_switch_dispatch_test.v
-├── make.vsh .v-version
+├── make.vsh
 ├── README.md AGENTS.md
 ```
 

@@ -84,9 +84,9 @@ pub fn mic_toggle_report(opts MicToggleOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('hardware mic toggle', 'would run: wpctl set-mute ${src} toggle',
 				{
-				'command_line': 'wpctl set-mute ${src} toggle'
-				'dry_run':      'true'
-			})
+					'command_line': 'wpctl set-mute ${src} toggle'
+					'dry_run':      'true'
+				})
 		}
 		return fail_result('hardware mic toggle', 'wpctl not found on PATH. Set HORNERO_WPCTL_BIN.\nExample: horneroctl hardware mic toggle --dry-run')
 	}

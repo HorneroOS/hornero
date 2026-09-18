@@ -194,8 +194,7 @@ fn test_batch2_resolvers_never_hardcode_dots_paths() {
 	assert resolve_default_apps_bin() == ''
 	assert resolve_settings_gui_bin() == ''
 	assert resolve_materialize_bin() == ''
-	for bin in [resolve_default_apps_bin(), resolve_settings_gui_bin(),
-		resolve_materialize_bin()] {
+	for bin in [resolve_default_apps_bin(), resolve_settings_gui_bin(), resolve_materialize_bin()] {
 		assert !bin.contains('/dots/')
 	}
 	b2_restore_resolution(old_home, old_path)

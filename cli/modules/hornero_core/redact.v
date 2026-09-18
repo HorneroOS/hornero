@@ -5,8 +5,8 @@ pub const redacted_marker = '[redacted]'
 
 // secret_key_markers are case-insensitive fragments. A KEY=VALUE (or
 // KEY: VALUE) pair is redacted when its key contains one of these.
-const secret_key_markers = ['token', 'secret', 'password', 'passwd', 'pwd', 'key', 'auth',
-	'credential', 'bearer']!
+const secret_key_markers = ['token', 'secret', 'password', 'passwd', 'pwd', 'key', 'auth', 'credential',
+	'bearer']!
 
 fn key_is_secret(key string) bool {
 	lk := key.to_lower()

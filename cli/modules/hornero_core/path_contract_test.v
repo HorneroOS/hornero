@@ -60,9 +60,8 @@ fn test_pc_canonical_resolvers_are_write_targets() {
 	assert resolve_image_cache_dir() == '${pc_root}/write-targets/cache/hornero/imagecache'
 	assert resolve_notif_image_cache_dir() == '${pc_root}/write-targets/cache/hornero/imagecache/notifs'
 	targets := [resolve_themes_dir(), resolve_presets_dir(), resolve_preset_state_file(),
-		scheme_state_file(), color_scheme_file(), resolve_snapshots_dir(),
-		resolve_wallpapers_dir(), resolve_wallpaper_pointer_file(),
-		resolve_notifs_file(), resolve_image_cache_dir()]
+		scheme_state_file(), color_scheme_file(), resolve_snapshots_dir(), resolve_wallpapers_dir(),
+		resolve_wallpaper_pointer_file(), resolve_notifs_file(), resolve_image_cache_dir()]
 	for p in targets {
 		assert p.contains('/hornero/'), 'write target must be hornero/*: ${p}'
 		assert !p.contains('/dots/'), 'write target must never be dots/*: ${p}'

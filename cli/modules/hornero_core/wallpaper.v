@@ -200,9 +200,9 @@ fn wallpaper_set_native(path string, dry_run bool) CommandResult {
 			wait_appearance_ipc(false) or { return fail_result('wallpaper set', err.msg()) }
 			return ok_result('wallpaper set', 'wallpaper applied via shell: ${path}',
 				{
-				'path':    path
-				'backend': 'shell'
-			})
+					'path':    path
+					'backend': 'shell'
+				})
 		}
 	}
 	st := read_scheme_state()
@@ -245,10 +245,10 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 				if opts.dry_run {
 					return ok_result('wallpaper set', 'would run: ${rep.command_line}',
 						{
-						'command_line': rep.command_line
-						'dry_run':      'true'
-						'path':         resolved
-					})
+							'command_line': rep.command_line
+							'dry_run':      'true'
+							'path':         resolved
+						})
 				}
 				if rep.ok {
 					return ok_result('wallpaper set', rep.output, {
@@ -279,9 +279,9 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			if opts.dry_run {
 				return ok_result('wallpaper reload', 'would run: ${rep.command_line}',
 					{
-					'command_line': rep.command_line
-					'dry_run':      'true'
-				})
+						'command_line': rep.command_line
+						'dry_run':      'true'
+					})
 			}
 			if rep.ok {
 				return ok_result('wallpaper reload', rep.output, {

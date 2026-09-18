@@ -32,8 +32,8 @@ pub fn colors_report(opts ColorsOptions) CommandResult {
 			if opts.dry_run {
 				return ok_result('appearance colors status', 'would run: read xrdb palette and preview smart colors',
 					{
-					'dry_run': 'true'
-				})
+						'dry_run': 'true'
+					})
 			}
 			// An explicit override short-circuits to that backend
 			// (opaque passthrough, fails when broken); unset means

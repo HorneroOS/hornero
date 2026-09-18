@@ -233,8 +233,11 @@ pub fn screenshot_report(opts ScreenshotOptions) CommandResult {
 		return fail_result('capture screenshot', err.msg())
 	}
 	out := if opts.output.len > 0 { opts.output } else { screenshot_default_path() }
-	args := if opts.region { []string{} } else { ['--screen', '--current', '--copy', '--output',
-			out] }
+	args := if opts.region {
+		[]string{}
+	} else {
+		['--screen', '--current', '--copy', '--output', out]
+	}
 	rep := run_exec(ExecSpec{
 		prog:    bin
 		args:    args
@@ -310,8 +313,8 @@ pub fn record_start_report(opts RecordStartOptions) CommandResult {
 	if recorder_running() {
 		return ok_result('capture record start', 'a recording is already running (start is a no-op)',
 			{
-			'running': 'true'
-		})
+				'running': 'true'
+			})
 	}
 	resolved_gsr := resolve_gsr_bin()
 	have_bin := resolved_gsr.len > 0
@@ -329,10 +332,10 @@ pub fn record_start_report(opts RecordStartOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('capture record start', 'would run: ${command_line(gsr, args)}',
 			{
-			'command_line': command_line(gsr, args)
-			'dry_run':      'true'
-			'file':         file
-		})
+				'command_line': command_line(gsr, args)
+				'dry_run':      'true'
+				'file':         file
+			})
 	}
 	os.mkdir_all(recorder_state_dir()) or {}
 	os.mkdir_all(recorder_output_dir()) or {}
@@ -369,9 +372,9 @@ pub fn record_stop_report(opts RecordStopOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('capture record stop', 'would run: ${line} (then drop the recorder state)',
 			{
-			'command_line': line
-			'dry_run':      'true'
-		})
+				'command_line': line
+				'dry_run':      'true'
+			})
 	}
 	cur := os.read_file(recorder_current_file()) or { '' }
 	rep := run_exec(ExecSpec{
@@ -391,8 +394,8 @@ pub fn record_stop_report(opts RecordStopOptions) CommandResult {
 	}
 	return ok_result('capture record stop', 'no recording state found (nothing to stop)',
 		{
-		'command_line': rep.command_line
-	})
+			'command_line': rep.command_line
+		})
 }
 
 pub struct RecordPauseOptions {
@@ -573,23 +576,23 @@ pub fn clipboard_report(opts ClipboardOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('capture clipboard', 'would run: wl-paste | head -c 500',
 				{
-				'command_line': 'wl-paste | head -c 500'
-				'dry_run':      'true'
-				'backend':      'minimal'
-			})
+					'command_line': 'wl-paste | head -c 500'
+					'dry_run':      'true'
+					'backend':      'minimal'
+				})
 		}
 		return ok_result('capture clipboard', '[dots-clipboard] minimal fallback\n(no data)',
 			{
-			'backend': 'minimal'
-		})
+				'backend': 'minimal'
+			})
 	}
 	if opts.dry_run {
 		return ok_result('capture clipboard', 'would run: ${command_line(bin, [])} | head -c 500',
 			{
-			'command_line': '${command_line(bin, [])} | head -c 500'
-			'dry_run':      'true'
-			'backend':      'minimal'
-		})
+				'command_line': '${command_line(bin, [])} | head -c 500'
+				'dry_run':      'true'
+				'backend':      'minimal'
+			})
 	}
 	rep := clipboard_minimal_output(bin)
 	if !rep.ok {
@@ -598,7 +601,7 @@ pub fn clipboard_report(opts ClipboardOptions) CommandResult {
 	msg := if rep.output.len > 0 { rep.output } else { '(empty)' }
 	return ok_result('capture clipboard', '[dots-clipboard] minimal fallback\n${msg}',
 		{
-		'command_line': rep.command_line
-		'backend':      'minimal'
-	})
+			'command_line': rep.command_line
+			'backend':      'minimal'
+		})
 }

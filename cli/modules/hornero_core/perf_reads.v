@@ -270,8 +270,8 @@ fn perf_startup_report(dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would measure zsh startup (5 runs) and write ${dir}/startup_<timestamp>.log',
 			{
-			'dry_run': 'true'
-		})
+				'dry_run': 'true'
+			})
 	}
 	os.mkdir_all(dir) or {}
 	lines, times := perf_startup_lines() or { return fail_result(name, err.msg()) }
@@ -319,8 +319,8 @@ fn perf_benchmark_report(dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would run the benchmark suite and write ${dir}/benchmark_<timestamp>.log',
 			{
-			'dry_run': 'true'
-		})
+				'dry_run': 'true'
+			})
 	}
 	os.mkdir_all(dir) or {}
 	mut body := ['# HorneroConfig Performance Benchmark', 'Date: ${time.now()}',

@@ -288,8 +288,8 @@ fn files_info_native() CommandResult {
 	xdg := xdg_mime_or_fail(false) or {
 		return ok_result('apps files --info', 'No XDG tools found (handlr or xdg-mime)',
 			{
-			'default': 'Not set'
-		})
+				'default': 'Not set'
+			})
 	}
 	rep := run_exec(ExecSpec{
 		prog: xdg
@@ -310,8 +310,8 @@ pub fn files_report(opts FilesOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('apps files --info', 'would read the inode/directory default via handlr (else xdg-mime)',
 				{
-				'dry_run': 'true'
-			})
+					'dry_run': 'true'
+				})
 		}
 		return files_info_native()
 	}
@@ -492,8 +492,8 @@ pub fn terminal_file_report(opts TerminalFileOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('apps terminal-file --cheatsheet', 'would print the yazi keybinding reference',
 				{
-				'dry_run': 'true'
-			})
+					'dry_run': 'true'
+				})
 		}
 		return ok_result('apps terminal-file --cheatsheet', yazi_cheatsheet_lines.join('\n'),
 			{})
@@ -502,8 +502,8 @@ pub fn terminal_file_report(opts TerminalFileOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('apps terminal-file --fix-previews', 'would diagnose yazi preview dependencies',
 				{
-				'dry_run': 'true'
-			})
+					'dry_run': 'true'
+				})
 		}
 		return yazi_fix_previews_native()
 	}
@@ -574,10 +574,10 @@ pub fn weather_report(opts WeatherOptions) CommandResult {
 	rep := apps_run_delegated('dots-weather-info', ['--${opts.field}'], true)
 	return ok_result('apps weather --${opts.field}', 'would run: ${rep.command_line}',
 		{
-		'command_line': rep.command_line
-		'dry_run':      'true'
-		'field':        opts.field
-	})
+			'command_line': rep.command_line
+			'dry_run':      'true'
+			'field':        opts.field
+		})
 }
 
 pub struct GitStatusOptions {
@@ -609,9 +609,9 @@ pub fn git_status_report(opts GitStatusOptions) CommandResult {
 		if opts.dry_run {
 			return ok_result('apps git-status jobs', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		return apps_delegated_ok('apps git-status jobs', rep, {})
 	}
@@ -645,9 +645,9 @@ pub fn git_status_report(opts GitStatusOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps git-status ${opts.leaf}', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	return apps_delegated_ok('apps git-status ${opts.leaf}', rep, {})
 }
@@ -743,9 +743,9 @@ fn launch_native(opts LaunchOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps launch', 'would prompt for a command (minimal fallback)',
 			{
-			'dry_run': 'true'
-			'backend': 'minimal'
-		})
+				'dry_run': 'true'
+				'backend': 'minimal'
+			})
 	}
 	cmd := os.input('command> ').trim_space()
 	if cmd.len == 0 {
@@ -890,8 +890,8 @@ fn toggle_daemon_native(name string, daemon string, dry_run bool) CommandResult 
 // (their monitor loops stay legacy).
 // Mutating: needs --yes; --dry-run only previews the legacy delegation.
 pub fn toggle_report(opts ToggleOptions) CommandResult {
-	if opts.component !in ['bar', 'launcher', 'dashboard', 'sidebar', 'session', 'utilities',
-		'redshift', 'caffeine'] {
+	if opts.component !in ['bar', 'launcher', 'dashboard', 'sidebar', 'session', 'utilities', 'redshift',
+		'caffeine'] {
 		return fail_result('apps toggle', 'unknown toggle component: ${opts.component}.\nRun: horneroctl apps toggle --help')
 	}
 	if !opts.yes && !opts.dry_run {
@@ -907,10 +907,10 @@ pub fn toggle_report(opts ToggleOptions) CommandResult {
 	rep := apps_run_delegated('dots-toggle', args, true)
 	return ok_result('apps toggle ${opts.component}', 'would run: ${rep.command_line}',
 		{
-		'command_line': rep.command_line
-		'dry_run':      'true'
-		'component':    opts.component
-	})
+			'command_line': rep.command_line
+			'dry_run':      'true'
+			'component':    opts.component
+		})
 }
 
 pub struct SwitcherOptions {
@@ -1004,9 +1004,9 @@ pub fn switcher_report(opts SwitcherOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps switcher ${opts.leaf}', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	return apps_delegated_ok('apps switcher ${opts.leaf}', rep, {})
 }
@@ -1090,9 +1090,9 @@ fn performance_mode_report(opts PerformanceOptions) CommandResult {
 			rep := apps_run_leaf('powerprofilesctl', ph, true)
 			return ok_result('apps performance mode', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+				})
 		}
 		return fail_result('apps performance mode', 'powerprofilesctl not found. Set HORNERO_POWERPROFILESCTL_BIN.\nExample: horneroctl apps performance mode --dry-run')
 	}
@@ -1124,10 +1124,10 @@ fn performance_mode_report(opts PerformanceOptions) CommandResult {
 			rep := apps_run_leaf(bin, ['set', opts.profile], true)
 			return ok_result('apps performance mode set', 'would run: ${rep.command_line}',
 				{
-				'command_line': rep.command_line
-				'dry_run':      'true'
-				'profile':      opts.profile
-			})
+					'command_line': rep.command_line
+					'dry_run':      'true'
+					'profile':      opts.profile
+				})
 		}
 		return fail_result('apps performance mode set', 'cannot list profiles: ${err.msg()}')
 	}
@@ -1139,10 +1139,10 @@ fn performance_mode_report(opts PerformanceOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('apps performance mode set', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'profile':      opts.profile
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+				'profile':      opts.profile
+			})
 	}
 	return apps_delegated_ok('apps performance mode set', rep, {
 		'profile': opts.profile

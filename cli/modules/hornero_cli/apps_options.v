@@ -8,8 +8,8 @@ module hornero_cli
 // with --dry-run previews. `audit` covers checks plus --fix/--report/
 // --json; default-apps set stays a deferral under `config default-apps`.
 
-pub const apps_verbs = ['files', 'terminal-file', 'weather', 'git-status', 'audit', 'launch',
-	'toggle', 'switcher', 'performance']
+pub const apps_verbs = ['files', 'terminal-file', 'weather', 'git-status', 'audit', 'launch', 'toggle',
+	'switcher', 'performance']
 
 // AppsCmdOptions covers `apps <verb>`: the verb routes, the rest parses
 // per verb.
@@ -515,7 +515,8 @@ pub fn parse_apps_switcher(args []string) !SwitcherCmdOptions {
 	mut leaf := 'toggle'
 	mut rest_start := 0
 	if args.len > 0 {
-		if args[0] !in ['daemon', 'next', 'prev', 'toggle', 'hide', 'select', 'quit', 'status', 'apply-theme', 'apply-theme-pack', 'apply-rice-theme']
+		if args[0] !in ['daemon', 'next', 'prev', 'toggle', 'hide', 'select', 'quit', 'status',
+			'apply-theme', 'apply-theme-pack', 'apply-rice-theme']
 			&& !args[0].starts_with('-') {
 			return error('unknown switcher leaf: ${args[0]}.\nRun: horneroctl apps switcher --help')
 		}

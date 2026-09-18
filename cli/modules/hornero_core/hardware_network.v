@@ -117,9 +117,9 @@ pub fn network_status_report(opts NetworkStatusOptions) CommandResult {
 	via := if iface.len > 0 { ' via ${iface} (${class})' } else { ' (${class}, interface unknown)' }
 	return ok_result('hardware network status', '${icon} ${state}${via} (host ${host})',
 		{
-		'state':     state
-		'interface': if iface.len > 0 { iface } else { 'unknown' }
-		'class':     class
-		'host':      host
-	})
+			'state':     state
+			'interface': if iface.len > 0 { iface } else { 'unknown' }
+			'class':     class
+			'host':      host
+		})
 }

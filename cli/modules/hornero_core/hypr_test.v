@@ -55,19 +55,19 @@ fn hypr_test_setup() {
 	os.mkdir_all(hx_hypr_root + '/bin') or { assert false }
 	os.write_file(hx_hypr_root + '/bin/hyprctl',
 		'#!/bin/sh\nif [ "\$1" = "monitors" ]; then cat ' + hx_hypr_root +
-		'/monitors.json\necho\nelif [ "\$1" = "getoption" ]; then echo "str: dwindle"\nfi\nexit 0\n') or {
+			'/monitors.json\necho\nelif [ "\$1" = "getoption" ]; then echo "str: dwindle"\nfi\nexit 0\n') or {
 		assert false
 	}
 	os.write_file(hx_hypr_root + '/bin/i3-msg',
 		'#!/bin/sh\nif [ "\$1" = "-t" ] && [ "\$2" = "get_config" ]; then cat ' + hx_hypr_root +
-		'/i3-config\nelif [ "\$1" = "-t" ] && [ "\$2" = "get_workspaces" ]; then cat ' +
-		hx_hypr_root + '/i3-workspaces\necho\nelse echo "ok"\nfi\nexit 0\n') or { assert false }
+			'/i3-config\nelif [ "\$1" = "-t" ] && [ "\$2" = "get_workspaces" ]; then cat ' +
+			hx_hypr_root + '/i3-workspaces\necho\nelse echo "ok"\nfi\nexit 0\n') or { assert false }
 	os.write_file(hx_hypr_root + '/bin/hyprpm', '#!/bin/sh\necho "Repository hyprland-scroll-overview (https://github.com/yayuuu/hyprland-scroll-overview.git):"\necho "  Plugin scrolloverview: enabled"\nexit 0\n') or {
 		assert false
 	}
 	os.write_file(hx_hypr_root + '/bin/hyprctl-single',
 		'#!/bin/sh\nif [ "\$1" = "monitors" ]; then cat ' + hx_hypr_root +
-		'/monitors-single.json\necho\nfi\nexit 0\n') or { assert false }
+			'/monitors-single.json\necho\nfi\nexit 0\n') or { assert false }
 	os.chmod(hx_hypr_root + '/bin/hyprctl', 0o755) or { assert false }
 	os.chmod(hx_hypr_root + '/bin/hyprctl-single', 0o755) or { assert false }
 	os.chmod(hx_hypr_root + '/bin/i3-msg', 0o755) or { assert false }

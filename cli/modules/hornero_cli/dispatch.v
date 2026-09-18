@@ -441,8 +441,8 @@ fn run_appearance_scheme(args []string, mode hornero_core.RenderMode) int {
 		if opts.dry_run {
 			return render(hornero_core.ok_result('appearance scheme sync-state', 'would run: sync state.json from scheme.json',
 				{
-				'dry_run': 'true'
-			}), mode)
+					'dry_run': 'true'
+				}), mode)
 		}
 		path := hornero_core.sync_state_from_scheme() or {
 			return render_error(hornero_core.err_usage('appearance.scheme.usage', err.msg()),
@@ -450,8 +450,8 @@ fn run_appearance_scheme(args []string, mode hornero_core.RenderMode) int {
 		}
 		return render(hornero_core.ok_result('appearance scheme sync-state', 'state synced from scheme.json',
 			{
-			'state_file': path
-		}), mode)
+				'state_file': path
+			}), mode)
 	}
 	kind := if opts.leaf == 'set-mode' { 'mode' } else { 'variant' }
 	return render(hornero_core.scheme_set_report(hornero_core.SchemeSetOptions{

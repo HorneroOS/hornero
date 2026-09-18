@@ -365,8 +365,7 @@ pub fn brightness_status_report(opts BrightnessStatusOptions) CommandResult {
 	backend := brightness_backend()
 	if opts.dry_run {
 		probe := brightness_probe_cmd(backend, opts.display, true)
-		return ok_result('hardware brightness status', 'would run: ${command_line(probe.prog,
-			probe.args)}', {
+		return ok_result('hardware brightness status', 'would run: ${command_line(probe.prog, probe.args)}', {
 			'command_line': command_line(probe.prog, probe.args)
 			'dry_run':      'true'
 		})
@@ -484,17 +483,17 @@ pub fn brightness_set_report(opts BrightnessSetOptions) CommandResult {
 	if opts.dry_run {
 		return ok_result('hardware brightness set', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	if rep.ok {
 		v := brightness_clamp(opts.value)
 		return ok_result('hardware brightness set', 'brightness set to ${v.str()} via ${backend}',
 			{
-			'command_line': rep.command_line
-			'value':        v.str()
-		})
+				'command_line': rep.command_line
+				'value':        v.str()
+			})
 	}
 	return fail_result('hardware brightness set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }
@@ -536,14 +535,13 @@ pub fn brightness_adjust_report(opts BrightnessAdjustOptions) CommandResult {
 	sign := if opts.dir == 'up' { '+' } else { '-' }
 	if opts.dry_run {
 		probe := brightness_probe_cmd(backend, disp, true)
-		return ok_result('hardware brightness ${opts.dir}', 'would run: ${command_line(probe.prog,
-			probe.args)}, then set brightness ${sign}${opts.step.str()} (clamped 0.0-1.0)',
+		return ok_result('hardware brightness ${opts.dir}', 'would run: ${command_line(probe.prog, probe.args)}, then set brightness ${sign}${opts.step.str()} (clamped 0.0-1.0)',
 			{
-			'read_command': command_line(probe.prog, probe.args)
-			'direction':    opts.dir
-			'step':         opts.step.str()
-			'dry_run':      'true'
-		})
+				'read_command': command_line(probe.prog, probe.args)
+				'direction':    opts.dir
+				'step':         opts.step.str()
+				'dry_run':      'true'
+			})
 	}
 	if backend == '' {
 		return fail_result('hardware brightness ${opts.dir}', 'no brightness backend found (needs brightnessctl, blight, xbacklight, or xrandr). Set HORNERO_BRIGHTNESSCTL_BIN.\nExample: horneroctl hardware brightness status --dry-run')
@@ -566,9 +564,9 @@ pub fn brightness_adjust_report(opts BrightnessAdjustOptions) CommandResult {
 	if rep.ok {
 		return ok_result('hardware brightness ${opts.dir}', 'brightness ${cur.str()} -> ${target.str()} via ${backend}',
 			{
-			'command_line': rep.command_line
-			'value':        target.str()
-		})
+				'command_line': rep.command_line
+				'value':        target.str()
+			})
 	}
 	return fail_result('hardware brightness ${opts.dir}', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }
@@ -735,9 +733,9 @@ pub fn brightness_temp_report(opts BrightnessTempOptions) CommandResult {
 	k := brightness_temp_kelvin_of(target)
 	return ok_result(name, 'temperature set to ${target.str()} (${k}K) on ${disp} via xrandr',
 		{
-		'command_line': rep.command_line
-		'value':        target.str()
-		'kelvin':       k.str()
-		'display':      disp
-	})
+			'command_line': rep.command_line
+			'value':        target.str()
+			'kelvin':       k.str()
+			'display':      disp
+		})
 }

@@ -142,10 +142,10 @@ pub fn scheme_current_report() CommandResult {
 	out_variant := if st.variant.len > 0 { st.variant } else { 'tonalspot' }
 	return ok_result('appearance scheme current', '${out_name}\n${out_flavour}\n${out_variant}',
 		{
-		'name':    out_name
-		'flavour': out_flavour
-		'variant': out_variant
-	})
+			'name':    out_name
+			'flavour': out_flavour
+			'variant': out_variant
+		})
 }
 
 // sync_state_from_scheme adopts scheme.json meta into state.json without
@@ -192,9 +192,9 @@ pub fn regenerate_scheme_native(wallpaper string, dry_run bool) CommandResult {
 		}
 		return ok_result('appearance scheme regenerate', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
 	}
 	os.mkdir_all(os.dir(out)) or {
 		return fail_result('appearance scheme regenerate', 'cannot create ${os.dir(out)}: ${err.msg()}')
@@ -245,10 +245,10 @@ pub fn scheme_set_mode_native(mode string, dry_run bool) CommandResult {
 		}
 		return ok_result('appearance scheme set-mode', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'mode':         mode
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+				'mode':         mode
+			})
 	}
 	ensure_scheme_state()
 	write_scheme_state(name, flavour, mode, variant) or {
@@ -266,9 +266,9 @@ pub fn scheme_set_mode_native(mode string, dry_run bool) CommandResult {
 	}
 	return ok_result('appearance scheme set-mode', 'mode: ${mode} (flavour ${flavour})',
 		{
-		'mode':    mode
-		'flavour': flavour
-	})
+			'mode':    mode
+			'flavour': flavour
+		})
 }
 
 // scheme_set_variant_native implements `set-variant`: normalize, persist
@@ -293,11 +293,11 @@ pub fn scheme_set_variant_native(variant_in string, dry_run bool) CommandResult 
 		}
 		return ok_result('appearance scheme set-variant', 'would run: ${rep.command_line}',
 			{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'variant':      variant
-			'flavour':      flavour
-		})
+				'command_line': rep.command_line
+				'dry_run':      'true'
+				'variant':      variant
+				'flavour':      flavour
+			})
 	}
 	ensure_scheme_state()
 	write_scheme_state(name, flavour, mode, variant) or {
@@ -309,9 +309,9 @@ pub fn scheme_set_variant_native(variant_in string, dry_run bool) CommandResult 
 	}
 	return ok_result('appearance scheme set-variant', 'variant: ${variant} (flavour ${flavour})',
 		{
-		'variant': variant
-		'flavour': flavour
-	})
+			'variant': variant
+			'flavour': flavour
+		})
 }
 
 // accent_report_native implements `appearance accent ...` natively:
@@ -334,9 +334,9 @@ pub fn accent_report_native(action string, value string, dry_run bool) CommandRe
 			if dry_run {
 				return ok_result('appearance accent set', 'would run: write ${seed} to ${accent_override_file()}',
 					{
-					'dry_run':  'true'
-					'override': seed
-				})
+						'dry_run':  'true'
+						'override': seed
+					})
 			}
 			os.mkdir_all(os.dir(accent_override_file())) or {
 				return fail_result('appearance accent set', 'cannot create override dir: ${err.msg()}')
@@ -350,15 +350,15 @@ pub fn accent_report_native(action string, value string, dry_run bool) CommandRe
 			}
 			return ok_result('appearance accent set', 'Accent override set to ${seed}.',
 				{
-				'override': seed
-			})
+					'override': seed
+				})
 		}
 		'clear' {
 			if dry_run {
 				return ok_result('appearance accent clear', 'would run: remove ${accent_override_file()}',
 					{
-					'dry_run': 'true'
-				})
+						'dry_run': 'true'
+					})
 			}
 			os.rm(accent_override_file()) or {}
 			fb := accent_override_file_fallback()

@@ -52,8 +52,8 @@ fn test_dispatch_lock_update() {
 	lock_dsetup()
 	assert dispatch(['horneroctl', 'lock', 'update', '${lock_droot}/wall.png', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'lock', 'update', '${lock_droot}/wall.png']) == 1
-	assert dispatch(['horneroctl', 'lock', 'update', '${lock_droot}/wall.png', '--dim', '30',
-		'--blur', '3', '--pixel', '4', '--yes']) == 0
+	assert dispatch(['horneroctl', 'lock', 'update', '${lock_droot}/wall.png', '--dim', '30', '--blur',
+		'3', '--pixel', '4', '--yes']) == 0
 	assert os.is_file('${lock_droot}/imgs/current/lock_pixel.png')
 	assert dispatch(['horneroctl', 'lock', 'update', '${lock_droot}/missing.png', '--yes']) == 1
 	assert dispatch(['horneroctl', 'lock', 'update', '--dim', '200', '--dry-run']) == 2
