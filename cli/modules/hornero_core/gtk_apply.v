@@ -622,10 +622,10 @@ pub fn gtk_select_report_with(opts GtkSelectOptions, names []string, read_choice
 	if opts.dry_run {
 		return ok_result('appearance gtk select', menu + '\nwould run: apply chosen theme natively',
 			{
-			'command_line': 'appearance gtk select'
-			'dry_run':      'true'
-			'count':        '${names.len}'
-		})
+				'command_line': 'appearance gtk select'
+				'dry_run':      'true'
+				'count':        '${names.len}'
+			})
 	}
 	if !opts.yes {
 		return fail_result('appearance gtk select', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk select --dry-run')

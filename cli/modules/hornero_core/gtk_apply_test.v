@@ -263,8 +263,8 @@ fn test_gtk3_fresh_template_matches_bash_keys() {
 	// Fresh-install settings.ini must carry the full key set the retired
 	// gtk-theme-manager.sh wrote (not just [Settings] + theme/icon).
 	for key in ['gtk-font-name=sans 11', 'gtk-cursor-theme-size=24',
-		'gtk-toolbar-style=GTK_TOOLBAR_ICONS', 'gtk-xft-rgba=rgb',
-		'gtk-modules=colorreload-gtk-module', 'gtk-enable-event-sounds=1'] {
+		'gtk-toolbar-style=GTK_TOOLBAR_ICONS', 'gtk-xft-rgba=rgb', 'gtk-modules=colorreload-gtk-module',
+		'gtk-enable-event-sounds=1'] {
 		assert gtk3_config_template.contains(key)
 	}
 }

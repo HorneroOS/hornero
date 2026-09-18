@@ -601,9 +601,9 @@ fn audit_report_native(dry_run bool) CommandResult {
 	if dry_run {
 		return ok_result(name, 'would write ${report} (permissions, secrets, system sections)',
 			{
-			'mode':    'report'
-			'dry_run': 'true'
-		})
+				'mode':    'report'
+				'dry_run': 'true'
+			})
 	}
 	os.mkdir_all(os.dir(report)) or {}
 	perm, _ := audit_permissions_native()
@@ -611,14 +611,14 @@ fn audit_report_native(dry_run bool) CommandResult {
 	sys, _ := audit_system_native()
 	doc := ['# horneroctl Security Audit Report', '', '_Generated: ${audit_utc_now()}_', '',
 		'## File Permissions', '', perm.join('\n'), '', '## Secrets Scan', '', sec.join('\n'),
-		'', '## System Security', '', sys.join('\n'), '', '## Recommendations', '',
-		'### High Priority', '- Ensure all SSH keys have 600 permissions',
+		'', '## System Security', '', sys.join('\n'), '', '## Recommendations', '', '### High Priority',
+		'- Ensure all SSH keys have 600 permissions',
 		'- Review any files flagged above for hardcoded secrets',
 		'- Enable firewall if not already active', '', '### Medium Priority',
 		'- Set up automatic security updates', '- Review SSH configuration for hardening',
-		'- Run monthly security audits', '', '### Security Checklist',
-		'- [ ] SSH keys properly secured', '- [ ] No plain-text secrets in config files',
-		'- [ ] Firewall configured', '- [ ] Automatic updates enabled', '', '## Next Steps', '',
+		'- Run monthly security audits', '', '### Security Checklist', '- [ ] SSH keys properly secured',
+		'- [ ] No plain-text secrets in config files', '- [ ] Firewall configured',
+		'- [ ] Automatic updates enabled', '', '## Next Steps', '',
 		'Run `horneroctl apps audit --fix` to apply permission fixes and scrub shell history.',
 		'']
 	os.write_file(report, doc.join('\n')) or {

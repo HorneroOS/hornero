@@ -733,9 +733,9 @@ pub fn brightness_temp_report(opts BrightnessTempOptions) CommandResult {
 	k := brightness_temp_kelvin_of(target)
 	return ok_result(name, 'temperature set to ${target.str()} (${k}K) on ${disp} via xrandr',
 		{
-		'command_line': rep.command_line
-		'value':        target.str()
-		'kelvin':       k.str()
-		'display':      disp
-	})
+			'command_line': rep.command_line
+			'value':        target.str()
+			'kelvin':       k.str()
+			'display':      disp
+		})
 }
