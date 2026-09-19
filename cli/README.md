@@ -25,7 +25,7 @@ horneroctl version [--json]
 horneroctl doctor [--json]
 horneroctl shell status
 horneroctl shell ipc [--dry-run] -- <qs-args...>
-horneroctl shell preset <list|current>
+horneroctl shell preset <list [--full]|current|apply <name>> [--dry-run|--yes]
 horneroctl appearance status
 horneroctl appearance sync [--dry-run|--yes]
 horneroctl appearance call [--dry-run] -- <backend-args...>
@@ -180,18 +180,14 @@ the `system` group (session/media/host utilities: no pinned backend yet),
 and `setup` (namespace reserved for HorneroOS/installer flows; nothing
 here may claim names under it) are explicitly out of scope for this CLI
 until their owning backends land. Deferred siblings of shipped commands
-(`package upgrade`/`deps`, `backup create`/`restore`,
-`config default-apps set`, `shell preset apply`) fail
-with a usage error naming the missing backend instead of inventing
+fail with a usage error naming the missing backend instead of inventing
 behavior.
 
 ## Roadmap (later phases, no verified backend yet)
 
-- `shell preset apply` (needs a pinned preset-merge backend).
-- `package upgrade` (needs a polkit backend), `package deps`.
-- `backup create`/`restore` (need a pinned non-interactive backend).
-- `config default-apps set` (needs a verified non-interactive backend
-  verb; `dots-default-apps --set` binds no arguments upstream).
+- `shell config` (needs a pinned merge backend).
+- Backup cron install (interactive by design).
+- The dots-default-apps gui/info/type modes (interactive).
 See `../docs/cli-architecture.md` section 7.
 
 ## License

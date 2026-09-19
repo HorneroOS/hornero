@@ -82,7 +82,10 @@ context.task(
 context.task(
 	name: 'fmt'
 	help: 'Format V sources'
-	run:  fn [r] (_ build.Task) ! {
+	run:  fn (_ build.Task) ! {
+		// Local root on purpose: explicit captures were removed upstream,
+		// so closures resolve it per call on every toolchain.
+		r := root()
 		each_mod(r, 'fmt', 'fmt -w')
 	}
 )
@@ -90,7 +93,8 @@ context.task(
 context.task(
 	name: 'fmt-check'
 	help: 'Verify formatting (CI)'
-	run:  fn [r] (_ build.Task) ! {
+	run:  fn (_ build.Task) ! {
+		r := root()
 		each_mod(r, 'fmt-check', 'fmt -verify')
 	}
 )
@@ -98,7 +102,8 @@ context.task(
 context.task(
 	name: 'vet'
 	help: 'Vet V sources'
-	run:  fn [r] (_ build.Task) ! {
+	run:  fn (_ build.Task) ! {
+		r := root()
 		each_mod(r, 'vet', 'vet')
 	}
 )
@@ -106,7 +111,8 @@ context.task(
 context.task(
 	name: 'test'
 	help: 'Run unit tests'
-	run:  fn [r] (_ build.Task) ! {
+	run:  fn (_ build.Task) ! {
+		r := root()
 		each_mod(r, 'test', 'test')
 	}
 )
@@ -114,7 +120,8 @@ context.task(
 context.task(
 	name: 'build'
 	help: 'Type-check modules (no binary)'
-	run:  fn [r] (_ build.Task) ! {
+	run:  fn (_ build.Task) ! {
+		r := root()
 		each_mod(r, 'build', 'build -o /dev/null')
 	}
 )
@@ -122,7 +129,8 @@ context.task(
 context.task(
 	name: 'build-cli'
 	help: 'Build build/horneroctl'
-	run:  fn [r] (_ build.Task) ! {
+	run:  fn (_ build.Task) ! {
+		r := root()
 		mkdir_all(join_path(r, 'build')) or {}
 		mut ver := 'dev'
 		vres := execute('git -C ${r} describe --tags --always --dirty 2>/dev/null')
@@ -165,7 +173,8 @@ context.task(
 context.task(
 	name: 'install-cli'
 	help: 'Install horneroctl to --prefix/bin (default ~/.local/bin)'
-	run:  fn [r] (_ build.Task) ! {
+	run:  fn (_ build.Task) ! {
+		r := root()
 		bin := join_path(install_prefix(), 'bin')
 		mkdir_all(bin) or { panic(err) }
 		cp(join_path(r, 'build', 'horneroctl'), join_path(bin, 'horneroctl')) or { panic(err) }

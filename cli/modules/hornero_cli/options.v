@@ -203,6 +203,7 @@ pub:
 	leaf      string // list | show | get | apply | set
 	id        string
 	wallpaper string
+	full      bool // list --full: full manifest array as JSON
 	dry_run   bool
 	yes       bool
 }
@@ -217,11 +218,17 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 	}
 	mut id := ''
 	mut wallpaper := ''
+	mut full := false
 	mut dry_run := false
 	mut yes := false
 	mut i := 1
 	for i < args.len {
 		a := args[i]
+		if a == '--full' && leaf == 'list' {
+			full = true
+			i++
+			continue
+		}
 		if a == '--dry-run' {
 			dry_run = true
 			i++
@@ -255,8 +262,8 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 		}
 		return error('missing theme id.\nExample: horneroctl appearance theme ${leaf} vapor-dreams')
 	}
-	if leaf == 'list' && (dry_run || yes || wallpaper.len > 0) {
-		return error('theme list takes no flags.\nExample: horneroctl appearance theme list')
+	if leaf == 'list' && (dry_run || yes || wallpaper.len > 0 || id.len > 0) {
+		return error('theme list takes no flags except --full.\nExample: horneroctl appearance theme list --full')
 	}
 	if leaf == 'show' && (dry_run || yes || wallpaper.len > 0) {
 		return error('theme show takes no flags.\nExample: horneroctl appearance theme show vapor-dreams')
@@ -271,6 +278,7 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 		leaf:      leaf
 		id:        id
 		wallpaper: wallpaper
+		full:      full
 		dry_run:   dry_run
 		yes:       yes
 	}
@@ -654,10 +662,14 @@ pub fn parse_appearance_hyprlock(args []string) !HyprlockCmdOptions {
 	}
 }
 
-// PresetCmdOptions covers `shell preset <list|current>` (read-only).
+// PresetCmdOptions covers `shell preset <list|current|apply>`.
 pub struct PresetCmdOptions {
 pub:
-	leaf string // list | current
+	leaf    string // list | current | apply
+	name    string // apply preset name
+	full    bool   // list --full: full entry array as JSON
+	dry_run bool
+	yes     bool
 }
 
 pub fn parse_shell_preset(args []string) !PresetCmdOptions {
@@ -665,17 +677,50 @@ pub fn parse_shell_preset(args []string) !PresetCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl shell preset list')
 	}
 	leaf := args[0]
-	if leaf !in ['list', 'current'] {
+	if leaf !in ['list', 'current', 'apply'] {
 		return error('unknown preset subcommand: ${leaf}.\nRun: horneroctl shell preset --help')
 	}
-	if args.len > 1 {
-		if args[1].starts_with('-') {
-			return error('unknown flag: ${args[1]}.\nExample: horneroctl shell preset ${leaf}')
+	mut name := ''
+	mut full := false
+	mut dry_run := false
+	mut yes := false
+	for a in args[1..] {
+		if a == '--full' && leaf == 'list' {
+			full = true
+			continue
 		}
-		return error('unexpected argument: ${args[1]}.\nExample: horneroctl shell preset ${leaf}')
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl shell preset ${leaf} --dry-run')
+		}
+		if leaf == 'apply' && name.len == 0 {
+			name = a
+			continue
+		}
+		return error('unexpected argument: ${a}.\nExample: horneroctl shell preset ${leaf}')
+	}
+	if leaf == 'apply' && name.len == 0 {
+		return error('missing preset name.\nExample: horneroctl shell preset apply hornero-left --dry-run')
+	}
+	if leaf == 'current' && (dry_run || yes) {
+		return error('preset current takes no flags.\nExample: horneroctl shell preset current')
+	}
+	if leaf == 'list' && (dry_run || yes) {
+		return error('preset list takes no flags except --full.\nExample: horneroctl shell preset list --full')
 	}
 	return PresetCmdOptions{
-		leaf: leaf
+		leaf:    leaf
+		name:    name
+		full:    full
+		dry_run: dry_run
+		yes:     yes
 	}
 }
 

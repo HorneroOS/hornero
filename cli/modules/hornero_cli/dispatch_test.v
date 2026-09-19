@@ -151,6 +151,8 @@ fn p2_dispatch_teardown() {
 fn test_dispatch_appearance_theme() {
 	p2_dispatch_setup()
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'list']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'list', '--full']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'list', '--dry-run']) == 2
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'show', 'alpha']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'show', 'missing']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'show']) == 2
@@ -205,8 +207,13 @@ fn test_dispatch_appearance_plus() {
 fn test_dispatch_shell_preset() {
 	p2_dispatch_setup()
 	assert dispatch(['horneroctl', 'shell', 'preset', 'list']) == 0
+	assert dispatch(['horneroctl', 'shell', 'preset', 'list', '--full']) == 0
 	assert dispatch(['horneroctl', 'shell', 'preset', 'current']) == 0
-	assert dispatch(['horneroctl', 'shell', 'preset', 'apply', 'alpha']) == 2
+	assert dispatch(['horneroctl', 'shell', 'preset', 'apply', 'alpha']) == 1
+	assert dispatch(['horneroctl', 'shell', 'preset', 'apply']) == 2
+	assert dispatch(['horneroctl', 'shell', 'preset', 'list', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'shell', 'preset', 'current', '--yes']) == 2
+	assert dispatch(['horneroctl', 'shell', 'preset', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'shell', 'preset', 'list', '--bogus']) == 2
 	p2_dispatch_teardown()
 }
