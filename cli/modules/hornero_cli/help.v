@@ -203,7 +203,10 @@ Examples:
 		'appearance theme' {
 			return 'Usage: horneroctl appearance theme <list|show|get|apply|set> [options]
 
-  list                List installed theme packs (read-only)
+  list [--full]       List installed theme packs (read-only);
+                      --full prints every pack manifest as a JSON
+                      array (id, name, wallpapers, gtk, darkMode…)
+                      for the launcher
   show <id>           Show one theme pack (read-only)
   get [--dry-run]     Show the active official theme (read-only)
   apply <id> [--wallpaper <path>] [--dry-run]
@@ -222,6 +225,7 @@ failure).
 
 Examples:
   horneroctl appearance theme list
+  horneroctl appearance theme list --full --json
   horneroctl appearance theme show vapor-dreams
   horneroctl appearance theme get
   horneroctl appearance theme apply vapor-dreams --dry-run

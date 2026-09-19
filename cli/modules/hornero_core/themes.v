@@ -138,6 +138,285 @@ pub fn list_theme_packs() ![]ThemeEntry {
 	return packs
 }
 
+// theme_image_exts mirrors EXTS in the retired list-themes.py backend:
+// recognized wallpaper file suffixes (compared lowercased).
+const theme_image_exts = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']
+
+// theme_pictures_root is the chezmoi-linked wallpaper source the retired
+// lister preferred over the data catalogue.
+fn theme_pictures_root() string {
+	return os.join_path(os.home_dir(), 'Pictures', 'Wallpapers')
+}
+
+// theme_wallpaper_roots lists the catalogue wallpaper roots, hornero
+// first. An explicit HORNERO_WALLPAPERS_DIR override wins outright.
+fn theme_wallpaper_roots() []string {
+	env := os.getenv('HORNERO_WALLPAPERS_DIR')
+	if env.len > 0 {
+		return [env]
+	}
+	return [resolve_wallpapers_dir(), resolve_wallpapers_dir_fallback()]
+}
+
+// theme_wallpaper_index maps wallpaper filename to absolute path for one
+// theme, first root winning (Pictures, then hornero, then dots). Returns
+// the sorted filenames plus the path map.
+fn theme_wallpaper_index(theme_id string, wallpaper_dir string, roots []string) ([]string, map[string]string) {
+	dir_name := if wallpaper_dir.len > 0 { wallpaper_dir } else { theme_id }
+	mut found := map[string]string{}
+	mut search := [theme_pictures_root()]
+	search << roots
+	for root in search {
+		d := os.join_path(root, dir_name)
+		if !os.is_dir(d) {
+			continue
+		}
+		files := os.ls(d) or { continue }
+		for f in files {
+			full := os.join_path(d, f)
+			if !os.is_file(full) {
+				continue
+			}
+			if os.file_ext(f).to_lower().trim_left('.') !in theme_image_exts {
+				continue
+			}
+			if f in found {
+				continue
+			}
+			found[f] = os.real_path(full)
+		}
+	}
+	mut names := found.keys()
+	names.sort()
+	return names, found
+}
+
+// theme_resolve_wallpaper_file resolves one wallpaper filename, Pictures
+// first, then the catalogue roots, else the canonical Pictures target
+// even when nothing is linked yet.
+fn theme_resolve_wallpaper_file(wallpaper_dir string, filename string, roots []string) string {
+	pics := os.join_path(theme_pictures_root(), wallpaper_dir, filename)
+	if os.is_file(pics) {
+		return pics
+	}
+	for root in roots {
+		candidate := os.join_path(root, wallpaper_dir, filename)
+		if os.is_file(candidate) {
+			return candidate
+		}
+	}
+	return pics
+}
+
+// theme_truthy mirrors Python truthiness for manifest scalars.
+fn theme_truthy(v json2.Any) bool {
+	if v is bool {
+		return v.bool()
+	}
+	if v is string {
+		return v.str().len > 0
+	}
+	if v is i64 {
+		return v.i64() != 0
+	}
+	if v is f64 {
+		return v.f64() != 0
+	}
+	if v is []json2.Any {
+		return v.arr().len > 0
+	}
+	if v is map[string]json2.Any {
+		return v.as_map().len > 0
+	}
+	return false
+}
+
+// theme_nonempty_str reads an optional non-empty string field.
+fn theme_nonempty_str(m map[string]json2.Any, key string, fallback string) string {
+	if key in m && m[key] is string && m[key].str().len > 0 {
+		return m[key].str()
+	}
+	return fallback
+}
+
+// theme_gtk_prefer_dark resolves the effective dark preference: explicit
+// gtkPreferDark first (null falls through), then the GTK name, then the
+// pack darkMode. Mirrors the retired lister.
+fn theme_gtk_prefer_dark(m map[string]json2.Any, gtk string, dark bool) bool {
+	if 'gtkPreferDark' in m {
+		raw := m['gtkPreferDark']
+		if raw is bool || raw is string || raw is i64 || raw is f64 {
+			return theme_truthy(raw)
+		}
+	}
+	lower := gtk.to_lower()
+	if lower.contains('light') {
+		return false
+	}
+	if lower.contains('dark') {
+		return true
+	}
+	return dark
+}
+
+// theme_gtk_color_scheme normalizes the persisted color-scheme policy.
+// Mirrors the retired lister exactly.
+fn theme_gtk_color_scheme(m map[string]json2.Any, prefer_dark bool) string {
+	raw := theme_nonempty_str(m, 'gtkColorScheme', '').trim_space().to_lower().replace('_',
+		'-')
+	if raw in ['follow', 'default', 'prefer-light', 'prefer-dark'] {
+		return raw
+	}
+	if raw == 'light' {
+		return 'prefer-light'
+	}
+	if raw == 'dark' {
+		return 'prefer-dark'
+	}
+	if raw in ['auto', 'apps'] {
+		return 'default'
+	}
+	if prefer_dark {
+		return 'prefer-dark'
+	}
+	return 'prefer-light'
+}
+
+// theme_load_full_entry builds one `--full` entry from a pack directory.
+// Lenient like the retired lister: unparseable manifests are skipped by
+// the caller, ids default to the directory name, every display field has
+// a fallback. Returns the entry with its resolved id.
+fn theme_load_full_entry(themes_dir string, dirname string, roots []string) !map[string]json2.Any {
+	raw := os.read_file(os.join_path(themes_dir, dirname, 'theme.json'))!
+	parsed := json2.decode[json2.Any](raw)!
+	parsed_ok := parsed is map[string]json2.Any
+	if !parsed_ok {
+		return error('not an object')
+	}
+	m := parsed.as_map()
+	theme_id := theme_nonempty_str(m, 'id', dirname)
+	name := theme_nonempty_str(m, 'name', theme_id)
+	description := theme_str_field(m, 'description')
+	mut dark := true
+	if 'darkMode' in m {
+		dark = theme_truthy(m['darkMode'])
+	}
+	mut color_only := false
+	if 'colorOnly' in m {
+		color_only = theme_truthy(m['colorOnly'])
+	}
+	scheme := theme_nonempty_str(m, 'schemeType', 'tonal-spot')
+	gtk := theme_nonempty_str(m, 'gtkTheme', 'Orchis-Light-Compact')
+	icons := theme_nonempty_str(m, 'iconTheme', 'Numix-Circle')
+	// Heuristics read the raw manifest value (missing counts as empty),
+	// not the display default above — mirroring the retired lister.
+	mut raw_gtk := ''
+	if 'gtkTheme' in m && m['gtkTheme'] is string {
+		raw_gtk = m['gtkTheme'].str()
+	}
+	prefer_dark := theme_gtk_prefer_dark(m, raw_gtk, dark)
+	policy := theme_gtk_color_scheme(m, prefer_dark)
+	wallpaper_dir := theme_nonempty_str(m, 'wallpaperDir', theme_id)
+	walls, paths := theme_wallpaper_index(theme_id, wallpaper_dir, roots)
+	mut preview := ''
+	for candidate in ['preview.jpg', 'preview.webp', 'preview.png'] {
+		p := os.join_path(themes_dir, dirname, candidate)
+		if os.is_file(p) {
+			preview = p
+			break
+		}
+	}
+	mut default_wall := theme_nonempty_str(m, 'defaultWallpaper', '')
+	if default_wall.len == 0 && walls.len > 0 {
+		default_wall = walls[0]
+	}
+	mut wallpaper_path := ''
+	if default_wall.len > 0 {
+		if default_wall in paths {
+			wallpaper_path = paths[default_wall]
+		} else {
+			wallpaper_path = theme_resolve_wallpaper_file(wallpaper_dir, default_wall,
+				roots)
+		}
+	}
+	mut tags := []json2.Any{}
+	if 'tags' in m && m['tags'] is []json2.Any {
+		tags = m['tags'].arr()
+	}
+	mut wall_list := []json2.Any{}
+	for w in walls {
+		wall_list << json2.Any(w)
+	}
+	mut wall_map := map[string]json2.Any{}
+	mut path_names := paths.keys()
+	path_names.sort()
+	for n in path_names {
+		wall_map[n] = json2.Any(paths[n])
+	}
+	return {
+		'id':               json2.Any(theme_id)
+		'name':             json2.Any(name)
+		'colorOnly':        json2.Any(color_only)
+		'description':      json2.Any(description)
+		'tags':             json2.Any(tags)
+		'darkMode':         json2.Any(dark)
+		'schemeType':       json2.Any(scheme)
+		'gtkTheme':         json2.Any(gtk)
+		'iconTheme':        json2.Any(icons)
+		'gtkPreferDark':    json2.Any(prefer_dark)
+		'gtkColorScheme':   json2.Any(policy)
+		'defaultWallpaper': json2.Any(default_wall)
+		'wallpaperDir':     json2.Any(wallpaper_dir)
+		'wallpapers':       json2.Any(wall_list)
+		'wallpaperPaths':   json2.Any(wall_map)
+		'preview':          json2.Any(preview)
+		'wallpaperPath':    json2.Any(wallpaper_path)
+	}
+}
+
+// theme_list_full_report implements `appearance theme list --full`
+// (read-only). The message is every pack manifest as a JSON array — same
+// shape as the retired list-themes.py backend the launcher consumes.
+pub fn theme_list_full_report() CommandResult {
+	dirs := resolve_themes_dirs_for_read().filter(os.is_dir(it))
+	if dirs.len == 0 {
+		explicit := resolve_themes_dirs_for_read()
+		dir := if explicit.len > 0 { explicit[0] } else { resolve_themes_dir() }
+		return fail_result('appearance theme list', 'no themes installed at ${dir}. Set HORNERO_THEMES_DIR.\nExample: horneroctl appearance theme list --json')
+	}
+	roots := theme_wallpaper_roots()
+	mut seen := map[string]bool{}
+	mut order := []string{}
+	mut items := map[string]map[string]json2.Any{}
+	for dir in dirs {
+		children := os.ls(dir) or { continue }
+		mut sorted := children.clone()
+		sorted.sort()
+		for child in sorted {
+			if !os.is_dir(os.join_path(dir, child)) {
+				continue
+			}
+			entry := theme_load_full_entry(dir, child, roots) or { continue }
+			id := entry['id'].str()
+			if id in seen {
+				continue
+			}
+			seen[id] = true
+			order << id
+			items[id] = entry
+		}
+	}
+	order.sort()
+	mut arr := []json2.Any{}
+	for id in order {
+		arr << json2.Any(items[id])
+	}
+	return ok_result('appearance theme list', json2.encode(arr, escape_unicode: true), {
+		'count':  order.len.str()
+		'format': 'full'
+	})
+}
+
 // themes_list_report implements `appearance theme list` (read-only).
 pub fn themes_list_report() CommandResult {
 	packs := list_theme_packs() or { return fail_result('appearance theme list', err.msg()) }

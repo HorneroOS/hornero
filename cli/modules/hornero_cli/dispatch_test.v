@@ -151,6 +151,8 @@ fn p2_dispatch_teardown() {
 fn test_dispatch_appearance_theme() {
 	p2_dispatch_setup()
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'list']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'list', '--full']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'list', '--dry-run']) == 2
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'show', 'alpha']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'show', 'missing']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'show']) == 2

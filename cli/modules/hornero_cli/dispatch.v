@@ -255,6 +255,9 @@ fn run_appearance_theme(args []string, mode hornero_core.RenderMode) int {
 			mode)
 	}
 	if opts.leaf == 'list' {
+		if opts.full {
+			return render(hornero_core.theme_list_full_report(), mode)
+		}
 		return render(hornero_core.themes_list_report(), mode)
 	}
 	if opts.leaf == 'show' {

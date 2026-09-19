@@ -203,6 +203,7 @@ pub:
 	leaf      string // list | show | get | apply | set
 	id        string
 	wallpaper string
+	full      bool // list --full: full manifest array as JSON
 	dry_run   bool
 	yes       bool
 }
@@ -217,11 +218,17 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 	}
 	mut id := ''
 	mut wallpaper := ''
+	mut full := false
 	mut dry_run := false
 	mut yes := false
 	mut i := 1
 	for i < args.len {
 		a := args[i]
+		if a == '--full' && leaf == 'list' {
+			full = true
+			i++
+			continue
+		}
 		if a == '--dry-run' {
 			dry_run = true
 			i++
@@ -255,8 +262,8 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 		}
 		return error('missing theme id.\nExample: horneroctl appearance theme ${leaf} vapor-dreams')
 	}
-	if leaf == 'list' && (dry_run || yes || wallpaper.len > 0) {
-		return error('theme list takes no flags.\nExample: horneroctl appearance theme list')
+	if leaf == 'list' && (dry_run || yes || wallpaper.len > 0 || id.len > 0) {
+		return error('theme list takes no flags except --full.\nExample: horneroctl appearance theme list --full')
 	}
 	if leaf == 'show' && (dry_run || yes || wallpaper.len > 0) {
 		return error('theme show takes no flags.\nExample: horneroctl appearance theme show vapor-dreams')
@@ -271,6 +278,7 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 		leaf:      leaf
 		id:        id
 		wallpaper: wallpaper
+		full:      full
 		dry_run:   dry_run
 		yes:       yes
 	}
