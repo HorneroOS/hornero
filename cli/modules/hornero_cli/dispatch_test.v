@@ -205,8 +205,11 @@ fn test_dispatch_appearance_plus() {
 fn test_dispatch_shell_preset() {
 	p2_dispatch_setup()
 	assert dispatch(['horneroctl', 'shell', 'preset', 'list']) == 0
+	assert dispatch(['horneroctl', 'shell', 'preset', 'list', '--full']) == 0
 	assert dispatch(['horneroctl', 'shell', 'preset', 'current']) == 0
-	assert dispatch(['horneroctl', 'shell', 'preset', 'apply', 'alpha']) == 2
+	assert dispatch(['horneroctl', 'shell', 'preset', 'apply', 'alpha']) == 1
+	assert dispatch(['horneroctl', 'shell', 'preset', 'apply']) == 2
+	assert dispatch(['horneroctl', 'shell', 'preset', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'shell', 'preset', 'list', '--bogus']) == 2
 	p2_dispatch_teardown()
 }

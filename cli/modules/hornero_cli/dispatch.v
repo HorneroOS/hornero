@@ -13,8 +13,8 @@ import hornero_core
 // `config gui`; preview 1 adds `config migrate`. R1 (lifecycle +
 // privileged) adds `shell start|stop|restart|logs`, `package
 // upgrade|deps`, `backup create|restore`, `config default-apps set`,
-// and `hypr plugins install`. Still deferred: `shell preset apply`
-// and `shell config` (need a pinned merge backend), backup cron
+// and `hypr plugins install`. Still deferred: `shell config` (needs a
+// pinned merge backend), backup cron
 // install (interactive by design), and the dots-default-apps
 // gui/info/type modes (interactive).
 // Each future leaf needs the same treatment as below: a verified backend,
@@ -197,6 +197,16 @@ fn run_shell_preset(args []string, mode hornero_core.RenderMode) int {
 	}
 	if opts.leaf == 'current' {
 		return render(hornero_core.preset_current_report(), mode)
+	}
+	if opts.leaf == 'apply' {
+		return render(hornero_core.preset_apply_report(hornero_core.PresetApplyOptions{
+			name:    opts.name
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	if opts.full {
+		return render(hornero_core.preset_list_full_report(), mode)
 	}
 	return render(hornero_core.preset_list_report(), mode)
 }

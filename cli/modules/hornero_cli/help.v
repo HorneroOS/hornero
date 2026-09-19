@@ -82,8 +82,10 @@ Examples:
   status              Summarize shell session reachability
   ipc [--dry-run] -- <qs-args...>
                       Pass arguments through to `qs ipc`
-  preset list         List installed shell presets (read-only)
+  preset list [--full] List installed shell presets (read-only)
   preset current      Show the active preset (read-only)
+  preset apply <name> [--dry-run|--yes]
+                      Apply a shell preset (needs --yes)
   start [--dry-run|--yes]
                       Start the quickshell daemon (needs --yes)
   stop [--dry-run|--yes]
@@ -104,7 +106,9 @@ the quickshell config dir; stop tries `quickshell kill` first, then
 SIGKILL. Output goes to the shell log (HORNERO_SHELL_LOG_FILE);
 binaries via HORNERO_QUICKSHELL_BIN / HORNERO_QS_BIN.
 
-Later phases: preset apply (needs a pinned merge backend).
+Preset apply validates the preset, resets owned settings in
+shell.json, deep-merges, and updates the active-preset pointer
+(atomically); quickshell reloads on shell.json change.
 
 Examples:
   horneroctl shell status
@@ -112,6 +116,8 @@ Examples:
   horneroctl shell ipc --dry-run -- call bar toggleLauncher
   horneroctl shell preset list
   horneroctl shell preset current --json
+  horneroctl shell preset apply hornero-left --dry-run
+  horneroctl shell preset apply hornero-left --yes
   horneroctl shell start --dry-run
   horneroctl shell start --yes
   horneroctl shell restart --yes
@@ -119,21 +125,30 @@ Examples:
 '
 		}
 		'shell preset' {
-			return 'Usage: horneroctl shell preset <list|current>
+			return 'Usage: horneroctl shell preset <list|current|apply> [options]
 
-  list                List installed shell presets (read-only)
+  list [--full]       List installed shell presets (read-only);
+                      --full prints the full entry array as JSON
+                      (name, display, description, icon, iconMaterial,
+                      position, style, active) for the layout picker
   current             Show the active preset (read-only)
+  apply <name> [--dry-run|--yes]
+                      Apply a shell preset: validate, reset owned
+                      settings in shell.json, deep-merge, update the
+                      active-preset pointer (needs --yes)
 
 Preset sources: HORNERO_PRESETS_DIR, else the XDG data catalogue
 (hornero/shell-presets, legacy dots/shell-presets as read-only fallback);
-the active pointer lives under XDG state.
-
-Later phases: preset apply (needs a pinned merge backend).
+the active pointer lives under XDG state. Writes go to the canonical
+hornero paths only (XDG_CONFIG_HOME/hornero/shell.json plus the state
+pointer). Quickshell reloads on shell.json change, so no IPC is needed.
 
 Examples:
   horneroctl shell preset list
   horneroctl shell preset current
-  horneroctl shell preset list --json
+  horneroctl shell preset list --full --json
+  horneroctl shell preset apply hornero-left --dry-run
+  horneroctl shell preset apply hornero-left --yes
 '
 		}
 		'appearance' {
