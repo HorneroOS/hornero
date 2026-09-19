@@ -487,13 +487,13 @@ fn preset_find_file(name string) string {
 	return ''
 }
 
-// preset_write_file_atomic writes content via temp-file rename,
-// mirroring the state-file pattern. No lock file: single-user CLI.
-fn preset_write_file_atomic(path string, content string) ! {
+// preset_write_tmp stages content in a per-process temp file next to the
+// target. The pid suffix keeps concurrent writers from sharing one path.
+fn preset_write_tmp(path string, content string) !string {
 	os.mkdir_all(os.dir(path)) or { return error('cannot create ${os.dir(path)}: ${err}') }
-	tmp := os.join_path(os.dir(path), '.${os.file_name(path)}.tmp')
+	tmp := os.join_path(os.dir(path), '.${os.file_name(path)}.tmp.${os.getpid()}')
 	os.write_file(tmp, content) or { return error('cannot write ${tmp}: ${err}') }
-	os.mv(tmp, path) or { return error('cannot move ${tmp} to ${path}: ${err}') }
+	return tmp
 }
 
 pub struct PresetApplyOptions {
@@ -511,6 +511,9 @@ pub:
 pub fn preset_apply_report(opts PresetApplyOptions) CommandResult {
 	if opts.name.len == 0 {
 		return fail_result('shell preset apply', 'missing preset name.\nExample: horneroctl shell preset apply hornero-left --dry-run')
+	}
+	if opts.name.contains('/') || opts.name.contains('\\') || opts.name.contains('..') {
+		return fail_result('shell preset apply', 'invalid preset name: ${opts.name}.\nList them: horneroctl shell preset list')
 	}
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell preset apply', 'refusing to apply preset ${opts.name} without --yes (preview with --dry-run).\nExample: horneroctl shell preset apply ${opts.name} --dry-run')
@@ -577,11 +580,25 @@ pub fn preset_apply_report(opts PresetApplyOptions) CommandResult {
 		}
 		clean[k] = v
 	}
-	preset_write_file_atomic(conf, json2.encode(clean, escape_unicode: true) + '\n') or {
+	// Stage both files before either rename commits: every fallible write
+	// finishes first, so a failure leaves the previous state untouched.
+	// Config still renames before the pointer (a stale pointer after a
+	// crash re-applies cleanly: apply is idempotent).
+	config_tmp := preset_write_tmp(conf, json2.encode(clean, escape_unicode: true) + '\n') or {
 		return fail_result('shell preset apply', err.msg())
 	}
-	preset_write_file_atomic(marker, '${opts.name}\n') or {
+	marker_tmp := preset_write_tmp(marker, '${opts.name}\n') or {
+		os.rm(config_tmp) or {}
 		return fail_result('shell preset apply', err.msg())
+	}
+	os.mv(config_tmp, conf) or {
+		os.rm(config_tmp) or {}
+		os.rm(marker_tmp) or {}
+		return fail_result('shell preset apply', 'cannot move ${config_tmp} to ${conf}: ${err}')
+	}
+	os.mv(marker_tmp, marker) or {
+		os.rm(marker_tmp) or {}
+		return fail_result('shell preset apply', 'config applied but cannot move ${marker_tmp} to ${marker}: ${err}. Re-run to converge.')
 	}
 	display := if '_name' in normalized { normalized['_name'].str() } else { opts.name }
 	return ok_result('shell preset apply', 'applied preset ${display} (${opts.name})', {

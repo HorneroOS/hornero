@@ -709,6 +709,12 @@ pub fn parse_shell_preset(args []string) !PresetCmdOptions {
 	if leaf == 'apply' && name.len == 0 {
 		return error('missing preset name.\nExample: horneroctl shell preset apply hornero-left --dry-run')
 	}
+	if leaf == 'current' && (dry_run || yes) {
+		return error('preset current takes no flags.\nExample: horneroctl shell preset current')
+	}
+	if leaf == 'list' && (dry_run || yes) {
+		return error('preset list takes no flags except --full.\nExample: horneroctl shell preset list --full')
+	}
 	return PresetCmdOptions{
 		leaf:    leaf
 		name:    name

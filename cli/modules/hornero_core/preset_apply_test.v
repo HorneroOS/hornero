@@ -60,6 +60,17 @@ fn test_preset_apply_missing_name() {
 	preset_test_restore(old_presets, old_marker, old_xdg)
 }
 
+fn test_preset_apply_rejects_traversal_name() {
+	old_presets, old_marker, old_xdg := preset_test_isolate()
+	r := preset_apply_report(PresetApplyOptions{
+		name: '../shared'
+		yes:  true
+	})
+	assert !r.ok
+	assert r.message.contains('invalid preset name')
+	preset_test_restore(old_presets, old_marker, old_xdg)
+}
+
 fn test_preset_apply_unknown_name_lists_available() {
 	old_presets, old_marker, old_xdg := preset_test_isolate()
 	r := preset_apply_report(PresetApplyOptions{
