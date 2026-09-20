@@ -109,13 +109,19 @@ jobs:
         run: |
           tag="${{ needs.create-release.outputs.tag }}"
           ver="${tag#horneroctl-v}"
+          # makepkg forbids hyphens in pkgver; pre-release tags use them
+          # (0.2.0-preview2), so stamp the AUR-safe form and keep the real
+          # tag in _reltag for the download URLs.
+          aurver="$(printf '%s' "${ver}" | tr '-' '_')"
           pkgdir="${GITHUB_WORKSPACE}/packaging/horneroctl-bin"
           pkgbuild="${pkgdir}/PKGBUILD"
           # Exactly one mutation target each: fail loudly otherwise.
+          [ "$(grep -c '^_reltag=' "${pkgbuild}")" -eq 1 ]
           [ "$(grep -c '^pkgver=' "${pkgbuild}")" -eq 1 ]
           [ "$(grep -c '^sha256sums_x86_64=(' "${pkgbuild}")" -eq 1 ]
           [ "$(grep -c '^sha256sums_aarch64=(' "${pkgbuild}")" -eq 1 ]
-          sed -i "s/^pkgver=.*/pkgver=${ver}/" "${pkgbuild}"
+          sed -i "s/^_reltag=.*/_reltag=${tag}/" "${pkgbuild}"
+          sed -i "s/^pkgver=.*/pkgver=${aurver}/" "${pkgbuild}"
           mkdir -p /tmp/assets
           gh release download "${tag}" -D /tmp/assets \
             -p 'horneroctl-linux-x86_64' -p 'horneroctl-linux-arm64'
