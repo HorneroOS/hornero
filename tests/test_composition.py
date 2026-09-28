@@ -38,9 +38,9 @@ compare_pins = _pins.compare_pins
 SHELL_SHA = "b0a864cd57cfea01d7314c1de9823b873fb9269a"
 CONFIG_SHA = "c4ac00326cd5476c5efc05c11a403d1d6353a7d6"
 
-# Release-candidate composition (Development Preview 2).
-CANDIDATE_SHELL_SHA = "643185e839235242be40255d8f6aa02047407af1"
-CANDIDATE_CONFIG_SHA = "4c761ae5e332f6920cf18a82d4b4863076cbc009"
+# Release-candidate composition (Development Preview 3).
+CANDIDATE_SHELL_SHA = "ba7032e0e30fe86f88fe93c39eec0e20a1879aad"
+CANDIDATE_CONFIG_SHA = "f344f3064433d65933ad65af9ba0b401a6c34326"
 
 
 def read_text(path: Path) -> str:
@@ -149,15 +149,15 @@ def test_all_three_editions_cover_pinned_components():
 def test_candidate_pointer_is_explicit_and_deterministic():
     import yaml
 
-    assert read_candidate_name(ROOT) == "v0.2.0-preview2.yaml"
-    doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview2.yaml"))
-    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview2"
+    assert read_candidate_name(ROOT) == "v0.2.0-preview3.yaml"
+    doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview3.yaml"))
+    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview3"
 
 
 def test_candidate_manifest_pins_release_candidate():
     import yaml
 
-    doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview2.yaml"))
+    doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview3.yaml"))
     assert doc["components"]["shell"]["sha"] == CANDIDATE_SHELL_SHA
     assert doc["components"]["config"]["sha"] == CANDIDATE_CONFIG_SHA
     assert doc["components"]["shell"]["status"] == "pinned"
@@ -167,7 +167,7 @@ def test_candidate_manifest_pins_release_candidate():
 def test_profiles_track_candidate_manifest():
     import yaml
 
-    candidate = "hornero-0.2.0-preview2"
+    candidate = "hornero-0.2.0-preview3"
     assert candidate_manifest_name(ROOT) == candidate
     for edition in ("base", "desktop", "developer"):
         profile = yaml.safe_load(read_text(ROOT / "profiles" / f"{edition}.yaml"))
@@ -178,8 +178,8 @@ def test_historical_manifest_is_exempt_from_freshness():
     # Preview 0 pins are stale by design (b0a864c/c4ac003 predate current
     # mains). The freshness gate must NOT select them: only the candidate
     # manifest yields pin entries, and the structural check passes.
-    assert validate_historical_manifests(ROOT, "v0.2.0-preview2.yaml") == []
-    entries = manifest_pin_entries(ROOT / "manifests" / "v0.2.0-preview2.yaml")
+    assert validate_historical_manifests(ROOT, "v0.2.0-preview3.yaml") == []
+    entries = manifest_pin_entries(ROOT / "manifests" / "v0.2.0-preview3.yaml")
     assert {name for _, name, _, _, _ in entries} == {"shell", "config"}
     stale = manifest_pin_entries(ROOT / "manifests" / "v0.1.0-draft.yaml")
     assert stale, "historical manifest must still parse its pins"
@@ -226,6 +226,40 @@ def test_unknown_profile_still_rejected_for_historical_release():
         check_release_doc(release, "test", {"hornero-0.1.0-draft": None}, {}, False)
         != []
     )
+
+
+def _ledger_rows():
+    lines = read_text(ROOT / "releases" / "LEDGER.md").splitlines()
+    rows = [ln for ln in lines if ln.startswith("| v")]
+    parsed = []
+    for ln in rows:
+        cells = [c.strip().strip("`") for c in ln.strip().strip("|").split("|")]
+        assert len(cells) == 7, f"ledger row must have 7 cells: {ln}"
+        parsed.append(dict(zip(
+            ("version", "date", "codename", "manifest", "shell", "config", "checklist"),
+            cells,
+        )))
+    return parsed
+
+
+def test_ledger_covers_every_release():
+    import yaml
+
+    rows = {r["version"]: r for r in _ledger_rows()}
+    for path in sorted((ROOT / "releases").glob("v*.yaml")):
+        doc = yaml.safe_load(read_text(path))
+        version = doc["tag"] if str(doc.get("tag", "")).startswith("v") else doc["name"]
+        assert version in rows, f"{path.name}: no LEDGER.md row for {version}"
+        row = rows[version]
+        assert row["manifest"] == f"manifests/{version}.yaml", path.name
+        assert row["checklist"] == f"releases/{version}-checklist.md", path.name
+        assert (ROOT / row["checklist"]).exists(), f"{path.name}: checklist missing"
+        manifest = yaml.safe_load(read_text(ROOT / row["manifest"]))
+        for comp in ("shell", "config"):
+            sha = manifest["components"][comp].get("sha", "")
+            assert sha.startswith(row[comp]), (
+                f"{path.name}: ledger {comp} {row[comp]} != manifest {sha[:7]}"
+            )
 
 
 if __name__ == "__main__":
