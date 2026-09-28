@@ -121,6 +121,34 @@ fn test_shell_cover_up_tracks_pid_and_down_is_quiet() {
 	os.rmdir_all(dir) or {}
 }
 
+fn test_shell_start_guard_and_force() {
+	// pgrep always matches, so the shell looks running: plain start
+	// refuses, forced start (what restart uses under its cover)
+	// launches anyway. /bin/true exits at once and is harmless.
+	saved := shell_lifecycle_test_save_env(['HORNERO_QUICKSHELL_BIN', 'HORNERO_PGREP_BIN',
+		'HORNERO_QUICKSHELL_CONFIG_DIR', 'HORNERO_SHELL_LOG_FILE', 'QML_IMPORT_PATH', 'QML2_IMPORT_PATH',
+		'QS_PLUGIN_PATH', 'QT_QPA_PLATFORMTHEME'])
+	dir := os.join_path(os.temp_dir(), 'hornero-start-force-test')
+	os.mkdir_all(dir) or { assert false, 'mkdir ${dir}' }
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/true', true)
+	os.setenv('HORNERO_PGREP_BIN', '/bin/true', true)
+	os.setenv('HORNERO_QUICKSHELL_CONFIG_DIR', dir, true)
+	os.setenv('HORNERO_SHELL_LOG_FILE', os.join_path(dir, 'shell.log'), true)
+	guarded := shell_start_report(ShellStartOptions{
+		yes: true
+	})
+	assert guarded.ok
+	assert guarded.message.contains('already running')
+	forced := shell_start_report(ShellStartOptions{
+		yes:   true
+		force: true
+	})
+	assert forced.ok
+	assert !forced.message.contains('already running')
+	os.rmdir_all(dir) or {}
+	shell_lifecycle_test_restore_env(saved)
+}
+
 fn test_shell_stop_idle_is_success() {
 	// Nothing running: stop is a no-op success.
 	saved := shell_lifecycle_test_save_env(['HORNERO_QUICKSHELL_BIN', 'HORNERO_PGREP_BIN'])
