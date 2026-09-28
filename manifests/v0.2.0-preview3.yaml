@@ -22,9 +22,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: ba7032e0e30fe86f88fe93c39eec0e20a1879aad
+    sha: 9f29619d6172df4250bf7c04c56676d14f14ff19
     status: pinned
-    subject: "feat(layoutpicker): drive preset grid from horneroctl with fallback chain (#48)"
+    subject: "fix(panes): stdout answers win over nonzero exits (#50)"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
