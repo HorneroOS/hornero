@@ -156,11 +156,13 @@ pub:
 	dry_run bool
 	yes     bool
 	bin     string // explicit override (tests); else resolution
+	force   bool   // skip the already-running guard (restart: the only
+	// quickshell present is its own reload cover, same process name)
 }
 
-// shell_start_report implements `shell start`: refuse when running,
-// require the config dir, launch detached, wait, verify.
-// Mutating: needs --yes; --dry-run only previews.
+// shell_start_report implements `shell start`: refuse when running
+// (unless force), require the config dir, launch detached, wait,
+// verify. Mutating: needs --yes; --dry-run only previews.
 pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell start', 'refusing to start the shell without --yes (preview with --dry-run).\nExample: horneroctl shell start --dry-run')
@@ -186,7 +188,7 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 				'dry_run':      'true'
 			})
 	}
-	if shell_is_running() {
+	if !opts.force && shell_is_running() {
 		return ok_result('shell start', 'Quickshell is already running', {
 			'command_line': line
 		})
@@ -320,10 +322,15 @@ pub fn shell_restart_report(opts ShellRestartOptions) CommandResult {
 	// Cover up: best-effort, tracked by PID so only the cover dies.
 	cover_pid := shell_cover_up(bin, cover, logf)
 	time.sleep(500 * time.millisecond)
+	// Forced: the cover just went up under the same process name, so
+	// the already-running guard would refuse and strand the session
+	// with no main shell. The pre-start stop already cleared any real
+	// instance; the post-launch verification below still applies.
 	start_rep := shell_start_report(ShellStartOptions{
 		dry_run: false
 		yes:     true
 		bin:     bin
+		force:   true
 	})
 	shell_cover_down(cover_pid)
 	if !start_rep.ok {
