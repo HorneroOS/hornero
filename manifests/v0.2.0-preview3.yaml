@@ -22,9 +22,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: da16b020cb3ab6d6be01f3f0abbbf649f08d5201
+    sha: 60fda3f775ee6822af5e0b4268f73ba2b3d410e7
     status: pinned
-    subject: "feat(cover): standalone reload cover with CMake install (#52)"
+    subject: "fix(dashboard): rename Keys component to Keybindings (#53)"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
