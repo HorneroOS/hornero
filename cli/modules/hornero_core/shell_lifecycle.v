@@ -279,9 +279,12 @@ pub:
 	bin     string // explicit override (tests); else resolution
 }
 
-// shell_restart_report implements `shell restart`: stop, wait ~1s,
-// start — mirroring the legacy sequence. Mutating: needs --yes;
-// --dry-run only previews.
+// shell_restart_report implements `shell restart`: stop, cover, start.
+// The reload cover (`reloadcover/shell.qml` under the quickshell config
+// dir) paints every screen while the main shell is down, so a restart
+// never flashes a bare desktop. The cover is best-effort: a missing
+// cover file or failed cover launch degrades to the old bare sequence.
+// Mutating: needs --yes; --dry-run only previews.
 pub fn shell_restart_report(opts ShellRestartOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell restart', 'refusing to restart the shell without --yes (preview with --dry-run).\nExample: horneroctl shell restart --dry-run')
@@ -296,10 +299,12 @@ pub fn shell_restart_report(opts ShellRestartOptions) CommandResult {
 	kill_line := command_line(bin, ['kill'])
 	logf := resolve_shell_log_file()
 	start_line := 'nohup ${bin} >>${logf} 2>&1 &'
+	cover := os.join_path(resolve_quickshell_config_dir(), 'reloadcover', 'shell.qml')
+	cover_line := 'nohup ${bin} --path ${cover} >>${logf} 2>&1 & echo \$!'
 	if opts.dry_run {
-		return ok_result('shell restart', 'would run: ${kill_line}\nwould run: sleep 1\nwould run: ${start_line}',
+		return ok_result('shell restart', 'would run: ${kill_line}\nwould run: sleep 1\nwould run: ${cover_line}\nwould run: ${start_line}\nwould run: kill <cover-pid>',
 			{
-				'command_line': '${kill_line}; sleep 1; ${start_line}'
+				'command_line': '${kill_line}; sleep 1; ${cover_line}; ${start_line}'
 				'dry_run':      'true'
 			})
 	}
@@ -312,18 +317,51 @@ pub fn shell_restart_report(opts ShellRestartOptions) CommandResult {
 		return fail_result('shell restart', 'stop phase failed: ${stop_rep.message}')
 	}
 	time.sleep(1 * time.second)
+	// Cover up: best-effort, tracked by PID so only the cover dies.
+	cover_pid := shell_cover_up(bin, cover, logf)
+	time.sleep(500 * time.millisecond)
 	start_rep := shell_start_report(ShellStartOptions{
 		dry_run: false
 		yes:     true
 		bin:     bin
 	})
+	shell_cover_down(cover_pid)
 	if !start_rep.ok {
 		return fail_result('shell restart', 'start phase failed: ${start_rep.message}')
 	}
-	return ok_result('shell restart', 'Quickshell restarted\n${stop_rep.message}\n${start_rep.message}',
+	cover_note := if cover_pid.len > 0 {
+		'\ncover: shown during reload'
+	} else {
+		'\ncover: skipped (no reloadcover/shell.qml)'
+	}
+	return ok_result('shell restart', 'Quickshell restarted\n${stop_rep.message}\n${start_rep.message}${cover_note}',
 		{
 			'command_line': '${kill_line}; sleep 1; ${start_line}'
 		})
+}
+
+// shell_cover_up launches the reload cover detached and returns its PID,
+// or '' when the cover file is absent or the launch fails. Best-effort:
+// the caller always proceeds, with or without a cover.
+fn shell_cover_up(bin string, cover string, logf string) string {
+	if !os.is_file(cover) {
+		return ''
+	}
+	rep := os.execute('nohup ${bin} --path ${cover} >>${logf} 2>&1 & echo \$!')
+	pid := rep.output.trim_space()
+	if rep.exit_code != 0 || pid.len == 0 {
+		return ''
+	}
+	return pid
+}
+
+// shell_cover_down kills a cover started by shell_cover_up. '' is a
+// no-op; kill failures are ignored (the cover has a 60 s watchdog).
+fn shell_cover_down(cover_pid string) {
+	if cover_pid.len == 0 {
+		return
+	}
+	os.execute('kill ${cover_pid}')
 }
 
 pub struct ShellLogsOptions {
