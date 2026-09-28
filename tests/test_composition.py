@@ -228,5 +228,39 @@ def test_unknown_profile_still_rejected_for_historical_release():
     )
 
 
+def _ledger_rows():
+    lines = read_text(ROOT / "releases" / "LEDGER.md").splitlines()
+    rows = [ln for ln in lines if ln.startswith("| v")]
+    parsed = []
+    for ln in rows:
+        cells = [c.strip().strip("`") for c in ln.strip().strip("|").split("|")]
+        assert len(cells) == 7, f"ledger row must have 7 cells: {ln}"
+        parsed.append(dict(zip(
+            ("version", "date", "codename", "manifest", "shell", "config", "checklist"),
+            cells,
+        )))
+    return parsed
+
+
+def test_ledger_covers_every_release():
+    import yaml
+
+    rows = {r["version"]: r for r in _ledger_rows()}
+    for path in sorted((ROOT / "releases").glob("v*.yaml")):
+        doc = yaml.safe_load(read_text(path))
+        version = doc["tag"] if str(doc.get("tag", "")).startswith("v") else doc["name"]
+        assert version in rows, f"{path.name}: no LEDGER.md row for {version}"
+        row = rows[version]
+        assert row["manifest"] == f"manifests/{version}.yaml", path.name
+        assert row["checklist"] == f"releases/{version}-checklist.md", path.name
+        assert (ROOT / row["checklist"]).exists(), f"{path.name}: checklist missing"
+        manifest = yaml.safe_load(read_text(ROOT / row["manifest"]))
+        for comp in ("shell", "config"):
+            sha = manifest["components"][comp].get("sha", "")
+            assert sha.startswith(row[comp]), (
+                f"{path.name}: ledger {comp} {row[comp]} != manifest {sha[:7]}"
+            )
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
