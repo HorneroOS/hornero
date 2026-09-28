@@ -94,6 +94,33 @@ fn test_shell_start_missing_config_dir() {
 	shell_lifecycle_test_restore_env(saved)
 }
 
+fn test_shell_restart_dry_run_mentions_cover() {
+	r := shell_restart_report(ShellRestartOptions{
+		dry_run: true
+	})
+	assert r.ok
+	assert r.message.contains('cover')
+}
+
+fn test_shell_cover_up_missing_file_returns_empty() {
+	assert shell_cover_up('/bin/true', '/nonexistent-cover-hornero-test/shell.qml',
+		'/tmp/hx-cover-test.log') == ''
+}
+
+fn test_shell_cover_up_tracks_pid_and_down_is_quiet() {
+	// /bin/true ignores argv and exits at once, so the cover PID is
+	// already reaped when down runs: kill fails, and must stay quiet.
+	dir := os.join_path(os.temp_dir(), 'hornero-cover-test')
+	os.mkdir_all(dir) or { assert false, 'mkdir ${dir}' }
+	cover := os.join_path(dir, 'shell.qml')
+	os.write_file(cover, '// fake cover') or { assert false, 'write ${cover}' }
+	pid := shell_cover_up('/bin/true', cover, os.join_path(dir, 'cover.log'))
+	assert pid.int() > 0
+	shell_cover_down(pid)
+	shell_cover_down('')
+	os.rmdir_all(dir) or {}
+}
+
 fn test_shell_stop_idle_is_success() {
 	// Nothing running: stop is a no-op success.
 	saved := shell_lifecycle_test_save_env(['HORNERO_QUICKSHELL_BIN', 'HORNERO_PGREP_BIN'])

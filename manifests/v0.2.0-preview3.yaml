@@ -22,9 +22,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: ba7032e0e30fe86f88fe93c39eec0e20a1879aad
+    sha: 60fda3f775ee6822af5e0b4268f73ba2b3d410e7
     status: pinned
-    subject: "feat(layoutpicker): drive preset grid from horneroctl with fallback chain (#48)"
+    subject: "fix(dashboard): rename Keys component to Keybindings (#53)"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
