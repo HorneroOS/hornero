@@ -3,7 +3,7 @@
 apiVersion: hornero.os/v1
 kind: EditionProfile
 name: desktop
-manifest: hornero-0.2.0-preview9
+manifest: hornero-0.2.0-preview10
 description: >-
   Full desktop edition for daily use on hardware. Extends base with
   the complete desktop defaults; same pinned components.
