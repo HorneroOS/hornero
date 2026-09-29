@@ -1,0 +1,19 @@
+# Hornero OS release: v0.2.0-preview11
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview11
+version: 0.2.0-preview11
+status: pre-release
+manifest: hornero-0.2.0-preview11
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview11-checklist.md
+summary: >-
+  Development Preview 11 release candidate. Picks up everything in
+  Preview 10 plus the OSD/toast/notification roles doc. Ships no
+  installable artifacts: installer and iso remain future slots.
+tag: v0.2.0-preview11
+published: false
