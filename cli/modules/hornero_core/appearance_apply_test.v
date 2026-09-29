@@ -216,3 +216,40 @@ fn test_smart_file_outputs_count() {
 	assert m.len == 12
 	assert m['current.env'] == '/d/current.env'
 }
+
+// Regression (experience baseline §5.4): the shell-IPC fast path of
+// `appearance theme apply` returned without persisting the pack, so
+// `appearance status` (state-file backed) kept reporting the old mode
+// while the live shell had already switched.
+fn test_theme_apply_via_shell_syncs_scheme_state() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-apply-state-sync')
+	os.rmdir_all(tmp) or {}
+	with_apply_xdg(tmp, fn [tmp] () {
+		// Stub quickshell: applyTheme/isBusy/lastError succeed instantly.
+		stub := os.join_path(tmp, 'qs-stub.sh')
+		os.write_file(stub, '#!/bin/sh\nif [ "$4" = "isBusy" ]; then echo 0; exit 0; fi\nif [ "$4" = "lastError" ]; then echo ""; exit 0; fi\necho ok\n') or {}
+		os.chmod(stub, 0o755) or {}
+		os.setenv('HORNERO_QUICKSHELL_BIN', stub, true)
+		os.setenv('HORNERO_SHELL_RUNNING', '1', true)
+		// Light pack over a dark pre-state.
+		dir := os.join_path(tmp, 'data', 'hornero', 'themes', 'demo-light')
+		os.mkdir_all(dir) or {}
+		os.write_file(os.join_path(dir, 'theme.json'), '{"schemaVersion": 1, "id": "demo-light", "name": "T", "defaultWallpaper": "w.jpg", "wallpaperDir": "t", "schemeType": "expressive", "darkMode": false, "gtkTheme": "Orchis-Light", "iconTheme": "Numix-Circle"}\n') or {}
+		os.setenv('HORNERO_THEMES_DIR', os.join_path(tmp, 'data', 'hornero', 'themes'), true)
+		write_scheme_state('hornero-dark', 'tonal-spot', 'dark', 'tonalspot') or {
+			assert false, err.msg()
+		}
+		rep := theme_apply_native_with('demo-light', '', false, default_palette_backends())
+		assert rep.ok, rep.message
+		assert rep.message.contains('via shell')
+		st := read_scheme_state()
+		assert st.mode == 'light', 'state mode must follow the applied pack, got ${st.mode}'
+		assert st.flavour == 'expressive', 'state flavour must follow the pack, got ${st.flavour}'
+		raw := os.read_file(scheme_state_file()) or { '' }
+		assert raw.contains('"demo-light"'), 'state name must record the applied pack'
+		os.unsetenv('HORNERO_QUICKSHELL_BIN')
+		os.unsetenv('HORNERO_SHELL_RUNNING')
+		os.unsetenv('HORNERO_THEMES_DIR')
+	})
+	os.rmdir_all(tmp) or {}
+}

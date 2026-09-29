@@ -331,20 +331,27 @@ pub fn theme_apply_native_with(id string, wallpaper_override string, dry_run boo
 		return fail_result('appearance theme apply', 'invalid theme id.\nExample: horneroctl appearance theme apply vapor-dreams --dry-run')
 	}
 	pack := read_pack_map(id) or { return fail_result('appearance theme apply', err.msg()) }
+	scheme_type := normalize_scheme_type(pack_str(pack, 'schemeType'))
+	dark_raw := pack_str(pack, 'darkMode')
+	mode := if dark_raw == 'false' { 'light' } else { 'dark' }
 	if !dry_run && shell_running() {
 		ipc := ipc_appearance_call(['applyTheme', id, wallpaper_override], false)
 		if ipc.ok && !ipc.output.contains('Target not found') {
 			wait_appearance_ipc(false) or {
 				return fail_result('appearance theme apply', err.msg())
 			}
+			// The shell owns the live apply; horneroctl owns the state
+			// file `appearance status` reads. Persist the pack identity
+			// here so status never disagrees with the live shell.
+			write_scheme_state(id, scheme_type, mode, normalize_variant(scheme_type)) or {
+				return fail_result('appearance theme apply', '${id} applied via shell but state sync failed: ${err.msg()}')
+			}
 			return ok_result('appearance theme apply', '${id} applied via shell', {
-				'id': id
+				'id':   id
+				'mode': mode
 			})
 		}
 	}
-	scheme_type := normalize_scheme_type(pack_str(pack, 'schemeType'))
-	dark_raw := pack_str(pack, 'darkMode')
-	mode := if dark_raw == 'false' { 'light' } else { 'dark' }
 	mut gtk_theme := pack_str(pack, 'gtkTheme')
 	if gtk_theme.len == 0 {
 		gtk_theme = 'Orchis-Light-Compact'
