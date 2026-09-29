@@ -1,0 +1,62 @@
+# HorneroOS bind audit: every `horneroctl` invocation reachable
+# from keybinds, autostart, .desktop launchers, first-boot
+# scripts, and shell QML. One verb chain per line, sorted.
+# Refresh: python3 scripts/check-binds.py --refresh \
+#   --binary cli/build/horneroctl --shell-dir <shell> --config-dir <config>
+# The gate fails on unhandled chains and on drift vs this file.
+
+appearance accent clear
+appearance accent set
+appearance colors m3
+appearance gtk apply
+appearance gtk color-scheme
+appearance gtk current
+appearance gtk current-color-scheme
+appearance gtk current-icon
+appearance gtk icons
+appearance gtk list
+appearance gtk set-icons
+appearance gtk sync-color-scheme
+appearance gtk theme
+appearance hyprlock
+appearance night-mode toggle
+appearance theme list
+apps launch
+apps switcher apply-theme-pack
+apps switcher daemon
+apps switcher next
+apps switcher prev
+apps terminal-file
+backup create
+capture clipboard
+capture record pause
+capture record start
+capture record stop
+capture screenshot
+config gui
+hardware battery monitor
+hardware brightness down
+hardware brightness up
+hardware keyboard keys
+hypr layout restore
+hypr layout set dwindle
+hypr layout set scrolling
+hypr layout toggle
+hypr plugins install
+lock now
+package upgrade
+power
+scheme current
+scheme list
+scheme regenerate
+scheme set-mode
+scheme set-variant
+scheme sync-state
+shell ipc
+shell preset apply
+shell preset list
+shell start
+wallpaper current
+welcome mark-seen
+welcome open
+welcome set-show-on-login
