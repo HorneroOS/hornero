@@ -396,10 +396,13 @@ pub fn welcome_open_report(opts WelcomeOpenOptions) CommandResult {
 		return fail_result(name, 'qs not found on PATH. Set HORNERO_QS_BIN.\nExample: horneroctl welcome open --dry-run')
 	}
 	bin = if bin.len > 0 { bin } else { 'qs' }
+	// The shell IPC entry requires its page argument (quickshell
+	// validates arity), so an omitted page is sent as `start` — the
+	// same default the shell applies. Without this the launcher
+	// (`Exec=horneroctl welcome open`) dies with "Too few arguments".
+	page := if opts.page.len > 0 { opts.page } else { 'start' }
 	mut args := ['ipc', 'call', 'welcome', 'open']
-	if opts.page.len > 0 {
-		args << opts.page
-	}
+	args << page
 	rep := run_exec(ExecSpec{
 		prog:    bin
 		args:    args
