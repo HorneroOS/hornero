@@ -3,7 +3,7 @@
 apiVersion: hornero.os/v1
 kind: EditionProfile
 name: developer
-manifest: hornero-0.2.0-preview10
+manifest: hornero-0.2.0-preview11
 description: >-
   Desktop edition plus a development tooling layer. Extends desktop;
   same pinned shell and config components.
