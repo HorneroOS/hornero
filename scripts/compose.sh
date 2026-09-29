@@ -159,4 +159,10 @@ printf '{}\n' >"$DEST/.config/hornero/shell.json"
 "$HORNERectl" config show >/dev/null || fail "config show against $DEST"
 pass "config show parses the materialized root"
 
+# --- 7. bind audit: every horneroctl invocation in the pins resolves ----
+python3 "$ROOT/scripts/check-binds.py" --binary "$HORNERectl" \
+  --shell-dir "$WORK/shell" --config-dir "$WORK/config" \
+  || fail "bind audit (hornero#61)"
+pass "bind audit: pinned binds resolve, manifest in sync"
+
 echo "COMPOSE-PASS: shell=${SHELL_SHA:0:8} config=${CONFIG_SHA:0:8} root=$DEST"
