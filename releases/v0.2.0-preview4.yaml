@@ -1,0 +1,21 @@
+# Hornero OS release: v0.2.0-preview4
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview4
+version: 0.2.0-preview3
+status: pre-release
+manifest: hornero-0.2.0-preview3
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview4-checklist.md
+summary: >-
+  Development Preview 3 release candidate. Picks up the finished
+  horneroctl migration (shell preset grid, config defaults, dead
+  wrapper removal), the theme catalogue registry, the release ledger,
+  and the staged installer contract. Ships no installable
+  artifacts: installer and iso remain future slots.
+tag: v0.2.0-preview4
+published: false
