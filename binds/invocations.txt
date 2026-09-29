@@ -55,6 +55,7 @@ scheme sync-state
 shell ipc
 shell preset apply
 shell preset list
+shell restart
 shell start
 wallpaper current
 welcome mark-seen
