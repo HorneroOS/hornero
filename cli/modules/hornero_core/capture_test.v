@@ -23,7 +23,7 @@ fn capture_test_restore_env(saved map[string]string) {
 const capture_test_keys = ['HORNERO_SSS_BIN', 'HORNERO_GPU_SCREEN_RECORDER_BIN',
 	'HORNERO_RECORDER_MATCH', 'HORNERO_COPYQ_BIN', 'HORNERO_CLIPHIST_BIN', 'HORNERO_WL_PASTE_BIN',
 	'XDG_SESSION_TYPE', 'XDG_PICTURES_DIR', 'XDG_VIDEOS_DIR', 'CAELESTIA_RECORDINGS_DIR',
-	'XDG_STATE_HOME']
+	'XDG_STATE_HOME', 'HORNERO_CAPTURE_TIMEOUT_SEC']
 
 fn capture_test_break_backends() {
 	os.setenv('HORNERO_SSS_BIN', '/nonexistent-sss-hornero-test', true)
@@ -78,6 +78,80 @@ fn test_screenshot_region_dry_run() {
 	})
 	assert r.ok
 	assert r.message.contains('would run:')
+	capture_test_restore_env(saved)
+}
+
+fn capture_test_write_fake_sss(name string, body string) string {
+	base := '/tmp/hx-capture-test/bin'
+	os.mkdir_all(base) or { assert false }
+	path := base + '/' + name
+	os.write_file(path, body) or { assert false }
+	os.execute('chmod +x ' + path)
+	return path
+}
+
+fn test_screenshot_hang_times_out() {
+	saved := capture_test_save_env(capture_test_keys)
+	capture_test_isolate_paths()
+	// Fake backend that hangs: the timeout must turn it into a loud
+	// failure instead of blocking the CLI (regression: sss hung until
+	// the caller gave up, exit 124 with no message).
+	fake := capture_test_write_fake_sss('sss-hang', r'#!/bin/sh
+sleep 60
+')
+	os.setenv('HORNERO_SSS_BIN', fake, true)
+	os.setenv('HORNERO_CAPTURE_TIMEOUT_SEC', '2', true)
+	r := screenshot_report(ScreenshotOptions{
+		output: '/tmp/hx-capture-test/pictures/hang.png'
+		yes:    true
+	})
+	assert !r.ok
+	assert r.message.contains('timed out')
+	capture_test_restore_env(saved)
+}
+
+fn test_screenshot_silent_exit_zero_fails() {
+	saved := capture_test_save_env(capture_test_keys)
+	capture_test_isolate_paths()
+	// Fake backend that exits 0 without writing the output file: the
+	// file-existence check must fail loudly (regression: sss exited 0
+	// with no file and the CLI reported success).
+	fake := capture_test_write_fake_sss('sss-silent', r'#!/bin/sh
+exit 0
+')
+	os.setenv('HORNERO_SSS_BIN', fake, true)
+	r := screenshot_report(ScreenshotOptions{
+		output: '/tmp/hx-capture-test/pictures/silent.png'
+		yes:    true
+	})
+	assert !r.ok
+	assert r.message.contains('produced no output file')
+	capture_test_restore_env(saved)
+}
+
+fn test_screenshot_success_writes_file() {
+	saved := capture_test_save_env(capture_test_keys)
+	capture_test_isolate_paths()
+	// Fake backend honoring `--output <file>`: a real file must keep
+	// the success path intact after the existence check.
+	fake := capture_test_write_fake_sss('sss-ok', r'#!/bin/sh
+out=""
+prev=""
+for a in "$@"; do
+	if [ "$prev" = "--output" ]; then out="$a"; fi
+	prev="$a"
+done
+if [ -n "$out" ]; then mkdir -p "$(dirname "$out")"; : > "$out"; fi
+exit 0
+')
+	os.setenv('HORNERO_SSS_BIN', fake, true)
+	r := screenshot_report(ScreenshotOptions{
+		output: '/tmp/hx-capture-test/pictures/ok.png'
+		yes:    true
+	})
+	assert r.ok
+	assert r.message.contains('saved screenshot')
+	assert os.is_file('/tmp/hx-capture-test/pictures/ok.png')
 	capture_test_restore_env(saved)
 }
 
