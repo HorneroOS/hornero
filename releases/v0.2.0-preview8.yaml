@@ -1,0 +1,20 @@
+# Hornero OS release: v0.2.0-preview8
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview8
+version: 0.2.0-preview8
+status: pre-release
+manifest: hornero-0.2.0-preview8
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview8-checklist.md
+summary: >-
+  Development Preview 8 release candidate. Picks up everything in
+  Preview 7 plus the docs-coherence README updates in both
+  components. Ships no installable artifacts: installer and iso
+  remain future slots.
+tag: v0.2.0-preview8
+published: false
