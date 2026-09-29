@@ -487,6 +487,54 @@ fn preset_find_file(name string) string {
 	return ''
 }
 
+// preset_load_error returns '' when the preset file reads, parses, and
+// validates; otherwise the human reason for the safe-layout fallback.
+fn preset_load_error(preset_file string) string {
+	raw := os.read_file(preset_file) or { return 'cannot read ${preset_file}: ${err}' }
+	if parsed := json2.decode[json2.Any](raw) {
+		if parsed is map[string]json2.Any {
+			preset_validate(parsed.as_map(), preset_file) or { return err.msg() }
+			return ''
+		}
+		return '${preset_file}: preset must be a JSON object'
+	} else {
+		return '${preset_file}: invalid JSON: ${err.msg()}'
+	}
+}
+
+// preset_load_validated reads, parses, and validates a preset file
+// already cleared by preset_load_error; the happy path stays free of
+// error plumbing.
+fn preset_load_validated(preset_file string) map[string]json2.Any {
+	raw := os.read_file(preset_file) or { return map[string]json2.Any{} }
+	if parsed := json2.decode[json2.Any](raw) {
+		if parsed is map[string]json2.Any {
+			return preset_validate(parsed.as_map(), preset_file) or { map[string]json2.Any{} }
+		}
+	}
+	return map[string]json2.Any{}
+}
+
+// preset_safe_config merges the owned defaults over the current config
+// (when readable) without any preset content: the minimal layout that
+// always renders a bar.
+fn preset_safe_config(conf string) !map[string]json2.Any {
+	mut config := map[string]json2.Any{}
+	if os.is_file(conf) {
+		raw_cfg := os.read_file(conf) or { return error('cannot read ${conf}: ${err}') }
+		if parsed_cfg := json2.decode[json2.Any](raw_cfg) {
+			if parsed_cfg is map[string]json2.Any {
+				config = parsed_cfg.as_map()
+			} else {
+				return error('${conf}: config must be a JSON object')
+			}
+		} else {
+			return error('${conf}: invalid JSON: ${err.msg()}')
+		}
+	}
+	return preset_deep_merge(config, preset_owned_defaults())
+}
+
 // preset_write_tmp stages content in a per-process temp file next to the
 // target. The pid suffix keeps concurrent writers from sharing one path.
 fn preset_write_tmp(path string, content string) !string {
@@ -494,6 +542,52 @@ fn preset_write_tmp(path string, content string) !string {
 	tmp := os.join_path(os.dir(path), '.${os.file_name(path)}.tmp.${os.getpid()}')
 	os.write_file(tmp, content) or { return error('cannot write ${tmp}: ${err}') }
 	return tmp
+}
+
+// preset_default_name is the fallback preset for `shell preset apply`
+// (shell#46): an unknown name resolves to it, and a broken preset file
+// falls back past it to the owned-defaults safe layout. hornero-left is
+// the product default and this file's own worked example; its
+// left/attached bar matches the factory geometry in
+// preset_owned_defaults_json.
+const preset_default_name = 'hornero-left'
+
+// preset_not_found_msg reports an unresolvable preset name with the
+// installed catalogue (or the empty-catalogue hint) for fail paths.
+fn preset_not_found_msg(name string) string {
+	known := list_presets() or { []PresetEntry{} }
+	mut names := []string{}
+	for p in known {
+		names << p.name
+	}
+	hint := if names.len > 0 {
+		'Available presets: ${names.join(', ')}.\nList them: horneroctl shell preset list'
+	} else {
+		'No presets installed. Set HORNERO_PRESETS_DIR.\nExample: horneroctl shell preset list --json'
+	}
+	return 'preset not found: ${name}\n${hint}'
+}
+
+// preset_commit_config atomically writes the merged config and the
+// active-preset pointer. Both files are staged before either rename
+// commits: every fallible write finishes first, so a failure leaves the
+// previous state untouched. Config still renames before the pointer (a
+// stale pointer after a crash re-applies cleanly: apply is idempotent).
+fn preset_commit_config(conf string, marker string, clean map[string]json2.Any, pointer string) ! {
+	config_tmp := preset_write_tmp(conf, json2.encode(clean, escape_unicode: true) + '\n')!
+	marker_tmp := preset_write_tmp(marker, pointer + '\n') or {
+		os.rm(config_tmp) or {}
+		return err
+	}
+	os.mv(config_tmp, conf) or {
+		os.rm(config_tmp) or {}
+		os.rm(marker_tmp) or {}
+		return error('cannot move ${config_tmp} to ${conf}: ${err}')
+	}
+	os.mv(marker_tmp, marker) or {
+		os.rm(marker_tmp) or {}
+		return error('config applied but cannot move ${marker_tmp} to ${marker}: ${err}. Re-run to converge.')
+	}
 }
 
 pub struct PresetApplyOptions {
@@ -518,38 +612,63 @@ pub fn preset_apply_report(opts PresetApplyOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell preset apply', 'refusing to apply preset ${opts.name} without --yes (preview with --dry-run).\nExample: horneroctl shell preset apply ${opts.name} --dry-run')
 	}
-	preset_file := preset_find_file(opts.name)
+	// Fallback order (shell#46): requested -> default preset ->
+	// owned-defaults safe layout. An unknown name resolves to the
+	// default with a note; only a missing default itself still fails.
+	mut target := opts.name
+	mut note := ''
+	mut preset_file := preset_find_file(target)
 	if preset_file.len == 0 {
-		known := list_presets() or { []PresetEntry{} }
-		mut names := []string{}
-		for p in known {
-			names << p.name
+		if target == preset_default_name {
+			return fail_result('shell preset apply', preset_not_found_msg(opts.name))
 		}
-		hint := if names.len > 0 {
-			'Available presets: ${names.join(', ')}.\nList them: horneroctl shell preset list'
-		} else {
-			'No presets installed. Set HORNERO_PRESETS_DIR.\nExample: horneroctl shell preset list --json'
+		note = "unknown preset '${opts.name}', applied default '${preset_default_name}'"
+		target = preset_default_name
+		preset_file = preset_find_file(target)
+		if preset_file.len == 0 {
+			return fail_result('shell preset apply', preset_not_found_msg(opts.name))
 		}
-		return fail_result('shell preset apply', 'preset not found: ${opts.name}\n${hint}')
 	}
-	raw := os.read_file(preset_file) or {
-		return fail_result('shell preset apply', 'cannot read ${preset_file}: ${err}')
-	}
-	parsed := json2.decode[json2.Any](raw) or {
-		return fail_result('shell preset apply', '${preset_file}: invalid JSON: ${err}')
-	}
-	parsed_ok := parsed is map[string]json2.Any
-	if !parsed_ok {
-		return fail_result('shell preset apply', '${preset_file}: preset must be a JSON object')
-	}
-	normalized := preset_validate(parsed.as_map(), preset_file) or {
-		return fail_result('shell preset apply', err.msg())
-	}
+	// A preset file that cannot be read, parsed, or validated falls back
+	// to the minimal safe layout (owned-defaults reset, no preset merge)
+	// so the user keeps a bar. The pointer keeps the requested name as
+	// the intent record; list/grid honestly show no active preset since
+	// the file is unusable.
+	load_err := preset_load_error(preset_file)
 	conf := shell_config_file(resolve_paths())
 	marker := resolve_preset_state_file()
+	if load_err.len != 0 {
+		if opts.dry_run {
+			return ok_result('shell preset apply', "would run: safe reset into ${conf} (preset '${opts.name}' unusable: ${load_err})", {
+				'preset':   opts.name
+				'config':   conf
+				'marker':   marker
+				'fallback': 'safe-reset'
+				'dry_run':  'true'
+			})
+		}
+		safe := preset_safe_config(conf) or {
+			return fail_result('shell preset apply', err.msg())
+		}
+		preset_commit_config(conf, marker, safe, opts.name) or {
+			return fail_result('shell preset apply', err.msg())
+		}
+		return ok_result('shell preset apply', "applied safe layout for '${opts.name}' (${load_err})", {
+			'preset':   opts.name
+			'config':   conf
+			'marker':   marker
+			'fallback': 'safe-reset'
+		})
+	}
+	normalized := preset_load_validated(preset_file)
 	if opts.dry_run {
-		return ok_result('shell preset apply', 'would run: merge ${preset_file} into ${conf}, write pointer ${marker}', {
-			'preset':       opts.name
+		msg := if note.len > 0 {
+			'would run: merge ${preset_file} into ${conf}, write pointer ${marker} (${note})'
+		} else {
+			'would run: merge ${preset_file} into ${conf}, write pointer ${marker}'
+		}
+		return ok_result('shell preset apply', msg, {
+			'preset':       target
 			'preset_file':  preset_file
 			'config':       conf
 			'marker':       marker
@@ -580,29 +699,17 @@ pub fn preset_apply_report(opts PresetApplyOptions) CommandResult {
 		}
 		clean[k] = v
 	}
-	// Stage both files before either rename commits: every fallible write
-	// finishes first, so a failure leaves the previous state untouched.
-	// Config still renames before the pointer (a stale pointer after a
-	// crash re-applies cleanly: apply is idempotent).
-	config_tmp := preset_write_tmp(conf, json2.encode(clean, escape_unicode: true) + '\n') or {
+	preset_commit_config(conf, marker, clean, target) or {
 		return fail_result('shell preset apply', err.msg())
 	}
-	marker_tmp := preset_write_tmp(marker, '${opts.name}\n') or {
-		os.rm(config_tmp) or {}
-		return fail_result('shell preset apply', err.msg())
+	display := if '_name' in normalized { normalized['_name'].str() } else { target }
+	msg := if note.len > 0 {
+		'applied preset ${display} (${target}); ${note}'
+	} else {
+		'applied preset ${display} (${target})'
 	}
-	os.mv(config_tmp, conf) or {
-		os.rm(config_tmp) or {}
-		os.rm(marker_tmp) or {}
-		return fail_result('shell preset apply', 'cannot move ${config_tmp} to ${conf}: ${err}')
-	}
-	os.mv(marker_tmp, marker) or {
-		os.rm(marker_tmp) or {}
-		return fail_result('shell preset apply', 'config applied but cannot move ${marker_tmp} to ${marker}: ${err}. Re-run to converge.')
-	}
-	display := if '_name' in normalized { normalized['_name'].str() } else { opts.name }
-	return ok_result('shell preset apply', 'applied preset ${display} (${opts.name})', {
-		'preset': opts.name
+	return ok_result('shell preset apply', msg, {
+		'preset': target
 		'config': conf
 		'marker': marker
 	})
