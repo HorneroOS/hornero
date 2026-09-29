@@ -21,3 +21,4 @@ files, not this ledger; regenerate when a release is cut.
 | v0.2.0-preview2 | 2026-09-15 | — | `manifests/v0.2.0-preview2.yaml` | `643185e` | `4c761ae` | `releases/v0.2.0-preview2-checklist.md` |
 | v0.2.0-preview3 | 2026-09-28 | — | `manifests/v0.2.0-preview3.yaml` | `60fda3f` | `f344f30` | `releases/v0.2.0-preview3-checklist.md` |
 | v0.2.0-preview4 | 2026-09-29 | hornero | `manifests/v0.2.0-preview4.yaml` | `5bdd5f0` | `f344f30` | `releases/v0.2.0-preview4-checklist.md` |
+| v0.2.0-preview5 | 2026-09-29 | — | `manifests/v0.2.0-preview5.yaml` | `5139747` | `f344f30` | `releases/v0.2.0-preview5-checklist.md` |

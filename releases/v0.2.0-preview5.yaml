@@ -1,0 +1,22 @@
+# Hornero OS release: v0.2.0-preview5
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview5
+version: 0.2.0-preview5
+status: pre-release
+manifest: hornero-0.2.0-preview5
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview5-checklist.md
+summary: >-
+  Development Preview 5 release candidate. Picks up the finished
+  system-wide experience-overhaul slices (settings round-trip, lock
+  privacy, Welcome labels, wallpaper names, Companion suppression,
+  dashboard ADR 003, dash-media empty state) and the horneroctl
+  theme-apply state sync. Ships no installable artifacts: installer
+  and iso remain future slots.
+tag: v0.2.0-preview5
+published: false
