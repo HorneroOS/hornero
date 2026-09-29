@@ -212,6 +212,20 @@ fn capture_notify(icon string, title string, body string) {
 	os.execute('${command_line(bin, ['-i', icon, '-a', 'dots-recorder', title, body])} 2>/dev/null || true')
 }
 
+// screenshot_timeout_sec bounds the sss backend run (default 30s).
+// Override with HORNERO_CAPTURE_TIMEOUT_SEC (a test seam so hang tests
+// stay fast without weakening the production default).
+fn screenshot_timeout_sec() int {
+	raw := os.getenv('HORNERO_CAPTURE_TIMEOUT_SEC')
+	if raw.len > 0 {
+		n := raw.int()
+		if n > 0 {
+			return n
+		}
+	}
+	return 30
+}
+
 pub struct ScreenshotOptions {
 pub:
 	region  bool
@@ -239,9 +253,10 @@ pub fn screenshot_report(opts ScreenshotOptions) CommandResult {
 		['--screen', '--current', '--copy', '--output', out]
 	}
 	rep := run_exec(ExecSpec{
-		prog:    bin
-		args:    args
-		dry_run: opts.dry_run
+		prog:        bin
+		args:        args
+		dry_run:     opts.dry_run
+		timeout_sec: screenshot_timeout_sec()
 	})
 	if opts.dry_run {
 		return ok_result('capture screenshot', 'would run: ${rep.command_line}', {
@@ -256,6 +271,11 @@ pub fn screenshot_report(opts ScreenshotOptions) CommandResult {
 			return ok_result('capture screenshot', msg, {
 				'command_line': rep.command_line
 			})
+		}
+		// A silent exit-0 without an output file is a backend failure,
+		// not success: fail loudly naming the backend and command line.
+		if !os.is_file(out) {
+			return fail_result('capture screenshot', 'sss backend produced no output file: ${out}\ncommand: ${rep.command_line}')
 		}
 		return ok_result('capture screenshot', 'saved screenshot: ${out}', {
 			'command_line': rep.command_line
