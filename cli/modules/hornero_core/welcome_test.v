@@ -210,3 +210,21 @@ fn test_welcome_parse_cli_bool() {
 		assert false
 	}
 }
+
+fn test_welcome_open_defaults_to_start_page() {
+	// `horneroctl welcome open` documents [page] as optional, but the
+	// shell IPC entry requires its argument: an omitted page must be
+	// sent as `start`, or the .desktop launcher dies with
+	// "Too few arguments".
+	r := welcome_open_report(WelcomeOpenOptions{
+		dry_run: true
+	})
+	assert r.ok
+	assert r.message.ends_with('qs ipc call welcome open start')
+	with_page := welcome_open_report(WelcomeOpenOptions{
+		page:    'shortcuts'
+		dry_run: true
+	})
+	assert with_page.ok
+	assert with_page.message.ends_with('qs ipc call welcome open shortcuts')
+}
