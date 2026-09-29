@@ -1,0 +1,20 @@
+# Hornero OS release: v0.2.0-preview7
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview7
+version: 0.2.0-preview7
+status: pre-release
+manifest: hornero-0.2.0-preview7
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview7-checklist.md
+summary: >-
+  Development Preview 7 release candidate. Picks up everything in
+  Preview 6 plus the companion Settings yield with the documented
+  z-order policy. Ships no installable artifacts: installer and iso
+  remain future slots.
+tag: v0.2.0-preview7
+published: false

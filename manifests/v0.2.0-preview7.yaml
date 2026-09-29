@@ -1,0 +1,52 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview7
+#
+# Release-candidate composition for Development Preview 7. This file is
+# IMMUTABLE once the v0.2.0-preview7 tag is cut: a new release always
+# gets a new manifest file, historical manifests are never rewritten.
+# Before freezing, the shell/config pins below are refreshed to their
+# current mains (docs/RELEASE_PROCESS.md); freshness is enforced only
+# for the candidate named in manifests/candidate
+# (scripts/check-pins.py).
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview7
+date: "2026-09-29"
+description: >-
+  Release-candidate composition for Development Preview 7. Picks up
+  everything in Preview 6 plus the companion Settings yield
+  (companion hides while a Settings window is open) with the
+  documented z-order policy. Pins HorneroOS/shell
+  and HorneroOS/config to their release-candidate main SHAs.
+  horneroctl builds from this repository. installer and iso are
+  named future slots only.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 98cac61c11adf87606df672163953f01381606a5
+    status: pinned
+    subject: "feat(companion): yield to open Settings window, document z-order policy"
+    notes: Desktop shell / Quickshell UX.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: f344f3064433d65933ad65af9ba0b401a6c34326
+    status: pinned
+    subject: "feat(catalogue): derived theme registry with freshness contract (#39)"
+    notes: Reusable desktop and system defaults.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. Install and first-boot flows are defined by HorneroOS/installer in a follow-up.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot. Image build order is documented in docs/RELEASE_PROCESS.md; no image exists yet.
