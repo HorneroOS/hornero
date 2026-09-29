@@ -1,0 +1,20 @@
+# Hornero OS release: v0.2.0-preview6
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview6
+version: 0.2.0-preview6
+status: pre-release
+manifest: hornero-0.2.0-preview6
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview6-checklist.md
+summary: >-
+  Development Preview 6 release candidate. Picks up everything in
+  Preview 5 plus the persisted Appearance section disclosure (Themes
+  open by default). Ships no installable artifacts: installer and iso
+  remain future slots.
+tag: v0.2.0-preview6
+published: false
