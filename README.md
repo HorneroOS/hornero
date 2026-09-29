@@ -42,7 +42,11 @@ repository that owns it:
 
 ## Status
 
-Early scaffolding. Nothing here is installable yet.
+Composition is live: `horneroctl` builds from `cli/`, release manifests
+pin the shell/config mains, and `scripts/compose.sh` materializes and
+validates the pinned composition (preview candidates in `releases/`).
+Installer and ISO remain future slots, so nothing here is installable
+yet.
 
 ## License
 
