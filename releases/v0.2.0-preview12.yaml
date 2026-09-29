@@ -1,0 +1,20 @@
+# Hornero OS release: v0.2.0-preview12
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview12
+version: 0.2.0-preview12
+status: pre-release
+manifest: hornero-0.2.0-preview12
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview12-checklist.md
+summary: >-
+  Development Preview 12 release candidate. Picks up everything in
+  Preview 11 plus the capture-backend loud-failure fix (hornero#83).
+  Ships no installable artifacts: installer and iso remain future
+  slots.
+tag: v0.2.0-preview12
+published: false
