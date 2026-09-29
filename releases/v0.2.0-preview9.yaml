@@ -1,0 +1,20 @@
+# Hornero OS release: v0.2.0-preview9
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview9
+version: 0.2.0-preview9
+status: pre-release
+manifest: hornero-0.2.0-preview9
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview9-checklist.md
+summary: >-
+  Development Preview 9 release candidate. Picks up everything in
+  Preview 8 plus the preset fallback chain and the perf baseline
+  harness. Ships no installable artifacts: installer and iso
+  remain future slots.
+tag: v0.2.0-preview9
+published: false

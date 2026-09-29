@@ -1,0 +1,51 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview9
+#
+# Release-candidate composition for Development Preview 9. This file is
+# IMMUTABLE once the v0.2.0-preview9 tag is cut: a new release always
+# gets a new manifest file, historical manifests are never rewritten.
+# Before freezing, the shell/config pins below are refreshed to their
+# current mains (docs/RELEASE_PROCESS.md); freshness is enforced only
+# for the candidate named in manifests/candidate
+# (scripts/check-pins.py).
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview9
+date: "2026-09-29"
+description: >-
+  Release-candidate composition for Development Preview 9. Picks up
+  everything in Preview 8 plus the preset fallback chain (shell#46)
+  and the perf baseline harness. Pins HorneroOS/shell
+  and HorneroOS/config to their release-candidate main SHAs.
+  horneroctl builds from this repository. installer and iso are
+  named future slots only.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 2b023923ba170daa8001d39ad4366f6750aea09b
+    status: pinned
+    subject: "feat(perf): repeatable baseline harness + methodology"
+    notes: Desktop shell / Quickshell UX.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: c4a25f0ef2196a9257582190447de9ebc6fd7528
+    status: pinned
+    subject: "docs(readme): 15 theme packs, drop first-extraction language"
+    notes: Reusable desktop and system defaults.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. Install and first-boot flows are defined by HorneroOS/installer in a follow-up.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot. Image build order is documented in docs/RELEASE_PROCESS.md; no image exists yet.
