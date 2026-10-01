@@ -1,0 +1,22 @@
+# Hornero OS release: v0.2.0-preview13
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview13
+version: 0.2.0-preview13
+status: pre-release
+manifest: hornero-0.2.0-preview13
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview13-checklist.md
+summary: >-
+  Development Preview 13 release candidate. Layout fidelity milestone:
+  clear bars (Polybar transparent lineage), Cockpit Clear and Horizon,
+  per-layout entry options, topology-aware Layout Picker with working
+  keyboard navigation, popout/panel alignment and hover-to-click fixes,
+  factory shell default parity gate, notification ownership. Ships no
+  installable artifacts: installer and iso remain future slots.
+tag: v0.2.0-preview13
+published: false

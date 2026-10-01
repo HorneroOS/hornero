@@ -1,0 +1,54 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview13
+#
+# Release-candidate composition for Development Preview 13. This file is
+# IMMUTABLE once the v0.2.0-preview13 tag is cut: a new release always
+# gets a new manifest file, historical manifests are never rewritten.
+# Before freezing, the shell/config pins below are refreshed to their
+# current mains (docs/RELEASE_PROCESS.md); freshness is enforced only
+# for the candidate named in manifests/candidate
+# (scripts/check-pins.py).
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview13
+date: "2026-10-01"
+description: >-
+  Release-candidate composition for Development Preview 13. Picks up
+  everything in Preview 12 plus the layout fidelity milestone: clear bar
+  backdrops, per-layout entry options, Cockpit Clear and Horizon, the
+  topology-aware Layout Picker, popout/panel alignment and hover fixes,
+  the factory shell default re-sync with its parity gate, and the shell
+  owning org.freedesktop.Notifications. Pins HorneroOS/shell and
+  HorneroOS/config to their release-candidate main SHAs. horneroctl
+  builds from this repository. installer and iso are named future
+  slots only.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 25d22061af26c9aef394445d15a760e52bb38d58
+    status: pinned
+    subject: "Merge pull request #94 from HorneroOS/fix/clear-bar-tray-chip"
+    notes: Desktop shell / Quickshell UX.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: dae2255c7d0ba3649dff5fe131e6ca14aaa9353b
+    status: pinned
+    subject: "Merge pull request #44 from HorneroOS/fix/shell-owns-notifications"
+    notes: Reusable desktop and system defaults.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. Install and first-boot flows are defined by HorneroOS/installer in a follow-up.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot. Image build order is documented in docs/RELEASE_PROCESS.md; no image exists yet.
