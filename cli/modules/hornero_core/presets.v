@@ -121,6 +121,118 @@ pub:
 	position      string
 	style         string
 	active        bool
+	lineage       string
+	// bars: topology summary for previews (preset_bars_summary), one
+	// {edge, style, backdrop, groups:{start,center,end}} per resolved bar.
+	bars []json2.Any
+}
+
+const preset_bar_edges = ['top', 'bottom', 'left', 'right']
+const preset_bar_styles = ['attached', 'inset', 'floating', 'islands', 'dock']
+
+// preset_enabled_count counts enabled, non-spacer entries in a group.
+fn preset_enabled_count(list []json2.Any) int {
+	mut n := 0
+	for e in list {
+		if e !is map[string]json2.Any {
+			continue
+		}
+		m := e.as_map()
+		if 'id' !in m || m['id'].str() == 'spacer' {
+			continue
+		}
+		if 'enabled' in m && m['enabled'].str() == 'false' {
+			continue
+		}
+		n++
+	}
+	return n
+}
+
+fn preset_bar_summary_item(edge string, style string, backdrop string, start int, center int, end int) json2.Any {
+	return json2.Any({
+		'edge':     json2.Any(edge)
+		'style':    json2.Any(style)
+		'backdrop': json2.Any(backdrop)
+		'groups':   json2.Any({
+			'start':  json2.Any(start)
+			'center': json2.Any(center)
+			'end':    json2.Any(end)
+		})
+	})
+}
+
+// preset_bars_summary resolves a preset's bar topology the way the shell
+// does (BarConfig.barsFor): valid v2 `bars` specs, first spec wins on a
+// duplicated edge, unknown styles fall back to attached; with no usable
+// spec, one legacy bar from position/style/entries split at enabled
+// spacers (before first -> start, between -> center, after last -> end).
+pub fn preset_bars_summary(bar map[string]json2.Any) []json2.Any {
+	mut out := []json2.Any{}
+	if 'bars' in bar && bar['bars'] is []json2.Any {
+		mut seen := []string{}
+		for raw in bar['bars'].as_array() {
+			if raw !is map[string]json2.Any {
+				continue
+			}
+			spec := raw.as_map()
+			edge := if 'edge' in spec { spec['edge'].str() } else { '' }
+			if edge !in preset_bar_edges || edge in seen {
+				continue
+			}
+			seen << edge
+			raw_style := if 'style' in spec { spec['style'].str() } else { '' }
+			style := if raw_style in preset_bar_styles { raw_style } else { 'attached' }
+			backdrop := if 'backdrop' in spec && spec['backdrop'].str() == 'clear' {
+				'clear'
+			} else {
+				'solid'
+			}
+			mut counts := [0, 0, 0]
+			if 'groups' in spec && spec['groups'] is map[string]json2.Any {
+				g := spec['groups'].as_map()
+				for i, key in ['start', 'center', 'end'] {
+					if key in g && g[key] is []json2.Any {
+						counts[i] = preset_enabled_count(g[key].as_array())
+					}
+				}
+			}
+			out << preset_bar_summary_item(edge, style, backdrop, counts[0], counts[1],
+				counts[2])
+		}
+	}
+	if out.len > 0 {
+		return out
+	}
+	raw_pos := if 'position' in bar { bar['position'].str() } else { '' }
+	edge := if raw_pos in preset_bar_edges { raw_pos } else { 'left' }
+	raw_style := if 'style' in bar { bar['style'].str() } else { '' }
+	style := if raw_style in preset_bar_styles { raw_style } else { 'attached' }
+	entries := if 'entries' in bar && bar['entries'] is []json2.Any {
+		bar['entries'].as_array()
+	} else {
+		[]json2.Any{}
+	}
+	mut cuts := []int{}
+	for i, e in entries {
+		if e is map[string]json2.Any {
+			m := e.as_map()
+			if 'id' in m && m['id'].str() == 'spacer'
+				&& !('enabled' in m && m['enabled'].str() == 'false') {
+				cuts << i
+			}
+		}
+	}
+	if cuts.len == 0 {
+		return [preset_bar_summary_item(edge, style, 'solid', preset_enabled_count(entries),
+			0, 0)]
+	}
+	first := cuts[0]
+	last := cuts[cuts.len - 1]
+	start := preset_enabled_count(entries[..first])
+	end := preset_enabled_count(entries[last + 1..])
+	center := if cuts.len == 1 { 0 } else { preset_enabled_count(entries[first + 1..last]) }
+	return [preset_bar_summary_item(edge, style, 'solid', start, center, end)]
 }
 
 // current_preset_name returns the active preset id, or '' when unset.
@@ -151,10 +263,16 @@ fn preset_entry_from_map(name string, m map[string]json2.Any, current string) Pr
 	if '_iconMaterial' in m && m['_iconMaterial'].str().len > 0 {
 		icon_material = m['_iconMaterial'].str()
 	}
+	mut lineage := ''
+	if '_lineage' in m {
+		lineage = m['_lineage'].str()
+	}
 	mut position := 'left'
 	mut style := 'attached'
+	mut bars := []json2.Any{}
 	if 'bar' in m && m['bar'] is map[string]json2.Any {
 		bar := m['bar'].as_map()
+		bars = preset_bars_summary(bar)
 		if 'position' in bar && bar['position'].str().len > 0 {
 			position = bar['position'].str()
 		}
@@ -171,6 +289,8 @@ fn preset_entry_from_map(name string, m map[string]json2.Any, current string) Pr
 		position:      position
 		style:         style
 		active:        name == current
+		lineage:       lineage
+		bars:          bars
 	}
 }
 
@@ -262,7 +382,8 @@ pub fn preset_current_report() CommandResult {
 // (read-only). The message is the full entry array as JSON — same shape
 // as the retired `dots-quickshell preset list --json` backend the
 // in-shell layout picker consumes: name, display, description, icon,
-// iconMaterial, position, style, active.
+// iconMaterial, position, style, active — plus additive lineage and a
+// bars topology summary (preset_bars_summary) for multi-bar previews.
 pub fn preset_list_full_report() CommandResult {
 	presets := list_presets() or { return fail_result('shell preset list', err.msg()) }
 	mut names := []string{}
@@ -282,6 +403,8 @@ pub fn preset_list_full_report() CommandResult {
 			'position':     json2.Any(p.position)
 			'style':        json2.Any(p.style)
 			'active':       json2.Any(p.active)
+			'lineage':      json2.Any(p.lineage)
+			'bars':         json2.Any(p.bars)
 		})
 	}
 	return ok_result('shell preset list', json2.encode(arr, escape_unicode: true), {
