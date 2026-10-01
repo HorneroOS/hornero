@@ -1,3 +1,4 @@
 /build/
 .make.*
 modules/.cache/
+/make
