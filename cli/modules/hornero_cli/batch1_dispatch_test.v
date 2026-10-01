@@ -10,10 +10,19 @@ import os
 const b1_fake_home = '/tmp/hx-batch1-dtest/fakehome'
 
 fn b1_dispatch_setup() {
+	// A failed assert aborts the test process before teardown: start from
+	// a clean tree so a previous crash can never leave real-home archives.
+	os.rmdir_all('/tmp/hx-batch1-dtest') or {}
 	os.mkdir_all(b1_fake_home + '/.config/app') or { assert false }
 	os.mkdir_all(b1_fake_home + '/.local/bin') or { assert false }
 	os.write_file(b1_fake_home + '/.config/app/conf', 'v1') or { assert false }
-	os.setenv('HX_B1_REAL_HOME', os.getenv('HOME'), true)
+	// Remember whether HOME was set at all, not only its value.
+	if real := os.getenv_opt('HOME') {
+		os.setenv('HX_B1_REAL_HOME', real, true)
+		os.setenv('HX_B1_HOME_WAS_SET', '1', true)
+	} else {
+		os.unsetenv('HX_B1_HOME_WAS_SET')
+	}
 	os.setenv('HOME', b1_fake_home, true)
 	os.mkdir_all('/tmp/hx-batch1-dtest/snapshots/config_20260101_020000') or { assert false }
 	os.write_file('/tmp/hx-batch1-dtest/snapshots/config_20260101_020000/metadata.json',
@@ -38,8 +47,13 @@ fn b1_dispatch_setup() {
 }
 
 fn b1_dispatch_teardown() {
-	os.setenv('HOME', os.getenv('HX_B1_REAL_HOME'), true)
+	if os.getenv('HX_B1_HOME_WAS_SET') == '1' {
+		os.setenv('HOME', os.getenv('HX_B1_REAL_HOME'), true)
+	} else {
+		os.unsetenv('HOME')
+	}
 	os.unsetenv('HX_B1_REAL_HOME')
+	os.unsetenv('HX_B1_HOME_WAS_SET')
 	os.rmdir_all('/tmp/hx-batch1-dtest') or {}
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
 	os.unsetenv('HORNERO_CONFIG_MANAGER_BIN')
