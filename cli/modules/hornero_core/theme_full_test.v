@@ -60,7 +60,7 @@ fn test_theme_list_full_is_manifest_array() {
 	assert a['wallpaperDir'].str() == 'hx-full-a'
 	assert a['defaultWallpaper'].str() == 'a.jpg'
 	assert a['preview'].str().ends_with('pack-a/preview.jpg')
-	walls := a['wallpapers'].arr()
+	walls := a['wallpapers'].as_array()
 	assert walls.len == 2
 	assert walls[0].str() == 'a.jpg'
 	assert walls[1].str() == 'b.png'
@@ -71,7 +71,7 @@ fn test_theme_list_full_is_manifest_array() {
 	assert b['id'].str() == 'pack-b'
 	assert b['schemeType'].str() == 'tonal-spot'
 	assert b['iconTheme'].str() == 'Numix-Circle'
-	assert b['wallpapers'].arr().len == 0
+	assert b['wallpapers'].as_array().len == 0
 	assert b['wallpaperPath'].str() == ''
 	theme_full_restore(old_themes, old_walls)
 }

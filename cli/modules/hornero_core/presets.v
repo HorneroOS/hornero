@@ -395,14 +395,14 @@ fn preset_validate(preset map[string]json2.Any, source string) !map[string]json2
 	}
 	hover_ok := 'showOnHover' in bar && bar['showOnHover'] is bool
 	entries_ok := 'entries' in bar && bar['entries'] is []json2.Any
-		&& bar['entries'].arr().len > 0
+		&& bar['entries'].as_array().len > 0
 	if !hover_ok {
 		return error('${source}: bar.showOnHover must be a boolean')
 	}
 	if !entries_ok {
 		return error('${source}: bar.entries must be a non-empty list')
 	}
-	for entry in bar['entries'].arr() {
+	for entry in bar['entries'].as_array() {
 		entry_ok := entry is map[string]json2.Any
 		mut em := map[string]json2.Any{}
 		if entry_ok {
