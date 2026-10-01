@@ -276,3 +276,56 @@ fn test_preset_list_full_is_json_array() {
 	assert seen['hornero-left']
 	preset_test_restore(old_presets, old_marker, old_xdg)
 }
+
+fn preset_summary_of(raw string) []json2.Any {
+	bar := json2.decode[map[string]json2.Any](raw) or { return []json2.Any{} }
+	return preset_bars_summary(bar)
+}
+
+fn test_preset_bars_summary_v2_dedupes_and_counts() {
+	s := preset_summary_of('{"position":"top","style":"attached","bars":[{"edge":"top","style":"inset","groups":{"start":[{"id":"logo","enabled":true},{"id":"clock","enabled":false}],"center":[{"id":"clock"}],"end":[]}},{"edge":"top","style":"dock"},{"edge":"diagonal"},{"edge":"bottom","style":"weird","backdrop":"clear","groups":{"start":[{"id":"workspaces"}]}}]}')
+	assert s.len == 2
+	top := s[0].as_map()
+	assert top['edge'].str() == 'top'
+	assert top['style'].str() == 'inset'
+	assert top['backdrop'].str() == 'solid'
+	assert top['reserve'].str() == 'true'
+	g := top['groups'].as_map()
+	assert g['start'].int() == 1
+	assert g['center'].int() == 1
+	assert g['end'].int() == 0
+	bottom := s[1].as_map()
+	assert bottom['style'].str() == 'attached'
+	assert bottom['backdrop'].str() == 'clear'
+	assert bottom['reserve'].str() == 'true' // invalid style -> attached reserves
+}
+
+fn test_preset_bars_summary_v1_splits_at_spacers() {
+	s := preset_summary_of('{"position":"left","style":"floating","bars":[],"entries":[{"id":"logo"},{"id":"workspaces"},{"id":"spacer"},{"id":"clock"},{"id":"spacer","enabled":false},{"id":"spacer"},{"id":"power"},{"id":"tray","enabled":false}]}')
+	assert s.len == 1
+	m := s[0].as_map()
+	assert m['edge'].str() == 'left'
+	assert m['style'].str() == 'floating'
+	assert m['reserve'].str() == 'false'
+	g := m['groups'].as_map()
+	assert g['start'].int() == 2
+	assert g['center'].int() == 1
+	assert g['end'].int() == 1
+}
+
+fn test_preset_list_full_carries_bars_and_lineage() {
+	old_presets, old_marker, old_xdg := preset_test_isolate()
+	r := preset_list_full_report()
+	arr := json2.decode[[]json2.Any](r.message) or { []json2.Any{} }
+	for item in arr {
+		m := item.as_map()
+		assert 'lineage' in m
+		assert 'bars' in m
+		if m['name'].str() == 'test-left' {
+			bars := m['bars'].as_array()
+			assert bars.len == 1
+			assert bars[0].as_map()['edge'].str() == 'left'
+		}
+	}
+	preset_test_restore(old_presets, old_marker, old_xdg)
+}

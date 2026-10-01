@@ -58,7 +58,9 @@ packs, apply via `dots-appearance theme apply`, verify GTK/scheme agree,
 best-effort rollback to the previous official theme); scheme status
 reads the materialized scheme files under XDG state/cache; preset list/current read the installed presets
 (`HORNERO_PRESETS_DIR` override, else XDG data `dots/shell-presets`)
-and the state pointer; config show reads the materialized
+and the state pointer (`list --full` adds each preset's `lineage` and a
+`bars` topology summary resolved like the shell's `BarConfig.barsFor`:
+edge, style, backdrop, enabled entries per group); config show reads the materialized
 `$XDG_CONFIG_HOME/hornero/shell.json` (system default as fallback);
 snapshot list reads the materialized snapshots (`HORNERO_SNAPSHOTS_DIR`
 override, else XDG cache `dots/snapshots`) while create/restore delegate
