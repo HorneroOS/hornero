@@ -289,6 +289,7 @@ fn test_preset_bars_summary_v2_dedupes_and_counts() {
 	assert top['edge'].str() == 'top'
 	assert top['style'].str() == 'inset'
 	assert top['backdrop'].str() == 'solid'
+	assert top['reserve'].str() == 'true'
 	g := top['groups'].as_map()
 	assert g['start'].int() == 1
 	assert g['center'].int() == 1
@@ -296,6 +297,7 @@ fn test_preset_bars_summary_v2_dedupes_and_counts() {
 	bottom := s[1].as_map()
 	assert bottom['style'].str() == 'attached'
 	assert bottom['backdrop'].str() == 'clear'
+	assert bottom['reserve'].str() == 'true' // invalid style -> attached reserves
 }
 
 fn test_preset_bars_summary_v1_splits_at_spacers() {
@@ -304,6 +306,7 @@ fn test_preset_bars_summary_v1_splits_at_spacers() {
 	m := s[0].as_map()
 	assert m['edge'].str() == 'left'
 	assert m['style'].str() == 'floating'
+	assert m['reserve'].str() == 'false'
 	g := m['groups'].as_map()
 	assert g['start'].int() == 2
 	assert g['center'].int() == 1

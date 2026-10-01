@@ -123,7 +123,7 @@ pub:
 	active        bool
 	lineage       string
 	// bars: topology summary for previews (preset_bars_summary), one
-	// {edge, style, backdrop, groups:{start,center,end}} per resolved bar.
+	// {edge, style, backdrop, reserve, groups:{start,center,end}} per bar.
 	bars []json2.Any
 }
 
@@ -149,11 +149,18 @@ fn preset_enabled_count(list []json2.Any) int {
 	return n
 }
 
-fn preset_bar_summary_item(edge string, style string, backdrop string, start int, center int, end int) json2.Any {
+// preset_style_reserves mirrors the shell's BarConfig.styleReserves:
+// strips and the dock reserve, floating/islands overlay by default.
+fn preset_style_reserves(style string) bool {
+	return style in ['attached', 'inset', 'dock']
+}
+
+fn preset_bar_summary_item(edge string, style string, backdrop string, reserve bool, start int, center int, end int) json2.Any {
 	return json2.Any({
 		'edge':     json2.Any(edge)
 		'style':    json2.Any(style)
 		'backdrop': json2.Any(backdrop)
+		'reserve':  json2.Any(reserve)
 		'groups':   json2.Any({
 			'start':  json2.Any(start)
 			'center': json2.Any(center)
@@ -197,8 +204,14 @@ pub fn preset_bars_summary(bar map[string]json2.Any) []json2.Any {
 					}
 				}
 			}
-			out << preset_bar_summary_item(edge, style, backdrop, counts[0], counts[1],
-				counts[2])
+			reserve := if 'reserve' in spec
+				&& spec['reserve'].str() in ['true', 'false'] {
+				spec['reserve'].str() == 'true'
+			} else {
+				preset_style_reserves(style)
+			}
+			out << preset_bar_summary_item(edge, style, backdrop, reserve, counts[0],
+				counts[1], counts[2])
 		}
 	}
 	if out.len > 0 {
@@ -224,15 +237,16 @@ pub fn preset_bars_summary(bar map[string]json2.Any) []json2.Any {
 		}
 	}
 	if cuts.len == 0 {
-		return [preset_bar_summary_item(edge, style, 'solid', preset_enabled_count(entries),
-			0, 0)]
+		return [preset_bar_summary_item(edge, style, 'solid', preset_style_reserves(style),
+			preset_enabled_count(entries), 0, 0)]
 	}
 	first := cuts[0]
 	last := cuts[cuts.len - 1]
 	start := preset_enabled_count(entries[..first])
 	end := preset_enabled_count(entries[last + 1..])
 	center := if cuts.len == 1 { 0 } else { preset_enabled_count(entries[first + 1..last]) }
-	return [preset_bar_summary_item(edge, style, 'solid', start, center, end)]
+	return [preset_bar_summary_item(edge, style, 'solid', preset_style_reserves(style),
+		start, center, end)]
 }
 
 // current_preset_name returns the active preset id, or '' when unset.
