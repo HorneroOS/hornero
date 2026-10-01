@@ -18,7 +18,7 @@ fn root() string {
 
 fn vbin() string {
 	for k in ['V', 'VBIN'] {
-		p := getenv(k)
+		p := os.getenv(k)
 		if p.len > 0 {
 			return p
 		}
@@ -145,19 +145,19 @@ context.task(
 		// Release provenance for `horneroctl version`: scripts/compose.sh
 		// exports the composition pins; every value defaults to unknown so
 		// local builds need no manifest checkout.
-		mut shell_sha := getenv('HX_SHELL_SHA')
+		mut shell_sha := os.getenv('HX_SHELL_SHA')
 		if shell_sha.len == 0 {
 			shell_sha = 'unknown'
 		}
-		mut config_sha := getenv('HX_CONFIG_SHA')
+		mut config_sha := os.getenv('HX_CONFIG_SHA')
 		if config_sha.len == 0 {
 			config_sha = 'unknown'
 		}
-		mut manifest := getenv('HX_MANIFEST')
+		mut manifest := os.getenv('HX_MANIFEST')
 		if manifest.len == 0 {
 			manifest = 'unknown'
 		}
-		mut release := getenv('HX_RELEASE')
+		mut release := os.getenv('HX_RELEASE')
 		if release.len == 0 {
 			release = 'unknown'
 		}

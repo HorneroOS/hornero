@@ -223,7 +223,7 @@ fn theme_truthy(v json2.Any) bool {
 		return v.f64() != 0
 	}
 	if v is []json2.Any {
-		return v.arr().len > 0
+		return v.as_array().len > 0
 	}
 	if v is map[string]json2.Any {
 		return v.as_map().len > 0
@@ -341,7 +341,7 @@ fn theme_load_full_entry(themes_dir string, dirname string, roots []string) !map
 	}
 	mut tags := []json2.Any{}
 	if 'tags' in m && m['tags'] is []json2.Any {
-		tags = m['tags'].arr()
+		tags = m['tags'].as_array()
 	}
 	mut wall_list := []json2.Any{}
 	for w in walls {
