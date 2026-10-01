@@ -61,8 +61,12 @@ schema, skip a check, or hand-edit generated output to make a gate
 pass. `compose.sh` is the executable gate: it fetches the pinned
 shell/config SHAs, builds horneroctl, materializes the config pin into
 a scratch root, and validates that root with `config paths`, `config
-validate`, and `config show`. The same script runs as the `compose`
-job in `composition-ci`.
+validate`, and `config show`. It also fails when the config pin's
+`shell/shell.default.json` is not byte-identical to the shell pin's
+`config/shell.default.json`. The shell owns that factory default and
+config only packages it. Fix that by resyncing `HorneroOS/config`
+(see its `shell/README.md`), then bump the config pin. The same script
+runs as the `compose` job in `composition-ci`.
 
 ## 3. Tag
 
