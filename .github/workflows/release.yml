@@ -78,6 +78,24 @@ jobs:
             echo "mismatch: ${got} != ${want}" >&2
             exit 1
           fi
+      # Release provenance: bake the candidate composition (the manifest
+      # manifests/candidate names at the tagged commit) into `horneroctl
+      # version`, exactly as scripts/compose.sh does for composed builds.
+      - name: Export composition pins
+        run: |
+          pip install --quiet pyyaml
+          manifest="manifests/$(grep -v '^#' manifests/candidate | grep -v '^$' | head -1)"
+          python3 - "$manifest" >> "$GITHUB_ENV" <<'PY'
+          import sys, yaml
+          from pathlib import Path
+          m = yaml.safe_load(open(sys.argv[1]))
+          rel = Path("releases") / (Path(sys.argv[1]).stem + ".yaml")
+          version = yaml.safe_load(open(rel)).get("version", "unknown") if rel.is_file() else "unknown"
+          print(f"HX_SHELL_SHA={m['components']['shell']['sha']}")
+          print(f"HX_CONFIG_SHA={m['components']['config']['sha']}")
+          print(f"HX_MANIFEST={m['name']}")
+          print(f"HX_RELEASE={version}")
+          PY
       - name: Build native CLI
         working-directory: cli
         run: ./make.vsh build-cli
@@ -85,6 +103,19 @@ jobs:
         working-directory: cli
         run: |
           ./build/horneroctl version
+          # A release binary must name its tag (never -dirty) and its pins.
+          if ./build/horneroctl version | grep -q -- '-dirty'; then
+            echo "release build is dirty" >&2
+            exit 1
+          fi
+          ./build/horneroctl version --json > /tmp/hx-version.json
+          python3 - <<'PY'
+          import json, os
+          d = json.load(open("/tmp/hx-version.json"))["data"]
+          assert d["shell_sha"] == os.environ["HX_SHELL_SHA"], d
+          assert d["config_sha"] == os.environ["HX_CONFIG_SHA"], d
+          assert d["manifest"] == os.environ["HX_MANIFEST"], d
+          PY
           ./build/horneroctl --help | head -n 12
           cp -f build/horneroctl "build/${{ matrix.asset }}"
       - name: Upload release asset
