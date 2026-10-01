@@ -27,9 +27,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 7b67e37a8cce8e5956c787db8afd914e2f27efea
+    sha: 25d22061af26c9aef394445d15a760e52bb38d58
     status: pinned
-    subject: "Merge pull request #93 from HorneroOS/feat/picker-topology"
+    subject: "Merge pull request #94 from HorneroOS/fix/clear-bar-tray-chip"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
