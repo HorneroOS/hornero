@@ -65,7 +65,10 @@ validate`, and `config show`. It also fails when the config pin's
 `shell/shell.default.json` is not byte-identical to the shell pin's
 `config/shell.default.json`. The shell owns that factory default and
 config only packages it. Fix that by resyncing `HorneroOS/config`
-(see its `shell/README.md`), then bump the config pin. The same script
+(see its `shell/README.md`), then bump the config pin. Two cases do
+not fail: a config pin that ships no factory default passes, and the
+tagged manifests listed in `PARITY_HISTORICAL` (Preview 2-12, which
+shipped a mismatch before the gate existed) only warn. The same script
 runs as the `compose` job in `composition-ci`.
 
 ## 3. Tag
