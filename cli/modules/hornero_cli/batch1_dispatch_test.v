@@ -3,8 +3,18 @@ module hornero_cli
 import os
 
 // Batch-1 dispatch fixtures reuse the core /tmp tree; each test sets the
-// overrides it needs and unsets them afterwards.
+// overrides it needs and unsets them afterwards. HOME is redirected to a
+// tiny fake home: snapshot create/restore run natively (tar over HOME), and
+// without this the tests archived the developer's real home into /tmp
+// (~1 GB per run, on tmpfs) and restore targeted the real home.
+const b1_fake_home = '/tmp/hx-batch1-dtest/fakehome'
+
 fn b1_dispatch_setup() {
+	os.mkdir_all(b1_fake_home + '/.config/app') or { assert false }
+	os.mkdir_all(b1_fake_home + '/.local/bin') or { assert false }
+	os.write_file(b1_fake_home + '/.config/app/conf', 'v1') or { assert false }
+	os.setenv('HX_B1_REAL_HOME', os.getenv('HOME'), true)
+	os.setenv('HOME', b1_fake_home, true)
 	os.mkdir_all('/tmp/hx-batch1-dtest/snapshots/config_20260101_020000') or { assert false }
 	os.write_file('/tmp/hx-batch1-dtest/snapshots/config_20260101_020000/metadata.json',
 		'{"id":"config_20260101_020000","timestamp":"2026-01-01T02:00:00","hostname":"den","dotfiles_commit":"abc123"}') or {
@@ -28,6 +38,9 @@ fn b1_dispatch_setup() {
 }
 
 fn b1_dispatch_teardown() {
+	os.setenv('HOME', os.getenv('HX_B1_REAL_HOME'), true)
+	os.unsetenv('HX_B1_REAL_HOME')
+	os.rmdir_all('/tmp/hx-batch1-dtest') or {}
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
 	os.unsetenv('HORNERO_CONFIG_MANAGER_BIN')
 	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
@@ -146,4 +159,22 @@ fn test_batch1_json_and_quiet_modes() {
 	assert dispatch(['horneroctl', '--json', 'package', 'updates']) == 0
 	assert dispatch(['horneroctl', '--quiet', 'config', 'snapshot', 'list']) == 0
 	b1_dispatch_teardown()
+}
+
+fn test_dispatch_snapshot_never_touches_real_home() {
+	b1_dispatch_setup()
+	assert os.getenv('HOME') == b1_fake_home
+	assert dispatch(['horneroctl', 'config', 'snapshot', 'create', '--yes']) == 0
+	mut tarballs := 0
+	for d in os.ls('/tmp/hx-batch1-dtest/snapshots') or { []string{} } {
+		tb := '/tmp/hx-batch1-dtest/snapshots/${d}/dotfiles.tar.gz'
+		if os.is_file(tb) {
+			tarballs++
+			// The fake home archives to a few hundred bytes, never the real home.
+			assert os.file_size(tb) < 64 * 1024
+		}
+	}
+	assert tarballs >= 1
+	b1_dispatch_teardown()
+	assert !os.exists('/tmp/hx-batch1-dtest')
 }
