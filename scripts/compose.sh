@@ -99,6 +99,32 @@ grep -q "hornero" "$WORK/shell/utils/Paths.qml" \
   || fail "shell pin lacks path-contract resolution (utils/Paths.qml)"
 pass "shell pin carries path-contract resolution"
 
+# --- 3b. factory shell default parity ------------------------------------------
+# HorneroOS/shell owns config/shell.default.json; the config pin packages a
+# byte-exact copy as /etc/xdg/hornero/shell.json (path-contract row 6). A
+# composition must ship exactly the default its shell pin owns.
+# Manifests tagged before this gate existed shipped a mismatched copy; they
+# are immutable history, so the mismatch is reported, never enforced.
+PARITY_HISTORICAL=(
+  hornero-0.2.0-preview2 hornero-0.2.0-preview3 hornero-0.2.0-preview4
+  hornero-0.2.0-preview5 hornero-0.2.0-preview6 hornero-0.2.0-preview7
+  hornero-0.2.0-preview8 hornero-0.2.0-preview9 hornero-0.2.0-preview10
+  hornero-0.2.0-preview11 hornero-0.2.0-preview12
+)
+MANIFEST_NAME="$(python3 -c "import yaml,sys; print(yaml.safe_load(open(sys.argv[1]))['name'])" "$ROOT/$MANIFEST")"
+SHELL_DEFAULT="$WORK/shell/config/shell.default.json"
+CONFIG_DEFAULT="$WORK/config/shell/shell.default.json"
+if [[ ! -f $CONFIG_DEFAULT ]]; then
+  pass "config pin ships no factory shell default (nothing to compare)"
+elif [[ -f $SHELL_DEFAULT ]] && cmp -s "$SHELL_DEFAULT" "$CONFIG_DEFAULT"; then
+  pass "factory shell default: config pin is byte-exact shell pin"
+elif [[ " ${PARITY_HISTORICAL[*]} " == *" $MANIFEST_NAME "* ]]; then
+  echo "COMPOSE-WARN: $MANIFEST_NAME shipped a factory shell default that differs from its shell pin (historical, not enforced)" >&2
+else
+  diff -u "$SHELL_DEFAULT" "$CONFIG_DEFAULT" 2>&1 | head -40 >&2 || true
+  fail "config pin shell/shell.default.json != shell pin config/shell.default.json (resync HorneroOS/config, then bump the config pin)"
+fi
+
 # --- 4. build horneroctl -------------------------------------------------------
 # Release provenance is baked into the binary via -d defines (see
 # cli/make.vsh build-cli): the pins below become `horneroctl version`.
@@ -151,9 +177,10 @@ assert data['config_sha'] == '$CONFIG_SHA', data
 assert data['manifest'] == '$HX_MANIFEST', data
 " || fail "version provenance does not match pins"
 pass "version reports shell=${SHELL_SHA:0:8} config=${CONFIG_SHA:0:8} manifest=$HX_MANIFEST"
-# shell.json is user-created (the shell writes it on settings change; no
-# repo ships a factory default yet). Seed an empty object so `config show`
-# exercises the parse path against this root without faking user content.
+# The user shell.json is created by the shell on settings change (the
+# factory default lives at the system location, see step 3b). Seed an
+# empty object so `config show` exercises the parse path against this
+# root without faking user content.
 mkdir -p "$DEST/.config/hornero"
 printf '{}\n' >"$DEST/.config/hornero/shell.json"
 "$HORNERectl" config show >/dev/null || fail "config show against $DEST"
