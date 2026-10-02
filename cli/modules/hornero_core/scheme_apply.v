@@ -165,7 +165,14 @@ pub fn sync_state_from_scheme() !string {
 	if name.len == 0 {
 		name = 'dynamic'
 	}
-	return write_scheme_state(name, flavour, mode, normalize_variant(flavour))
+	path := write_scheme_state(name, flavour, mode, normalize_variant(flavour))!
+	policy := scheme_json_field(scheme, 'gtkColorScheme')
+	if policy in ['follow', 'default', 'prefer-light', 'prefer-dark'] {
+		return update_state_json_fields({
+			'gtkColorScheme': policy
+		}, {})
+	}
+	return path
 }
 
 // regenerate_scheme_native rewrites scheme.json from the wallpaper via
