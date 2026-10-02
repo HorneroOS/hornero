@@ -232,7 +232,7 @@ pub fn settings_gui_report(opts SettingsGuiOptions) CommandResult {
 		if opts.pane.len > 0 {
 			args << '--pane=${opts.pane}'
 		}
-		rep := run_exec(ExecSpec{prog: helper, args: args, dry_run: opts.dry_run})
+		rep := run_exec(ExecSpec{ prog: helper, args: args, dry_run: opts.dry_run })
 		if opts.dry_run {
 			return ok_result('config gui', 'would run: ${rep.command_line}', {
 				'command_line': rep.command_line
@@ -240,14 +240,16 @@ pub fn settings_gui_report(opts SettingsGuiOptions) CommandResult {
 			})
 		}
 		if rep.ok {
-			return ok_result('config gui', rep.output, {'command_line': rep.command_line})
+			return ok_result('config gui', rep.output, {
+				'command_line': rep.command_line
+			})
 		}
 		return fail_result('config gui', 'settings helper failed (exit ${rep.exit_code}):\n${rep.output}')
 	}
 
 	mut passthrough := ['call', 'controlCenter', 'open']
 	passthrough << if opts.pane.len > 0 { opts.pane } else { 'network' }
-	result := ipc_report(IpcOptions{passthrough: passthrough, dry_run: opts.dry_run})
+	result := ipc_report(IpcOptions{ passthrough: passthrough, dry_run: opts.dry_run })
 	if result.ok && opts.dry_run {
 		return ok_result('config gui', result.message, result.data)
 	}

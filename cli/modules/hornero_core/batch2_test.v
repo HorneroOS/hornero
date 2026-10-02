@@ -147,10 +147,10 @@ fn test_settings_gui_previews_native_shell_ipc() {
 	assert d.ok
 	assert d.data['dry_run'] == 'true'
 	assert d.message.contains('ipc call controlCenter open vpn')
-	default_dry_run := settings_gui_report(SettingsGuiOptions{dry_run: true})
+	default_dry_run := settings_gui_report(SettingsGuiOptions{ dry_run: true })
 	assert default_dry_run.ok
 	assert default_dry_run.message.contains('ipc call controlCenter open network')
-	r := settings_gui_report(SettingsGuiOptions{pane: 'vpn'})
+	r := settings_gui_report(SettingsGuiOptions{ pane: 'vpn' })
 	assert r.ok
 	assert r.message.contains('call controlCenter open vpn')
 	os.unsetenv('HORNERO_QS_BIN')
