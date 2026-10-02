@@ -204,6 +204,25 @@ fn test_appearance_status_reads() {
 	os.rmdir_all(tmp) or {}
 }
 
+fn test_appearance_doctor_preserves_legacy_rice_markers() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-doctor-legacy-rice')
+	os.rmdir_all(tmp) or {}
+	with_apply_xdg(tmp, fn [tmp] () {
+		markers := legacy_rice_marker_paths()
+		for marker in markers {
+			os.mkdir_all(os.dir(marker)) or {}
+			os.write_file(marker, 'owner state') or {}
+		}
+		rep := appearance_doctor_native()
+		assert rep.message.contains('legacy rice marker remains')
+		for marker in markers {
+			assert os.is_file(marker), 'doctor removed legacy marker ${marker}'
+			assert (os.read_file(marker) or { '' }) == 'owner state'
+		}
+	})
+	os.rmdir_all(tmp) or {}
+}
+
 fn test_hyprlock_dry_run() {
 	rep := regenerate_hyprlock_native('', true)
 	assert rep.ok

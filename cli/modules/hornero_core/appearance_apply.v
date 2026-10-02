@@ -783,18 +783,36 @@ pub fn appearance_sync_native(dry_run bool) CommandResult {
 	return ok_result('appearance sync', 'appearance state synced from scheme.json', {})
 }
 
+// legacy_rice_marker_paths resolves the three obsolete rice markers using
+// the same XDG roots as the rest of Hornero's user state.
+fn legacy_rice_marker_paths() []string {
+	mut data_home := os.getenv('XDG_DATA_HOME')
+	if data_home.len == 0 {
+		data_home = os.join_path(os.home_dir(), '.local', 'share')
+	}
+	mut cache_home := os.getenv('XDG_CACHE_HOME')
+	if cache_home.len == 0 {
+		cache_home = os.join_path(os.home_dir(), '.cache')
+	}
+	mut state_home := os.getenv('XDG_STATE_HOME')
+	if state_home.len == 0 {
+		state_home = os.join_path(os.home_dir(), '.local', 'state')
+	}
+	return [
+		os.join_path(data_home, 'dots', 'rices', '.current_rice'),
+		os.join_path(cache_home, 'dots', 'current_rice'),
+		os.join_path(state_home, 'dots', 'rice', 'current'),
+	]
+}
+
 // appearance_doctor_native checks appearance consistency (the doctor
 // port): scheme/state agreement, wallpaper pointer chain, hyprlock
-// output, GTK policy, M3 interpreter, and legacy orphans. One-time
-// legacy rice pointers are purged like the bash doctor did.
+// output, GTK policy, M3 interpreter, and legacy orphans. It never
+// mutates user state; old rice markers are reported without removing them.
 pub fn appearance_doctor_native() CommandResult {
 	mut fails := []string{}
 	mut warns := []string{}
 	mut lines := []string{}
-	os.rm(os.join_path(os.home_dir(), '.local', 'share', 'dots', 'rices', '.current_rice')) or {}
-	os.rm(os.join_path(os.home_dir(), '.cache', 'dots', 'current_rice')) or {}
-	os.rm(os.join_path(os.home_dir(), '.local', 'state', 'dots', 'rice', 'current')) or {}
-	os.rmdir(os.join_path(os.home_dir(), '.local', 'state', 'dots', 'rice')) or {}
 	scheme := color_scheme_file_for_read()
 	state := scheme_state_file_for_read()
 	scheme_flavour := scheme_json_field(scheme, 'flavour')
@@ -846,9 +864,10 @@ pub fn appearance_doctor_native() CommandResult {
 	lines << 'gtk.preferDark : ${if gtk_prefer.len > 0 { gtk_prefer } else { '(missing)' }}'
 	lines << 'gtk.colorPolicy: ${policy}'
 	lines << 'gtk.colorScheme: ${if gtk_scheme.len > 0 { gtk_scheme } else { '(missing)' }}'
-	if os.is_file(os.join_path(os.home_dir(), '.local', 'share', 'dots', 'rices', '.current_rice'))
-		|| os.is_file(os.join_path(os.home_dir(), '.cache', 'dots', 'current_rice')) {
-		fails << 'legacy rice pointer still present'
+	for marker in legacy_rice_marker_paths() {
+		if os.is_file(marker) {
+			warns << 'legacy rice marker remains: ${marker} (left unchanged)'
+		}
 	}
 	if scheme_flavour.len > 0 && state_flavour.len > 0 && scheme_flavour != state_flavour {
 		fails << 'scheme flavour != state flavour (${scheme_flavour} vs ${state_flavour})'
