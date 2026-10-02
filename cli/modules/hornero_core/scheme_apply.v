@@ -152,6 +152,12 @@ pub fn scheme_current_report() CommandResult {
 // regenerating (the ThemePipeline post-write handshake). Fails when the
 // scheme file is missing.
 pub fn sync_state_from_scheme() !string {
+	return sync_state_from_scheme_with_theme_id('')
+}
+
+// sync_state_from_scheme_with_theme_id optionally preserves the selected
+// theme-pack identity while adopting generated flavour and mode metadata.
+pub fn sync_state_from_scheme_with_theme_id(theme_id string) !string {
 	scheme := color_scheme_file_for_read()
 	if !os.is_file(scheme) {
 		return error('scheme.json missing at ${scheme} — regenerate first.')
@@ -164,6 +170,12 @@ pub fn sync_state_from_scheme() !string {
 	mut name := scheme_json_field(scheme, 'name')
 	if name.len == 0 {
 		name = 'dynamic'
+	}
+	if theme_id.len > 0 {
+		show_theme_pack(theme_id) or {
+			return error('cannot sync unknown theme id: ${theme_id}: ${err.msg()}')
+		}
+		name = theme_id
 	}
 	path := write_scheme_state(name, flavour, mode, normalize_variant(flavour))!
 	policy := scheme_json_field(scheme, 'gtkColorScheme')

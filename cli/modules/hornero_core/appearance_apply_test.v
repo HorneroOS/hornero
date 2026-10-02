@@ -93,6 +93,27 @@ fn test_sync_state_from_scheme_roundtrip() {
 	os.rmdir_all(tmp) or {}
 }
 
+fn test_sync_state_from_scheme_keeps_selected_theme_id() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-syncstate-theme-id')
+	os.rmdir_all(tmp) or {}
+	with_apply_xdg(tmp, fn [tmp] () {
+		write_pack(tmp, 'pampa')
+		scheme := color_scheme_file()
+		os.mkdir_all(os.dir(scheme)) or {}
+		os.write_file(scheme, '{"name":"dynamic","flavour":"tonal-spot","mode":"dark","colours":{}}\n') or {}
+		path := sync_state_from_scheme_with_theme_id('pampa') or {
+			assert false, err.msg()
+			return
+		}
+		state := os.read_file(path) or { '' }
+		assert state.contains('pampa')
+		assert state.contains('dark')
+		assert state.contains('tonal-spot')
+	})
+	os.unsetenv('HORNERO_THEMES_DIR')
+	os.rmdir_all(tmp) or {}
+}
+
 fn test_sync_state_missing_scheme_fails() {
 	tmp := os.join_path(os.temp_dir(), 'hornero-syncmissing')
 	os.rmdir_all(tmp) or {}
