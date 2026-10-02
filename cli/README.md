@@ -30,7 +30,7 @@ horneroctl appearance status
 horneroctl appearance sync [--dry-run|--yes]
 horneroctl appearance call [--dry-run] -- <backend-args...>
 horneroctl appearance theme <list|show <id>|get|apply <id> [--wallpaper <path>]|set <hornero-dark|hornero-light|pampa>> [--dry-run|--yes]
-horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>> [--dry-run|--yes]
+horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>|sync-state> [--dry-run|--yes]
 horneroctl scheme ...                       # alias of appearance scheme
 horneroctl config <paths|validate|show [key]>
 horneroctl config snapshot <create|list|restore <id>> [--dry-run|--yes]
@@ -77,8 +77,9 @@ default-apps list delegates to `dots-default-apps --list`
 to the config repo `materialize.sh --dest <dir>`
 (`HORNERO_MATERIALIZE_BIN` override; `--dest` travels verbatim,
 never rewritten to a legacy `dots/*` path); gui delegates to
-`dots-settings-gui [--pane=<name>]` (`HORNERO_SETTINGS_GUI_BIN`
-override, default `~/.local/bin/dots-settings-gui`); migrate delegates
+the Hornero Shell Control Center IPC registry when the Shell is running;
+`HORNERO_SETTINGS_GUI_BIN` is an explicit compatibility override for
+development or shell-unavailable environments; migrate delegates
 to the config repo `migrate-to-hornero.sh [--dry-run]`
 (`HORNERO_MIGRATE_BIN` override, or `--helper PATH` for one invocation;
 needs `--yes`, copy-if-absent over the Hornero-owned rows only: themes,
@@ -159,7 +160,8 @@ backup list (native) + backup schedule (recipe only, never installed).
 v0.4 (batch 2, backend-grounded): config default-apps list (via
 `dots-default-apps --list`, read-only), config materialize --dest
 (via the config repo `materialize.sh`, needs --yes), config gui
-(via `dots-settings-gui`, launcher semantics). `default-apps set`
+(via Hornero Shell IPC, with an explicit compatibility override).
+`default-apps set`
 stays deferred: no verified upstream verb.
 v0.5 (preview 1, worker D): config migrate (via the config repo
 `migrate-to-hornero.sh`, copy-if-absent, needs --yes, per-row `--json`),

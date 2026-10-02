@@ -238,7 +238,7 @@ breaks; nothing else may jump ahead of them.
 | `dots-dependencies` | `package deps` | P3 | Check plus install |
 | `dots-config-manager` | `config snapshot ...` | P2 | Snapshots and backups |
 | `dots-default-apps` | `config default-apps ...` | P3 | `handlr` backend stays internal |
-| `dots-settings-gui` | `config gui` | P3 | Shell-launched hub |
+| Hornero Shell IPC (`controlCenter.open`) | `config gui` | P3 | Opens the registered Control Center pane; `HORNERO_SETTINGS_GUI_BIN` is an explicit compatibility override |
 | `dots-backup` | `backup ...` | P3 | Cron scheduling kept |
 | `dots-security-audit` | `system security audit` | P3 | `--fix` privileged via polkit |
 | `dots-performance` | `system performance status` | P3 | Benchmarks stay subcommands |

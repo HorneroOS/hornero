@@ -104,6 +104,42 @@ pub fn resolve_wallpapers_dir_fallback() string {
 	return os.join_path(base, 'dots', 'wallpapers')
 }
 
+// resolve_wallpapers_dirs_for_read returns wallpaper catalogue roots in
+// precedence order: explicit override, user canonical, user legacy, then
+// read-only system catalogues. It never changes the canonical write target.
+pub fn resolve_wallpapers_dirs_for_read() []string {
+	override := os.getenv('HORNERO_WALLPAPERS_DIR')
+	if override.len > 0 {
+		return [override]
+	}
+	mut dirs := []string{}
+	canonical := resolve_wallpapers_dir()
+	fallback := resolve_wallpapers_dir_fallback()
+	if os.is_dir(canonical) {
+		dirs << canonical
+	}
+	if os.is_dir(fallback) && fallback != canonical {
+		dirs << fallback
+	}
+	append_system_catalogues(mut dirs, os.join_path('hornero', 'wallpapers'))
+	append_system_catalogues(mut dirs, os.join_path('dots', 'wallpapers'))
+	return dirs
+}
+
+// resolve_pictures_wallpapers_dir accepts the Hornero override first. The
+// DOTS_* name remains a read-only compatibility fallback for existing users.
+pub fn resolve_pictures_wallpapers_dir() string {
+	value := os.getenv('HORNERO_PICTURES_WALLPAPERS')
+	if value.len > 0 {
+		return value
+	}
+	legacy := os.getenv('DOTS_PICTURES_WALLPAPERS')
+	if legacy.len > 0 {
+		return legacy
+	}
+	return os.join_path(os.home_dir(), 'Pictures', 'Wallpapers')
+}
+
 // resolve_wallpaper_pointer_file locates the wallpaper pointer (row 9).
 // Override with HORNERO_WALLPAPER_POINTER_FILE.
 pub fn resolve_wallpaper_pointer_file() string {

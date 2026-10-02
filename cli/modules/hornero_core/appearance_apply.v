@@ -197,22 +197,21 @@ pub fn resolve_pack_wallpaper(id string, wallpaper_dir string, default_name stri
 			return real
 		}
 	}
-	pics := os.getenv('DOTS_PICTURES_WALLPAPERS')
-	pics_base := if pics.len > 0 {
-		pics
-	} else {
-		os.join_path(os.home_dir(), 'Pictures', 'Wallpapers')
+	pics_base := resolve_pictures_wallpapers_dir()
+	wall_roots := resolve_wallpapers_dirs_for_read()
+	mut search_dirs := []string{}
+	if os.getenv('HORNERO_WALLPAPERS_DIR').len == 0 {
+		search_dirs << os.join_path(pics_base, wallpaper_dir)
 	}
-	wall_dirs := resolve_wallpapers_dir()
-	wall_fallback := resolve_wallpapers_dir_fallback()
-	for base in [os.join_path(pics_base, wallpaper_dir), os.join_path(wall_dirs, wallpaper_dir),
-		os.join_path(wall_fallback, wallpaper_dir)] {
+	for root in wall_roots {
+		search_dirs << os.join_path(root, wallpaper_dir)
+	}
+	for base in search_dirs {
 		if default_name.len > 0 && os.is_file(os.join_path(base, default_name)) {
 			return os.real_path(os.join_path(base, default_name))
 		}
 	}
-	for base in [os.join_path(pics_base, wallpaper_dir), os.join_path(wall_dirs, wallpaper_dir),
-		os.join_path(wall_fallback, wallpaper_dir)] {
+	for base in search_dirs {
 		entries := os.ls(base) or { continue }
 		mut cands := []string{}
 		for e in entries {

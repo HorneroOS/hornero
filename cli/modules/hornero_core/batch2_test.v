@@ -135,25 +135,25 @@ fn test_materialize_missing_backend_fails_cleanly() {
 	b2_restore_resolution(old_home, old_path)
 }
 
-fn test_settings_gui_validates_pane_and_previews() {
+fn test_settings_gui_previews_native_shell_ipc() {
 	b2_setup_backends()
-	bad := settings_gui_report(SettingsGuiOptions{
-		pane: 'bogus'
-	})
-	assert !bad.ok
-	assert bad.message.contains('invalid pane')
+	os.unsetenv('HORNERO_SETTINGS_GUI_BIN')
+	b2_write('${b2_root}/bin/qs', '#!/bin/sh\nprintf "ipc %s\\n" "$*"\n')
+	os.setenv('HORNERO_QS_BIN', '${b2_root}/bin/qs', true)
 	d := settings_gui_report(SettingsGuiOptions{
-		pane:    'appearance'
+		pane:    'vpn'
 		dry_run: true
 	})
 	assert d.ok
 	assert d.data['dry_run'] == 'true'
-	assert d.message.contains('--pane=appearance')
-	p := settings_gui_report(SettingsGuiOptions{
-		dry_run: true
-	})
-	assert p.ok
-	assert p.message.contains('dots-settings-gui')
+	assert d.message.contains('ipc call controlCenter open vpn')
+	default_dry_run := settings_gui_report(SettingsGuiOptions{ dry_run: true })
+	assert default_dry_run.ok
+	assert default_dry_run.message.contains('ipc call controlCenter open network')
+	r := settings_gui_report(SettingsGuiOptions{ pane: 'vpn' })
+	assert r.ok
+	assert r.message.contains('call controlCenter open vpn')
+	os.unsetenv('HORNERO_QS_BIN')
 	b2_teardown_backends()
 }
 
@@ -171,7 +171,7 @@ fn test_settings_gui_missing_backend_fails_cleanly() {
 	r := settings_gui_report(SettingsGuiOptions{})
 	assert r.command == 'config gui'
 	assert !r.ok
-	assert r.message.contains('HORNERO_SETTINGS_GUI_BIN')
+	assert r.message.contains('Hornero Shell running') || r.message.contains('qs not found')
 	b2_restore_resolution(old_home, old_path)
 }
 

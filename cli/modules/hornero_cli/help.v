@@ -450,9 +450,10 @@ Examples:
 		'config gui' {
 			return 'Usage: horneroctl config gui [--pane <name>] [--dry-run]
 
-  Open the settings hub via dots-settings-gui
-  (HORNERO_SETTINGS_GUI_BIN). Panes: network, bluetooth, audio,
-  appearance, taskbar, launcher, dashboard, system.
+  Open Hornero Settings through the running shell.
+  `--pane` is validated by the Hornero Shell pane registry. With no shell,
+  the command reports that the desktop session is unavailable.
+  HORNERO_SETTINGS_GUI_BIN is an explicit compatibility override.
 
 Examples:
   horneroctl config gui --dry-run

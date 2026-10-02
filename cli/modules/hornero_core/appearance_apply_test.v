@@ -72,7 +72,7 @@ fn test_sync_state_from_scheme_roundtrip() {
 	with_apply_xdg(tmp, fn [tmp] () {
 		scheme := color_scheme_file()
 		os.mkdir_all(os.dir(scheme)) or {}
-		os.write_file(scheme, '{"name": "dynamic", "flavour": "vibrant", "mode": "light", "colours": {"primary": "FF0000"}}\n') or {}
+		os.write_file(scheme, '{"name": "dynamic", "flavour": "vibrant", "mode": "light", "gtkColorScheme": "prefer-light", "colours": {"primary": "FF0000"}}\n') or {}
 		path := sync_state_from_scheme() or {
 			assert false, err.msg()
 			return
@@ -81,6 +81,7 @@ fn test_sync_state_from_scheme_roundtrip() {
 		raw := os.read_file(path) or { '' }
 		assert raw.contains('"vibrant"')
 		assert raw.contains('"light"')
+		assert raw.contains('"gtkColorScheme":"prefer-light"')
 		cur := scheme_current_report()
 		assert cur.ok
 		assert cur.message.contains('vibrant')
@@ -101,6 +102,25 @@ fn test_sync_state_missing_scheme_fails() {
 		} else {
 			assert err.msg().contains('missing')
 		}
+	})
+	os.rmdir_all(tmp) or {}
+}
+
+fn test_sync_state_persists_builtin_theme_and_gtk_policy() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-syncstate-builtin')
+	os.rmdir_all(tmp) or {}
+	with_apply_xdg(tmp, fn [tmp] () {
+		scheme := color_scheme_file()
+		os.mkdir_all(os.dir(scheme)) or {}
+		os.write_file(scheme, '{"name":"hornero-light","flavour":"tonal-spot","mode":"light","gtkColorScheme":"prefer-light","colours":{}}\n') or {}
+		path := sync_state_from_scheme() or {
+			assert false, err.msg()
+			return
+		}
+		state := os.read_file(path) or { '' }
+		assert state.contains('"name":"hornero-light"')
+		assert state.contains('"mode":"light"')
+		assert state.contains('"gtkColorScheme":"prefer-light"')
 	})
 	os.rmdir_all(tmp) or {}
 }
