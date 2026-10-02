@@ -16,22 +16,25 @@ description: >-
   Release-candidate composition for Development Preview 14. Picks up
   everything in Preview 13 plus the packaging-truth fixes found by Hornero
   QA: package installs ship the layout-preset catalogue where horneroctl
-  reads it, hornero-config declares python-materialyoucolor so theme
-  switching works, optional Hyprland plugin config never raises the
-  config-error banner, the package no longer conflicts with systemd's user
-  unit path, and Hornero Shell declares the supported pywal16 provider for
-  recipe theme switching. Pins below track only current component main
-  SHAs; this candidate does not include the pending Settings redesign.
-  horneroctl builds from this repository. installer and iso are named future
-  slots only.
+  reads it, installed theme packs and wallpapers resolve without dotfiles,
+  whole-system theme application keeps Shell, GTK, icons, and selected
+  identity coherent, and Hornero Config declares python-materialyoucolor so
+  dynamic color generation works. Optional Hyprland plugin config never
+  raises the config-error banner, the package no longer conflicts with
+  systemd's user unit path, and Hornero Shell declares the supported pywal16
+  provider for recipe theme switching. First-boot Weather stays offline
+  until a location is explicitly configured. Pins below track only current
+  component main SHAs; this candidate does not include the pending Settings
+  redesign. horneroctl builds from this repository. installer and iso are
+  named future slots only.
 
 components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 190ca5e42706bce5bbacb67ea8e543093edd55d1
+    sha: 3658e1b2fc5ece22c54917f17ed803b02a47003e
     status: pinned
-    subject: "fix(weather): make location lookup explicit and offline by default (#103)"
+    subject: "fix(appearance): keep theme state and GTK changes coherent (#107)"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config

@@ -20,6 +20,7 @@ appearance gtk sync-color-scheme
 appearance gtk theme
 appearance hyprlock
 appearance night-mode toggle
+appearance theme apply
 appearance theme list
 apps launch
 apps switcher apply-theme-pack
