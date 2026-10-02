@@ -29,9 +29,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 3773c99c627c6bb980babd451d5d80887f853f02
+    sha: 190ca5e42706bce5bbacb67ea8e543093edd55d1
     status: pinned
-    subject: "fix(themes): keep installed theme state coherent (#105)"
+    subject: "fix(weather): make location lookup explicit and offline by default (#103)"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
