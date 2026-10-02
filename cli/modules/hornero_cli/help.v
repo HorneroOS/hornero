@@ -451,7 +451,7 @@ Examples:
 			return 'Usage: horneroctl config gui [--pane <name>] [--dry-run]
 
   Open Hornero Settings through the running shell.
-  `--pane` is validated by the shell's pane registry. With no shell,
+  `--pane` is validated by the Hornero Shell pane registry. With no shell,
   the command reports that the desktop session is unavailable.
   HORNERO_SETTINGS_GUI_BIN is an explicit compatibility override.
 
