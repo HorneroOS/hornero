@@ -196,8 +196,9 @@ fn theme_wallpaper_index(theme_id string, wallpaper_dir string, roots []string) 
 // first, then the catalogue roots, else the canonical Pictures target
 // even when nothing is linked yet.
 fn theme_resolve_wallpaper_file(wallpaper_dir string, filename string, roots []string) string {
+	override := os.getenv('HORNERO_WALLPAPERS_DIR')
 	pics := os.join_path(theme_pictures_root(), wallpaper_dir, filename)
-	if os.is_file(pics) {
+	if override.len == 0 && os.is_file(pics) {
 		return pics
 	}
 	for root in roots {
@@ -205,6 +206,9 @@ fn theme_resolve_wallpaper_file(wallpaper_dir string, filename string, roots []s
 		if os.is_file(candidate) {
 			return candidate
 		}
+	}
+	if override.len > 0 {
+		return os.join_path(override, wallpaper_dir, filename)
 	}
 	return pics
 }

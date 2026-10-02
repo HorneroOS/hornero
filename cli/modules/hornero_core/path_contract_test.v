@@ -121,6 +121,8 @@ fn test_pc_explicit_overrides_win() {
 fn test_pc_system_wallpaper_catalogue_is_read_only_fallback() {
 	pc_set_xdg('system-wallpapers')
 	system_root := '${pc_root}/system-wallpapers/sys/hornero/wallpapers'
+	empty_pictures := '${pc_root}/system-wallpapers/pictures-empty'
+	os.setenv('HORNERO_PICTURES_WALLPAPERS', empty_pictures, true)
 	pc_write('${system_root}/pampa/pampa-01.png', 'system-wallpaper')
 	pc_write('${pc_root}/system-wallpapers/sys/hornero/themes/pampa/theme.json', '{"schemaVersion":1,"id":"pampa","name":"Pampa","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","darkMode":true,"gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark"}')
 	assert resolve_wallpapers_dirs_for_read() == [system_root]
@@ -144,6 +146,7 @@ fn test_pc_system_wallpaper_catalogue_is_read_only_fallback() {
 	override := '${pc_root}/system-wallpapers/override'
 	pc_write('${pictures}/pampa/pampa-01.png', 'picture-wallpaper')
 	pc_write('${override}/pampa/pampa-01.png', 'override-wallpaper')
+	os.unsetenv('HORNERO_PICTURES_WALLPAPERS')
 	os.setenv('DOTS_PICTURES_WALLPAPERS', pictures, true)
 	assert resolve_pictures_wallpapers_dir() == pictures
 	canonical_pictures := '${pc_root}/system-wallpapers/pictures-canonical'
@@ -151,6 +154,7 @@ fn test_pc_system_wallpaper_catalogue_is_read_only_fallback() {
 	assert resolve_pictures_wallpapers_dir() == canonical_pictures
 	os.unsetenv('HORNERO_PICTURES_WALLPAPERS')
 	os.setenv('HORNERO_WALLPAPERS_DIR', override, true)
+	os.setenv('HORNERO_PICTURES_WALLPAPERS', pictures, true)
 	resolved_override := resolve_pack_wallpaper('pampa', 'pampa', 'pampa-01.png', '') or {
 		assert false, err.msg()
 		''
