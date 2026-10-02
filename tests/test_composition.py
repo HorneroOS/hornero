@@ -131,6 +131,29 @@ def test_release_must_reference_known_manifest():
     assert check_release_doc(release, "test", {}, {}) != []
 
 
+def test_release_name_version_and_manifest_must_agree():
+    # Regression: v0.2.0-preview4 once pointed at the Preview 3 composition.
+    manifests = {"hornero-0.2.0-preview3": {}, "hornero-0.2.0-preview4": {}}
+    base = {
+        "apiVersion": "hornero.os/v1",
+        "kind": "Release",
+        "status": "pre-release",
+        "profiles": [],
+    }
+    good = base | {
+        "name": "v0.2.0-preview4",
+        "version": "0.2.0-preview4",
+        "manifest": "hornero-0.2.0-preview4",
+        "tag": "v0.2.0-preview4",
+    }
+    assert check_release_doc(good, "test", manifests, {}) == []
+    copied = good | {"version": "0.2.0-preview3", "manifest": "hornero-0.2.0-preview3"}
+    errors = check_release_doc(copied, "test", manifests, {})
+    assert any("does not match version" in e for e in errors)
+    wrong_tag = good | {"tag": "v0.2.0-preview3"}
+    assert any("tag" in e for e in check_release_doc(wrong_tag, "test", manifests, {}))
+
+
 def test_all_three_editions_cover_pinned_components():
     import yaml
 

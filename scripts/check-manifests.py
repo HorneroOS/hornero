@@ -212,6 +212,16 @@ def check_release_doc(
         errors.append(f"{source}: version must be semver-like")
     if doc.get("status") not in RELEASE_STATUSES:
         errors.append(f"{source}: status must be one of {list(RELEASE_STATUSES)}")
+    # One release = one version = one manifest: name, version, tag and
+    # manifest must all name the same release (a copied file once shipped
+    # v0.2.0-preview4 pointing at the Preview 3 composition).
+    version = str(doc.get("version", ""))
+    if doc.get("name") != f"v{version}":
+        errors.append(f"{source}: name '{doc.get('name')}' does not match version '{version}'")
+    if doc.get("manifest") != f"hornero-{version}":
+        errors.append(f"{source}: manifest '{doc.get('manifest')}' does not match version '{version}'")
+    if "tag" in doc and doc["tag"] != doc.get("name"):
+        errors.append(f"{source}: tag '{doc['tag']}' does not match name '{doc.get('name')}'")
     manifest_name = doc.get("manifest")
     if manifest_name not in manifests:
         errors.append(f"{source}: unknown manifest '{manifest_name}'")
