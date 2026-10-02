@@ -38,9 +38,9 @@ compare_pins = _pins.compare_pins
 SHELL_SHA = "b0a864cd57cfea01d7314c1de9823b873fb9269a"
 CONFIG_SHA = "c4ac00326cd5476c5efc05c11a403d1d6353a7d6"
 
-# Release-candidate composition (Development Preview 13).
-CANDIDATE_SHELL_SHA = "25d22061af26c9aef394445d15a760e52bb38d58"
-CANDIDATE_CONFIG_SHA = "dae2255c7d0ba3649dff5fe131e6ca14aaa9353b"
+# Release-candidate composition (Development Preview 14).
+CANDIDATE_SHELL_SHA = "b22d33319368263db39b09cdceecd42f04521b61"
+CANDIDATE_CONFIG_SHA = "f5f7229d4322d2ac6d0a53b601d292e3849f3e49"
 
 
 def read_text(path: Path) -> str:
@@ -149,15 +149,15 @@ def test_all_three_editions_cover_pinned_components():
 def test_candidate_pointer_is_explicit_and_deterministic():
     import yaml
 
-    assert read_candidate_name(ROOT) == "v0.2.0-preview13.yaml"
-    doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview13.yaml"))
-    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview13"
+    assert read_candidate_name(ROOT) == "v0.2.0-preview14.yaml"
+    doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview14.yaml"))
+    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview14"
 
 
 def test_candidate_manifest_pins_release_candidate():
     import yaml
 
-    doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview13.yaml"))
+    doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview14.yaml"))
     assert doc["components"]["shell"]["sha"] == CANDIDATE_SHELL_SHA
     assert doc["components"]["config"]["sha"] == CANDIDATE_CONFIG_SHA
     assert doc["components"]["shell"]["status"] == "pinned"
@@ -167,7 +167,7 @@ def test_candidate_manifest_pins_release_candidate():
 def test_profiles_track_candidate_manifest():
     import yaml
 
-    candidate = "hornero-0.2.0-preview13"
+    candidate = "hornero-0.2.0-preview14"
     assert candidate_manifest_name(ROOT) == candidate
     for edition in ("base", "desktop", "developer"):
         profile = yaml.safe_load(read_text(ROOT / "profiles" / f"{edition}.yaml"))
@@ -178,8 +178,8 @@ def test_historical_manifest_is_exempt_from_freshness():
     # Preview 0 pins are stale by design (b0a864c/c4ac003 predate current
     # mains). The freshness gate must NOT select them: only the candidate
     # manifest yields pin entries, and the structural check passes.
-    assert validate_historical_manifests(ROOT, "v0.2.0-preview13.yaml") == []
-    entries = manifest_pin_entries(ROOT / "manifests" / "v0.2.0-preview13.yaml")
+    assert validate_historical_manifests(ROOT, "v0.2.0-preview14.yaml") == []
+    entries = manifest_pin_entries(ROOT / "manifests" / "v0.2.0-preview14.yaml")
     assert {name for _, name, _, _, _ in entries} == {"shell", "config"}
     stale = manifest_pin_entries(ROOT / "manifests" / "v0.1.0-draft.yaml")
     assert stale, "historical manifest must still parse its pins"

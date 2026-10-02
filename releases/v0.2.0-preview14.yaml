@@ -1,0 +1,22 @@
+# Hornero OS release: v0.2.0-preview14
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview14
+version: 0.2.0-preview14
+status: pre-release
+manifest: hornero-0.2.0-preview14
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview14-checklist.md
+summary: >-
+  Development Preview 14 release candidate. Packaging truth milestone,
+  found by the new Hornero QA acceptance layer: system preset/theme/M3
+  catalogues for package installs, the python-materialyoucolor dependency
+  for theme switching, and optional-plugin config that never shows the
+  config-error banner. Ships no installable artifacts: installer and iso
+  remain future slots.
+tag: v0.2.0-preview14
+published: false
