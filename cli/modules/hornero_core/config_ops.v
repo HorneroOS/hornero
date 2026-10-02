@@ -246,9 +246,7 @@ pub fn settings_gui_report(opts SettingsGuiOptions) CommandResult {
 	}
 
 	mut passthrough := ['call', 'controlCenter', 'open']
-	if opts.pane.len > 0 {
-		passthrough << opts.pane
-	}
+	passthrough << if opts.pane.len > 0 { opts.pane } else { 'network' }
 	result := ipc_report(IpcOptions{passthrough: passthrough, dry_run: opts.dry_run})
 	if result.ok && opts.dry_run {
 		return ok_result('config gui', result.message, result.data)
