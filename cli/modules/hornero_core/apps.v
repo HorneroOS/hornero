@@ -720,7 +720,7 @@ fn launch_native(opts LaunchOptions) CommandResult {
 		})
 	}
 	backend := if opts.backend.len == 0 { 'auto' } else { opts.backend }
-	qs_allowed := os.getenv('DOTS_BYPASS_QUICKSHELL') != '1' && quickshell_running()
+	qs_allowed := !shell_ipc_bypassed() && quickshell_running()
 	if (backend == 'quickshell' || backend == 'auto') && qs_allowed {
 		qs := resolve_quickshell_bin()
 		if qs.len > 0 {
