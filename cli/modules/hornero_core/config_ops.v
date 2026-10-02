@@ -5,19 +5,11 @@ import os
 // Config operations backend: the remaining `config` leaves beyond
 // snapshots (see snapshots.v).
 //
-// `list` prints current XDG defaults natively (terminal via
-// xfce4/helpers.rc, the rest via handlr); `set <mime>
-// <app>` writes via xdg-mime directly (the upstream `--set` verb
-// never binds its arguments under EasyOptions, and handlr stays
-// internal). `config gui` delegates to
-// `dots-settings-gui` (`--pane=<name>` selects the control-center
-// pane, bare invocation opens the hub). `config materialize`
-// delegates to the config repo's `scripts/materialize.sh`
-// (`--dest <dir> [--dry-run]`, hermetic into a temp HOME for tests).
-// Path handling follows docs/PATH_CONTRACT.md: backend locations are
-// resolved through the helpers below (explicit override, then the
-// installed `~/.local/bin` helper, then PATH) and `--dest` is passed
-// through verbatim -- never rewritten to a hardcoded `dots/*` path.
+// `list` prints current XDG defaults natively; `set <mime> <app>` writes
+// via xdg-mime. `config gui` opens the Hornero Control Center through the
+// shell-owned IPC contract. HORNERO_SETTINGS_GUI_BIN remains an explicit
+// compatibility override for environments that still provide a helper.
+// `config materialize` delegates to the config repo's materializer.
 
 // resolve_default_apps_bin locates the `dots-default-apps` backend CLI.
 // Override with HORNERO_DEFAULT_APPS_BIN.
@@ -33,18 +25,9 @@ pub fn resolve_default_apps_bin() string {
 	return find_on_path('dots-default-apps')
 }
 
-// resolve_settings_gui_bin locates the `dots-settings-gui` backend CLI.
-// Override with HORNERO_SETTINGS_GUI_BIN.
+// An explicit helper remains available for local compatibility setups.
 pub fn resolve_settings_gui_bin() string {
-	env := os.getenv('HORNERO_SETTINGS_GUI_BIN')
-	if env.len > 0 {
-		return env
-	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-settings-gui')
-	if os.is_file(home_helper) {
-		return home_helper
-	}
-	return find_on_path('dots-settings-gui')
+	return os.getenv('HORNERO_SETTINGS_GUI_BIN')
 }
 
 // resolve_materialize_bin locates the config repo's `materialize.sh`.
@@ -58,17 +41,6 @@ pub fn resolve_materialize_bin() string {
 		return env
 	}
 	return find_on_path('materialize.sh')
-}
-
-fn settings_gui_or_fail(helper string, dry_run bool) !string {
-	bin := if helper.len > 0 { helper } else { resolve_settings_gui_bin() }
-	if bin.len == 0 {
-		if dry_run {
-			return 'dots-settings-gui'
-		}
-		return error('settings-gui backend not found. Set HORNERO_SETTINGS_GUI_BIN.\nExample: horneroctl config gui --dry-run')
-	}
-	return bin
 }
 
 fn materialize_or_fail(helper string, dry_run bool) !string {
@@ -243,11 +215,6 @@ pub fn materialize_report(opts MaterializeOptions) CommandResult {
 	return fail_result('config materialize', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }
 
-// valid_gui_panes are the control-center panes `dots-settings-gui`
-// documents (`--pane=NAME`); anything else is a caller-side typo.
-const valid_gui_panes = ['network', 'bluetooth', 'audio', 'appearance', 'taskbar', 'launcher',
-	'dashboard', 'system']
-
 pub struct SettingsGuiOptions {
 pub:
 	pane    string
@@ -255,38 +222,44 @@ pub:
 	helper  string
 }
 
-// settings_gui_report implements `config gui [--pane <name>]` by
-// delegating to `dots-settings-gui [--pane=<name>]` (verified backend
-// verbs). Launcher semantics (mirroring `shell ipc`): --dry-run
-// previews, no --yes needed.
+// settings_gui_report opens Settings through the running Hornero Shell.
+// The shell's PaneRegistry is the authority for valid destinations, avoiding
+// a second list in horneroctl. A helper is used only when explicitly set.
 pub fn settings_gui_report(opts SettingsGuiOptions) CommandResult {
-	if opts.pane.len > 0 && opts.pane !in valid_gui_panes {
-		return fail_result('config gui', 'invalid pane: ${opts.pane} (want network|bluetooth|audio|appearance|taskbar|launcher|dashboard|system).\nExample: horneroctl config gui --pane appearance --dry-run')
+	helper := if opts.helper.len > 0 { opts.helper } else { resolve_settings_gui_bin() }
+	if helper.len > 0 {
+		mut args := []string{}
+		if opts.pane.len > 0 {
+			args << '--pane=${opts.pane}'
+		}
+		rep := run_exec(ExecSpec{prog: helper, args: args, dry_run: opts.dry_run})
+		if opts.dry_run {
+			return ok_result('config gui', 'would run: ${rep.command_line}', {
+				'command_line': rep.command_line
+				'dry_run':      'true'
+			})
+		}
+		if rep.ok {
+			return ok_result('config gui', rep.output, {'command_line': rep.command_line})
+		}
+		return fail_result('config gui', 'settings helper failed (exit ${rep.exit_code}):\n${rep.output}')
 	}
-	bin := settings_gui_or_fail(opts.helper, opts.dry_run) or {
-		return fail_result('config gui', err.msg())
-	}
-	mut args := []string{}
+
+	mut passthrough := ['call', 'controlCenter', 'open']
 	if opts.pane.len > 0 {
-		args << '--pane=${opts.pane}'
+		passthrough << opts.pane
 	}
-	rep := run_exec(ExecSpec{
-		prog:    bin
-		args:    args
-		dry_run: opts.dry_run
-	})
-	if opts.dry_run {
-		return ok_result('config gui', 'would run: ${rep.command_line}', {
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
+	result := ipc_report(IpcOptions{passthrough: passthrough, dry_run: opts.dry_run})
+	if result.ok && opts.dry_run {
+		return ok_result('config gui', result.message, result.data)
 	}
-	if rep.ok {
-		return ok_result('config gui', rep.output, {
-			'command_line': rep.command_line
-		})
+	if result.ok && result.message.contains('error:') {
+		return fail_result('config gui', result.message)
 	}
-	return fail_result('config gui', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	if result.ok {
+		return ok_result('config gui', result.message, result.data)
+	}
+	return fail_result('config gui', 'Could not open Hornero Settings. Is Hornero Shell running in this desktop session?\n${result.message}')
 }
 
 // Config migration backend: the one-shot `dots/*` to `hornero/*` move.

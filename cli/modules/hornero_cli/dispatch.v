@@ -610,6 +610,7 @@ fn run_config_gui(args []string, mode hornero_core.RenderMode) int {
 	return render(hornero_core.settings_gui_report(hornero_core.SettingsGuiOptions{
 		pane:    opts.pane
 		dry_run: opts.dry_run
+		helper:  hornero_core.resolve_settings_gui_bin()
 	}), mode)
 }
 
