@@ -17,25 +17,28 @@ description: >-
   everything in Preview 13 plus the packaging-truth fixes found by Hornero
   QA: package installs ship the layout-preset catalogue where horneroctl
   reads it, hornero-config declares python-materialyoucolor so theme
-  switching works, and optional Hyprland plugin config never raises the
-  config-error banner. Pins HorneroOS/shell and HorneroOS/config to their
-  release-candidate main SHAs. horneroctl builds from this repository.
-  installer and iso are named future slots only.
+  switching works, optional Hyprland plugin config never raises the
+  config-error banner, the package no longer conflicts with systemd's user
+  unit path, and Hornero Shell declares the supported pywal16 provider for
+  recipe theme switching. Pins below track only current component main
+  SHAs; this candidate does not include the pending Settings redesign.
+  horneroctl builds from this repository. installer and iso are named future
+  slots only.
 
 components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: b22d33319368263db39b09cdceecd42f04521b61
+    sha: 3773c99c627c6bb980babd451d5d80887f853f02
     status: pinned
-    subject: "Merge pull request #95 from HorneroOS/fix/system-preset-catalogue"
+    subject: "fix(themes): keep installed theme state coherent (#105)"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: f5f7229d4322d2ac6d0a53b601d292e3849f3e49
+    sha: 96b68703ef88e64dcd2ce7f9bd224fd0c897c411
     status: pinned
-    subject: "Merge pull request #45 from HorneroOS/fix/optional-plugin-binds"
+    subject: "Merge pull request #47 from HorneroOS/fix/package-systemd-units"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
