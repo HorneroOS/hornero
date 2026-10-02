@@ -41,8 +41,9 @@ pub fn resolve_themes_dir_fallback() string {
 
 // resolve_themes_dirs_for_read lists the directories actually read,
 // canonical-first. An explicit HORNERO_THEMES_DIR override wins outright;
-// otherwise every existing directory is returned so readers merge both
-// locations with canonical precedence.
+// otherwise every existing directory is returned so readers merge them with
+// canonical precedence: user canonical, user legacy, then the read-only
+// system catalogues from XDG_DATA_DIRS (package installs, hornero#96).
 pub fn resolve_themes_dirs_for_read() []string {
 	env := os.getenv('HORNERO_THEMES_DIR')
 	if env.len > 0 {
@@ -57,6 +58,7 @@ pub fn resolve_themes_dirs_for_read() []string {
 	if os.is_dir(fallback) && fallback != canonical {
 		dirs << fallback
 	}
+	append_system_catalogues(mut dirs, os.join_path('hornero', 'themes'))
 	return dirs
 }
 

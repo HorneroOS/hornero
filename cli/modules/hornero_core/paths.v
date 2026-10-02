@@ -55,6 +55,32 @@ pub fn quickshell_config_dir(p HorneroPaths) string {
 // there. `*_for_read` helpers resolve canonical-first, falling back to the
 // legacy path only when the canonical one is absent.
 
+// system_data_dirs lists the system data roots from XDG_DATA_DIRS (default
+// `/usr/local/share:/usr/share`). Packages install catalogues there; they
+// are read-only and always rank below the user's data home.
+pub fn system_data_dirs() []string {
+	raw := os.getenv('XDG_DATA_DIRS')
+	spec := if raw.len > 0 { raw } else { '/usr/local/share:/usr/share' }
+	mut out := []string{}
+	for d in spec.split(':') {
+		if d.len > 0 && d !in out {
+			out << d
+		}
+	}
+	return out
+}
+
+// append_system_catalogues adds `<data-dir>/<rel>` for every existing system
+// data dir not already present, after the user-level directories.
+fn append_system_catalogues(mut dirs []string, rel string) {
+	for base in system_data_dirs() {
+		dir := os.join_path(base, rel)
+		if os.is_dir(dir) && dir !in dirs {
+			dirs << dir
+		}
+	}
+}
+
 // resolve_wallpapers_dir locates installed wallpaper binaries (row 11).
 // Override with HORNERO_WALLPAPERS_DIR.
 pub fn resolve_wallpapers_dir() string {

@@ -106,13 +106,26 @@ pub fn resolve_pkill_bin() string {
 
 // resolve_m3_script locates the M3 synthesis script
 // (generate-m3-colors.py, needs a Python with materialyoucolor).
-// Override with HORNERO_M3_SCRIPT.
+// Order: HORNERO_M3_SCRIPT, the user install (~/.local/lib/dots), then the
+// hornero-config package copy under XDG_DATA_DIRS
+// (`<dir>/hornero/lib/dots`, hornero#96). When none exists the user path is
+// returned so error messages name the documented location.
 pub fn resolve_m3_script() string {
 	env := os.getenv('HORNERO_M3_SCRIPT')
 	if env.len > 0 {
 		return env
 	}
-	return os.join_path(os.home_dir(), '.local', 'lib', 'dots', 'generate-m3-colors.py')
+	user := os.join_path(os.home_dir(), '.local', 'lib', 'dots', 'generate-m3-colors.py')
+	if os.exists(user) {
+		return user
+	}
+	for base in system_data_dirs() {
+		cand := os.join_path(base, 'hornero', 'lib', 'dots', 'generate-m3-colors.py')
+		if os.exists(cand) {
+			return cand
+		}
+	}
+	return user
 }
 
 // m3_python_candidates lists interpreters to probe, richest first:
