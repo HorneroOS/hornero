@@ -29,9 +29,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: aba99e4aa227766be6728bbb9ed921578fe74a67
+    sha: 3773c99c627c6bb980babd451d5d80887f853f02
     status: pinned
-    subject: "Merge pull request #104 from HorneroOS/fix/python-pywal16"
+    subject: "fix(themes): keep installed theme state coherent (#105)"
     notes: Desktop shell / Quickshell UX.
   config:
     repo: https://github.com/HorneroOS/config
