@@ -144,20 +144,16 @@ pub fn list_theme_packs() ![]ThemeEntry {
 // recognized wallpaper file suffixes (compared lowercased).
 const theme_image_exts = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']
 
-// theme_pictures_root is the chezmoi-linked wallpaper source the retired
-// lister preferred over the data catalogue.
+// theme_pictures_root preserves the optional user Pictures library, after
+// the explicit Hornero override and before installed catalogue roots.
 fn theme_pictures_root() string {
-	return os.join_path(os.home_dir(), 'Pictures', 'Wallpapers')
+	return resolve_pictures_wallpapers_dir()
 }
 
-// theme_wallpaper_roots lists the catalogue wallpaper roots, hornero
-// first. An explicit HORNERO_WALLPAPERS_DIR override wins outright.
+// theme_wallpaper_roots lists user then read-only installed catalogue
+// wallpaper roots. An explicit HORNERO_WALLPAPERS_DIR override wins outright.
 fn theme_wallpaper_roots() []string {
-	env := os.getenv('HORNERO_WALLPAPERS_DIR')
-	if env.len > 0 {
-		return [env]
-	}
-	return [resolve_wallpapers_dir(), resolve_wallpapers_dir_fallback()]
+	return resolve_wallpapers_dirs_for_read()
 }
 
 // theme_wallpaper_index maps wallpaper filename to absolute path for one
@@ -166,7 +162,10 @@ fn theme_wallpaper_roots() []string {
 fn theme_wallpaper_index(theme_id string, wallpaper_dir string, roots []string) ([]string, map[string]string) {
 	dir_name := if wallpaper_dir.len > 0 { wallpaper_dir } else { theme_id }
 	mut found := map[string]string{}
-	mut search := [theme_pictures_root()]
+	mut search := []string{}
+	if os.getenv('HORNERO_WALLPAPERS_DIR').len == 0 {
+		search << theme_pictures_root()
+	}
 	search << roots
 	for root in search {
 		d := os.join_path(root, dir_name)

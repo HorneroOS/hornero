@@ -29,6 +29,8 @@ fn pc_set_xdg(tag string) {
 	os.unsetenv('HORNERO_PRESET_STATE_FILE')
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
 	os.unsetenv('HORNERO_WALLPAPERS_DIR')
+	os.unsetenv('HORNERO_PICTURES_WALLPAPERS')
+	os.unsetenv('DOTS_PICTURES_WALLPAPERS')
 	os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
 	os.unsetenv('HORNERO_NOTIFS_FILE')
 	os.unsetenv('HORNERO_IMAGE_CACHE_DIR')
@@ -44,6 +46,8 @@ fn pc_unset_xdg() {
 	os.unsetenv('HORNERO_PRESET_STATE_FILE')
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
 	os.unsetenv('HORNERO_WALLPAPERS_DIR')
+	os.unsetenv('HORNERO_PICTURES_WALLPAPERS')
+	os.unsetenv('DOTS_PICTURES_WALLPAPERS')
 	os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
 	os.unsetenv('HORNERO_NOTIFS_FILE')
 	os.unsetenv('HORNERO_IMAGE_CACHE_DIR')
@@ -110,6 +114,48 @@ fn test_pc_explicit_overrides_win() {
 	assert resolve_image_cache_dir() == '/tmp/hx-pc-ov/imagecache'
 	assert resolve_notif_image_cache_dir() == '/tmp/hx-pc-ov/imagecache/notifs'
 	assert resolve_wallpapers_dir() == '/tmp/hx-pc-ov/wallpapers'
+	assert resolve_wallpapers_dirs_for_read() == ['/tmp/hx-pc-ov/wallpapers']
+	pc_unset_xdg()
+}
+
+fn test_pc_system_wallpaper_catalogue_is_read_only_fallback() {
+	pc_set_xdg('system-wallpapers')
+	system_root := '${pc_root}/system-wallpapers/sys/hornero/wallpapers'
+	pc_write('${system_root}/pampa/pampa-01.png', 'system-wallpaper')
+	pc_write('${pc_root}/system-wallpapers/sys/hornero/themes/pampa/theme.json', '{"schemaVersion":1,"id":"pampa","name":"Pampa","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","darkMode":true,"gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark"}')
+	assert resolve_wallpapers_dirs_for_read() == [system_root]
+	resolved := resolve_pack_wallpaper('pampa', 'pampa', 'pampa-01.png', '') or {
+		assert false, err.msg()
+		''
+	}
+	assert resolved == '${system_root}/pampa/pampa-01.png'
+	full := theme_list_full_report()
+	assert full.ok
+	assert full.message.contains('"wallpaperPath":"${system_root}/pampa/pampa-01.png"')
+	assert resolve_wallpapers_dir() == '${pc_root}/system-wallpapers/data/hornero/wallpapers'
+	pc_write('${pc_root}/system-wallpapers/data/hornero/wallpapers/pampa/pampa-01.png', 'user-wallpaper')
+	assert resolve_wallpapers_dirs_for_read() == [resolve_wallpapers_dir(), system_root]
+	resolved_user := resolve_pack_wallpaper('pampa', 'pampa', 'pampa-01.png', '') or {
+		assert false, err.msg()
+		''
+	}
+	assert resolved_user == '${pc_root}/system-wallpapers/data/hornero/wallpapers/pampa/pampa-01.png'
+	pictures := '${pc_root}/system-wallpapers/pictures'
+	override := '${pc_root}/system-wallpapers/override'
+	pc_write('${pictures}/pampa/pampa-01.png', 'picture-wallpaper')
+	pc_write('${override}/pampa/pampa-01.png', 'override-wallpaper')
+	os.setenv('DOTS_PICTURES_WALLPAPERS', pictures, true)
+	assert resolve_pictures_wallpapers_dir() == pictures
+	canonical_pictures := '${pc_root}/system-wallpapers/pictures-canonical'
+	os.setenv('HORNERO_PICTURES_WALLPAPERS', canonical_pictures, true)
+	assert resolve_pictures_wallpapers_dir() == canonical_pictures
+	os.unsetenv('HORNERO_PICTURES_WALLPAPERS')
+	os.setenv('HORNERO_WALLPAPERS_DIR', override, true)
+	resolved_override := resolve_pack_wallpaper('pampa', 'pampa', 'pampa-01.png', '') or {
+		assert false, err.msg()
+		''
+	}
+	assert resolved_override == '${override}/pampa/pampa-01.png'
 	pc_unset_xdg()
 }
 

@@ -45,10 +45,15 @@ and the theme manifest (see rows 6 and 8).
 | 8 | Theme manifest (wallpaper refs + fetch locations) | `$XDG_DATA_HOME/hornero/themes/wallpapers.manifest.json`. No fallback: already `hornero/*`-native. Shape is an object `{provenance, note, themes: [{id, ...}, ...]}` (NOT a top-level array); `config validate` counts entries and requires an `id` per entry. | none | hornero `cli/modules/hornero_core/configx.v` (`config_validate_report`); config `docs/DECISIONS.md:24` (manifest records refs, binaries not vendored); hornero `docs/check-theme-refs.sh` (object-shape parity) |
 | 9 | Runtime state: wallpaper pointer (one-line file) | `$XDG_STATE_HOME/hornero/wallpaper/path` | `$XDG_STATE_HOME/dots/wallpaper/path` | shell `utils/Paths.qml:17` (`wallpaperPointer`, must match `wallpaper-resolver.sh`); config `lib/dots/wallpaper-resolver.sh:9` (`DOTS_STATE_DIR`); config `lib/dots/apply-appearance.sh:9` (`DOTS_WALLPAPER_POINTER_FILE`); dotfiles `home/dot_local/bin/executable_dots-color-scheme:18` (`CURRENT_WALL_CACHE`) |
 | 10 | Runtime state: notifications (`notifs.json`) and image caches | `$XDG_STATE_HOME/hornero/notifs.json`; `$XDG_CACHE_HOME/hornero/imagecache[/notifs]` | `$XDG_STATE_HOME/dots/notifs.json`; `$XDG_CACHE_HOME/dots/imagecache[/notifs]` | shell `services/Notifs.qml:91` (`${Paths.state}/notifs.json`); shell `services/Notifs.qml:215` (`Paths.notifimagecache`); shell `components/images/CachingImage.qml:26` (`Paths.imagecache`); shell `utils/Paths.qml:21` (`imagecache`, `notifimagecache`) |
-| 11 | Installed wallpapers (binary packs) | `$XDG_DATA_HOME/hornero/wallpapers/` (see open question 1) | `$XDG_DATA_HOME/dots/wallpapers/` | shell `services/ThemePipeline.qml:13` (`wallpapersDir`); config `lib/dots/apply-appearance.sh:6` (`DOTS_WALLPAPERS_DIR`); config `docs/DECISIONS.md:89` (binaries never vendored, shipped via release pipeline) |
+| 11 | Installed wallpapers (binary packs) | `$XDG_DATA_HOME/hornero/wallpapers/` is the user write/read root; system packages are read from `$XDG_DATA_DIRS/hornero/wallpapers/` | `$XDG_DATA_HOME/dots/wallpapers/` and packaged `$XDG_DATA_DIRS/dots/wallpapers/` are read-only compatibility roots | hornero `paths.v` (`resolve_wallpapers_dirs_for_read`, explicit `HORNERO_WALLPAPERS_DIR` override); config `packaging/PKGBUILD:132` (installs binaries under `/usr/share/hornero/wallpapers`); config `docs/DECISIONS.md:89` (binaries never vendored in source, shipped via packages) |
 | 12 | Shell library / helper binaries (read-only lookup, not migrated data) | `/usr/lib/hornero` with `$HOME/.local/lib/dots` + `$HOME/.local/bin` as legacy lookup | `$HOME/.local/lib/dots`, `$HOME/.local/bin/dots-*` | shell `utils/Paths.qml:25` (`libdir`); config `scripts/materialize.sh:72` (`lib/dots` to `$LIB_DIR`) and `materialize.sh:29` (`LIB_DIR="$DEST/.local/lib/dots"`) |
 | 13 | Welcome/onboarding state (portable Hornero-wide contract, no legacy fallback: this file never existed as `dots/*`) | `$XDG_STATE_HOME/hornero/welcome/state.json` | none | hornero `cli/modules/hornero_core/welcome.v` (`resolve_welcome_state_file`, override `HORNERO_WELCOME_STATE_FILE`); session marker (ephemeral) lives under `$XDG_RUNTIME_DIR/hornero/welcome/` and is owned by the Shell, not this contract |
 | 14 | Lockscreen effect images (`current/lock_{resize,dim,blur,dimblur,pixel}.png`) | `$XDG_CACHE_HOME/hornero/lockscreen/current/` | `$XDG_CACHE_HOME/dots-lockscreen/current/` | hornero `cli/modules/hornero_core/lock_effects.v` (`lockscreen_cache_dir`, override `HORNERO_LOCKSCREEN_CACHE_DIR`); dotfiles `home/dot_local/bin/executable_dots-lockscreen:38` (`CACHE_DIR`/`CURRENT_DIR`) |
+
+Wallpaper reads honor `HORNERO_WALLPAPERS_DIR` as the explicit catalogue-root
+override. The personal Pictures library uses `HORNERO_PICTURES_WALLPAPERS`;
+`DOTS_PICTURES_WALLPAPERS` is read only when the Hornero variable is unset, as
+a compatibility path for existing personal dotfiles.
 
 Base-directory resolution is `explicit env override -> XDG -> $HOME default`
 everywhere: shell `utils/Paths.qml:14` (`data`, `state`, `cache`, `config`
@@ -125,9 +130,7 @@ plus the optional theme manifest at `.../hornero/themes/wallpapers.manifest.json
 
 ## Explicit-Open-Questions
 
-1. Do installed wallpaper binaries move to
-   `$XDG_DATA_HOME/hornero/wallpapers/`, or stay under `dots/wallpapers`
-   because `wallpapers.manifest.json` already abstracts their location?
+1. Wallpaper read roots now include package-owned `$XDG_DATA_DIRS/hornero/wallpapers/` after user canonical/legacy roots; `HORNERO_WALLPAPERS_DIR` is an explicit root override. The canonical user write target remains `$XDG_DATA_HOME/hornero/wallpapers/`.
 2. What is the migration window (date or release) for removing the `dots/*`
    read fallbacks?
 3. Who owns the one-shot migrator (`dots/*` to `hornero/*`): `horneroctl`,
