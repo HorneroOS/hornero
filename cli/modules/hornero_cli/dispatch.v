@@ -452,18 +452,24 @@ fn run_appearance_scheme(args []string, mode hornero_core.RenderMode) int {
 				mode)
 		}
 		if opts.dry_run {
-			return render(hornero_core.ok_result('appearance scheme sync-state', 'would run: sync state.json from scheme.json',
+			return render(hornero_core.ok_result('appearance scheme sync-state', 'would run: sync state.json from scheme.json${if opts.theme_id.len > 0 {
+				' with theme ${opts.theme_id}'
+			} else {
+				''
+			}}',
 				{
-					'dry_run': 'true'
+					'dry_run':  'true'
+					'theme_id': opts.theme_id
 				}), mode)
 		}
-		path := hornero_core.sync_state_from_scheme() or {
+		path := hornero_core.sync_state_from_scheme_with_theme_id(opts.theme_id) or {
 			return render_error(hornero_core.err_usage('appearance.scheme.usage', err.msg()),
 				mode)
 		}
 		return render(hornero_core.ok_result('appearance scheme sync-state', 'state synced from scheme.json',
 			{
 				'state_file': path
+				'theme_id':   opts.theme_id
 			}), mode)
 	}
 	kind := if opts.leaf == 'set-mode' { 'mode' } else { 'variant' }

@@ -246,8 +246,8 @@ Examples:
                       Set the color-scheme variant (needs --yes)
   regenerate [--dry-run]
                       Rewrite scheme.json from the wallpaper (needs --yes)
-  sync-state [--dry-run]
-                      Adopt scheme.json meta into state (needs --yes)
+  sync-state [--theme-id <id>] [--dry-run]
+                      Adopt scheme.json meta into state; keep selected theme (needs --yes)
 
 State source: the materialized scheme files under XDG state/cache,
 all read and written natively.
@@ -262,6 +262,7 @@ Examples:
   horneroctl appearance scheme set-mode dark --yes
   horneroctl appearance scheme set-variant tonalspot --yes
   horneroctl appearance scheme regenerate --dry-run
+  horneroctl appearance scheme sync-state --theme-id pampa --yes
 '
 		}
 		'appearance colors' {

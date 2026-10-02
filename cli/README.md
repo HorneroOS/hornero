@@ -30,7 +30,7 @@ horneroctl appearance status
 horneroctl appearance sync [--dry-run|--yes]
 horneroctl appearance call [--dry-run] -- <backend-args...>
 horneroctl appearance theme <list|show <id>|get|apply <id> [--wallpaper <path>]|set <hornero-dark|hornero-light|pampa>> [--dry-run|--yes]
-horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>|sync-state> [--dry-run|--yes]
+horneroctl appearance scheme <status|set-mode <dark|light>|set-variant <name>|sync-state [--theme-id <id>]> [--dry-run|--yes]
 horneroctl scheme ...                       # alias of appearance scheme
 horneroctl config <paths|validate|show [key]>
 horneroctl config snapshot <create|list|restore <id>> [--dry-run|--yes]

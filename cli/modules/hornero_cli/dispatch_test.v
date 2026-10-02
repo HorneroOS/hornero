@@ -12,6 +12,20 @@ fn test_dispatch_help_exit_zero() {
 	assert dispatch(['horneroctl', 'doctor', '--help']) == 0
 }
 
+fn test_scheme_sync_state_theme_id_flag() {
+	opts := parse_appearance_scheme(['sync-state', '--theme-id', 'pampa', '--yes']) or {
+		assert false, err.msg()
+		return
+	}
+	assert opts.theme_id == 'pampa'
+	assert opts.yes
+	if _ := parse_appearance_scheme(['status', '--theme-id', 'pampa']) {
+		assert false, 'theme id must only be accepted by sync-state'
+	} else {
+		assert err.msg().contains('only valid with scheme sync-state')
+	}
+}
+
 fn test_dispatch_unknown_command_exit_one() {
 	assert dispatch(['horneroctl', 'not-a-real-command']) == 1
 }

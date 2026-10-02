@@ -287,10 +287,11 @@ pub fn parse_appearance_theme(args []string) !ThemeCmdOptions {
 // SchemeCmdOptions covers `appearance scheme <status|set-mode|set-variant>`.
 pub struct SchemeCmdOptions {
 pub:
-	leaf    string // status | set-mode | set-variant
-	value   string
-	dry_run bool
-	yes     bool
+	leaf     string // status | set-mode | set-variant
+	value    string
+	theme_id string
+	dry_run  bool
+	yes      bool
 }
 
 pub fn parse_appearance_scheme(args []string) !SchemeCmdOptions {
@@ -302,6 +303,7 @@ pub fn parse_appearance_scheme(args []string) !SchemeCmdOptions {
 		return error('unknown scheme subcommand: ${leaf}.\nRun: horneroctl appearance scheme --help')
 	}
 	mut value := ''
+	mut theme_id := ''
 	mut dry_run := false
 	mut yes := false
 	mut i := 1
@@ -315,6 +317,14 @@ pub fn parse_appearance_scheme(args []string) !SchemeCmdOptions {
 		if a == '--yes' {
 			yes = true
 			i++
+			continue
+		}
+		if a == '--theme-id' {
+			if i + 1 >= args.len || args[i + 1].starts_with('-') {
+				return error('missing theme id.\nExample: horneroctl appearance scheme sync-state --theme-id pampa --yes')
+			}
+			theme_id = args[i + 1]
+			i += 2
 			continue
 		}
 		if a.starts_with('-') {
@@ -332,14 +342,18 @@ pub fn parse_appearance_scheme(args []string) !SchemeCmdOptions {
 	if leaf in ['status', 'list', 'current', 'regenerate', 'sync-state'] && value.len > 0 {
 		return error('scheme ${leaf} takes no value.\nExample: horneroctl appearance scheme ${leaf} --dry-run')
 	}
+	if theme_id.len > 0 && leaf != 'sync-state' {
+		return error('--theme-id is only valid with scheme sync-state.\nExample: horneroctl appearance scheme sync-state --theme-id pampa --yes')
+	}
 	if leaf in ['status', 'list', 'current'] && (dry_run || yes) {
 		return error('scheme ${leaf} takes no flags.\nExample: horneroctl appearance scheme ${leaf}')
 	}
 	return SchemeCmdOptions{
-		leaf:    leaf
-		value:   value
-		dry_run: dry_run
-		yes:     yes
+		leaf:     leaf
+		value:    value
+		theme_id: theme_id
+		dry_run:  dry_run
+		yes:      yes
 	}
 }
 
