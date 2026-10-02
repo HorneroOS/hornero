@@ -330,11 +330,18 @@ fn test_pc_system_catalogues_rank_below_user() {
 }
 
 fn test_pc_system_data_dirs_default_and_dedup() {
+	inherited := os.getenv_opt('XDG_DATA_DIRS')
+	defer {
+		if v := inherited {
+			os.setenv('XDG_DATA_DIRS', v, true)
+		} else {
+			os.unsetenv('XDG_DATA_DIRS')
+		}
+	}
 	os.unsetenv('XDG_DATA_DIRS')
 	assert system_data_dirs() == ['/usr/local/share', '/usr/share']
 	os.setenv('XDG_DATA_DIRS', '/a::/b:/a', true)
 	assert system_data_dirs() == ['/a', '/b']
-	os.unsetenv('XDG_DATA_DIRS')
 }
 
 fn test_pc_m3_script_user_then_system() {
