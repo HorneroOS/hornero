@@ -78,6 +78,10 @@ def test_pin_freshness_job_runs_checker():
     assert "scripts/check-pins.py" in text
 
 
+def test_published_candidate_is_not_freshness_checked():
+    assert _pins.candidate_is_published(ROOT, "v0.2.0-preview14.yaml")
+
+
 def test_secrets_lint_job_runs_scanner():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "scripts/secrets-lint.sh" in text
