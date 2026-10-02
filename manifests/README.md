@@ -8,8 +8,10 @@ This directory holds the pinning schema and the dated manifests.
 - `schema.json` — JSON Schema (draft 2020-12) for `CompositionManifest`
   documents. It enforces the component table shape, the `pinned` /
   `local` / `future` statuses, and the 40-char commit SHA format.
-- `candidate` — pointer naming the ONE release-candidate manifest
-  whose pins must be fresh. Reviewed like code; CI follows it.
+- `candidate` — pointer naming the current composition manifest.
+  CI checks its pins against live mains only while its matching release
+  record is unpublished. Published manifests remain frozen historical
+  records and are still valid inputs to `compose.sh`.
 - `v0.1.0-draft.yaml` — IMMUTABLE record of the `0.1.0-draft`
   (Preview 0) composition. Never rewritten; history lives here, not
   in refreshed pins.

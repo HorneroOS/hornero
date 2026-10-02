@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-gate: the release-candidate manifest pins must equal live main SHAs.
+"""Cross-gate: unpublished candidate pins must equal live main SHAs.
 
 Usage:
     python3 scripts/check-pins.py [--root DIR] [--manifest FILE]
@@ -8,13 +8,14 @@ Composition manifests are immutable release records: a new release gets
 a new file under ``manifests/`` and historical manifests are never
 rewritten. Freshness against live component mains is therefore enforced
 only for the ONE release-candidate manifest named by
-``manifests/candidate`` (override with ``--manifest``). Every other
-manifest still gets structural validation (it must parse and any
+``manifests/candidate`` (override with ``--manifest``). Once its release
+record is published, the candidate is frozen and freshness no longer applies.
+Every other manifest still gets structural validation (it must parse and any
 ``pinned`` entry must carry a well-formed 40-char SHA), but a
 historical pin is allowed to remain historical.
 
-Exit 0 when the candidate pins are fresh, 1 otherwise (with bump
-instructions).
+Exit 0 when the candidate pins are fresh or already published, 1 otherwise
+(with bump instructions).
 
 Network access to github.com is required: a pin cannot be proven
 fresh offline.
@@ -117,6 +118,31 @@ def validate_historical_manifests(root: Path, candidate: str) -> list[str]:
     return errors
 
 
+def candidate_is_published(root: Path, candidate: str) -> bool:
+    """Whether the candidate manifest already has a published release record.
+
+    Published manifests are immutable historical inputs. Once a release is
+    published, its recorded component SHAs must not be chased to current main;
+    freshness resumes when the pointer moves to a new, unpublished candidate.
+    """
+    manifest_path = root / "manifests" / candidate
+    try:
+        with manifest_path.open(encoding="utf-8") as fh:
+            manifest = yaml.safe_load(fh)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("name"), str):
+        return False
+    version = manifest["name"].removeprefix("hornero-")
+    release_path = root / "releases" / f"v{version}.yaml"
+    try:
+        with release_path.open(encoding="utf-8") as fh:
+            release = yaml.safe_load(fh)
+    except (OSError, ValueError):
+        return False
+    return isinstance(release, dict) and release.get("published") is True
+
+
 def resolve_live_sha(repo: str, ref: str = "main") -> str:
     """Resolve the live SHA of refs/heads/<ref> via git ls-remote."""
     proc = subprocess.run(
@@ -202,6 +228,12 @@ def main(argv: list[str] | None = None) -> int:
         for error in structural:
             print(f"PIN-FAIL: {error}")
         return 1
+    if candidate_is_published(root, candidate):
+        print(
+            f"PIN-SKIP: manifests/{candidate} is a published release; "
+            "its frozen pins are historical"
+        )
+        return 0
     entries = manifest_pin_entries(root / "manifests" / candidate)
     if not entries:
         print(f"PIN-FAIL: no pinned shell/config entries in manifests/{candidate}")

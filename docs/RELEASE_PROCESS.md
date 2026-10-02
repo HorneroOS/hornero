@@ -13,10 +13,15 @@ Composition manifests are immutable release records:
 - a tagged manifest is never edited again — not even to refresh
   pins. Tags preserve the release state; the file preserves its
   content;
-- `manifests/candidate` names the ONE release-candidate manifest
-  whose `shell`/`config` pins track current component mains;
+- `manifests/candidate` names the current composition manifest;
+  its `shell`/`config` pins are freshness-checked while its matching
+  release record is unpublished;
 - historical manifests keep schema/content validation but are
   exempt from freshness checks and are never rewritten;
+- after publication, set the matching release record's `published`
+  field to `true`; the frozen manifest remains usable for composition
+  and is exempt from live-main freshness checks until the pointer moves
+  to a new unpublished candidate;
 - `profiles/` are live files tracking the candidate manifest;
   `releases/` definitions pin one manifest each, so historical
   releases stay valid without chasing moved profiles;

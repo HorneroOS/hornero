@@ -30,6 +30,7 @@ _pins = _load_module("check_pins", "check-pins.py")
 read_candidate_name = _pins.read_candidate_name
 manifest_pin_entries = _pins.manifest_pin_entries
 validate_historical_manifests = _pins.validate_historical_manifests
+candidate_is_published = _pins.candidate_is_published
 compare_pins = _pins.compare_pins
 
 # Preview 0 composition, frozen at tag v0.1.0-draft. These MUST match the
@@ -175,6 +176,10 @@ def test_candidate_pointer_is_explicit_and_deterministic():
     assert read_candidate_name(ROOT) == "v0.2.0-preview14.yaml"
     doc = yaml.safe_load(read_text(ROOT / "manifests" / "v0.2.0-preview14.yaml"))
     assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview14"
+
+
+def test_published_candidate_is_treated_as_immutable_history():
+    assert candidate_is_published(ROOT, "v0.2.0-preview14.yaml")
 
 
 def test_candidate_manifest_pins_release_candidate():
