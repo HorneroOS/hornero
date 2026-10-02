@@ -900,8 +900,9 @@ Layout backend: hyprctl on Hyprland, else setxkbmap
 lxqt-config-input detached (HORNERO_KEYBOARD_SETTINGS_BIN pin).
 keys parses the
 Hyprland keybindings file (HORNERO_KEYBINDINGS_FILE override),
-rewriting \$mainMod to SUPER; with quickshell running it asks the
-settings GUI instead (DOTS_BYPASS_QUICKSHELL=1 forces parsing).
+rewriting \$mainMod to SUPER; with Hornero Shell running it opens
+System Settings. HORNERO_BYPASS_QUICKSHELL=1 forces parsing; the old
+DOTS_BYPASS_QUICKSHELL name remains a compatibility alias.
 
 Examples:
   horneroctl hardware keyboard layout --current

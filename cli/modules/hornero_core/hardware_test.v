@@ -25,9 +25,9 @@ fn hw_test_keys() []string {
 		'HORNERO_XRANDR_BIN', 'HORNERO_ACPI_BIN', 'HORNERO_UPOWER_BIN', 'HORNERO_POWERALERTD_BIN',
 		'HORNERO_NOTIFY_BIN', 'HORNERO_WPCTL_BIN', 'HORNERO_MIC_SOURCE', 'HORNERO_HYPRCTL_BIN',
 		'HORNERO_SETXKBMAP_BIN', 'HORNERO_LXQT_CONFIG_INPUT_BIN', 'HORNERO_KEYBOARD_SETTINGS_BIN',
-		'HORNERO_SETTINGS_GUI_BIN', 'HORNERO_PING_BIN', 'HORNERO_IP_BIN', 'HORNERO_KEYBINDINGS_FILE',
-		'DOTS_BYPASS_QUICKSHELL', 'DOTS_PING_HOST', 'HYPRLAND_INSTANCE_SIGNATURE', 'WAYLAND_DISPLAY',
-		'I3SOCK', 'XDG_CONFIG_HOME']
+		'HORNERO_SETTINGS_GUI_BIN', 'HORNERO_QS_BIN', 'HORNERO_BYPASS_QUICKSHELL', 'PATH',
+		'HORNERO_PING_BIN', 'HORNERO_IP_BIN', 'HORNERO_KEYBINDINGS_FILE', 'DOTS_BYPASS_QUICKSHELL',
+		'DOTS_PING_HOST', 'HYPRLAND_INSTANCE_SIGNATURE', 'WAYLAND_DISPLAY', 'I3SOCK', 'XDG_CONFIG_HOME']
 }
 
 fn hw_test_break_backends() {
@@ -290,6 +290,44 @@ fn test_hw_keys_parse_fixture() {
 	m := keyboard_keys_report(KeyboardKeysOptions{})
 	assert !m.ok
 	assert m.message.contains('not found')
+	hw_test_restore_env(saved)
+}
+
+fn test_shell_ipc_bypass_prefers_hornero_name_and_keeps_legacy_alias() {
+	saved := hw_test_save_env(['HORNERO_BYPASS_QUICKSHELL', 'DOTS_BYPASS_QUICKSHELL'])
+	os.unsetenv('HORNERO_BYPASS_QUICKSHELL')
+	os.unsetenv('DOTS_BYPASS_QUICKSHELL')
+	assert !shell_ipc_bypassed()
+	os.setenv('DOTS_BYPASS_QUICKSHELL', '1', true)
+	assert shell_ipc_bypassed()
+	os.setenv('HORNERO_BYPASS_QUICKSHELL', '0', true)
+	assert !shell_ipc_bypassed()
+	os.setenv('HORNERO_BYPASS_QUICKSHELL', '1', true)
+	assert shell_ipc_bypassed()
+	hw_test_restore_env(saved)
+}
+
+fn test_hw_keys_opens_hornero_system_settings_over_shell_ipc() {
+	saved := hw_test_save_env(hw_test_keys())
+	dir := '/tmp/hx-hw-keys-ipc-test'
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir + '/bin') or { assert false }
+	os.write_file(dir + '/bin/pgrep', '#!/bin/sh\nexit 0\n') or { assert false }
+	os.write_file(dir + '/bin/qs', '#!/bin/sh\nprintf "%s\\n" "$*"\nexit 0\n') or { assert false }
+	os.chmod(dir + '/bin/pgrep', 0o755) or { assert false }
+	os.chmod(dir + '/bin/qs', 0o755) or { assert false }
+	os.setenv('PATH', dir + '/bin', true)
+	os.setenv('HORNERO_QS_BIN', dir + '/bin/qs', true)
+	os.unsetenv('HORNERO_SETTINGS_GUI_BIN')
+	os.unsetenv('HORNERO_BYPASS_QUICKSHELL')
+	os.unsetenv('DOTS_BYPASS_QUICKSHELL')
+	preview := keyboard_keys_report(KeyboardKeysOptions{ dry_run: true })
+	assert preview.ok
+	assert preview.data['command_line'].contains('ipc call controlCenter open system')
+	assert !preview.message.contains('dots-settings-gui')
+	actual := keyboard_keys_report(KeyboardKeysOptions{})
+	assert actual.ok
+	assert actual.message.contains('ipc call controlCenter open system')
 	hw_test_restore_env(saved)
 }
 

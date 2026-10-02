@@ -541,44 +541,21 @@ pub:
 	dry_run  bool
 }
 
-// keyboard_keys_report implements `hardware keyboard keys`: when a
-// quickshell is running (and DOTS_BYPASS_QUICKSHELL is unset) it asks the
-// settings GUI for the system pane, else it parses the Hyprland
+// keyboard_keys_report implements `hardware keyboard keys`: when the
+// Hornero Shell is running and IPC is enabled, it opens the System pane;
+// otherwise it parses the Hyprland
 // keybindings file with optional category/search filters. Read-only;
 // --dry-run only previews.
 pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
-	if os.getenv('DOTS_BYPASS_QUICKSHELL') != '1' && quickshell_running() {
-		bin := resolve_settings_gui_bin()
-		args := ['--pane=system', 'menu']
-		if bin.len == 0 {
-			if opts.dry_run {
-				return ok_result('hardware keyboard keys', 'would run: dots-settings-gui --pane=system menu',
-					{
-						'command_line': 'dots-settings-gui --pane=system menu'
-						'dry_run':      'true'
-					})
-			}
-			return fail_result('hardware keyboard keys', 'quickshell is running but the settings-gui backend is missing. Set HORNERO_SETTINGS_GUI_BIN or DOTS_BYPASS_QUICKSHELL=1.\nExample: horneroctl hardware keyboard keys --dry-run')
-		}
-		rep := run_exec(ExecSpec{
-			prog:    bin
-			args:    args
+	if !shell_ipc_bypassed() && quickshell_running() {
+		result := settings_gui_report(SettingsGuiOptions{
+			pane:    'system'
 			dry_run: opts.dry_run
 		})
-		if opts.dry_run {
-			return ok_result('hardware keyboard keys', 'would run: ${rep.command_line}',
-				{
-					'command_line': rep.command_line
-					'dry_run':      'true'
-				})
+		if result.ok {
+			return ok_result('hardware keyboard keys', result.message, result.data)
 		}
-		if rep.ok {
-			return ok_result('hardware keyboard keys', 'settings opened (quickshell running)',
-				{
-					'command_line': rep.command_line
-				})
-		}
-		return fail_result('hardware keyboard keys', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+		return fail_result('hardware keyboard keys', 'Could not open Hornero System Settings.\n${result.message}')
 	}
 	path := keybindings_path()
 	if opts.dry_run {
