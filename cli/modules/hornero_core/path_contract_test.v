@@ -22,6 +22,8 @@ fn pc_set_xdg(tag string) {
 	os.setenv('XDG_DATA_HOME', '${pc_root}/${tag}/data', true)
 	os.setenv('XDG_STATE_HOME', '${pc_root}/${tag}/state', true)
 	os.setenv('XDG_CACHE_HOME', '${pc_root}/${tag}/cache', true)
+	// Hermetic system catalogues: never read the host's /usr/share.
+	os.setenv('XDG_DATA_DIRS', '${pc_root}/${tag}/sys', true)
 	os.unsetenv('HORNERO_THEMES_DIR')
 	os.unsetenv('HORNERO_PRESETS_DIR')
 	os.unsetenv('HORNERO_PRESET_STATE_FILE')
@@ -34,6 +36,7 @@ fn pc_set_xdg(tag string) {
 
 fn pc_unset_xdg() {
 	os.unsetenv('XDG_DATA_HOME')
+	os.unsetenv('XDG_DATA_DIRS')
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
 	os.unsetenv('HORNERO_THEMES_DIR')
@@ -284,5 +287,76 @@ fn test_pc_manifest_missing_is_optional() {
 	rep := config_validate_report()
 	assert rep.ok, rep.message
 	assert rep.message.contains('missing theme manifest'), rep.message
+	pc_unset_xdg()
+}
+
+// hornero#96: package installs ship catalogues under XDG_DATA_DIRS only.
+fn test_pc_system_catalogues_package_only_install() {
+	pc_set_xdg('sys-only')
+	pc_write('${pc_root}/sys-only/sys/hornero/shell-presets/cockpit-clear.json', '{"_name":"Cockpit Clear","bar":{"position":"top"}}')
+	pc_write('${pc_root}/sys-only/sys/hornero/themes/hornero-dark/theme.json', '{"schemaVersion":1,"id":"hornero-dark","name":"Hornero Dark","defaultWallpaper":"d.jpg","wallpaperDir":"hornero-dark"}')
+	assert resolve_presets_dirs_for_read() == ['${pc_root}/sys-only/sys/hornero/shell-presets']
+	assert resolve_themes_dirs_for_read() == ['${pc_root}/sys-only/sys/hornero/themes']
+	presets := list_presets() or {
+		assert false, err.msg()
+		return
+	}
+	assert presets.map(it.name) == ['cockpit-clear']
+	packs := list_theme_packs() or {
+		assert false, err.msg()
+		return
+	}
+	assert packs.map(it.id) == ['hornero-dark']
+	// Reads never materialize the user side.
+	assert !os.exists(resolve_presets_dir())
+	assert !os.exists(resolve_themes_dir())
+	pc_unset_xdg()
+}
+
+fn test_pc_system_catalogues_rank_below_user() {
+	pc_set_xdg('sys-rank')
+	pc_write('${pc_root}/sys-rank/data/hornero/shell-presets/shared.json', '{"_name":"User Shared","bar":{"position":"left"}}')
+	pc_write('${pc_root}/sys-rank/sys/hornero/shell-presets/shared.json', '{"_name":"System Shared","bar":{"position":"top"}}')
+	pc_write('${pc_root}/sys-rank/sys/hornero/shell-presets/sys-only.json', '{"_name":"System Only","bar":{"position":"bottom"}}')
+	dirs := resolve_presets_dirs_for_read()
+	assert dirs == [resolve_presets_dir(), '${pc_root}/sys-rank/sys/hornero/shell-presets']
+	presets := list_presets() or {
+		assert false, err.msg()
+		return
+	}
+	assert presets.map(it.name) == ['shared', 'sys-only']
+	assert presets[0].display == 'User Shared'
+	pc_unset_xdg()
+}
+
+fn test_pc_system_data_dirs_default_and_dedup() {
+	inherited := os.getenv_opt('XDG_DATA_DIRS')
+	defer {
+		if v := inherited {
+			os.setenv('XDG_DATA_DIRS', v, true)
+		} else {
+			os.unsetenv('XDG_DATA_DIRS')
+		}
+	}
+	os.unsetenv('XDG_DATA_DIRS')
+	assert system_data_dirs() == ['/usr/local/share', '/usr/share']
+	os.setenv('XDG_DATA_DIRS', '/a::/b:/a', true)
+	assert system_data_dirs() == ['/a', '/b']
+}
+
+fn test_pc_m3_script_user_then_system() {
+	pc_set_xdg('m3')
+	old_home := os.getenv('HOME')
+	os.setenv('HOME', '${pc_root}/m3/home', true)
+	os.unsetenv('HORNERO_M3_SCRIPT')
+	user := '${pc_root}/m3/home/.local/lib/dots/generate-m3-colors.py'
+	sys := '${pc_root}/m3/sys/hornero/lib/dots/generate-m3-colors.py'
+	// Nothing installed: the documented user path is named.
+	assert resolve_m3_script() == user
+	pc_write(sys, '# packaged\n')
+	assert resolve_m3_script() == sys
+	pc_write(user, '# user\n')
+	assert resolve_m3_script() == user
+	os.setenv('HOME', old_home, true)
 	pc_unset_xdg()
 }

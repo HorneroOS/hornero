@@ -57,6 +57,22 @@ with `DOTS_*_DIR` overrides), shell `docs/ARCHITECTURE.md:29`, hornero
 hermeticity: `config/scripts/materialize.sh:23` honors XDG only for real-`$HOME`
 installs so `--dest` test installs never leak.
 
+### System catalogues (rows 1 and 2, read-only)
+
+Packages install catalogues outside the user's home. For theme packs (row 1)
+and layout presets (row 2), `horneroctl` reads, in order:
+
+1. the canonical user path (the only write target),
+2. the `dots/*` fallback,
+3. `<dir>/hornero/themes` and `<dir>/hornero/shell-presets` for every
+   `<dir>` in `$XDG_DATA_DIRS` (default `/usr/local/share:/usr/share`).
+
+A name present in several places resolves from the first. An explicit
+`HORNERO_THEMES_DIR` / `HORNERO_PRESETS_DIR` override still wins outright.
+Evidence: hornero `cli/modules/hornero_core/paths.v` (`system_data_dirs`,
+`append_system_catalogues`); tracking
+[hornero#96](https://github.com/HorneroOS/hornero/issues/96).
+
 ## Observed `horneroctl` outputs (binary built from `793c256`)
 
 `horneroctl config paths`:
