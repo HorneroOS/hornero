@@ -101,10 +101,27 @@ fn test_dispatch_config_gui() {
 	assert dispatch(['horneroctl', 'config', 'gui', '--pane=launcher']) == 0
 	assert dispatch(['horneroctl', 'config', 'gui', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'appearance', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'bogus']) == 1
+	// An explicitly configured compatibility helper owns its own route
+	// validation; Hornero does not maintain a second pane-name list.
+	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'bogus']) == 0
 	assert dispatch(['horneroctl', 'config', 'gui', '--bogus']) == 2
 	assert dispatch(['horneroctl', 'config', 'gui', 'extra']) == 2
 	assert dispatch(['horneroctl', 'config', 'gui', '--help']) == 0
+	b2_dispatch_teardown()
+}
+
+fn test_settings_gui_uses_shell_registry_to_reject_unknown_panes() {
+	b2_dispatch_setup()
+	os.unsetenv('HORNERO_SETTINGS_GUI_BIN')
+	qs := '/tmp/hx-batch2-dtest/bin/qs'
+	os.write_file(qs, '#!/bin/sh\ncase "$*" in *bogus*) echo "error: unknown Control Center pane";; *) echo "opened";; esac\n') or {
+		assert false
+	}
+	os.chmod(qs, 0o755) or { assert false }
+	os.setenv('HORNERO_QS_BIN', qs, true)
+	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'appearance']) == 0
+	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'bogus']) == 1
+	os.unsetenv('HORNERO_QS_BIN')
 	b2_dispatch_teardown()
 }
 
