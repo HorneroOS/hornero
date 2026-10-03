@@ -8,8 +8,8 @@ import time
 //
 // Semantics preserved from the script:
 // - `start` refuses when a shell is already running, requires the
-//   quickshell config directory, launches detached, waits ~1s, then
-//   verifies the process exists.
+//   quickshell config directory, launches detached, and waits for the
+//   Hornero `drawers` IPC target rather than trusting a process name.
 // - `stop` is a no-op success when nothing runs, otherwise tries the
 //   graceful `quickshell kill` first, waits ~1s, and escalates to
 //   SIGKILL (`pkill -9 -x qs|quickshell`) when needed.
@@ -105,6 +105,30 @@ fn shell_running_pids() []string {
 	return pids
 }
 
+// shell_wait_for_hornero_ipc waits until the product shell has registered
+// its stable drawers IPC target. A Quickshell process alone is not enough:
+// shell restart temporarily launches a separate reload-cover process with
+// the same process name.
+fn shell_wait_for_hornero_ipc(bin string, attempts int) bool {
+	if bin.len == 0 {
+		return false
+	}
+	for attempt in 0 .. attempts {
+		rep := run_exec(ExecSpec{
+			prog:        bin
+			args:        ['ipc', 'call', 'drawers', 'list']
+			timeout_sec: 1
+		})
+		if rep.ok {
+			return true
+		}
+		if attempt + 1 < attempts {
+			time.sleep(250 * time.millisecond)
+		}
+	}
+	return false
+}
+
 fn quickshell_or_fail(leaf string, dry_run bool) !string {
 	bin := resolve_quickshell_bin()
 	if bin.len == 0 {
@@ -189,9 +213,12 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 			})
 	}
 	if !opts.force && shell_is_running() {
-		return ok_result('shell start', 'Quickshell is already running', {
-			'command_line': line
-		})
+		if shell_wait_for_hornero_ipc(bin, 1) {
+			return ok_result('shell start', 'Hornero Shell is already running', {
+				'command_line': line
+			})
+		}
+		return fail_result('shell start', 'Quickshell is running, but Hornero Shell IPC target `drawers` is unavailable. Check the shell log: ${logf}')
 	}
 	if !os.is_dir(conf) {
 		return fail_result('shell start', 'Quickshell config directory not found: ${conf}')
@@ -201,8 +228,7 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 		return fail_result('shell start', 'cannot create log dir ${os.dir(logf)}: ${err}')
 	}
 	os.execute(line)
-	time.sleep(1 * time.second)
-	if shell_is_running() {
+	if shell_wait_for_hornero_ipc(bin, 8) {
 		pids := shell_running_pids()
 		return ok_result('shell start', 'Quickshell started successfully (PID: ${pids.join(',')})',
 			{
@@ -211,7 +237,7 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 				'log_file':     logf
 			})
 	}
-	return fail_result('shell start', 'Failed to start Quickshell')
+	return fail_result('shell start', 'Quickshell did not become ready: Hornero Shell IPC target `drawers` was unavailable. Check the shell log: ${logf}')
 }
 
 pub struct ShellStopOptions {

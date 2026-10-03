@@ -134,6 +134,12 @@ fn test_shell_start_guard_and_force() {
 	os.setenv('HORNERO_PGREP_BIN', '/bin/true', true)
 	os.setenv('HORNERO_QUICKSHELL_CONFIG_DIR', dir, true)
 	os.setenv('HORNERO_SHELL_LOG_FILE', os.join_path(dir, 'shell.log'), true)
+	cover_only := shell_start_report(ShellStartOptions{
+		yes: true
+		bin: '/bin/false'
+	})
+	assert !cover_only.ok
+	assert cover_only.message.contains('Hornero Shell IPC target `drawers` is unavailable')
 	guarded := shell_start_report(ShellStartOptions{
 		yes: true
 	})
@@ -147,6 +153,11 @@ fn test_shell_start_guard_and_force() {
 	assert !forced.message.contains('already running')
 	os.rmdir_all(dir) or {}
 	shell_lifecycle_test_restore_env(saved)
+}
+
+fn test_shell_readiness_requires_product_ipc_not_a_quickshell_process() {
+	assert shell_wait_for_hornero_ipc('/bin/true', 1)
+	assert !shell_wait_for_hornero_ipc('/bin/false', 1)
 }
 
 fn test_shell_stop_idle_is_success() {
