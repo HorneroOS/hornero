@@ -92,3 +92,21 @@ fn test_theme_list_full_light_gtk_heuristic() {
 	assert c['gtkColorScheme'].str() == 'prefer-light'
 	theme_full_restore(old_themes, old_walls)
 }
+
+fn test_theme_list_full_does_not_claim_missing_default_wallpaper() {
+	old_themes, old_walls := theme_full_isolate()
+	theme_full_write(theme_full_root + '/themes/pack-c/theme.json', '{"id":"pack-c","name":"Pack C","defaultWallpaper":"missing.jpg","wallpaperDir":"pack-c","colorOnly":true}')
+	r := theme_list_full_report()
+	assert r.ok
+	arr := json2.decode[[]json2.Any](r.message) or {
+		assert false, 'full message is a JSON array: ${err}'
+		[]json2.Any{}
+	}
+	pack := arr[2].as_map()
+	assert pack['id'].str() == 'pack-c'
+	assert pack['colorOnly'].bool()
+	assert pack['defaultWallpaper'].str() == 'missing.jpg'
+	assert pack['wallpaperPath'].str() == ''
+	assert pack['wallpapers'].as_array().len == 0
+	theme_full_restore(old_themes, old_walls)
+}
