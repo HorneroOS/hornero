@@ -192,9 +192,10 @@ fn theme_wallpaper_index(theme_id string, wallpaper_dir string, roots []string) 
 	return names, found
 }
 
-// theme_resolve_wallpaper_file resolves one wallpaper filename, Pictures
-// first, then the catalogue roots, else the canonical Pictures target
-// even when nothing is linked yet.
+// theme_resolve_wallpaper_file resolves one wallpaper filename from the
+// user's gallery or an installed catalogue. An expected path is not an
+// available wallpaper: callers use this result to decide whether a recipe
+// can apply its default or should preserve the current background.
 fn theme_resolve_wallpaper_file(wallpaper_dir string, filename string, roots []string) string {
 	override := os.getenv('HORNERO_WALLPAPERS_DIR')
 	pics := os.join_path(theme_pictures_root(), wallpaper_dir, filename)
@@ -207,10 +208,7 @@ fn theme_resolve_wallpaper_file(wallpaper_dir string, filename string, roots []s
 			return candidate
 		}
 	}
-	if override.len > 0 {
-		return os.join_path(override, wallpaper_dir, filename)
-	}
-	return pics
+	return ''
 }
 
 // theme_truthy mirrors Python truthiness for manifest scalars.

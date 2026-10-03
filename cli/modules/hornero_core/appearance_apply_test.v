@@ -66,6 +66,45 @@ fn test_theme_apply_dry_run_previews_pipeline() {
 	os.rmdir_all(tmp) or {}
 }
 
+fn test_color_only_theme_uses_current_wallpaper_when_its_default_is_missing() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-color-only-wallpaper')
+	os.rmdir_all(tmp) or {}
+	with_apply_xdg(tmp, fn [tmp] () {
+		write_pack(tmp, 'color-only')
+		pack_file := os.join_path(tmp, 'data', 'hornero', 'themes', 'color-only', 'theme.json')
+		os.write_file(pack_file, '{"id":"color-only","name":"Color only","defaultWallpaper":"missing.jpg","wallpaperDir":"color-only","colorOnly":true}') or {}
+		os.setenv('HORNERO_WALLPAPERS_DIR', os.join_path(tmp, 'walls'), true)
+		os.setenv('HORNERO_PICTURES_WALLPAPERS', os.join_path(tmp, 'pictures'), true)
+		os.setenv('HORNERO_WALLPAPER_POINTER_FILE', os.join_path(tmp, 'state', 'hornero', 'wallpaper', 'path'), true)
+		current := os.join_path(tmp, 'current.jpg')
+		os.write_file(current, 'wallpaper') or {}
+		pointer := resolve_wallpaper_pointer_file()
+		os.mkdir_all(os.dir(pointer)) or {}
+		os.write_file(pointer, current) or {}
+		resolved := resolve_theme_apply_wallpaper('color-only', 'color-only', 'missing.jpg', '', true, false) or {
+			assert false, err.msg()
+			''
+		}
+		assert resolved == current
+		os.rm(pointer) or {}
+		missing := resolve_theme_apply_wallpaper('color-only', 'color-only', 'missing.jpg', '', true, false) or {
+			assert err.msg().contains('no current wallpaper is available')
+			''
+		}
+		assert missing == ''
+		preview := resolve_theme_apply_wallpaper('color-only', 'color-only', 'missing.jpg', '', true, true) or {
+			assert false, err.msg()
+			''
+		}
+		assert preview == '<current wallpaper>'
+		os.unsetenv('HORNERO_WALLPAPERS_DIR')
+		os.unsetenv('HORNERO_PICTURES_WALLPAPERS')
+		os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
+	})
+	os.unsetenv('HORNERO_THEMES_DIR')
+	os.rmdir_all(tmp) or {}
+}
+
 fn test_sync_state_from_scheme_roundtrip() {
 	tmp := os.join_path(os.temp_dir(), 'hornero-syncstate')
 	os.rmdir_all(tmp) or {}

@@ -232,6 +232,29 @@ pub fn resolve_pack_wallpaper(id string, wallpaper_dir string, default_name stri
 	return error('no wallpaper for theme ${id}')
 }
 
+// resolve_theme_apply_wallpaper keeps colour-only recipes usable when their
+// optional catalogue image is absent. In that case their intended behavior is
+// to generate colours from the currently selected background.
+fn resolve_theme_apply_wallpaper(id string, wallpaper_dir string, default_name string, override string, color_only bool, dry_run bool) !string {
+	wallpaper := resolve_pack_wallpaper(id, wallpaper_dir, default_name, override) or {
+		if color_only {
+			current := read_wallpaper_pointer()
+			if current.len > 0 && os.is_file(current) {
+				return os.real_path(current)
+			}
+			if dry_run {
+				return '<current wallpaper>'
+			}
+			return error('theme ${id} changes colours only, but no current wallpaper is available; choose a wallpaper first')
+		}
+		if dry_run {
+			return '<wallpaper>'
+		}
+		return err
+	}
+	return wallpaper
+}
+
 // run_palette_pipeline runs wal + pointer + wal-path-file + M3 + state
 // sync + GTK policy sync + hyprlock + hyprctl reload for one wallpaper
 // (the _dots_aa_run_palette port).
@@ -363,13 +386,13 @@ pub fn theme_apply_native_with(id string, wallpaper_override string, dry_run boo
 	if wallpaper_dir.len == 0 {
 		wallpaper_dir = id
 	}
-	wallpaper := resolve_pack_wallpaper(id, wallpaper_dir, pack_str(pack, 'defaultWallpaper'),
-		wallpaper_override) or {
-		if dry_run {
-			'<wallpaper>'
-		} else {
-			return fail_result('appearance theme apply', err.msg())
-		}
+	mut color_only := false
+	if 'colorOnly' in pack {
+		color_only = theme_truthy(pack['colorOnly'])
+	}
+	wallpaper := resolve_theme_apply_wallpaper(id, wallpaper_dir, pack_str(pack, 'defaultWallpaper'),
+		wallpaper_override, color_only, dry_run) or {
+		return fail_result('appearance theme apply', err.msg())
 	}
 	policy := pack_gtk_policy(pack_str(pack, 'gtkColorScheme'), pack_str(pack, 'gtkPreferDark'),
 		gtk_theme, mode)
