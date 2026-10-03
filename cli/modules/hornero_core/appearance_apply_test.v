@@ -69,6 +69,13 @@ fn test_theme_apply_dry_run_previews_pipeline() {
 fn test_color_only_theme_uses_current_wallpaper_when_its_default_is_missing() {
 	tmp := os.join_path(os.temp_dir(), 'hornero-color-only-wallpaper')
 	os.rmdir_all(tmp) or {}
+	defer {
+		os.unsetenv('HORNERO_WALLPAPERS_DIR')
+		os.unsetenv('HORNERO_PICTURES_WALLPAPERS')
+		os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
+		os.unsetenv('HORNERO_THEMES_DIR')
+		os.rmdir_all(tmp) or {}
+	}
 	with_apply_xdg(tmp, fn [tmp] () {
 		write_pack(tmp, 'color-only')
 		pack_file := os.join_path(tmp, 'data', 'hornero', 'themes', 'color-only', 'theme.json')
@@ -97,12 +104,7 @@ fn test_color_only_theme_uses_current_wallpaper_when_its_default_is_missing() {
 			''
 		}
 		assert preview == '<current wallpaper>'
-		os.unsetenv('HORNERO_WALLPAPERS_DIR')
-		os.unsetenv('HORNERO_PICTURES_WALLPAPERS')
-		os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
 	})
-	os.unsetenv('HORNERO_THEMES_DIR')
-	os.rmdir_all(tmp) or {}
 }
 
 fn test_sync_state_from_scheme_roundtrip() {
