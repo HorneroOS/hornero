@@ -36,6 +36,8 @@ fn capture_test_break_backends() {
 }
 
 fn capture_test_isolate_paths() {
+	// The Niri branch is opt-in per test; never inherit a live desktop's socket.
+	os.unsetenv('NIRI_SOCKET')
 	base := '/tmp/hx-capture-test'
 	os.mkdir_all(base + '/pictures') or { assert false }
 	os.mkdir_all(base + '/videos') or { assert false }

@@ -86,3 +86,27 @@ def test_optional_package_entries_are_validated_and_resolved():
     changed = copy.deepcopy(catalogue)
     changed["packageSets"]["agents"]["optionalPackages"] = ["podman"]
     assert any("both required and optional" in error for error in resolver.validate_catalogue(changed))
+
+
+def test_malformed_editions_return_validation_errors_instead_of_raising():
+    import copy
+
+    catalogue = resolver.load_catalogue()
+    changed = copy.deepcopy(catalogue)
+    changed["editions"]["agents"] = "invalid"
+    changed["editions"]["studio"]["role"] = ""
+    changed["packageSets"]["server"] = []
+    errors = resolver.validate_catalogue(changed)
+    assert any("edition 'agents' must be a mapping" in error for error in errors)
+    assert any("edition 'studio' needs a non-empty role" in error for error in errors)
+    assert any("package set 'server'" in error for error in errors)
+
+
+def test_inheritance_cycle_with_non_mapping_entry_does_not_raise():
+    import copy
+
+    catalogue = resolver.load_catalogue()
+    changed = copy.deepcopy(catalogue)
+    changed["editions"]["agents"] = []
+    errors = resolver.validate_catalogue(changed)
+    assert any("edition 'agents' must be a mapping" in error for error in errors)

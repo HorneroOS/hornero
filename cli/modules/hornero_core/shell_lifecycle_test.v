@@ -148,6 +148,28 @@ fn test_quickshell_ipc_uses_packaged_hornero_config_for_sibling_commands() {
 	shell_lifecycle_test_restore_env(saved)
 }
 
+fn test_ipc_report_sets_config_even_when_binary_is_explicit() {
+	saved := shell_lifecycle_test_save_env(['XDG_CONFIG_HOME', 'XDG_CONFIG_DIRS',
+		'HORNERO_QUICKSHELL_CONFIG_DIR', 'QS_CONFIG_PATH'])
+	dir := os.join_path(os.temp_dir(), 'hornero-explicit-ipc-config-path-test')
+	user := os.join_path(dir, 'config', 'quickshell', 'hornero')
+	os.mkdir_all(user) or { assert false, 'mkdir ${user}' }
+	os.write_file(os.join_path(user, 'shell.qml'), '// packaged Hornero') or { assert false }
+	os.setenv('XDG_CONFIG_HOME', os.join_path(dir, 'config'), true)
+	os.setenv('XDG_CONFIG_DIRS', os.join_path(dir, 'missing-system'), true)
+	os.unsetenv('HORNERO_QUICKSHELL_CONFIG_DIR')
+	os.unsetenv('QS_CONFIG_PATH')
+	r := ipc_report(IpcOptions{
+		passthrough: ['show']
+		dry_run:     true
+		qs_bin:      '/explicit/qs'
+	})
+	assert r.ok
+	assert os.getenv('QS_CONFIG_PATH') == os.join_path(user, 'shell.qml')
+	os.rmdir_all(dir) or {}
+	shell_lifecycle_test_restore_env(saved)
+}
+
 fn test_shell_restart_dry_run_mentions_cover() {
 	r := shell_restart_report(ShellRestartOptions{
 		dry_run: true

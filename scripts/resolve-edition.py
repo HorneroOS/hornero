@@ -68,6 +68,8 @@ def validate_catalogue(doc: object) -> list[str]:
             errors.append(f"edition '{name}' has invalid maturity")
         if not isinstance(edition.get("title"), str) or not edition["title"]:
             errors.append(f"edition '{name}' needs a title")
+        if not isinstance(edition.get("role"), str) or not edition["role"]:
+            errors.append(f"edition '{name}' needs a non-empty role")
         if not isinstance(edition.get("packageSets"), list):
             errors.append(f"edition '{name}' packageSets must be a list")
             continue
@@ -80,11 +82,14 @@ def validate_catalogue(doc: object) -> list[str]:
         seen = {name}
         cursor = parent
         while cursor in editions:
+            cursor_edition = editions[cursor]
+            if not isinstance(cursor_edition, dict):
+                break
             if cursor in seen:
                 errors.append(f"edition '{name}' has a cyclic inheritance chain")
                 break
             seen.add(cursor)
-            cursor = editions[cursor].get("extends")
+            cursor = cursor_edition.get("extends")
         compositor_choice = edition.get("compositor")
         if compositor_choice is not None:
             if not isinstance(compositor_choice, dict):
@@ -106,14 +111,19 @@ def validate_catalogue(doc: object) -> list[str]:
                     errors.append(f"edition '{name}' advertises planned compositor '{backend}'")
     if set(editions) != {"desktop", "server", "agents", "studio"}:
         errors.append("user-facing editions must be desktop, server, agents, and studio")
-    if editions.get("agents", {}).get("extends") != "server":
+    agents = editions.get("agents")
+    if isinstance(agents, dict) and agents.get("extends") != "server":
         errors.append("Agents must derive from Server")
-    if editions.get("studio", {}).get("extends") != "desktop":
+    studio = editions.get("studio")
+    if isinstance(studio, dict) and studio.get("extends") != "desktop":
         errors.append("Studio must derive from Desktop")
     desktop_names = {"hornero-shell", "hornero-config", "horneroctl-bin", "quickshell", "hyprland", "niri"}
     server_sets = ["server"]
     for set_name in server_sets:
-        names = set(sets.get(set_name, {}).get("packages", []))
+        server_set = sets.get(set_name, {})
+        if not isinstance(server_set, dict):
+            continue
+        names = set(server_set.get("packages", []))
         leaked = names & desktop_names
         if leaked:
             errors.append(f"server package set leaks desktop packages: {', '.join(sorted(leaked))}")
