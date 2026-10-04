@@ -14,11 +14,11 @@ arch=('x86_64' 'aarch64')
 url='https://github.com/HorneroOS/hornero'
 license=('MIT')
 options=('!strip')
-source_x86_64=("horneroctl::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-x86_64")
-source_aarch64=("horneroctl::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-arm64")
+source_x86_64=("horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-x86_64")
+source_aarch64=("horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-arm64")
 sha256sums_x86_64=('0000000000000000000000000000000000000000000000000000000000000000')
 sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000')
 
 package() {
-  install -Dm755 "${srcdir}/horneroctl" "${pkgdir}/usr/bin/horneroctl"
+  install -Dm755 "${srcdir}/horneroctl-${pkgver}" "${pkgdir}/usr/bin/horneroctl"
 }
