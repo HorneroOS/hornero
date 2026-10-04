@@ -108,6 +108,12 @@ fn test_dispatch_config_paths() {
 
 fn test_dispatch_completion() {
 	assert dispatch(['horneroctl', 'completion', 'bash']) == 0
+	assert !bash_completion().contains('scheme')
+	assert bash_completion().contains('welcome')
+	assert !zsh_completion().contains('scheme')
+	assert zsh_completion().contains('welcome')
+	assert !fish_completion().contains('scheme')
+	assert fish_completion().contains('-a welcome')
 	assert dispatch(['horneroctl', 'completion', 'powershell']) == 1
 }
 

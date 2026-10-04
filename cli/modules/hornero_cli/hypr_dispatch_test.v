@@ -109,6 +109,8 @@ fn test_dispatch_hypr_usage_errors() {
 
 fn test_dispatch_hypr_workspace_prev_alias() {
 	hypr_dispatch_setup()
+	assert dispatch(['horneroctl', 'hypr', 'workspace', 'next', '--previous', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'workspace', 'next', '--left', '--dry-run']) == 2
 	hypr_dispatch_teardown()
 }
 

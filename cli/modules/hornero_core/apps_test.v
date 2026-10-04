@@ -25,7 +25,7 @@ const apps_test_keys = ['HORNERO_FILE_MANAGER_BIN', 'HORNERO_EXO_OPEN_BIN', 'HOR
 	'HORNERO_XDG_OPEN_BIN', 'HORNERO_YAZI_HELPER_BIN', 'HORNERO_YAZI_BIN', 'HORNERO_GIT_NOTIFY_BIN',
 	'HORNERO_SNAPPY_BIN', 'HORNERO_SNAPPY_SWITCHER_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_PGREP_BIN',
 	'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN', 'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN',
-	'HORNERO_CAFFEINE_BIN', 'XDG_CONFIG_HOME', 'HORNERO_BYPASS_QUICKSHELL',
+	'HORNERO_CAFFEINE_BIN', 'XDG_CONFIG_HOME', 'HORNERO_BYPASS_QUICKSHELL', 'PATH',
 	'HORNERO_POWERPROFILESCTL_BIN']
 
 fn apps_test_break_backends() {
@@ -308,17 +308,20 @@ fn test_files_info_native_needs_no_external_helper() {
 }
 
 fn test_apps_audit_dry_run_keeps_delegation_preview() {
-	// Native port: real runs never consult the wrapper, but dry-run
-	// still previews the selected helper invocation.
+	// Dry-run previews the optional helper but must never execute it.
 	saved := apps_test_save_env(apps_test_keys)
 	base := '/tmp/hx-apps-test/bin2'
 	os.mkdir_all(base) or { assert false }
-	os.write_file(base + '/horneroctl apps audit', '#!/bin/sh\nexit 0\n') or { assert false }
-	os.chmod(base + '/horneroctl apps audit', 0o755) or { assert false }
+	marker := base + '/audit-ran'
+	helper := base + '/hornero-security-audit'
+	os.write_file(helper, '#!/bin/sh\nprintf ran > ' + marker + '\nexit 0\n') or { assert false }
+	os.chmod(helper, 0o755) or { assert false }
+	os.setenv('PATH', base, true)
 	r := audit_report(AuditOptions{ check: 'system', dry_run: true })
 	assert r.ok
+	assert r.message.contains('hornero-security-audit')
 	assert r.message.contains('--system')
-	assert !r.message.contains('HORNEROCTL_INTERNAL_CALL')
+	assert !os.exists(marker)
 	apps_test_restore_env(saved)
 }
 

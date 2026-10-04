@@ -31,7 +31,7 @@ fn hw_dispatch_setup() {
 	}
 	os.write_file('/tmp/hx-hw-dtest/bin/horneroctl hardware keyboard settings', '#!/bin/sh\nexit 0\n') or { assert false }
 	for b in ['brightnessctl', 'xrandr', 'acpi', 'wpctl', 'setxkbmap', 'ping', 'ip', 'notify-send',
-		'lxqt-config-input'] {
+		'lxqt-config-input', 'horneroctl hardware keyboard settings'] {
 		os.chmod('/tmp/hx-hw-dtest/bin/${b}', 0o755) or { assert false }
 	}
 	os.mkdir_all('/tmp/hx-hw-dtest/conf') or { assert false }

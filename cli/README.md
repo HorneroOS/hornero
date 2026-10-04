@@ -41,7 +41,7 @@ factory defaults, packaged application settings, and read-only catalogues.
 User state is stored under the standard XDG roots in the `hornero` namespace;
 installed package data is never modified at runtime. See
 [`../docs/PATH_CONTRACT.md`](../docs/PATH_CONTRACT.md) and
-[`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+[`../docs/cli-architecture.md`](../docs/cli-architecture.md).
 
 ## Build and verify
 

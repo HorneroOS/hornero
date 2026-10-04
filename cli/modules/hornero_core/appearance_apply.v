@@ -583,7 +583,7 @@ pub fn sync_qt6ct_palette(theme_id string) {
 // snappy_pack_best_effort hands the pack id to the sibling
 // snappy-switcher family when installed; never fails.
 fn snappy_pack_best_effort(theme_id string) {
-	bin := find_on_path('snappy-switcher')
+	bin := resolve_hornero_snappy_bin()
 	if bin.len == 0 {
 		return
 	}

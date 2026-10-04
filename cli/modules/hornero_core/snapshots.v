@@ -69,6 +69,14 @@ fn valid_snapshot_id(id string) bool {
 	return true
 }
 
+fn snapshot_config_home() string {
+	config_home := os.getenv('XDG_CONFIG_HOME')
+	if config_home.len > 0 {
+		return config_home
+	}
+	return os.join_path(os.home_dir(), '.config')
+}
+
 // read_snapshot parses one snapshot directory; the backend always writes
 // metadata.json, so directories without a parseable one are skipped,
 // mirroring how unparseable theme packs are skipped.
@@ -216,15 +224,19 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 	tar := tar_or_fail('create', false) or { return fail_result(name, err.msg()) }
 	// Missing optional configuration roots do not prevent collecting package
 	// metadata; tar runs only when at least one Hornero config root exists.
-	config_home := os.getenv_opt('XDG_CONFIG_HOME') or { os.join_path(home, '.config') }
+	config_home := snapshot_config_home()
 	config_roots := ['hornero', 'quickshell'].filter(os.is_dir(os.join_path(config_home, it)))
 	if config_roots.len > 0 {
 		mut args := ['-czf', os.join_path(dir, 'hornero-config.tar.gz'), '-C', config_home]
 		args << config_roots
-		run_exec(ExecSpec{
+		ex := run_exec(ExecSpec{
 			prog: tar
 			args: args
 		})
+		if !ex.ok {
+			os.rmdir_all(dir) or {}
+			return fail_result(name, 'cannot archive Hornero configuration (exit ${ex.exit_code}):\n${ex.output}')
+		}
 	}
 	pacman := backend_or_empty('HORNERO_PACMAN_BIN', 'pacman')
 	if pacman.len > 0 {
@@ -293,11 +305,14 @@ pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	if os.is_file(tarball) {
 		lines << '  Restoring Hornero configuration...'
 		tar := tar_or_fail('restore', false) or { return fail_result(name, err.msg()) }
-		config_home := os.getenv_opt('XDG_CONFIG_HOME') or { os.join_path(os.home_dir(), '.config') }
-		run_exec(ExecSpec{
+		config_home := snapshot_config_home()
+		ex := run_exec(ExecSpec{
 			prog: tar
 			args: ['-xzf', tarball, '-C', config_home]
 		})
+		if !ex.ok {
+			return fail_result(name, 'cannot restore Hornero configuration (exit ${ex.exit_code}):\n${ex.output}')
+		}
 	}
 	lines << 'Restore completed!'
 	lines << '   You may need to restart your shell or reload configurations'

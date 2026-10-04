@@ -477,7 +477,7 @@ Examples:
   deps --install [--optional] [--dry-run|--yes]
                       Install missing dependencies (needs --yes)
 
-Update source: checkupdates or checkupdates on PATH
+Update source: checkupdates on PATH
 (HORNERO_CHECKUPDATES_BIN override). Upgrade runs
 `pkexec pacman -Syu` (HORNERO_PKEXEC_BIN/HORNERO_PACMAN_BIN);
 without pkexec it fails with guidance: installs need polkit.
@@ -860,8 +860,7 @@ lxqt-config-input detached (HORNERO_KEYBOARD_SETTINGS_BIN pin).
 keys parses the
 Hyprland keybindings file (HORNERO_KEYBINDINGS_FILE override),
 rewriting \$mainMod to SUPER; with Hornero Shell running it opens
-System Settings. HORNERO_BYPASS_QUICKSHELL=1 forces parsing; the old
-HORNERO_BYPASS_QUICKSHELL name remains a compatibility alias.
+System Settings. HORNERO_BYPASS_QUICKSHELL=1 forces parsing.
 
 Examples:
   horneroctl hardware keyboard layout --current
@@ -1235,7 +1234,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture apps help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1249,7 +1248,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture apps help)
+  cmds=(version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1262,7 +1261,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a version -d "Print version"
 complete -c horneroctl -f -n __fish_use_subcommand -a doctor -d "Health checks"
 complete -c horneroctl -f -n __fish_use_subcommand -a shell -d "Shell integration"
 complete -c horneroctl -f -n __fish_use_subcommand -a appearance -d "Appearance controls"
-complete -c horneroctl -f -n __fish_use_subcommand -a scheme -d "Color scheme shortcut"
 complete -c horneroctl -f -n __fish_use_subcommand -a config -d "Configuration"
 complete -c horneroctl -f -n __fish_use_subcommand -a package -d "Package updates"
 complete -c horneroctl -f -n __fish_use_subcommand -a backup -d "Backups"
@@ -1271,6 +1269,7 @@ complete -c horneroctl -f -n __fish_use_subcommand -a lock -d "Screen lock"
 complete -c horneroctl -f -n __fish_use_subcommand -a hypr -d "Hyprland controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a hardware -d "Hardware controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
+complete -c horneroctl -f -n __fish_use_subcommand -a welcome -d "First-run guidance"
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, recording, clipboard"
 complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"

@@ -22,13 +22,6 @@ fn b1_dispatch_setup() {
 		os.setenv('HX_B1_HOME_WAS_SET', '1', true)
 	} else {
 		os.unsetenv('HX_B1_HOME_WAS_SET')
-		if os.getenv('HX_B1_XDG_CONFIG_HOME_WAS_SET') == '1' {
-			os.setenv('XDG_CONFIG_HOME', os.getenv('HX_B1_REAL_XDG_CONFIG_HOME'), true)
-		} else {
-			os.unsetenv('XDG_CONFIG_HOME')
-		}
-		os.unsetenv('HX_B1_REAL_XDG_CONFIG_HOME')
-		os.unsetenv('HX_B1_XDG_CONFIG_HOME_WAS_SET')
 	}
 	os.setenv('HOME', b1_fake_home, true)
 	if real := os.getenv_opt('XDG_CONFIG_HOME') {
