@@ -9,7 +9,7 @@ import x.json2
 
 const theme_full_root = '/tmp/hx-theme-full-test'
 
-const theme_full_a_json = '{"schemaVersion":1,"id":"pack-a","name":"Pack A","description":"first","tags":["dark","cozy"],"darkMode":true,"schemeType":"tonal-spot","gtkTheme":"Orchis-Dark-Compact","iconTheme":"Papirus-Dark","gtkPreferDark":true,"defaultWallpaper":"a.jpg","wallpaperDir":"hx-full-a","colorOnly":false}'
+const theme_full_a_json = '{"schemaVersion":1,"id":"pack-a","name":"Pack A","description":"first","tags":["dark","cozy"],"darkMode":true,"schemeType":"tonal-spot","gtkTheme":"Orchis-Dark-Compact","iconTheme":"Papirus-Dark","gtkPreferDark":true,"defaultWallpaper":"a.jpg","wallpaperDir":"hx-full-a","colorOnly":false,"collection":"hornero-originals","collectionOrder":3,"family":"hornero"}'
 
 const theme_full_b_json = '{"id":"pack-b","name":"Pack B"}'
 
@@ -53,6 +53,9 @@ fn test_theme_list_full_is_manifest_array() {
 	assert a['id'].str() == 'pack-a'
 	assert a['name'].str() == 'Pack A'
 	assert a['description'].str() == 'first'
+	assert a['collection'].str() == 'hornero-originals'
+	assert a['collectionOrder'].i64() == 3
+	assert a['model'].str() == 'semantic'
 	assert a['darkMode'].bool() == true
 	assert a['gtkTheme'].str() == 'Orchis-Dark-Compact'
 	assert a['gtkPreferDark'].bool() == true
@@ -69,6 +72,9 @@ fn test_theme_list_full_is_manifest_array() {
 	assert a['wallpaperPath'].str().ends_with('hx-full-a/a.jpg')
 	b := arr[1].as_map()
 	assert b['id'].str() == 'pack-b'
+	assert b['collection'].str() == ''
+	assert b['collectionOrder'].i64() == 0
+	assert b['model'].str() == 'recipe'
 	assert b['schemeType'].str() == 'tonal-spot'
 	assert b['iconTheme'].str() == 'Numix-Circle'
 	assert b['wallpapers'].as_array().len == 0
