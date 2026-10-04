@@ -49,9 +49,29 @@ pub fn run_doctor() []DoctorCheck {
 	p := resolve_paths()
 	mut checks := []DoctorCheck{}
 	checks << env_check('wayland-session', 'WAYLAND_DISPLAY')
-	checks << env_check('hyprland-instance', 'HYPRLAND_INSTANCE_SIGNATURE')
+	compositor := active_compositor()
+	if compositor == 'niri' {
+		checks << DoctorCheck{
+			name:   'niri-session'
+			ok:     true
+			detail: 'NIRI_SOCKET is set'
+		}
+		checks << bin_check('niri-ipc', 'niri')
+	} else if compositor == 'hyprland' {
+		checks << DoctorCheck{
+			name:   'hyprland-session'
+			ok:     true
+			detail: 'HYPRLAND_INSTANCE_SIGNATURE is set'
+		}
+		checks << bin_check('hyprland-ctl', 'hyprctl')
+	} else {
+		checks << DoctorCheck{
+			name:   'compositor-session'
+			ok:     false
+			detail: 'No recognized Hornero compositor session is active'
+		}
+	}
 	checks << bin_check('quickshell-cli', 'qs')
-	checks << bin_check('hyprland-ctl', 'hyprctl')
 	cfg := shell_config_file(p)
 	if os.is_file(cfg) {
 		checks << DoctorCheck{

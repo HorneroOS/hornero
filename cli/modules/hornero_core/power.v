@@ -140,7 +140,7 @@ fn describe_bin(bin string) string {
 pub fn power_status_report() CommandResult {
 	session := os.getenv('XDG_SESSION_ID')
 	wayland := os.getenv('WAYLAND_DISPLAY')
-	sig := os.getenv('HYPRLAND_INSTANCE_SIGNATURE')
+	compositor := active_compositor()
 	mut lines := []string{}
 	mut data := map[string]string{}
 	if session.len > 0 {
@@ -157,13 +157,8 @@ pub fn power_status_report() CommandResult {
 		lines << 'wayland: no WAYLAND_DISPLAY (not in a Wayland session?)'
 		data['wayland'] = 'unknown'
 	}
-	if sig.len > 0 {
-		lines << 'compositor: Hyprland instance signature is set'
-		data['compositor'] = 'hyprland'
-	} else {
-		lines << 'compositor: no Hyprland instance signature'
-		data['compositor'] = 'unknown'
-	}
+	lines << 'compositor: ${compositor}'
+	data['compositor'] = compositor
 	sys := resolve_systemctl_bin()
 	lc := resolve_loginctl_bin()
 	ls := resolve_lockscreen_bin()

@@ -33,6 +33,16 @@ pub fn resolve_sss_bin() string {
 	return find_on_path('sss')
 }
 
+// resolve_niri_bin locates the compositor client. HORNERO_NIRI_BIN is a
+// deterministic test seam; production uses the binary from the Niri package.
+pub fn resolve_niri_bin() string {
+	env := os.getenv('HORNERO_NIRI_BIN')
+	if env.len > 0 {
+		return env
+	}
+	return find_on_path('niri')
+}
+
 // resolve_gsr_bin locates gpu-screen-recorder.
 // Override with HORNERO_GPU_SCREEN_RECORDER_BIN.
 pub fn resolve_gsr_bin() string {
@@ -241,6 +251,43 @@ pub:
 pub fn screenshot_report(opts ScreenshotOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('capture screenshot', 'refusing to capture without --yes (preview with --dry-run).\nExample: horneroctl capture screenshot --dry-run')
+	}
+	if os.getenv('NIRI_SOCKET').len > 0 {
+		if opts.output.len > 0 {
+			return fail_result('capture screenshot', 'Niri controls screenshot destinations with its screenshot-path setting; --output is not supported in this session.')
+		}
+		niri := capture_backend_or_placeholder(resolve_niri_bin(), 'niri', 'HORNERO_NIRI_BIN',
+			opts.dry_run, 'horneroctl capture screenshot --dry-run') or {
+			return fail_result('capture screenshot', err.msg())
+		}
+		action := if opts.region { 'screenshot' } else { 'screenshot-screen' }
+		args := ['msg', 'action', action]
+		rep := run_exec(ExecSpec{
+			prog:        niri
+			args:        args
+			dry_run:     opts.dry_run
+			timeout_sec: screenshot_timeout_sec()
+		})
+		if opts.dry_run {
+			return ok_result('capture screenshot', 'would run: ${rep.command_line}', {
+				'command_line': rep.command_line
+				'dry_run':      'true'
+				'compositor':   'niri'
+			})
+		}
+		if rep.ok {
+			msg := if opts.region {
+				'requested Niri screenshot selection; Niri saves it to screenshot-path and the clipboard'
+			} else {
+				'requested Niri screen capture; Niri saves it to screenshot-path and the clipboard'
+			}
+			return ok_result('capture screenshot', msg, {
+				'command_line': rep.command_line
+				'compositor':   'niri'
+				'native':       'true'
+			})
+		}
+		return fail_result('capture screenshot', 'Niri screenshot action failed (exit ${rep.exit_code}):\n${rep.output}')
 	}
 	bin := capture_backend_or_placeholder(resolve_sss_bin(), 'sss', 'HORNERO_SSS_BIN',
 		opts.dry_run, 'horneroctl capture screenshot --dry-run') or {

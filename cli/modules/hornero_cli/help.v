@@ -890,7 +890,7 @@ Examples:
 			return 'Usage: horneroctl capture <screenshot|record|clipboard> [options]
 
   screenshot [--fullscreen|--region] [--output PATH] [--dry-run]
-                      Take a screenshot via sss (needs --yes)
+                      Take a screenshot (needs --yes; backend follows session)
   record <start|stop|pause> [--region] [--sound] [--sr] [--fps N] [--dry-run]
                       Drive gpu-screen-recorder (needs --yes)
   clipboard [--backend NAME] [--dry-run]
@@ -906,7 +906,8 @@ ok no-op while a recording runs; stop and pause are ok no-ops with
 none running. Clipboard resolves like horneroctl capture clipboard (Wayland:
 copyq, cliphist, minimal; otherwise copyq, minimal): copyq opens the
 picker, cliphist lists history (top 25, no interactive pick), minimal
-previews the paste.
+previews the paste. Under Niri, --region opens Niri’s native selection UI
+and saves through its configured screenshot path; --output is unsupported.
 
 Mutations (screenshot, every record leaf) need --yes; --dry-run only
 previews. Backend overrides: HORNERO_SSS_BIN,

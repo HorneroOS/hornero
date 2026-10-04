@@ -27,6 +27,7 @@ _pins = _load_pins_module()
 REQUIRED_PATHS = {
     "manifests/**",
     "profiles/**",
+    "editions/**",
     "releases/**",
     "scripts/**",
     "tests/**",

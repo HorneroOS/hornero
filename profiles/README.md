@@ -1,15 +1,13 @@
-# Edition profiles
+# Release composition profiles
 
-Profiles compose the pinned components from a manifest into named
-editions. Every profile references one manifest by name and lists
-the manifest components it ships, with the role each plays.
+These files record which pinned repository components a release profile
+contains. They do not define edition package composition. The user-facing
+edition and package-set source of truth is [`../editions/catalogue.yaml`](../editions/catalogue.yaml).
 
 ## Files
 
-- `base.yaml` — minimal system for VM smoke tests.
-- `desktop.yaml` — full desktop edition. Extends `base`.
-- `developer.yaml` — desktop plus a development tooling layer.
-  Extends `desktop`.
+- `base.yaml`, `desktop.yaml`, `developer.yaml` — release-era composition
+  profiles referenced by the frozen Preview 14 release record.
 
 ## Rules
 
@@ -22,5 +20,7 @@ the manifest components it ships, with the role each plays.
 - `target` is `vm` or `hardware` and documents what the edition is
   validated on.
 
-New editions add a file here; existing editions change only through
-the release process in `docs/RELEASE_PROCESS.md`.
+Create or change user-facing edition package composition in
+`editions/catalogue.yaml`; validate it with `scripts/resolve-edition.py` and
+`tests/test_editions.py`. Release profiles change only through the process in
+`docs/RELEASE_PROCESS.md`.

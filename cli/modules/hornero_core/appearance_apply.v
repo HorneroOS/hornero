@@ -15,6 +15,7 @@ import x.json2
 // appearance fast path: HORNERO_QUICKSHELL_BIN, else `quickshell`, else
 // `qs` (both external backends).
 pub fn resolve_quickshell_bin() string {
+	ensure_quickshell_ipc_config()
 	env := os.getenv('HORNERO_QUICKSHELL_BIN')
 	if env.len > 0 {
 		return env
