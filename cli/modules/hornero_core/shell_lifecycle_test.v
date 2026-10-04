@@ -100,6 +100,7 @@ fn test_shell_config_prefers_named_system_package_over_bare_user_checkout() {
 	dir := os.join_path(os.temp_dir(), 'hornero-packaged-shell-path-test')
 	user := os.join_path(dir, 'user', 'quickshell')
 	system := os.join_path(dir, 'system', 'quickshell', 'hornero')
+	os.rmdir_all(dir) or {}
 	os.mkdir_all(user) or { assert false, 'mkdir ${user}' }
 	os.mkdir_all(system) or { assert false, 'mkdir ${system}' }
 	os.write_file(os.join_path(user, 'shell.qml'), '// legacy dev checkout') or { assert false }
