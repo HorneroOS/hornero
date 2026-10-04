@@ -142,6 +142,45 @@ fn test_snapshot_restore_native_round_trip() {
 	os.rmdir_all(b1_root + '/native-snaps2') or {}
 }
 
+fn test_snapshot_without_config_archive_is_not_reported_as_restored() {
+	root := b1_root + '/snapshot-without-config'
+	home := root + '/home'
+	config_home := home + '/.config'
+	snapshots := root + '/snapshots'
+	old_home := os.getenv('HOME')
+	old_config := os.getenv('XDG_CONFIG_HOME')
+	old_snapshots := os.getenv('HORNERO_SNAPSHOTS_DIR')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(home) or { assert false }
+	os.setenv('HOME', home, true)
+	os.setenv('XDG_CONFIG_HOME', config_home, true)
+	os.setenv('HORNERO_SNAPSHOTS_DIR', snapshots, true)
+	created := snapshot_create_report(SnapshotCreateOptions{ yes: true })
+	assert created.ok
+	assert !os.is_file(created.data['dir'] + '/hornero-config.tar.gz')
+	os.mkdir_all(config_home + '/hornero') or { assert false }
+	os.write_file(config_home + '/hornero/shell.json', 'new configuration') or { assert false }
+	restored := snapshot_restore_report(SnapshotRestoreOptions{
+		id:  created.data['id']
+		yes: true
+	})
+	assert !restored.ok
+	assert restored.message.contains('contains no Hornero configuration archive')
+	assert (os.read_file(config_home + '/hornero/shell.json') or { '' }) == 'new configuration'
+	os.setenv('HOME', old_home, true)
+	if old_config.len > 0 {
+		os.setenv('XDG_CONFIG_HOME', old_config, true)
+	} else {
+		os.unsetenv('XDG_CONFIG_HOME')
+	}
+	if old_snapshots.len > 0 {
+		os.setenv('HORNERO_SNAPSHOTS_DIR', old_snapshots, true)
+	} else {
+		os.unsetenv('HORNERO_SNAPSHOTS_DIR')
+	}
+	os.rmdir_all(root) or {}
+}
+
 fn test_snapshot_config_home_empty_value_falls_back_to_home() {
 	old_home := os.getenv('HOME')
 	old_config := os.getenv('XDG_CONFIG_HOME')
@@ -221,6 +260,7 @@ fn test_snapshot_restore_reports_tar_extraction_failure() {
 	created := snapshot_create_report(SnapshotCreateOptions{ yes: true })
 	assert created.ok
 	os.write_file(config_home + '/hornero/shell.json', 'after') or { assert false }
+	os.rmdir_all(config_home) or { assert false }
 	os.write_file(fake_tar, '#!/bin/sh\nif [ "$1" = "-xzf" ]; then echo simulated extraction error >&2; exit 9; fi\nexec /bin/tar "$@"\n') or { assert false }
 	os.chmod(fake_tar, 0o755) or { assert false }
 	os.setenv('HORNERO_TAR_BIN', fake_tar, true)
@@ -231,7 +271,7 @@ fn test_snapshot_restore_reports_tar_extraction_failure() {
 	assert !restored.ok
 	assert restored.message.contains('exit 9')
 	assert restored.message.contains('simulated extraction error')
-	assert os.read_file(config_home + '/hornero/shell.json') or { '' } == 'after'
+	assert os.is_dir(config_home)
 	os.setenv('HOME', old_home, true)
 	if old_config.len > 0 {
 		os.setenv('XDG_CONFIG_HOME', old_config, true)

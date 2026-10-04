@@ -293,6 +293,10 @@ pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	if dir.len == 0 {
 		return fail_result(name, 'Snapshot not found: ${id}')
 	}
+	tarball := os.join_path(dir, 'hornero-config.tar.gz')
+	if !os.is_file(tarball) {
+		return fail_result(name, 'snapshot ${id} contains no Hornero configuration archive; no configuration was restored')
+	}
 	entry := read_snapshot(os.dir(dir), id) or { SnapshotEntry{} }
 	mut lines := ['Restoring configuration from snapshot: ${id}', '  Snapshot info:',
 		'    Date: ${entry.timestamp}', '    Host: ${entry.hostname}',
@@ -301,18 +305,18 @@ pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	if !backup.ok {
 		return fail_result(name, 'pre-restore backup failed: ${backup.message}')
 	}
-	tarball := os.join_path(dir, 'hornero-config.tar.gz')
-	if os.is_file(tarball) {
-		lines << '  Restoring Hornero configuration...'
-		tar := tar_or_fail('restore', false) or { return fail_result(name, err.msg()) }
-		config_home := snapshot_config_home()
-		ex := run_exec(ExecSpec{
-			prog: tar
-			args: ['-xzf', tarball, '-C', config_home]
-		})
-		if !ex.ok {
-			return fail_result(name, 'cannot restore Hornero configuration (exit ${ex.exit_code}):\n${ex.output}')
-		}
+	lines << '  Restoring Hornero configuration...'
+	tar := tar_or_fail('restore', false) or { return fail_result(name, err.msg()) }
+	config_home := snapshot_config_home()
+	os.mkdir_all(config_home) or {
+		return fail_result(name, 'cannot create configuration directory ${config_home}: ${err.msg()}')
+	}
+	ex := run_exec(ExecSpec{
+		prog: tar
+		args: ['-xzf', tarball, '-C', config_home]
+	})
+	if !ex.ok {
+		return fail_result(name, 'cannot restore Hornero configuration (exit ${ex.exit_code}):\n${ex.output}')
 	}
 	lines << 'Restore completed!'
 	lines << '   You may need to restart your shell or reload configurations'

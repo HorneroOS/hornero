@@ -818,8 +818,6 @@ pub fn appearance_doctor_native() CommandResult {
 	}
 	if pointer_val.len == 0 {
 		fails << 'wallpaper pointer missing'
-	} else if !os.is_file(pointer_val) && os.real_path(pointer_val).len == 0 {
-		fails << 'wallpaper pointer does not exist: ${pointer_val}'
 	}
 	if pointer_val.len > 0 && !os.is_file(pointer_val) {
 		fails << 'wallpaper file does not exist: ${pointer_val}'
