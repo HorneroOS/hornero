@@ -15,14 +15,18 @@ fn wp_dispatch_setup() {
 		true)
 	os.setenv('XDG_STATE_HOME', base + '/state', true)
 	os.setenv('XDG_CACHE_HOME', base + '/cache', true)
-	os.setenv('HORNERO_WAL_RELOAD_BIN', '/nonexistent-wal-reload-hornero-test', true)
+	os.setenv('HORNERO_SHELL_RUNNING', '0', true)
+	os.setenv('HORNERO_M3_PYTHON_BIN', '/bin/false', true)
+	os.setenv('HORNERO_M3_SCRIPT', '/nonexistent/generate-m3-colors.py', true)
 }
 
 fn wp_dispatch_teardown() {
 	os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
-	os.unsetenv('HORNERO_WAL_RELOAD_BIN')
+	os.unsetenv('HORNERO_SHELL_RUNNING')
+	os.unsetenv('HORNERO_M3_PYTHON_BIN')
+	os.unsetenv('HORNERO_M3_SCRIPT')
 }
 
 fn test_dispatch_wallpaper_current() {

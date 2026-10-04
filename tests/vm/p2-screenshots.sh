@@ -158,22 +158,18 @@ bash "$SHELL_HARNESS/lib/deploy-shell.sh" || fail "guest deploy (shell + config 
 pass "guest deployed (shell, composed config, factory defaults, wallpapers)"
 
 # --- 4. P2 overlay preparation (network PREP phase) -----------------------------
-# Appearance deps (hard requirements of hornero_apply_theme: wal,
-# materialyoucolor, ImageMagick for pywal's wal backend) plus the demo apps
-# the matrix captures (gtk3/gtk4 widget factories, hyprlock). Runs after
-# deploy so the composition owns HOME first; pip --user lands in the real
-# session HOME (/home/hornero) where the matrix applies themes.
+# Appearance dependency plus demo apps captured by the matrix. The palette
+# pipeline uses Hornero's Material generator directly; no Pywal backend is used.
 # shellcheck disable=SC2016
-vm_ssh 'sudo pacman -S --noconfirm --needed python-pip gtk3 gtk4 gtk4-demos zenity loupe hyprlock imagemagick qt6ct copyq' \
+vm_ssh 'sudo pacman -S --noconfirm --needed python-pip gtk3 gtk4 gtk4-demos zenity loupe hyprlock qt6ct copyq' \
   || fail "guest P2 packages"
 # shellcheck disable=SC2016
-vm_ssh 'python3 -m pip install --user -q --break-system-packages pywal materialyoucolor' \
-  || fail "guest pip install (pywal + materialyoucolor)"
+vm_ssh 'python3 -m pip install --user -q --break-system-packages materialyoucolor' \
+  || fail "guest pip install (materialyoucolor)"
 # shellcheck disable=SC2016
 vm_ssh 'export PATH=$HOME/.local/bin:$PATH
-  command -v wal >/dev/null && python3 -c "import materialyoucolor" \
-  && command -v magick >/dev/null || command -v convert >/dev/null' \
-  || fail "guest P2 apply deps (wal + materialyoucolor + imagemagick)"
+  python3 -c "import materialyoucolor"' \
+  || fail "guest P2 apply deps (materialyoucolor)"
 pass "guest P2 preparation complete"
 
 bash "$SHELL_HARNESS/lib/start-session.sh" || fail "guest session (Hyprland + shell)"

@@ -2,6 +2,12 @@ module hornero_core
 
 import os
 
+// wallpaper_shell_quote safely quotes arbitrary CLI values across the
+// process-launch boundary, including paths containing shell metacharacters.
+fn wallpaper_shell_quote(s string) string {
+	return "'" + s.replace("'", '\'"\'"\'') + "'"
+}
+
 // Native external-tool backends for appearance operations. Hornero owns the
 // coordination logic; compositor tools, settings daemons, and interpreters
 // remain platform dependencies with HORNERO_*_BIN test/override seams.
@@ -79,12 +85,6 @@ pub fn resolve_gsettings_bin() string {
 // Override with HORNERO_XRDB_BIN.
 pub fn resolve_xrdb_bin() string {
 	return backend_or_empty('HORNERO_XRDB_BIN', 'xrdb')
-}
-
-// resolve_wal_bin locates pywal (palette generation from wallpapers).
-// Override with HORNERO_WAL_BIN.
-pub fn resolve_wal_bin() string {
-	return backend_or_empty('HORNERO_WAL_BIN', 'wal')
 }
 
 // resolve_pkill_bin locates pkill (backend process control).

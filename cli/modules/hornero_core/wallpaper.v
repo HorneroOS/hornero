@@ -3,31 +3,15 @@ module hornero_core
 import os
 
 // Wallpaper control uses the Hornero state pointer and native palette
-// pipeline. Only the optional reload hook is an external session action.
+// pipeline for both live-shell and headless operations.
 // Mutations require --yes; --dry-run only previews.
-
-// resolve_wal_reload_bin locates the horneroctl wallpaper reload backend.
-// Override with HORNERO_WAL_RELOAD_BIN.
-pub fn resolve_wal_reload_bin() string {
-	env := os.getenv('HORNERO_WAL_RELOAD_BIN')
-	if env.len > 0 {
-		return env
-	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'horneroctl wallpaper reload')
-	if os.is_file(home_helper) {
-		return home_helper
-	}
-	return find_on_path('horneroctl wallpaper reload')
-}
 
 pub struct WallpaperOptions {
 pub:
-	action        string // set | current | reload
-	path          string // set target, or explicit candidate for current
-	dry_run       bool
-	yes           bool
-	set_helper    string
-	reload_helper string
+	action  string // set | current | reload
+	path    string // set target, or explicit candidate for current
+	dry_run bool
+	yes     bool
 }
 
 // wallpaper_strip_uri drops a file:// prefix, normalizing a file URI.
@@ -53,15 +37,6 @@ fn resolve_wallpaper_candidate(candidate string) string {
 		return c
 	}
 	return ''
-}
-
-// wallpaper_wal_link is the pywal state link (last-resort read candidate).
-fn wallpaper_wal_link() string {
-	mut base := os.getenv('XDG_CACHE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
-	}
-	return os.join_path(base, 'wal', 'wal')
 }
 
 // wallpaper_from_pointer reads one pointer file: a symlink-to-image resolves
@@ -104,8 +79,7 @@ fn wallpaper_from_pointer(pointer_file string) string {
 }
 
 // current_wallpaper resolves the live wallpaper: an explicit path wins,
-// then the canonical Hornero pointer, then the optional pywal
-// link. Returns '' when nothing resolves to an existing file.
+// then the canonical Hornero pointer. Returns '' when nothing resolves to an existing file.
 pub fn current_wallpaper(explicit string) string {
 	if explicit.len > 0 {
 		resolved := resolve_wallpaper_candidate(explicit)
@@ -113,7 +87,7 @@ pub fn current_wallpaper(explicit string) string {
 			return resolved
 		}
 	}
-	candidates := [resolve_wallpaper_pointer_file(), wallpaper_wal_link()]
+	candidates := [resolve_wallpaper_pointer_file()]
 	for c in candidates {
 		resolved := wallpaper_from_pointer(c)
 		if resolved.len > 0 {
@@ -123,66 +97,14 @@ pub fn current_wallpaper(explicit string) string {
 	return ''
 }
 
-// wallpaper_backend_or_placeholder resolves one wallpaper backend, or the
-// bare program name for dry-run previews when nothing is installed.
-fn wallpaper_backend_or_placeholder(helper string, resolve fn () string, prog string, dry_run bool) !string {
-	bin := if helper.len > 0 { helper } else { resolve() }
-	if bin.len == 0 {
-		if dry_run {
-			return prog
-		}
-		return error('wallpaper backend not found (${prog}). Set the HORNERO_*_BIN override.')
-	}
-	return bin
-}
-
-// wallpaper_shell_quote single-quotes one argv word for the shell hop
-// below. A wallpaper path is an arbitrary filename, so every word is
-// quoted (the shared quote_arg only covers spaces/quotes): without this,
-// a name like `wall.jpg;id` would run `id` as a second command.
-fn wallpaper_shell_quote(s string) string {
-	return "'" + s.replace("'", '\'"\'"\'') + "'"
-}
-
-// wallpaper_run_backend invokes the optional reload action with strict
-// argument quoting; dry-run previews never execute it.
-fn wallpaper_run_backend(bin string, args []string, dry_run bool) ExecReport {
-	mut words := ['env', bin]
-	for a in args {
-		words << a
-	}
-	mut quoted := []string{}
-	for w in words {
-		quoted << wallpaper_shell_quote(w)
-	}
-	line := quoted.join(' ')
-	if dry_run {
-		return ExecReport{
-			command_line: line
-			ok:           true
-			output:       '(dry-run: not executed)'
-			exit_code:    0
-			was_dry_run:  true
-		}
-	}
-	r := os.execute(line)
-	return ExecReport{
-		command_line: line
-		ok:           r.exit_code == 0
-		output:       r.output.trim_space()
-		exit_code:    r.exit_code
-		was_dry_run:  false
-	}
-}
-
 // wallpaper_report implements the wallpaper subcommands. `current` reads the
-// pointer and set palette natively; reload uses the optional session hook.
+// pointer; set and reload use the native palette pipeline.
 // Mutating verbs require --yes; --dry-run only previews.
 // wallpaper_set_native applies one wallpaper without the
 // horneroctl wallpaper set wrapper (retired): quickshell IPC setWallpaper
-// first (when the shell runs), else the wal+M3 palette pipeline for
+// first (when the shell runs), else the Hornero M3 palette pipeline for
 // the new path — the native wallpaper-only contract. An explicit
-// set_helper still delegates (caller override).
+
 fn wallpaper_set_native(path string, dry_run bool) CommandResult {
 	if !dry_run && shell_running() {
 		ipc := ipc_appearance_call(['setWallpaper', path], false)
@@ -229,56 +151,13 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			if !opts.yes && !opts.dry_run {
 				return fail_result('wallpaper set', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl wallpaper set ~/wall.jpg --dry-run')
 			}
-			if opts.set_helper.len > 0 {
-				bin := opts.set_helper
-				rep := wallpaper_run_backend(bin, [opts.path], opts.dry_run)
-				if opts.dry_run {
-					return ok_result('wallpaper set', 'would run: ${rep.command_line}',
-						{
-							'command_line': rep.command_line
-							'dry_run':      'true'
-							'path':         resolved
-						})
-				}
-				if rep.ok {
-					return ok_result('wallpaper set', rep.output, {
-						'command_line': rep.command_line
-						'path':         resolved
-					})
-				}
-				return fail_result('wallpaper set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
-			}
 			return wallpaper_set_native(resolved, opts.dry_run)
 		}
 		'reload' {
 			if !opts.yes && !opts.dry_run {
 				return fail_result('wallpaper reload', 'refusing to reload without --yes (preview with --dry-run).\nExample: horneroctl wallpaper reload --dry-run')
 			}
-			// A configured backend (explicit helper or the
-			// HORNERO_WAL_RELOAD_BIN-aware resolver) owns reload;
-			// with nothing configured the native pipeline runs.
-			helper := if opts.reload_helper.len > 0 {
-				opts.reload_helper
-			} else {
-				resolve_wal_reload_bin()
-			}
-			if helper.len == 0 {
-				return wallpaper_reload_native(opts.dry_run)
-			}
-			rep := wallpaper_run_backend(helper, [], opts.dry_run)
-			if opts.dry_run {
-				return ok_result('wallpaper reload', 'would run: ${rep.command_line}',
-					{
-						'command_line': rep.command_line
-						'dry_run':      'true'
-					})
-			}
-			if rep.ok {
-				return ok_result('wallpaper reload', rep.output, {
-					'command_line': rep.command_line
-				})
-			}
-			return fail_result('wallpaper reload', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			return wallpaper_reload_native(opts.dry_run)
 		}
 		else {
 			return fail_result('wallpaper', 'unknown action: ${opts.action}.\nRun: horneroctl wallpaper --help')

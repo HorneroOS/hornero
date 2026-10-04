@@ -61,6 +61,26 @@ fn scheme_json_field(path string, key string) string {
 	return ''
 }
 
+// scheme_json_colour reads one Material role from scheme.json's colours map.
+fn scheme_json_colour(key string) string {
+	return scheme_json_colour_from_file(color_scheme_file(), key)
+}
+
+fn scheme_json_colour_from_file(path string, key string) string {
+	raw := os.read_file(path) or { return '' }
+	parsed := json2.decode[json2.Any](raw) or { return '' }
+	if parsed is map[string]json2.Any {
+		if colours := parsed['colours'] {
+			if colours is map[string]json2.Any {
+				if value := colours[key] {
+					return value.str()
+				}
+			}
+		}
+	}
+	return ''
+}
+
 // read_scheme_state loads persisted appearance from canonical Hornero state.
 // Scheme metadata supplies mode, flavour, and variant when state is incomplete.
 pub fn read_scheme_state() SchemeState {

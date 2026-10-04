@@ -175,7 +175,7 @@ Examples:
   hyprlock [--dry-run] Regenerate colors-hyprlock.conf (needs --yes)
 
 Native: every verb runs in V. Only external tools stay backends
-(wal, xrdb, gsettings, hyprctl, quickshell IPC, the M3 python
+(xrdb, gsettings, hyprctl, quickshell IPC, the M3 python
 synthesizer, night-mode temperature tools), each with a
 HORNERO_*_BIN override.
 
@@ -214,7 +214,7 @@ Examples:
 Pack source: HORNERO_THEMES_DIR, else the XDG data catalogue
 (hornero/themes).
 Reads parse the installed theme.json manifests; apply runs
-the native shell pipeline (wal + M3 + GTK). get matches the live
+the native M3 + GTK pipeline. get matches the live
 native state against the official hornero-dark/hornero-light/pampa
 trio; set validates, applies natively, then verifies GTK/scheme
 agree (best-effort rollback to the previous official theme on
@@ -735,9 +735,7 @@ Examples:
   current [path]            Print the current wallpaper path (read-only)
   reload [--dry-run]        Re-apply the color pipeline (needs --yes)
 
-Reads use the Hornero wallpaper pointer, then the pywal link. `set` applies through shell IPC or the native wal+M3 pipeline; `reload`
-uses the configured Hornero reload backend (HORNERO_WAL_RELOAD_BIN) or the
-native pipeline.
+Reads use the canonical Hornero wallpaper pointer. `set` and `reload` use shell IPC when available and otherwise generate the Hornero Material colour scheme directly. A failed generation leaves the selected wallpaper unchanged.
 
 Mutations need --yes; --dry-run only previews.
 

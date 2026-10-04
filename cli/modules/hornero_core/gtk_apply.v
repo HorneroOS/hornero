@@ -147,11 +147,11 @@ pub fn list_names_in_dirs(dirs []string, require_index bool) []string {
 	return out
 }
 
-// detect_gtk_theme picks (theme, prefer_dark) from a pywal background hex
+// detect_gtk_theme picks (theme, prefer_dark) from a generated background hex
 // and the installed themes, mirroring detect_optimal_gtk_theme: dark
 // backgrounds (r+g+b below 384) prefer the dark list.
-pub fn detect_gtk_theme(pywal_bg string, installed []string) (string, string) {
-	r, g, b := parse_hex6(pywal_bg) or { return 'Orchis-Light', 'false' }
+pub fn detect_gtk_theme(background string, installed []string) (string, string) {
+	r, g, b := parse_hex6(background) or { return 'Orchis-Light', 'false' }
 	present := fn [installed] (name string) bool {
 		return name in installed
 	}
@@ -465,7 +465,18 @@ pub fn gtk_detect_report(wallpaper string) CommandResult {
 	if wall.len == 0 || !os.is_file(wall) {
 		return fail_result('appearance gtk detect', 'No wallpaper specified and no current wallpaper found.')
 	}
-	bg := read_wal_colors_bg()
+	bg := if wall == read_wallpaper_pointer() {
+		scheme_json_colour('background')
+	} else {
+		st := read_scheme_state()
+		mode := if st.mode == 'light' { 'light' } else { 'dark' }
+		out := os.join_path(os.temp_dir(), 'hornero-gtk-detect-${os.getpid()}.json')
+		defer { os.rm(out) or {} }
+		run_m3_synthesis(wall, out, normalize_scheme_type(st.flavour), mode, '', false) or {
+			return fail_result('appearance gtk detect', 'Could not analyse wallpaper colours: ${err.msg()}')
+		}
+		scheme_json_colour_from_file(out, 'background')
+	}
 	theme, prefer_dark := detect_gtk_theme(if bg.len > 0 { bg } else { '000000' }, list_names_in_dirs(gtk_theme_search_dirs(),
 		false))
 	return ok_result('appearance gtk detect', 'Detected optimal theme: ${theme}\nDark preference: ${prefer_dark}',

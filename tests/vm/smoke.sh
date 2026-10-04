@@ -207,29 +207,17 @@ if ! $SSH 'getent hosts archlinux.org >/dev/null 2>&1'; then
   [[ $dns_ok -eq 1 ]] || fail "guest DNS still broken after pinning $GUEST_DNS"
 fi
 pass "guest DNS resolves"
-# Guest appearance pre-requisites (network PREP phase, before the offline
-# boundary): pywal (`wal`) and materialyoucolor are hard requirements of
-# hornero_apply_theme, and the wallpaper PNGs are rendered on the host
-# (rsvg-convert) and shipped in, mirroring deploy-shell.sh. pip installs
-# with HOME pointed at the materialized root so the user site lands where
-# the apply runs.
-# Egress was restored right after the payload (see above); prep continues.
+# Guest appearance prerequisite (network PREP phase, before the offline
+# boundary): the Hornero Material generator dependency is installed in the
+# isolated guest user profile. Wallpaper assets are shipped in separately.
 $SSH 'command -v pip3 >/dev/null 2>&1 || sudo pacman -Sy --noconfirm --needed python-pip' \
   || fail "guest python-pip install"
-# pywal's default `wal` backend shells out to ImageMagick (proven: bare
-# `wal -i` fails in a minimal guest with "Imagemagick wasn't found").
-$SSH 'command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1 || sudo pacman -S --noconfirm --needed imagemagick' \
-  || fail "guest imagemagick install"
-# Arch Python is PEP 668 externally-managed: --break-system-packages is the
-# documented override. Scoped to the test guest (prep phase); the install
-# lands in the materialized root's user site (HOME=hx-root), never system-wide.
-$SSH 'export HOME=$HOME/hx-root; python3 -m pip install --user -q --break-system-packages pywal materialyoucolor' \
-  || fail "guest pip install (pywal + materialyoucolor)"
+$SSH 'export HOME=$HOME/hx-root; python3 -m pip install --user -q --break-system-packages materialyoucolor' \
+  || fail "guest pip install (materialyoucolor)"
 $SSH 'export HOME=$HOME/hx-root; unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
-  export PATH=$HOME/.local/bin:$PATH
-  command -v wal >/dev/null && python3 -c "import materialyoucolor"' \
-  || fail "guest apply deps (wal + materialyoucolor)"
-pass "guest apply deps installed (wal + materialyoucolor)"
+  python3 -c "import materialyoucolor"' \
+  || fail "guest apply deps (materialyoucolor)"
+pass "guest Hornero palette dependency installed (materialyoucolor)"
 WALLS_DIR="$(mktemp -d)"
 "$WORK/compose/config/scripts/render-brand-assets.sh" --wallpapers "$WALLS_DIR" \
   >/dev/null || fail "host wallpaper render"

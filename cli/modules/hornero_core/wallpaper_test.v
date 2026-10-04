@@ -6,50 +6,43 @@ fn wp_setup() string {
 	base := '/tmp/hx-wallpaper-test'
 	os.rmdir_all(base) or {}
 	os.mkdir_all(base + '/state/hornero/wallpaper') or { assert false }
-	os.mkdir_all(base + '/cache') or { assert false }
+	os.mkdir_all(base + '/cache/wal') or { assert false }
 	os.write_file(base + '/wall.jpg', 'fake-image') or { assert false }
-	os.setenv('HORNERO_WALLPAPER_POINTER_FILE', base + '/state/hornero/wallpaper/path',
-		true)
+	os.setenv('HORNERO_WALLPAPER_POINTER_FILE', base + '/state/hornero/wallpaper/path', true)
 	os.setenv('XDG_STATE_HOME', base + '/state', true)
 	os.setenv('XDG_CACHE_HOME', base + '/cache', true)
 	return base
 }
 
 fn wp_teardown() {
-	os.unsetenv('HORNERO_WALLPAPER_POINTER_FILE')
-	os.unsetenv('XDG_STATE_HOME')
-	os.unsetenv('XDG_CACHE_HOME')
-	os.unsetenv('HORNERO_WALLPAPER_SET_BIN')
-	os.unsetenv('HORNERO_WAL_RELOAD_BIN')
-	os.unsetenv('HORNERO_SHELL_RUNNING')
-	os.unsetenv('HORNERO_QUICKSHELL_BIN')
-	os.unsetenv('HORNERO_WAL_BIN')
+	for name in ['HORNERO_WALLPAPER_POINTER_FILE', 'XDG_STATE_HOME', 'XDG_CACHE_HOME',
+		'HORNERO_SHELL_RUNNING', 'HORNERO_QUICKSHELL_BIN', 'HORNERO_M3_PYTHON_BIN', 'HORNERO_M3_SCRIPT'] {
+		os.unsetenv(name)
+	}
+	os.rmdir_all('/tmp/hx-wallpaper-test') or {}
 }
 
-fn test_wallpaper_current_from_canonical_pointer() {
+fn test_wallpaper_current_uses_canonical_text_pointer() {
 	base := wp_setup()
-	os.write_file(base + '/state/hornero/wallpaper/path', base + '/wall.jpg\n') or { assert false }
+	os.write_file(resolve_wallpaper_pointer_file(), base + '/wall.jpg\n') or { assert false }
 	assert current_wallpaper('') == base + '/wall.jpg'
-	r := wallpaper_report(WallpaperOptions{
-		action: 'current'
-	})
+	r := wallpaper_report(WallpaperOptions{ action: 'current' })
 	assert r.ok
 	assert r.message == base + '/wall.jpg'
 	wp_teardown()
 }
 
-fn test_wallpaper_ignores_obsolete_pointer_path() {
+fn test_wallpaper_current_uses_canonical_symlink_pointer() {
 	base := wp_setup()
-	os.mkdir_all(base + '/state/retired/wallpaper') or { assert false }
-	os.write_file(base + '/state/retired/wallpaper/path', base + '/wall.jpg\n') or { assert false }
-	assert current_wallpaper('') == ''
+	os.symlink(base + '/wall.jpg', resolve_wallpaper_pointer_file()) or { assert false }
+	assert current_wallpaper('') == base + '/wall.jpg'
 	wp_teardown()
 }
 
-fn test_wallpaper_current_from_symlink_pointer() {
+fn test_wallpaper_current_ignores_retired_pywal_pointer() {
 	base := wp_setup()
-	os.symlink(base + '/wall.jpg', base + '/state/hornero/wallpaper/path') or { assert false }
-	assert current_wallpaper('') == base + '/wall.jpg'
+	os.write_file(base + '/cache/wal/wal', base + '/wall.jpg\n') or { assert false }
+	assert current_wallpaper('') == ''
 	wp_teardown()
 }
 
@@ -60,228 +53,68 @@ fn test_wallpaper_current_explicit_path_wins() {
 	wp_teardown()
 }
 
-fn test_wallpaper_current_missing_is_failure() {
+fn test_wallpaper_set_rejects_missing_file_and_missing_confirmation() {
 	base := wp_setup()
-	assert current_wallpaper('') == ''
-	r := wallpaper_report(WallpaperOptions{
-		action: 'current'
-	})
-	assert !r.ok
+	missing := wallpaper_report(WallpaperOptions{ action: 'set', path: base + '/missing.jpg', dry_run: true })
+	assert !missing.ok
+	needs_confirmation := wallpaper_report(WallpaperOptions{ action: 'set', path: base + '/wall.jpg' })
+	assert !needs_confirmation.ok
+	assert needs_confirmation.message.contains('--yes')
 	wp_teardown()
 }
 
-fn test_wallpaper_current_self_referential_pointer_ignored() {
+fn test_wallpaper_set_dry_run_previews_native_m3_without_pywal() {
 	base := wp_setup()
-	ptr := base + '/state/hornero/wallpaper/path'
-	os.write_file(ptr, ptr + '\n') or { assert false }
-	assert current_wallpaper('') == ''
-	wp_teardown()
-}
-
-fn test_wallpaper_set_missing_file_fails() {
-	wp_setup()
-	r := wallpaper_report(WallpaperOptions{
-		action:  'set'
-		path:    '/tmp/hx-wallpaper-test/does-not-exist.jpg'
-		dry_run: true
-	})
-	assert !r.ok
-	wp_teardown()
-}
-
-fn test_wallpaper_set_needs_yes() {
-	base := wp_setup()
-	r := wallpaper_report(WallpaperOptions{
-		action: 'set'
-		path:   base + '/wall.jpg'
-	})
-	assert !r.ok
-	assert r.message.contains('--yes')
-	wp_teardown()
-}
-
-fn test_wallpaper_set_dry_run_needs_no_backend() {
-	base := wp_setup()
-	r := wallpaper_report(WallpaperOptions{
-		action:     'set'
-		path:       base + '/wall.jpg'
-		dry_run:    true
-		set_helper: '/nonexistent-wallpaper-set-hornero-test'
-	})
-	assert r.ok
-	assert r.message.contains('would run:')
-	assert !r.message.contains('horneroctl wallpaper set')
-	assert r.message.contains('/nonexistent-wallpaper-set-hornero-test')
-	assert !r.message.contains('HORNEROCTL_INTERNAL_CALL')
+	r := wallpaper_report(WallpaperOptions{ action: 'set', path: base + '/wall.jpg', dry_run: true })
+	assert r.ok, r.message
+	assert r.message.contains('generate-m3-colors.py')
+	assert !r.message.contains("'wal'")
 	assert r.data['path'] == base + '/wall.jpg'
+	assert !os.is_file(resolve_wallpaper_pointer_file())
 	wp_teardown()
 }
 
-fn test_wallpaper_set_native_dry_run_previews_pipeline() {
-	// Native port: dry-run without helper previews the wal+M3 pipeline
-	// (no shell, no side effects) and carries the resolved path.
-	base := wp_setup()
-	os.setenv('HORNERO_SHELL_RUNNING', '0', true)
-	r := wallpaper_report(WallpaperOptions{
-		action:  'set'
-		path:    base + '/wall.jpg'
-		dry_run: true
-	})
-	assert r.ok
-	assert r.message.contains('wal')
-	assert r.data['path'] == base + '/wall.jpg'
-	wp_teardown()
-}
-
-fn test_wallpaper_set_native_shell_ipc() {
-	// Shell up with a fixture quickshell (/bin/true): IPC succeeds and
-	// the wait loop settles at once; no real compositor is touched.
+fn test_wallpaper_set_uses_live_shell_ipc() {
 	base := wp_setup()
 	os.setenv('HORNERO_SHELL_RUNNING', '1', true)
 	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/true', true)
-	r := wallpaper_report(WallpaperOptions{
-		action: 'set'
-		path:   base + '/wall.jpg'
-		yes:    true
-	})
+	r := wallpaper_report(WallpaperOptions{ action: 'set', path: base + '/wall.jpg', yes: true })
 	assert r.ok
 	assert r.message.contains('applied via shell')
 	wp_teardown()
 }
 
-fn test_wallpaper_set_native_falls_back_without_wal() {
-	// Shell IPC fails (fixture quickshell exits nonzero) and wal is
-	// missing: the pipeline fails closed naming wal, writing nothing.
+fn test_wallpaper_set_m3_failure_preserves_existing_selection() {
 	base := wp_setup()
+	previous := base + '/previous.jpg'
+	os.write_file(previous, 'previous') or { assert false }
+	os.write_file(resolve_wallpaper_pointer_file(), previous + '\n') or { assert false }
 	os.setenv('HORNERO_SHELL_RUNNING', '1', true)
 	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/false', true)
-	os.setenv('HORNERO_WAL_BIN', '/nonexistent-wal-hornero-test', true)
-	r := wallpaper_report(WallpaperOptions{
-		action: 'set'
-		path:   base + '/wall.jpg'
-		yes:    true
-	})
+	os.setenv('HORNERO_M3_PYTHON_BIN', '/nonexistent-python', true)
+	os.setenv('HORNERO_M3_SCRIPT', '/nonexistent-generate-m3.py', true)
+	r := wallpaper_report(WallpaperOptions{ action: 'set', path: base + '/wall.jpg', yes: true })
 	assert !r.ok
-	assert r.message.contains('wal')
+	assert r.message.contains('M3')
+	assert read_wallpaper_pointer() == previous
 	wp_teardown()
 }
 
-fn test_wallpaper_set_runs_backend_uses_backend() {
+fn test_wallpaper_reload_requires_confirmation_and_previews_natively() {
 	base := wp_setup()
-	os.write_file(base + '/horneroctl wallpaper set', '#!/bin/sh\n\necho "wallpaper applied \$*"\nexit 0\n') or {
-		assert false
-	}
-	os.chmod(base + '/horneroctl wallpaper set', 0o755) or { assert false }
-	r := wallpaper_report(WallpaperOptions{
-		action:     'set'
-		path:       base + '/wall.jpg'
-		yes:        true
-		set_helper: base + '/horneroctl wallpaper set'
-	})
-	assert r.ok
-	assert r.message.contains('wallpaper applied')
-	wp_teardown()
-}
-
-fn test_wallpaper_set_path_with_metacharacters_stays_one_arg() {
-	base := wp_setup()
-	// If the backend line were shell-split, `touch PWNED_MARKER.jpg` would
-	// run in the test working directory; it must never appear there.
-	marker := os.join_path(os.getwd(), 'PWNED_MARKER.jpg')
-	evil := base + '/evil;touch PWNED_MARKER.jpg'
-	os.write_file(evil, 'fake-image') or { assert false }
-	os.rm(marker) or {}
-	os.write_file(base + '/arg-echo', '#!/bin/sh\necho "n=$#"\necho "a=$1"\nexit 0\n') or {
-		assert false
-	}
-	os.chmod(base + '/arg-echo', 0o755) or { assert false }
-	r := wallpaper_report(WallpaperOptions{
-		action:     'set'
-		path:       evil
-		yes:        true
-		set_helper: base + '/arg-echo'
-	})
-	assert r.ok
-	assert r.message.contains('n=1')
-	assert r.message.contains('a=' + evil)
-	assert !os.is_file(marker)
-	wp_teardown()
-}
-
-fn test_wallpaper_set_missing_backend_fails() {
-	base := wp_setup()
-	r := wallpaper_report(WallpaperOptions{
-		action:     'set'
-		path:       base + '/wall.jpg'
-		yes:        true
-		set_helper: '/nonexistent-wallpaper-set-hornero-test'
-	})
-	assert !r.ok
-	wp_teardown()
-}
-
-fn test_wallpaper_reload_needs_yes() {
-	wp_setup()
-	r := wallpaper_report(WallpaperOptions{
-		action: 'reload'
-	})
-	assert !r.ok
-	assert r.message.contains('--yes')
-	wp_teardown()
-}
-
-fn test_wallpaper_reload_dry_run_needs_no_backend() {
-	wp_setup()
-	r := wallpaper_report(WallpaperOptions{
-		action:        'reload'
-		dry_run:       true
-		reload_helper: '/nonexistent-wal-reload-hornero-test'
-	})
-	assert r.ok
-	assert r.message.contains('would run:')
-	assert r.message.contains('/nonexistent-wal-reload-hornero-test')
-	assert !r.message.contains('HORNEROCTL_INTERNAL_CALL')
-	wp_teardown()
-}
-
-fn test_wallpaper_reload_runs_backend_uses_backend() {
-	base := wp_setup()
-	os.write_file(base + '/horneroctl wallpaper reload', '#!/bin/sh\n\necho reloaded\nexit 0\n') or {
-		assert false
-	}
-	os.chmod(base + '/horneroctl wallpaper reload', 0o755) or { assert false }
-	r := wallpaper_report(WallpaperOptions{
-		action:        'reload'
-		yes:           true
-		reload_helper: base + '/horneroctl wallpaper reload'
-	})
-	assert r.ok
-	assert r.message.contains('reloaded')
-	wp_teardown()
-}
-
-fn test_wallpaper_reload_missing_backend_fails() {
-	wp_setup()
-	r := wallpaper_report(WallpaperOptions{
-		action:        'reload'
-		yes:           true
-		reload_helper: '/nonexistent-wal-reload-hornero-test'
-	})
-	assert !r.ok
+	os.write_file(resolve_wallpaper_pointer_file(), base + '/wall.jpg\n') or { assert false }
+	needs_confirmation := wallpaper_report(WallpaperOptions{ action: 'reload' })
+	assert !needs_confirmation.ok
+	assert needs_confirmation.message.contains('--yes')
+	preview := wallpaper_report(WallpaperOptions{ action: 'reload', dry_run: true })
+	assert preview.ok, preview.message
+	assert preview.message.contains('generate-m3-colors.py')
+	assert !preview.message.contains("'wal'")
 	wp_teardown()
 }
 
 fn test_wallpaper_unknown_action_fails() {
 	wp_setup()
-	r := wallpaper_report(WallpaperOptions{
-		action: 'bogus'
-	})
-	assert !r.ok
-	wp_teardown()
-}
-
-fn test_resolve_wallpaper_backends_override() {
-	os.setenv('HORNERO_WAL_RELOAD_BIN', '/tmp/hx-wallpaper-test/reloader', true)
-	assert resolve_wal_reload_bin() == '/tmp/hx-wallpaper-test/reloader'
+	assert !wallpaper_report(WallpaperOptions{ action: 'bogus' }).ok
 	wp_teardown()
 }
