@@ -1,17 +1,21 @@
 # hornero
 
-Hornero OS is an Arch Linux-based desktop operating system built around
-Wayland, Hyprland and Quickshell, with a distinctive Argentine-inspired
-identity and a long-term focus on deeply integrated AI-native computing.
+HorneroOS is an Arch-based operating-system project with a composable
+product model. HorneroOS Desktop is a Wayland-first desktop powered by
+Hornero Shell; Hyprland is its current validated compositor backend, not the
+identity of the operating system. One edition catalogue defines the shared
+base, desktop compositor choices, and planned server, agent-host, and creative
+workstation compositions with explicit maturity.
 
-This repository defines **Hornero OS as a composed product**: which components
-make up the distribution, how they fit together and what gets released.
+This repository defines **HorneroOS as a composed product**: which components
+make up the operating system, how editions combine package sets and what gets
+released.
 
 ## What lives here
 
 - Which components compose Hornero OS.
 - Release manifests.
-- Distribution profiles and editions.
+- Release composition and profile metadata.
 - Integration between the HorneroOS repositories.
 - Top-level build, test and release orchestration.
 
@@ -35,18 +39,22 @@ repository that owns it:
 - `cli/` — the `horneroctl` system CLI implementation.
 - `docs/` — locked CLI architecture, release process, and plans.
 - `manifests/` — release manifests pinning component versions.
-- `profiles/` — distribution profiles and edition composition.
+- `profiles/` — frozen-release component profiles.
+- `editions/catalogue.yaml` — canonical Base/Desktop/Server/Agents/Studio
+  package composition, compositor options, and maturity labels.
 - `releases/` — release definitions and checklists.
 - `scripts/` — top-level orchestration helpers.
 - `tests/` — composition tests for the checker and manifests.
 
 ## Status
 
-Composition is live: `horneroctl` builds from `cli/`, release manifests
-pin the shell/config mains, and `scripts/compose.sh` materializes and
-validates the pinned composition (preview candidates in `releases/`).
-Installer and ISO remain future slots, so nothing here is installable
-yet.
+Composition is live: `horneroctl` builds from `cli/`, release manifests pin
+the shell/config sources, and `scripts/compose.sh` materializes and validates
+the pinned composition. The edition catalogue resolves four products from a
+shared base and role package sets. Desktop remains in Preview; Hyprland is
+supported and Niri is experimental. Server, Agents and Studio are planned,
+not installable editions yet. Package resolution alone does not claim that an
+edition is bootable or validated, and this repository does not produce images.
 
 ## License
 

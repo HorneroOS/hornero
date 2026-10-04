@@ -23,7 +23,8 @@ fn capture_test_restore_env(saved map[string]string) {
 const capture_test_keys = ['HORNERO_SSS_BIN', 'HORNERO_GPU_SCREEN_RECORDER_BIN',
 	'HORNERO_RECORDER_MATCH', 'HORNERO_COPYQ_BIN', 'HORNERO_CLIPHIST_BIN', 'HORNERO_WL_PASTE_BIN',
 	'XDG_SESSION_TYPE', 'XDG_PICTURES_DIR', 'XDG_VIDEOS_DIR', 'CAELESTIA_RECORDINGS_DIR',
-	'XDG_STATE_HOME', 'HORNERO_CAPTURE_TIMEOUT_SEC']
+	'XDG_STATE_HOME', 'HORNERO_CAPTURE_TIMEOUT_SEC', 'NIRI_SOCKET', 'HORNERO_NIRI_BIN',
+	'HORNERO_NIRI_TEST_ARGS']
 
 fn capture_test_break_backends() {
 	os.setenv('HORNERO_SSS_BIN', '/nonexistent-sss-hornero-test', true)
@@ -164,6 +165,62 @@ fn test_screenshot_missing_backend_fails() {
 	})
 	assert !r.ok
 	assert r.message.contains('HORNERO_SSS_BIN')
+	capture_test_restore_env(saved)
+}
+
+fn capture_test_write_fake_niri(name string) string {
+	base := '/tmp/hx-capture-test/bin'
+	os.mkdir_all(base) or { assert false }
+	path := base + '/' + name
+	os.write_file(path, r'#!/bin/sh
+printf "%s\n" "$@" > "$HORNERO_NIRI_TEST_ARGS"
+exit 0
+') or { assert false }
+	os.execute('chmod +x ' + path)
+	return path
+}
+
+fn test_screenshot_niri_uses_native_screen_capture_action() {
+	saved := capture_test_save_env(capture_test_keys)
+	capture_test_isolate_paths()
+	args_file := '/tmp/hx-capture-test/niri-args'
+	fake := capture_test_write_fake_niri('niri-ok')
+	os.setenv('NIRI_SOCKET', '/tmp/niri-test.sock', true)
+	os.setenv('HORNERO_NIRI_BIN', fake, true)
+	os.setenv('HORNERO_NIRI_TEST_ARGS', args_file, true)
+	r := screenshot_report(ScreenshotOptions{ yes: true })
+	assert r.ok
+	assert r.data['compositor'] == 'niri'
+	assert r.data['native'] == 'true'
+	got := os.read_file(args_file) or { '' }
+	assert got == 'msg\naction\nscreenshot-screen\n'
+	capture_test_restore_env(saved)
+}
+
+fn test_screenshot_niri_uses_native_region_picker() {
+	saved := capture_test_save_env(capture_test_keys)
+	capture_test_isolate_paths()
+	args_file := '/tmp/hx-capture-test/niri-region-args'
+	fake := capture_test_write_fake_niri('niri-region')
+	os.setenv('NIRI_SOCKET', '/tmp/niri-test.sock', true)
+	os.setenv('HORNERO_NIRI_BIN', fake, true)
+	os.setenv('HORNERO_NIRI_TEST_ARGS', args_file, true)
+	r := screenshot_report(ScreenshotOptions{ region: true, yes: true })
+	assert r.ok
+	got := os.read_file(args_file) or { '' }
+	assert got == 'msg\naction\nscreenshot\n'
+	capture_test_restore_env(saved)
+}
+
+fn test_screenshot_niri_rejects_custom_output_instead_of_ignoring_it() {
+	saved := capture_test_save_env(capture_test_keys)
+	os.setenv('NIRI_SOCKET', '/tmp/niri-test.sock', true)
+	r := screenshot_report(ScreenshotOptions{
+		output: '/tmp/custom.png'
+		yes:    true
+	})
+	assert !r.ok
+	assert r.message.contains('--output is not supported')
 	capture_test_restore_env(saved)
 }
 

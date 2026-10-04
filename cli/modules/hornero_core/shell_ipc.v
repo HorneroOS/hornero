@@ -4,11 +4,26 @@ import os
 
 // resolve_qs_bin locates the Quickshell CLI. Override with HORNERO_QS_BIN.
 pub fn resolve_qs_bin() string {
+	ensure_quickshell_ipc_config()
 	env := os.getenv('HORNERO_QS_BIN')
 	if env.len > 0 {
 		return env
 	}
 	return find_on_path('qs')
+}
+
+// Quickshell's IPC CLI selects an instance by its config path. Desktop
+// compositors launch horneroctl as a sibling process, so they do not inherit
+// QS_CONFIG_PATH from the Shell process that horneroctl shell start set.
+// Resolve the same packaged/user config before every CLI-originated IPC call.
+pub fn ensure_quickshell_ipc_config() {
+	if os.getenv('QS_CONFIG_PATH').len > 0 {
+		return
+	}
+	config_path := os.join_path(resolve_quickshell_config_dir(), 'shell.qml')
+	if os.is_file(config_path) {
+		os.setenv('QS_CONFIG_PATH', config_path, true)
+	}
 }
 
 pub struct IpcOptions {
@@ -25,17 +40,12 @@ pub fn shell_ipc_bypassed() bool {
 
 // shell_status reports whether a live shell session is reachable.
 pub fn shell_status() CommandResult {
-	sig := os.getenv('HYPRLAND_INSTANCE_SIGNATURE')
+	compositor := active_compositor()
 	qs := resolve_qs_bin()
 	mut lines := []string{}
 	mut data := map[string]string{}
-	if sig.len > 0 {
-		lines << 'compositor: Hyprland instance signature is set'
-		data['compositor'] = 'hyprland'
-	} else {
-		lines << 'compositor: no Hyprland instance signature (not in a Hyprland session?)'
-		data['compositor'] = 'unknown'
-	}
+	lines << 'compositor: ${compositor}'
+	data['compositor'] = compositor
 	if qs.len > 0 {
 		lines << 'quickshell-cli: ${qs}'
 		data['qs'] = qs

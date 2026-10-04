@@ -1,0 +1,136 @@
+apiVersion: hornero.os/v1
+kind: EditionCatalogue
+version: 1
+description: >-
+  User-facing editions compose one HorneroOS base, role package sets, and an
+  optional Wayland compositor backend. Maturity describes tested product
+  behavior, not package availability.
+base:
+  packages:
+    - base
+    - linux
+    - linux-firmware
+    - sudo
+packageSets:
+  desktop:
+    packages:
+      - hornero-shell
+      - hornero-config
+      - horneroctl-bin
+      - quickshell
+      - kitty
+      - thunar
+      - networkmanager
+      - xdg-desktop-portal
+  compositor:hyprland:
+    packages:
+      - hyprland
+      - xdg-desktop-portal-hyprland
+  compositor:niri:
+    packages:
+      - niri
+      - xwayland-satellite
+      - xdg-desktop-portal-gnome
+  server:
+    packages:
+      - openssh
+      - networkmanager
+      - nftables
+      - git
+      - curl
+      - jq
+      - ripgrep
+      - rsync
+      - tmux
+      - smartmontools
+      - btop
+  agents:
+    packages:
+      - podman
+      - crun
+      - shadow
+    optionalPackages:
+      - fuse-overlayfs
+      - slirp4netns
+  studio:
+    packages:
+      - pipewire
+      - pipewire-audio
+      - pipewire-alsa
+      - pipewire-pulse
+      - pipewire-jack
+      - wireplumber
+      - qpwgraph
+      - ardour
+      - guitarix
+      - obs-studio
+      - kdenlive
+      - ffmpeg
+      - blender
+      - krita
+compositors:
+  hyprland:
+    maturity: supported
+    packageSet: compositor:hyprland
+    capabilities:
+      - workspaces
+      - windows
+      - outputs
+      - keyboard-layouts
+      - screenshot
+      - screencast
+  niri:
+    maturity: experimental
+    packageSet: compositor:niri
+    capabilities:
+      - workspaces
+      - windows
+      - outputs
+      - keyboard-layouts
+      - screenshot
+      - screencast
+  labwc:
+    maturity: planned
+    packageSet: null
+    capabilities: []
+editions:
+  desktop:
+    title: HorneroOS Desktop
+    maturity: preview
+    role: desktop
+    packageSets: [desktop]
+    compositor:
+      default: hyprland
+      supported: [hyprland, niri]
+  server:
+    title: HorneroOS Server
+    maturity: planned
+    role: server
+    packageSets: [server]
+  agents:
+    title: HorneroOS Agents
+    maturity: planned
+    role: agent-host
+    extends: server
+    packageSets: [agents]
+    workloadModel:
+      runtime: podman-rootless
+      serviceManager: systemd-user-quadlet
+      firstWorkload: hermes-agent
+      hostDockerSocket: forbidden
+      secretsInImage: forbidden
+  studio:
+    title: HorneroOS Studio
+    maturity: planned
+    role: creative-workstation
+    extends: desktop
+    packageSets: [studio]
+    compositor:
+      inherit: desktop
+    optionalIntegrations:
+      - id: reaper
+        source: aur
+        licensing: proprietary-user-license
+      - id: yabridge
+        source: aur
+        licensing: user-supplied-windows-vst
