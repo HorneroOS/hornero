@@ -34,8 +34,10 @@ pub fn resolve_pgrep_bin() string {
 	return find_on_path('pgrep')
 }
 
-// resolve_quickshell_config_dir locates the quickshell config directory
-// `start` requires. Override with HORNERO_QUICKSHELL_CONFIG_DIR.
+// resolve_quickshell_config_dir locates the named Hornero config installed
+// by the system package. Explicit user config overrides win, then the XDG
+// system config directories, then a bare user config for development.
+// Override with HORNERO_QUICKSHELL_CONFIG_DIR.
 pub fn resolve_quickshell_config_dir() string {
 	env := os.getenv('HORNERO_QUICKSHELL_CONFIG_DIR')
 	if env.len > 0 {
@@ -45,7 +47,29 @@ pub fn resolve_quickshell_config_dir() string {
 	if base.len == 0 {
 		base = os.join_path(os.home_dir(), '.config')
 	}
-	return os.join_path(base, 'quickshell')
+	user_root := os.join_path(base, 'quickshell')
+	user_named := os.join_path(user_root, 'hornero')
+	if os.is_file(os.join_path(user_named, 'shell.qml')) {
+		return user_named
+	}
+	mut system_dirs := os.getenv('XDG_CONFIG_DIRS')
+	if system_dirs.len == 0 {
+		system_dirs = '/etc/xdg'
+	}
+	for dir in system_dirs.split(':') {
+		if dir.trim_space().len == 0 {
+			continue
+		}
+		system_named := os.join_path(dir, 'quickshell', 'hornero')
+		if os.is_file(os.join_path(system_named, 'shell.qml')) {
+			return system_named
+		}
+	}
+	// A bare user config remains useful for isolated development checkouts.
+	if os.is_file(os.join_path(user_root, 'shell.qml')) {
+		return user_root
+	}
+	return user_named
 }
 
 // resolve_shell_log_file locates the shell log `start` appends to and
@@ -140,31 +164,12 @@ fn quickshell_or_fail(leaf string, dry_run bool) !string {
 	return bin
 }
 
-// shell_start_env applies the launcher environment the native shell service
-// exports (QML import paths, plugin path, Qt platform theme), keeping
-// any caller-provided values.
-fn shell_start_env() {
-	if os.getenv('QML_IMPORT_PATH').len == 0 {
-		home := os.home_dir()
-		os.setenv('QML_IMPORT_PATH', os.join_path(home, '.local', 'lib', 'quickshell', 'qml') +
-			':' + os.join_path(home, '.local', 'usr', 'lib', 'qt6', 'qml'), true)
-	}
-	mut xdg_config := os.getenv('XDG_CONFIG_HOME')
-	if xdg_config.len == 0 {
-		xdg_config = os.join_path(os.home_dir(), '.config')
-	}
-	qs_conf := os.join_path(xdg_config, 'quickshell')
-	qml2 := os.getenv('QML2_IMPORT_PATH')
-	if qml2.len == 0 {
-		os.setenv('QML2_IMPORT_PATH',
-			os.join_path(os.home_dir(), '.local', 'usr', 'lib', 'qt6', 'qml') + ':' + qs_conf,
-			true)
-	} else if !qml2.split(':').contains(qs_conf) {
-		os.setenv('QML2_IMPORT_PATH', qml2 + ':' + qs_conf, true)
-	}
-	if os.getenv('QS_PLUGIN_PATH').len == 0 {
-		os.setenv('QS_PLUGIN_PATH', os.join_path(os.home_dir(), '.local', 'lib', 'quickshell'),
-			true)
+// shell_start_env selects the package-owned named config through Quickshell's
+// official path override. Qt's standard QML import paths load the packaged
+// native modules; caller-provided paths are left untouched.
+fn shell_start_env(conf string) {
+	if os.getenv('QS_CONFIG_PATH').len == 0 {
+		os.setenv('QS_CONFIG_PATH', os.join_path(conf, 'shell.qml'), true)
 	}
 	if os.getenv('QT_QPA_PLATFORMTHEME').len == 0 {
 		mut theme := os.getenv('QUICKSHELL_QT_PLATFORM_THEME')
@@ -223,7 +228,7 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 	if !os.is_dir(conf) {
 		return fail_result('shell start', 'Quickshell config directory not found: ${conf}')
 	}
-	shell_start_env()
+	shell_start_env(conf)
 	os.mkdir_all(os.dir(logf)) or {
 		return fail_result('shell start', 'cannot create log dir ${os.dir(logf)}: ${err}')
 	}
