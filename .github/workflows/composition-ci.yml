@@ -53,6 +53,8 @@ jobs:
         run: bash scripts/secrets-lint.sh
   compose:
     runs-on: ubuntu-latest
+    env:
+      VJOBS: 2
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Set up Python
@@ -67,5 +69,37 @@ jobs:
           git clone -q --depth 1 https://github.com/vlang/v /tmp/vlang-src
           make -C /tmp/vlang-src
           echo "/tmp/vlang-src" >> "$GITHUB_PATH"
-      - name: Build pinned composition and validate it
-        run: ./scripts/compose.sh --work "${{ runner.temp }}/hx-compose" --yes
+      - name: Resolve current Shell and Config main commits
+        id: pins
+        run: |
+          shell_sha="$(git ls-remote https://github.com/HorneroOS/shell refs/heads/main | cut -f1)"
+          config_sha="$(git ls-remote https://github.com/HorneroOS/config refs/heads/main | cut -f1)"
+          [[ "$shell_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$config_sha" =~ ^[0-9a-f]{40}$ ]]
+          {
+            echo "shell_sha=$shell_sha"
+            echo "config_sha=$config_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build current-main composition and validate it
+        env:
+          SHELL_SHA: ${{ steps.pins.outputs.shell_sha }}
+          CONFIG_SHA: ${{ steps.pins.outputs.config_sha }}
+        run: |
+          manifest="manifests/mainline-ci.yaml"
+          trap 'rm -f "$manifest"' EXIT
+          cat > "$manifest" <<EOF
+          apiVersion: hornero.os/v1
+          kind: CompositionManifest
+          name: hornero-mainline-ci
+          components:
+            shell:
+              repo: https://github.com/HorneroOS/shell
+              sha: $SHELL_SHA
+              status: pinned
+            config:
+              repo: https://github.com/HorneroOS/config
+              sha: $CONFIG_SHA
+              status: pinned
+          EOF
+          ./scripts/compose.sh --manifest "$manifest" --work "${{ runner.temp }}/hx-compose" --yes

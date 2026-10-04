@@ -20,6 +20,12 @@ appearance gtk sync-color-scheme
 appearance gtk theme
 appearance hyprlock
 appearance night-mode toggle
+appearance scheme current
+appearance scheme list
+appearance scheme regenerate
+appearance scheme set-mode
+appearance scheme set-variant
+appearance scheme sync-state
 appearance theme apply
 appearance theme list
 apps launch
@@ -47,12 +53,6 @@ hypr plugins install
 lock now
 package upgrade
 power
-scheme current
-scheme list
-scheme regenerate
-scheme set-mode
-scheme set-variant
-scheme sync-state
 shell ipc
 shell preset apply
 shell preset list
