@@ -94,6 +94,39 @@ fn test_shell_start_missing_config_dir() {
 	shell_lifecycle_test_restore_env(saved)
 }
 
+fn test_shell_config_prefers_named_system_package_over_bare_user_checkout() {
+	saved := shell_lifecycle_test_save_env(['XDG_CONFIG_HOME', 'XDG_CONFIG_DIRS',
+		'HORNERO_QUICKSHELL_CONFIG_DIR'])
+	dir := os.join_path(os.temp_dir(), 'hornero-packaged-shell-path-test')
+	user := os.join_path(dir, 'user', 'quickshell')
+	system := os.join_path(dir, 'system', 'quickshell', 'hornero')
+	os.mkdir_all(user) or { assert false, 'mkdir ${user}' }
+	os.mkdir_all(system) or { assert false, 'mkdir ${system}' }
+	os.write_file(os.join_path(user, 'shell.qml'), '// legacy dev checkout') or { assert false }
+	os.write_file(os.join_path(system, 'shell.qml'), '// packaged Hornero') or { assert false }
+	os.setenv('XDG_CONFIG_HOME', os.join_path(dir, 'user'), true)
+	os.setenv('XDG_CONFIG_DIRS', os.join_path(dir, 'system'), true)
+	os.unsetenv('HORNERO_QUICKSHELL_CONFIG_DIR')
+	assert resolve_quickshell_config_dir() == system
+	os.rmdir_all(dir) or {}
+	shell_lifecycle_test_restore_env(saved)
+}
+
+fn test_shell_config_allows_named_user_override() {
+	saved := shell_lifecycle_test_save_env(['XDG_CONFIG_HOME', 'XDG_CONFIG_DIRS',
+		'HORNERO_QUICKSHELL_CONFIG_DIR'])
+	dir := os.join_path(os.temp_dir(), 'hornero-user-shell-override-test')
+	user := os.join_path(dir, 'config', 'quickshell', 'hornero')
+	os.mkdir_all(user) or { assert false, 'mkdir ${user}' }
+	os.write_file(os.join_path(user, 'shell.qml'), '// named user override') or { assert false }
+	os.setenv('XDG_CONFIG_HOME', os.join_path(dir, 'config'), true)
+	os.setenv('XDG_CONFIG_DIRS', os.join_path(dir, 'missing-system'), true)
+	os.unsetenv('HORNERO_QUICKSHELL_CONFIG_DIR')
+	assert resolve_quickshell_config_dir() == user
+	os.rmdir_all(dir) or {}
+	shell_lifecycle_test_restore_env(saved)
+}
+
 fn test_shell_restart_dry_run_mentions_cover() {
 	r := shell_restart_report(ShellRestartOptions{
 		dry_run: true
@@ -126,13 +159,14 @@ fn test_shell_start_guard_and_force() {
 	// refuses, forced start (what restart uses under its cover)
 	// launches anyway. /bin/true exits at once and is harmless.
 	saved := shell_lifecycle_test_save_env(['HORNERO_QUICKSHELL_BIN', 'HORNERO_PGREP_BIN',
-		'HORNERO_QUICKSHELL_CONFIG_DIR', 'HORNERO_SHELL_LOG_FILE', 'QML_IMPORT_PATH', 'QML2_IMPORT_PATH',
-		'QS_PLUGIN_PATH', 'QT_QPA_PLATFORMTHEME'])
+		'HORNERO_QUICKSHELL_CONFIG_DIR', 'HORNERO_SHELL_LOG_FILE', 'QS_CONFIG_PATH',
+		'QT_QPA_PLATFORMTHEME'])
 	dir := os.join_path(os.temp_dir(), 'hornero-start-force-test')
 	os.mkdir_all(dir) or { assert false, 'mkdir ${dir}' }
 	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/true', true)
 	os.setenv('HORNERO_PGREP_BIN', '/bin/true', true)
 	os.setenv('HORNERO_QUICKSHELL_CONFIG_DIR', dir, true)
+	os.unsetenv('QS_CONFIG_PATH')
 	os.setenv('HORNERO_SHELL_LOG_FILE', os.join_path(dir, 'shell.log'), true)
 	cover_only := shell_start_report(ShellStartOptions{
 		yes: true
@@ -151,6 +185,7 @@ fn test_shell_start_guard_and_force() {
 	})
 	assert forced.ok
 	assert !forced.message.contains('already running')
+	assert os.getenv('QS_CONFIG_PATH') == os.join_path(dir, 'shell.qml')
 	os.rmdir_all(dir) or {}
 	shell_lifecycle_test_restore_env(saved)
 }
