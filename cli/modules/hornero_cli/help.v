@@ -421,10 +421,10 @@ Examples:
                     Set the default .desktop app for a MIME type
                     via xdg-mime (needs --yes)
 
-List source: handlr/XDG MIME associations via dots-default-apps
-(HORNERO_DEFAULT_APPS_BIN). Set backend: xdg-mime
-(HORNERO_XDG_MIME_BIN); handlr stays internal. The terminal
-emulator stays out: it lives in the exo config, not in MIME.
+List source: handlr MIME associations and installed desktop names;
+TerminalEmulator comes from the Xfce helper configuration. Set backend:
+xdg-mime (HORNERO_XDG_MIME_BIN). The terminal emulator stays out:
+it lives in the exo helper configuration, not in MIME.
 
 Examples:
   horneroctl config default-apps list
@@ -1000,9 +1000,6 @@ Examples:
 Reads and view-opens need no --yes; mutations need --yes and preview
 with --dry-run. Backends mirror the dots-* scripts, each with a
 HORNERO_*_BIN override; dots-* calls carry HORNEROCTL_DELEGATED=1.
-
-Later phases: default-apps set (no verified backend yet; list lives
-under `config default-apps list`).
 
 Examples:
   horneroctl apps files --dry-run
