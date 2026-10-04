@@ -35,6 +35,7 @@ horneroctl scheme ...                       # alias of appearance scheme
 horneroctl config <paths|validate|show [key]>
 horneroctl config snapshot <create|list|restore <id>> [--dry-run|--yes]
 horneroctl config default-apps list [--dry-run]
+horneroctl config default-apps set <mime> <app> [--dry-run|--yes]
 horneroctl config materialize --dest <dir> [--dry-run|--yes]
 horneroctl config gui [--pane <name>] [--dry-run]
 horneroctl config migrate [--dry-run|--yes] [--helper PATH]
@@ -71,9 +72,11 @@ delegate to `dots-checkupdates`/`checkupdates`
 backup list reads the materialized `*.zip` archives
 (`HORNERO_BACKUP_DIR` override, else `~/.dotfiles/backup`); backup
 schedule prints the cron/systemd recipe and never installs it;
-default-apps list delegates to `dots-default-apps --list`
-(`HORNERO_DEFAULT_APPS_BIN` override, default
-`~/.local/bin/dots-default-apps`, read-only); materialize delegates
+default-apps list reads MIME defaults with `handlr`, resolves desktop names
+from XDG application directories, and reads the terminal from the Xfce
+`TerminalEmulator` helper; default-apps set uses `xdg-mime default` for MIME
+associations only (`HORNERO_XDG_MIME_BIN` override, needs `--yes`);
+materialize delegates
 to the config repo `materialize.sh --dest <dir>`
 (`HORNERO_MATERIALIZE_BIN` override; `--dest` travels verbatim,
 never rewritten to a legacy `dots/*` path); gui delegates to
@@ -86,9 +89,8 @@ needs `--yes`, copy-if-absent over the Hornero-owned rows only: themes,
 presets, the preset pointer, scheme.json plus scheme state, the wallpaper
 pointer, and notifs). The backend reports one `ROW <domain> <status>`
 line per row (`<domain>: <status>` accepted too); `--json` carries them
-as `row.<domain>` entries plus a `rows` count. `default-apps
-set` stays out: `dots-default-apps --set` binds no arguments upstream
-and handlr stays internal.
+as `row.<domain>` entries plus a `rows` count. The terminal is not a MIME
+association; configure it through the desktop's `TerminalEmulator` helper.
 
 ## Version report
 

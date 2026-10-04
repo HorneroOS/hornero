@@ -137,6 +137,7 @@ fn test_apps_help_carries_performance_mode_probe() {
 	// dots-performance-mode delegates only when `apps --help` contains
 	// this usage line; pin it so the probe can never silently break.
 	assert command_help('apps').contains('Usage: horneroctl apps')
+	assert !command_help('apps').contains('Later phases: default-apps set')
 }
 
 fn test_apps_help_has_examples() {
