@@ -18,7 +18,7 @@ fn sw_write(path string, content string) {
 fn sw_setup_packs() {
 	sw_write('${sw_root}/themes/hornero-dark/theme.json', '{"schemaVersion":1,"id":"hornero-dark","name":"Hornero Dark","description":"Flagship dark","gtkTheme":"Orchis-Dark-Compact","iconTheme":"Papirus-Dark","defaultWallpaper":"hornero-dark-01.jpg","wallpaperDir":"hornero-dark","mode":"dark"}')
 	sw_write('${sw_root}/themes/hornero-light/theme.json', '{"schemaVersion":1,"id":"hornero-light","name":"Hornero Light","description":"Flagship light","gtkTheme":"Orchis-Light-Compact","iconTheme":"Numix-Circle","defaultWallpaper":"hornero-light-01.jpg","wallpaperDir":"hornero-light","mode":"light"}')
-	sw_write('${sw_root}/themes/legacy-dark/theme.json', '{"schemaVersion":1,"id":"legacy-dark","name":"Legacy Dark","gtkTheme":"Legacy-Dark","iconTheme":"Papirus-Dark","defaultWallpaper":"l.jpg","wallpaperDir":"legacy-dark","darkMode":true}')
+	sw_write('${sw_root}/themes/recipe-dark/theme.json', '{"schemaVersion":1,"id":"recipe-dark","name":"Recipe Dark","gtkTheme":"Recipe-Dark","iconTheme":"Papirus-Dark","defaultWallpaper":"l.jpg","wallpaperDir":"recipe-dark","darkMode":true}')
 	sw_write('${sw_root}/themes/pampa/theme.json', '{"schemaVersion":1,"id":"pampa","name":"Pampa","description":"Flagship grassland-night","gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","mode":"dark"}')
 	os.setenv('HORNERO_THEMES_DIR', '${sw_root}/themes', true)
 }
@@ -28,7 +28,7 @@ fn sw_setup_packs() {
 // (gtk-theme-name/gtk-icon-theme-name), and the wallpaper pointer.
 // Payload keys: wallpaper, mode, flavour, gtkTheme, iconTheme,
 // gtkColorScheme. Env is pointed at sw_root; sw_teardown restores it.
-// (The old fake-dots-appearance backend this replaced is gone: reads are
+// (The old fake-horneroctl appearance backend this replaced is gone: reads are
 // native now, so fixtures are files, not a stub process.)
 fn sw_setup_state(payload string) {
 	doc := json2.decode[json2.Any](payload) or {
@@ -127,7 +127,6 @@ fn sw_apply_stub(id string, wallpaper string, dry_run bool) CommandResult {
 
 fn sw_teardown() {
 	os.unsetenv('HORNERO_THEMES_DIR')
-	os.unsetenv('HORNERO_DOTS_APPEARANCE_BIN')
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
 	os.unsetenv('HORNERO_GTK3_FILE')
@@ -155,12 +154,12 @@ fn test_pack_expected_mode_tokens() {
 	} else {
 		assert false
 	}
-	legacy := json2.decode[json2.Any]('{"darkMode":false}') or {
+	recipe := json2.decode[json2.Any]('{"darkMode":false}') or {
 		assert false
 		return
 	}
-	if legacy is map[string]json2.Any {
-		assert pack_expected_mode(legacy) == 'light'
+	if recipe is map[string]json2.Any {
+		assert pack_expected_mode(recipe) == 'light'
 	} else {
 		assert false
 	}
@@ -240,21 +239,6 @@ fn test_theme_get_dry_run_needs_no_backend() {
 	assert r.ok
 	assert r.data['dry_run'] == 'true'
 	assert r.message.contains('read scheme state')
-	sw_teardown()
-}
-
-fn test_theme_get_honors_explicit_backend_override() {
-	// An explicit HORNERO_DOTS_APPEARANCE_BIN override short-circuits
-	// to that backend: dry-run previews it, a broken one fails loudly.
-	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
-	dry := theme_get_report(ThemeGetOptions{
-		dry_run: true
-	})
-	assert dry.ok
-	assert dry.message.contains('/nonexistent-appearance-hornero-test')
-	live := theme_get_report(ThemeGetOptions{})
-	assert !live.ok
-	assert live.message.contains('backend failed')
 	sw_teardown()
 }
 

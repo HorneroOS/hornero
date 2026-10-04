@@ -5,7 +5,7 @@ import strconv
 import time
 import x.json2
 
-// Native security-audit backend: mirrors the retired dots-security-audit
+// Native security-audit backend: mirrors the retired horneroctl apps audit
 // checks (full/permissions/secrets/system) plus --fix (chmod/history
 // scrub), --report (markdown), and --json. HOME redirection scopes
 // every verb (tests); leaf tools resolve via PATH with
@@ -135,8 +135,7 @@ fn audit_permissions_native() ([]string, int) {
 		lines << '❌ Sensitive file is world-readable: ${f}'
 		issues++
 	}
-	for s in audit_find([os.join_path(home, '.local', 'bin'), '-name', 'executable_dots-*', '-perm',
-		'/o+w']) {
+	for s in audit_find([os.join_path(home, '.local', 'bin'), '-name', 'hornero-*', '-perm', '/o+w']) {
 		lines << '❌ Script is world-writable: ${os.file_name(s)}'
 		issues++
 	}
@@ -353,6 +352,11 @@ fn audit_system_native() ([]string, int) {
 	return lines, warnings
 }
 
+fn cache_home() string {
+	base := os.getenv('XDG_CACHE_HOME')
+	return if base.len > 0 { base } else { os.join_path(os.home_dir(), '.cache') }
+}
+
 // audit_utc_now formats UTC like `date -u +%Y-%m-%dT%H:%M:%SZ`.
 fn audit_utc_now() string {
 	t := time.now().local_to_utc()
@@ -360,12 +364,11 @@ fn audit_utc_now() string {
 }
 
 // audit_full_native mirrors run_security_audit: header, the three
-// sections, a log file under $HOME/.cache/dots, and the failures
+// sections, a log file under the Hornero XDG cache, and the failures
 // summary. Sections with issues count as failures, like the script.
 fn audit_full_native() CommandResult {
 	name := 'apps audit'
-	home := os.home_dir()
-	log := os.join_path(home, '.cache', 'dots', 'security_audit_${perf_datestamp(time.now())}.log')
+	log := os.join_path(cache_home(), 'hornero', 'security', 'security_audit_${perf_datestamp(time.now())}.log')
 	os.mkdir_all(os.dir(log)) or {}
 	mut body := ['🔐 Running comprehensive security audit...', '']
 	mut failures := 0
@@ -530,7 +533,7 @@ fn audit_fix_native(dry_run bool, yes bool) CommandResult {
 		lines << '✅ Fixed credential file permissions'
 	}
 	bin_dir := os.join_path(home, '.local', 'bin')
-	for s in audit_find([bin_dir, '-name', 'executable_dots-*']) {
+	for s in audit_find([bin_dir, '-name', 'hornero-*']) {
 		msg := audit_chmod(s, 0o755, dry_run) or { return fail_result(name, err.msg()) }
 		if dry_run {
 			preview << msg
@@ -592,12 +595,11 @@ fn audit_fix_native(dry_run bool, yes bool) CommandResult {
 
 // audit_report_native mirrors generate_security_report: the three sections
 // plus static recommendations, written to a markdown file under
-// $HOME/.cache/dots.
+// the Hornero XDG cache.
 fn audit_report_native(dry_run bool) CommandResult {
 	name := 'apps audit --report'
-	home := os.home_dir()
 	stamp := perf_datestamp(time.now())
-	report := os.join_path(home, '.cache', 'dots', 'security_report_${stamp}.md')
+	report := os.join_path(cache_home(), 'hornero', 'security', 'security_report_${stamp}.md')
 	if dry_run {
 		return ok_result(name, 'would write ${report} (permissions, secrets, system sections)',
 			{

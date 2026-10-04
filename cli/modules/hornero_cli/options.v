@@ -557,7 +557,7 @@ pub fn parse_appearance_night_mode(args []string) !NightModeCmdOptions {
 	}
 }
 
-// GtkCmdOptions covers `appearance gtk <verb>`: the dots-gtk-theme verbs
+// GtkCmdOptions covers `appearance gtk <verb>`: the GTK theme operations
 // (list, current, apply, set-icons, color-scheme, sync-color-scheme,
 // detect, theme, auto, icons, info), all native.
 pub struct GtkCmdOptions {

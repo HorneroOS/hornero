@@ -4,16 +4,16 @@ import os
 
 // Power + screen-lock backends: session and machine power verbs.
 //
-// Verified backends (mirroring the dots-* reference scripts):
-// - `dots-power-menu` minimal mode locks via dots-lockscreen with a
+// Verified platform backends:
+// - `horneroctl power` minimal mode locks via horneroctl lock with a
 //   `loginctl lock-session` fallback, suspends with `systemctl suspend`,
 //   logs out with `loginctl terminate-session $XDG_SESSION_ID`, reboots
 //   with `systemctl -i reboot`, and powers off with `systemctl -i poweroff`.
-// - `dots-lockscreen --lock` is the hyprlock orchestration (themed config,
+// - `horneroctl lock --lock` is the hyprlock orchestration (themed config,
 //   effect images); it needs Wayland + hyprlock.
-// `power lock` and `lock now` share one lock plan: dots-lockscreen
+// `power lock` and `lock now` share one lock plan: horneroctl lock
 // (`--lock`), else bare hyprlock, else `loginctl lock-session`. When the
-// dots-lockscreen delegating shim calls outward it pins
+// horneroctl lock delegating shim calls outward it pins
 // HORNERO_LOCKSCREEN_BIN at the real hyprlock binary, so the hyprlock
 // basename below runs it bare instead of looping back into the shim.
 
@@ -45,7 +45,7 @@ pub fn resolve_hyprlock_bin() string {
 }
 
 // resolve_lockscreen_bin returns the explicit locker pin only
-// (HORNERO_LOCKSCREEN_BIN): the dots-lockscreen wrapper is retired,
+// (HORNERO_LOCKSCREEN_BIN): the horneroctl lock wrapper is retired,
 // so there is no auto-discovery — unpinned machines fall through to
 // hyprlock, then loginctl. The delegating shim pins this variable at
 // the real hyprlock binary when calling outward.
@@ -264,9 +264,9 @@ pub:
 
 // lock_now_report implements `lock now`. A configured lockscreen
 // backend (explicit HORNERO_LOCKSCREEN_BIN override or an installed
-// dots-lockscreen) owns the call; otherwise the native effect flow
+// horneroctl lock) owns the call; otherwise the native effect flow
 // runs when an effect is requested or cached images exist, else the
-// legacy bare-hyprlock/loginctl plan. Mutating: needs --yes;
+// direct hyprlock/loginctl commands. Mutating: needs --yes;
 // --dry-run only previews.
 pub fn lock_now_report(opts LockNowOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {

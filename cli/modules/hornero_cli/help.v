@@ -13,7 +13,6 @@ Commands:
   doctor        Read-only environment health checks
   shell         Desktop shell integration (status, ipc, preset, lifecycle, logs)
   appearance    Appearance controls (status, sync, theme, scheme, colors, accent, night-mode, gtk, hyprlock)
-  scheme        Alias of appearance scheme (compat shortcut)
   config        Configuration paths, values, validation, snapshots
   package       System packages (check, updates, upgrade, deps)
   backup        Config backups (list, schedule, create, restore)
@@ -24,7 +23,7 @@ Commands:
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
-  apps          Everyday apps (files, terminal-file, weather, git-status, audit, launch, toggle, switcher, performance)
+  apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   completion    Print shell completions
   help          Show help for a command
 
@@ -63,9 +62,7 @@ Examples:
 			return 'Usage: horneroctl doctor [--json]
 
 Read-only health checks: Wayland/Hyprland session, required binaries,
-shell configuration presence, plus a legacy-paths section listing the
-detected dots/* state per contract row (with a migration hint when any
-legacy state exists). Never changes anything.
+and shell configuration presence. Never changes anything.
 
 Exit codes:
   0  all checks passed
@@ -138,7 +135,7 @@ Examples:
                       active-preset pointer (needs --yes)
 
 Preset sources: HORNERO_PRESETS_DIR, else the XDG data catalogue
-(hornero/shell-presets, legacy dots/shell-presets as read-only fallback);
+(hornero/shell-presets);
 the active pointer lives under XDG state. Writes go to the canonical
 hornero paths only (XDG_CONFIG_HOME/hornero/shell.json plus the state
 pointer). Quickshell reloads on shell.json change, so no IPC is needed.
@@ -178,7 +175,7 @@ Examples:
   hyprlock [--dry-run] Regenerate colors-hyprlock.conf (needs --yes)
 
 Native: every verb runs in V. Only external tools stay backends
-(wal, xrdb, gsettings, hyprctl, quickshell IPC, the M3 python
+(xrdb, gsettings, hyprctl, quickshell IPC, the M3 python
 synthesizer, night-mode temperature tools), each with a
 HORNERO_*_BIN override.
 
@@ -215,9 +212,9 @@ Examples:
                       Switch the official theme atomically (needs --yes)
 
 Pack source: HORNERO_THEMES_DIR, else the XDG data catalogue
-(hornero/themes, legacy dots/themes as read-only fallback).
+(hornero/themes).
 Reads parse the installed theme.json manifests; apply runs
-the native shell pipeline (wal + M3 + GTK). get matches the live
+the native M3 + GTK pipeline. get matches the live
 native state against the official hornero-dark/hornero-light/pampa
 trio; set validates, applies natively, then verifies GTK/scheme
 agree (best-effort rollback to the previous official theme on
@@ -377,18 +374,8 @@ Examples:
   horneroctl appearance hyprlock --yes
 '
 		}
-		'scheme' {
-			return 'Usage: horneroctl scheme <status|list|current|set-mode|set-variant|regenerate|sync-state> [options]
-
-Compat shortcut for `horneroctl appearance scheme`.
-
-Examples:
-  horneroctl scheme status
-  horneroctl scheme set-mode dark --dry-run
-'
-		}
 		'config' {
-			return 'Usage: horneroctl config <paths|validate|show|snapshot|default-apps|materialize|gui|migrate> [key]
+			return 'Usage: horneroctl config <paths|validate|show|snapshot|default-apps|materialize|gui> [key]
 
   paths               Print the resolved XDG path contract
   validate            Check materialized config (read-only)
@@ -398,7 +385,6 @@ Examples:
   default-apps ...    Default applications (list, set)
   materialize ...     Install curated defaults into --dest (needs --yes)
   gui [--pane <name>] Open the settings hub
-  migrate ...         One-shot dots/* to hornero/* move (needs --yes)
 
 Examples:
   horneroctl config paths
@@ -410,7 +396,6 @@ Examples:
   horneroctl config default-apps list
   horneroctl config materialize --dest /tmp/hx-dest --dry-run
   horneroctl config gui --pane appearance
-  horneroctl config migrate --dry-run
 '
 		}
 		'config default-apps' {
@@ -454,31 +439,11 @@ Examples:
   Open Hornero Settings through the running shell.
   `--pane` is validated by the Hornero Shell pane registry. With no shell,
   the command reports that the desktop session is unavailable.
-  HORNERO_SETTINGS_GUI_BIN is an explicit compatibility override.
 
 Examples:
   horneroctl config gui --dry-run
   horneroctl config gui --pane appearance
   horneroctl config gui --pane launcher --json
-'
-		}
-		'config migrate' {
-			return 'Usage: horneroctl config migrate [--dry-run|--yes] [--helper PATH]
-
-  Move legacy dots/* state into the canonical hornero/* locations via
-  the config repo migrate-to-hornero.sh backend (HORNERO_MIGRATE_BIN,
-  or --helper PATH for one invocation). Copy-if-absent over the
-  Hornero-owned rows only: themes, presets, the preset pointer,
-  scheme.json plus scheme state, the wallpaper pointer, and notifs.
-  Mutating: needs --yes; --dry-run previews (passed through to the
-  backend). The backend reports one ROW line per row; --json carries
-  them as row.<domain> entries plus a rows count.
-
-Examples:
-  horneroctl config migrate --dry-run
-  horneroctl config migrate --yes
-  horneroctl config migrate --dry-run --helper /tmp/migrate-to-hornero.sh
-  horneroctl config migrate --yes --json
 '
 		}
 		'config snapshot' {
@@ -489,11 +454,9 @@ Examples:
   restore <id> [--dry-run]
                       Restore one snapshot (needs --yes)
 
-Snapshot source: HORNERO_SNAPSHOTS_DIR, else the XDG cache catalogue
-(hornero/snapshots, legacy dots/snapshots as read-only fallback);
-create/restore run natively (metadata, tarball, pre-backup), with an
-explicit helper override still delegating to dots-config-manager
-(HORNERO_CONFIG_MANAGER_BIN).
+Snapshots live under HORNERO_SNAPSHOTS_DIR or the XDG data catalogue
+(hornero/snapshots). They archive only Hornero configuration and record
+package inventory and host metadata; restore creates a safety snapshot first.
 
 Examples:
   horneroctl config snapshot list
@@ -514,7 +477,7 @@ Examples:
   deps --install [--optional] [--dry-run|--yes]
                       Install missing dependencies (needs --yes)
 
-Update source: dots-checkupdates or checkupdates on PATH
+Update source: checkupdates on PATH
 (HORNERO_CHECKUPDATES_BIN override). Upgrade runs
 `pkexec pacman -Syu` (HORNERO_PKEXEC_BIN/HORNERO_PACMAN_BIN);
 without pkexec it fails with guidance: installs need polkit.
@@ -542,15 +505,16 @@ Examples:
   list                List materialized backups (read-only)
   schedule            Print the cron/systemd recipe (documented, not installed)
   create [--name <name>] [--dry-run|--yes]
-                      Archive the source tree into a timestamped
+                      Archive Hornero configuration into a timestamped
                       tarball (needs --yes)
   restore <id> [--dry-run|--yes]
-                      Extract one archive back into the source tree
+                      Restore one archive into the Hornero configuration directory
                       (needs --yes)
 
-Backup dir: HORNERO_BACKUP_DIR, else the dotfiles backup directory
-(~/.dotfiles/backup); source tree: HORNERO_BACKUP_SOURCE, else
-~/.dotfiles. `list` reads both .tar.gz and legacy .zip archives.
+Archives live under HORNERO_BACKUP_DIR or XDG state
+(hornero/backups). The source defaults to XDG config/hornero; set
+HORNERO_BACKUP_SOURCE to choose another directory explicitly. Only .tar.gz
+Hornero archives are listed.
 Scheduling is never installed by horneroctl: copy-paste the
 printed recipe instead.
 
@@ -575,7 +539,7 @@ Examples:
   status              Show session and power backend state (read-only)
 
 Mutating actions need --yes; --dry-run only previews. The lock plan
-prefers dots-lockscreen --lock (HORNERO_LOCKSCREEN_BIN), then bare
+prefers horneroctl lock --lock (HORNERO_LOCKSCREEN_BIN), then bare
 hyprlock (HORNERO_HYPRLOCK_BIN), then loginctl lock-session;
 suspend/reboot/shutdown use systemctl (HORNERO_SYSTEMCTL_BIN) and
 logout uses loginctl (HORNERO_LOGINCTL_BIN).
@@ -632,7 +596,7 @@ Options:
 
 Profiles come from hyprland.conf.d/animations[-<profile>].conf under
 \$XDG_CONFIG_HOME/hypr; the selection persists under \$XDG_STATE_HOME
-(dots/hypr-animations/current).
+(hornero/hypr/animations/current).
 
 Examples:
   horneroctl hypr animations list
@@ -660,7 +624,7 @@ Options:
 
 The scrolling profile sets general:layout plus the scrolling tunables;
 dwindle/master set one keyword. The selection persists under
-\$XDG_STATE_HOME (dots/hypr-layout/current).
+\$XDG_STATE_HOME (hornero/hypr/layout/current).
 
 Examples:
   horneroctl hypr layout status
@@ -705,7 +669,6 @@ Examples:
   prev [--dry-run]    Switch to the previous workspace, wrapping (needs --yes)
 
 Options:
-  --previous, --left  Alias for prev (legacy dots-next-workspace flags)
   --dry-run           Preview the i3-msg invocation without running it
   --yes               Confirm a mutating action
 
@@ -772,12 +735,7 @@ Examples:
   current [path]            Print the current wallpaper path (read-only)
   reload [--dry-run]        Re-apply the color pipeline (needs --yes)
 
-Reads resolve canonical-first: the hornero/* pointer, then the legacy
-dots/* pointer, then the pywal link. `set` runs natively (shell setWallpaper IPC, else the wal+M3
-pipeline); `reload` delegates to the verified dots-wal-reload backend
-(HORNERO_WAL_RELOAD_BIN) or runs the native pipeline; every backend
-call carries HORNEROCTL_DELEGATED=1 so the delegating dots-* shims run
-their legacy body instead of calling back.
+Reads use the canonical Hornero wallpaper pointer. `set` and `reload` use shell IPC when available and otherwise generate the Hornero Material colour scheme directly. A failed generation leaves the selected wallpaper unchanged.
 
 Mutations need --yes; --dry-run only previews.
 
@@ -800,8 +758,7 @@ Examples:
   network       Connectivity probe (status)
 
 Reads report backend state; mutating leaves need --yes and preview
-with --dry-run. Backends mirror the dots-* scripts (brightnessctl /
-xrandr, acpi / upower, wpctl, hyprctl / setxkbmap, ping), each with a
+with --dry-run. Backends use brightnessctl / xrandr, acpi / upower, wpctl, hyprctl / setxkbmap, and ping, each with a
 HORNERO_*_BIN override.
 
 Examples:
@@ -830,11 +787,11 @@ Examples:
                 Lower brightness by step (needs --yes); with --temp,
                 shift color temperature down the ramp by step
 
-Backend precedence (dots-brightness): brightnessctl, blight,
+Backend precedence (horneroctl hardware brightness): brightnessctl, blight,
 xbacklight, xrandr (HORNERO_BRIGHTNESSCTL_BIN and siblings override).
 xbacklight/xrandr need a display: --display, else the first connected
 output. --temp always drives xrandr --gamma on one display
-(HORNERO_XRANDR_BIN override), mirroring the dots-brightness gamma
+(HORNERO_XRANDR_BIN override), mirroring the horneroctl hardware brightness gamma
 ramps cribbed from redshift.
 
 Examples:
@@ -876,7 +833,7 @@ Examples:
 
 Source: HORNERO_MIC_SOURCE, else the wpctl default-source
 placeholder (HORNERO_WPCTL_BIN override). The event-driven listen
-loop stays in dots-microphone.
+loop stays in horneroctl hardware microphone.
 
 Examples:
   horneroctl hardware mic status
@@ -901,8 +858,7 @@ lxqt-config-input detached (HORNERO_KEYBOARD_SETTINGS_BIN pin).
 keys parses the
 Hyprland keybindings file (HORNERO_KEYBINDINGS_FILE override),
 rewriting \$mainMod to SUPER; with Hornero Shell running it opens
-System Settings. HORNERO_BYPASS_QUICKSHELL=1 forces parsing; the old
-DOTS_BYPASS_QUICKSHELL name remains a compatibility alias.
+System Settings. HORNERO_BYPASS_QUICKSHELL=1 forces parsing.
 
 Examples:
   horneroctl hardware keyboard layout --current
@@ -920,8 +876,8 @@ Examples:
   status              Ping the probe host once and classify the first
                       UP interface as wired/wireless (read-only)
 
-Target: DOTS_PING_HOST, else 1.1.1.1; --timeout is the ping deadline
-in seconds. The polling loop stays in dots-check-network.
+Target: 1.1.1.1; --timeout is the ping deadline
+in seconds. The polling loop stays in horneroctl hardware network check.
 
 Examples:
   horneroctl hardware network status
@@ -947,7 +903,7 @@ instead (--region wins when both are given). Recordings land in
 recording_YYYYMMDD_HH-MM-SS.mp4; start reuses fps 30 unless --fps sets
 it, and --sr selects region plus desktop audio together. start is an
 ok no-op while a recording runs; stop and pause are ok no-ops with
-none running. Clipboard resolves like dots-clipboard (Wayland:
+none running. Clipboard resolves like horneroctl capture clipboard (Wayland:
 copyq, cliphist, minimal; otherwise copyq, minimal): copyq opens the
 picker, cliphist lists history (top 25, no interactive pick), minimal
 previews the paste.
@@ -974,7 +930,7 @@ Examples:
 '
 		}
 		'apps' {
-			return 'Usage: horneroctl apps <files|terminal-file|weather|git-status|audit|launch|toggle|switcher|performance> ... [--dry-run|--yes]
+			return 'Usage: horneroctl apps <files|terminal-file|git-status|audit|launch|toggle|switcher|performance> ... [--dry-run|--yes]
 
   files [--path PATH] [--info]
                       Open the default file manager (view-open, no --yes)
@@ -982,8 +938,6 @@ Examples:
   terminal-file [--path PATH] [--select FILE] [--last-dir]
                       Open yazi, show the cheatsheet, or diagnose previews
                       (view-open and reads, no --yes)
-  weather <--getdata|--icon|--temp|--hex|--stat|--loc|--quote|--quote2>
-                      Read one cached weather field or refresh (read-only)
   git-status [watch|jobs|stop] [--branch B] [--repository R]
                       Watch a repo with desktop notifications (needs --yes),
                       list watchers (jobs, read-only), or stop them (needs --yes)
@@ -998,14 +952,12 @@ Examples:
                       power-profile mode (set needs --yes)
 
 Reads and view-opens need no --yes; mutations need --yes and preview
-with --dry-run. Backends mirror the dots-* scripts, each with a
-HORNERO_*_BIN override; dots-* calls carry HORNEROCTL_DELEGATED=1.
+with --dry-run. External tools can be selected with HORNERO_*_BIN overrides.
 
 Examples:
   horneroctl apps files --dry-run
   horneroctl apps files --info
   horneroctl apps terminal-file --cheatsheet
-  horneroctl apps weather --temp
   horneroctl apps git-status jobs
   horneroctl apps audit --dry-run
   horneroctl apps launch --list
@@ -1036,11 +988,11 @@ Examples:
 		'apps terminal-file' {
 			return 'Usage: horneroctl apps terminal-file [--path PATH] [--select FILE] [--last-dir] [--cheatsheet] [--fix-previews] [--dry-run]
 
-  open (default)      Open yazi via dots-yazi (view-open, no --yes)
+  open (default)      Open yazi via hornero-yazi (view-open, no --yes)
   --cheatsheet        Print the keybinding reference (read-only)
   --fix-previews      Diagnose preview dependencies (read-only)
 
-Launch wraps dots-yazi (HORNERO_DOTS_YAZI_BIN), falling back to bare
+Launch wraps hornero-yazi (HORNERO_YAZI_HELPER_BIN), falling back to bare
 yazi (HORNERO_YAZI_BIN).
 
 Examples:
@@ -1050,23 +1002,6 @@ Examples:
   horneroctl apps terminal-file --last-dir --dry-run
   horneroctl apps terminal-file --cheatsheet
   horneroctl apps terminal-file --fix-previews
-'
-		}
-		'apps weather' {
-			return 'Usage: horneroctl apps weather <--getdata|--icon|--temp|--hex|--stat|--loc|--quote|--quote2> [--dry-run]
-
-  --getdata           Refresh the cache from OpenWeatherMap (read-only)
-  --icon --temp --hex --stat --loc --quote --quote2
-                      Read one cached field (read-only)
-
-Exactly one field per invocation. Reads serve the cache natively
-(HORNERO_WEATHER_CACHE_DIR); refresh needs a WEATHER_API_KEY like the script.
-
-Examples:
-  horneroctl apps weather --temp
-  horneroctl apps weather --icon --json
-  horneroctl apps weather --getdata --dry-run
-  horneroctl apps weather --loc
 '
 		}
 		'apps git-status' {
@@ -1083,7 +1018,7 @@ Options:
   --async             Detach the watcher into the background
   --verbose           Timestamped logging
 
-Backend: dots-git-notify (HORNERO_GIT_NOTIFY_BIN); watch runs inside
+Backend: horneroctl apps git-status (HORNERO_GIT_NOTIFY_BIN); watch runs inside
 the current git repository.
 
 Examples:
@@ -1102,7 +1037,7 @@ Examples:
   --secrets           Exposed-secret scan only (read-only)
   --system            Firewall, updates, SSH, MAC checks only (read-only)
   --fix               Apply permission fixes, scrub shell history (needs --yes)
-  --report            Write a markdown report under ~/.cache/dots
+  --report            Write a markdown report under $XDG_CACHE_HOME/hornero/security
   --json              Machine-readable summary (exit non-zero on findings)
 
 At most one check and one mode per invocation. Backend: native
@@ -1136,7 +1071,7 @@ Examples:
   bar launcher dashboard sidebar session utilities
                       Toggle one quickshell component via ipc (needs --yes)
   redshift caffeine   Toggle the daemon once (needs --yes); the monitor
-                      loops stay in dots-toggle
+                      loops stay in horneroctl apps toggle
 
 Backend: native (quickshell ipc; pidof + pkill/killall for daemons).
 
@@ -1160,7 +1095,7 @@ Examples:
 
 Default leaf is toggle. Backend: native snappy-switcher control
 (HORNERO_SNAPPY_SWITCHER_BIN); apply-theme* still delegate to
-dots-snappy-switcher (HORNERO_SNAPPY_BIN).
+hornero-snappy-switcher (HORNERO_SNAPPY_BIN).
 
 Examples:
   horneroctl apps switcher status
@@ -1184,7 +1119,7 @@ Examples:
 Reads run natively (ps/zsh/free seams); mode
 uses powerprofilesctl get/list/set
 (HORNERO_POWERPROFILESCTL_BIN). The interactive menu, quickshell
-pane, and auto-cpufreq GUI stay in dots-performance-mode.
+pane, and auto-cpufreq GUI stay in horneroctl apps performance mode.
 
 Examples:
   horneroctl apps performance memory
@@ -1297,7 +1232,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture apps help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1311,7 +1246,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance scheme config package backup power lock hypr hardware completion wallpaper capture apps help)
+  cmds=(version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1324,7 +1259,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a version -d "Print version"
 complete -c horneroctl -f -n __fish_use_subcommand -a doctor -d "Health checks"
 complete -c horneroctl -f -n __fish_use_subcommand -a shell -d "Shell integration"
 complete -c horneroctl -f -n __fish_use_subcommand -a appearance -d "Appearance controls"
-complete -c horneroctl -f -n __fish_use_subcommand -a scheme -d "Color scheme shortcut"
 complete -c horneroctl -f -n __fish_use_subcommand -a config -d "Configuration"
 complete -c horneroctl -f -n __fish_use_subcommand -a package -d "Package updates"
 complete -c horneroctl -f -n __fish_use_subcommand -a backup -d "Backups"
@@ -1333,6 +1267,7 @@ complete -c horneroctl -f -n __fish_use_subcommand -a lock -d "Screen lock"
 complete -c horneroctl -f -n __fish_use_subcommand -a hypr -d "Hyprland controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a hardware -d "Hardware controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
+complete -c horneroctl -f -n __fish_use_subcommand -a welcome -d "First-run guidance"
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, recording, clipboard"
 complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"

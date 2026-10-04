@@ -6,13 +6,9 @@ import x.json2
 // Theme-pack backend: installed `theme.json` recipes.
 //
 // The packs ship in HorneroOS/config (`profiles/themes/<id>/theme.json`)
-// and are installed to `$XDG_DATA_HOME/hornero/themes/<id>/theme.json`
-// (canonical WRITE TARGET, docs/PATH_CONTRACT.md row 1). Legacy installs
-// hold them under `$XDG_DATA_HOME/dots/themes/<id>/theme.json`, which these
-// readers keep as a read-only fallback (canonical-first). Mutation
-// (`apply`) runs the native shell pipeline in appearance_apply.v;
-// wallpaper/theme repository splits stay out of scope per
-// docs/theme-split-plan.md.
+// and are installed to the user catalogue or the read-only system
+// catalogue. Mutation (`apply`) runs the native shell pipeline in
+// appearance_apply.v.
 
 // resolve_themes_dir locates installed theme packs: the canonical
 // `hornero/*` location (docs/PATH_CONTRACT.md row 1) and the WRITE TARGET.
@@ -29,35 +25,13 @@ pub fn resolve_themes_dir() string {
 	return os.join_path(base, 'hornero', 'themes')
 }
 
-// resolve_themes_dir_fallback is the legacy `dots/*` location (row 1).
-// Reads only: nothing new is ever written here.
-pub fn resolve_themes_dir_fallback() string {
-	mut base := os.getenv('XDG_DATA_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.local', 'share')
-	}
-	return os.join_path(base, 'dots', 'themes')
-}
-
-// resolve_themes_dirs_for_read lists the directories actually read,
-// canonical-first. An explicit HORNERO_THEMES_DIR override wins outright;
-// otherwise every existing directory is returned so readers merge them with
-// canonical precedence: user canonical, user legacy, then the read-only
-// system catalogues from XDG_DATA_DIRS (package installs, hornero#96).
+// Return user packs first, followed by package-installed system packs.
 pub fn resolve_themes_dirs_for_read() []string {
 	env := os.getenv('HORNERO_THEMES_DIR')
-	if env.len > 0 {
-		return [env]
-	}
+	if env.len > 0 { return [env] }
 	mut dirs := []string{}
-	canonical := resolve_themes_dir()
-	fallback := resolve_themes_dir_fallback()
-	if os.is_dir(canonical) {
-		dirs << canonical
-	}
-	if os.is_dir(fallback) && fallback != canonical {
-		dirs << fallback
-	}
+	user := resolve_themes_dir()
+	if os.is_dir(user) { dirs << user }
 	append_system_catalogues(mut dirs, os.join_path('hornero', 'themes'))
 	return dirs
 }
@@ -78,7 +52,7 @@ fn theme_str_field(m map[string]json2.Any, key string) string {
 
 // read_theme_pack parses and validates one installed pack directory.
 // Required keys and the id == directory invariant follow the
-// docs/theme-split-plan.md checker rules.
+// catalogue validation rules.
 fn read_theme_pack(dir string, id string) !ThemeEntry {
 	raw := os.read_file(os.join_path(dir, id, 'theme.json'))!
 	parsed := json2.decode[json2.Any](raw)!
@@ -89,7 +63,7 @@ fn read_theme_pack(dir string, id string) !ThemeEntry {
 }
 
 // theme_entry_from_map validates required pack keys and the
-// id == directory invariant (docs/theme-split-plan.md checker rules).
+// id == directory invariant.
 fn theme_entry_from_map(id string, m map[string]json2.Any) !ThemeEntry {
 	for key in ['schemaVersion', 'id', 'name', 'defaultWallpaper', 'wallpaperDir'] {
 		if key !in m || m[key].str().len == 0 {
@@ -107,8 +81,7 @@ fn theme_entry_from_map(id string, m map[string]json2.Any) !ThemeEntry {
 }
 
 // list_theme_packs returns installed packs sorted by id.
-// Canonical-first with legacy fallback: both directories are merged and a
-// pack present in both resolves from the canonical side. Unparseable pack
+// User packs override system packs. Unparseable pack
 // directories are skipped (same as the backend lister).
 pub fn list_theme_packs() ![]ThemeEntry {
 	dirs := resolve_themes_dirs_for_read().filter(os.is_dir(it))
@@ -157,7 +130,7 @@ fn theme_wallpaper_roots() []string {
 }
 
 // theme_wallpaper_index maps wallpaper filename to absolute path for one
-// theme, first root winning (Pictures, then hornero, then dots). Returns
+// theme, first root winning (Pictures, then Hornero-managed media). Returns
 // the sorted filenames plus the path map.
 fn theme_wallpaper_index(theme_id string, wallpaper_dir string, roots []string) ([]string, map[string]string) {
 	dir_name := if wallpaper_dir.len > 0 { wallpaper_dir } else { theme_id }

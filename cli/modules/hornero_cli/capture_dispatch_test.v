@@ -152,7 +152,7 @@ fn test_record_start_confirms_launch() {
 	// no real recording is ever started, and the run reports failure.
 	saved := cap_dispatch_setup()
 	assert dispatch(['horneroctl', 'capture', 'record', 'start', '--yes']) == 1
-	assert !os.is_file(cap_dtest_base + '/state/dots/recorder/current_file')
+	assert !os.is_file(cap_dtest_base + '/state/hornero/recorder/current_file')
 	cap_dispatch_teardown(saved)
 }
 

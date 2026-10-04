@@ -4,28 +4,17 @@ import os
 
 // Package backend: pending system updates, read-only and unprivileged.
 //
-// Both leaves delegate to the verified `dots-checkupdates` backend
-// (dotfiles reference, read-only): it prints one pending update per line
-// using a throwaway sync database. `check` prints that list; `updates`
-// prints the notify-oriented count readout (`dots-updates` counts the
-// same lines). Privileged/mutating work lives in package_ops.v:
+// Both leaves use pacman-contrib's `checkupdates`: it prints one pending
+// update per line using a throwaway sync database. `check` prints that list;
+// `updates` returns the count. Privileged/mutating work lives in package_ops.v:
 // `upgrade` via polkit, `deps` check/install via pacman/paru.
 
-// resolve_checkupdates_bin locates the `dots-checkupdates` backend CLI.
-// Override with HORNERO_CHECKUPDATES_BIN; falls back to plain
-// `checkupdates` (pacman-contrib) on PATH.
+// resolve_checkupdates_bin locates pacman-contrib's `checkupdates`.
+// Override with HORNERO_CHECKUPDATES_BIN for isolated environments.
 pub fn resolve_checkupdates_bin() string {
 	env := os.getenv('HORNERO_CHECKUPDATES_BIN')
 	if env.len > 0 {
 		return env
-	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-checkupdates')
-	if os.is_file(home_helper) {
-		return home_helper
-	}
-	bin := find_on_path('dots-checkupdates')
-	if bin.len > 0 {
-		return bin
 	}
 	return find_on_path('checkupdates')
 }
@@ -34,9 +23,9 @@ fn checkupdates_or_fail(helper string, dry_run bool) !string {
 	bin := if helper.len > 0 { helper } else { resolve_checkupdates_bin() }
 	if bin.len == 0 {
 		if dry_run {
-			return 'dots-checkupdates'
+			return 'checkupdates'
 		}
-		return error('package backend not found (needs dots-checkupdates or checkupdates on PATH). Set HORNERO_CHECKUPDATES_BIN.\nExample: horneroctl package check --dry-run')
+		return error('checkupdates not found; install pacman-contrib or set HORNERO_CHECKUPDATES_BIN.\nExample: horneroctl package check --dry-run')
 	}
 	return bin
 }
@@ -48,7 +37,7 @@ pub:
 }
 
 // run_checkupdates runs the backend once and returns its raw report.
-fn run_checkupdates(command string, opts PackageCheckOptions) !ExecReport {
+fn run_checkupdates(opts PackageCheckOptions) !ExecReport {
 	bin := checkupdates_or_fail(opts.helper, opts.dry_run)!
 	rep := run_exec(ExecSpec{
 		prog:    bin
@@ -61,7 +50,7 @@ fn run_checkupdates(command string, opts PackageCheckOptions) !ExecReport {
 // package_check_report implements `package check` (read-only): the pending
 // update list, one line per package.
 pub fn package_check_report(opts PackageCheckOptions) CommandResult {
-	rep := run_checkupdates('package check', opts) or {
+	rep := run_checkupdates(opts) or {
 		return fail_result('package check', err.msg())
 	}
 	if opts.dry_run {
@@ -86,7 +75,7 @@ pub fn package_check_report(opts PackageCheckOptions) CommandResult {
 // package_updates_report implements `package updates` (read-only): the
 // notify-oriented pending-update count over the same backend output.
 pub fn package_updates_report(opts PackageCheckOptions) CommandResult {
-	rep := run_checkupdates('package updates', opts) or {
+	rep := run_checkupdates(opts) or {
 		return fail_result('package updates', err.msg())
 	}
 	if opts.dry_run {

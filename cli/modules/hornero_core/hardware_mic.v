@@ -3,8 +3,8 @@ module hornero_core
 import os
 
 // Microphone backend: PipeWire source mute state via wpctl, mirroring
-// dots-microphone. The event-driven listen loop (status-bar tail) stays
-// in the dots-microphone shim; horneroctl owns single-shot status plus
+// horneroctl hardware microphone. The event-driven listen loop (status-bar tail) stays
+// in the horneroctl hardware microphone shim; horneroctl owns single-shot status plus
 // the gated toggle.
 
 // resolve_wpctl_bin locates wpctl. Override with HORNERO_WPCTL_BIN.

@@ -70,7 +70,7 @@ fn test_dispatch_hypr_mutations_need_yes() {
 
 fn test_dispatch_hypr_monitors_all_modes_dry_run() {
 	hypr_dispatch_setup()
-	// Every arrangement the dots-hypr-monitors menu can pick must parse
+	// Every arrangement the horneroctl hypr monitors menu can pick must parse
 	// and preview (exit 0); the menu choice itself is the confirmation,
 	// so horneroctl only ever sees `set <mode> --yes`.
 	for mode in ['internal-only', 'external-only', 'extend-right', 'extend-left', 'extend-above',
@@ -109,8 +109,8 @@ fn test_dispatch_hypr_usage_errors() {
 
 fn test_dispatch_hypr_workspace_prev_alias() {
 	hypr_dispatch_setup()
-	assert dispatch(['horneroctl', 'hypr', 'workspace', 'next', '--previous', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'hypr', 'workspace', 'next', '--left', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'workspace', 'next', '--previous', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'workspace', 'next', '--left', '--dry-run']) == 2
 	hypr_dispatch_teardown()
 }
 

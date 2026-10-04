@@ -29,14 +29,9 @@ fn hw_dispatch_setup() {
 	os.write_file('/tmp/hx-hw-dtest/bin/lxqt-config-input', '#!/bin/sh\nexit 0\n') or {
 		assert false
 	}
-	os.write_file('/tmp/hx-hw-dtest/bin/dots-keyboard-settings', '#!/bin/sh\nexit 0\n') or {
-		assert false
-	}
-	os.write_file('/tmp/hx-hw-dtest/bin/dots-settings-gui', '#!/bin/sh\nexit 0\n') or {
-		assert false
-	}
+	os.write_file('/tmp/hx-hw-dtest/bin/horneroctl hardware keyboard settings', '#!/bin/sh\nexit 0\n') or { assert false }
 	for b in ['brightnessctl', 'xrandr', 'acpi', 'wpctl', 'setxkbmap', 'ping', 'ip', 'notify-send',
-		'lxqt-config-input', 'dots-keyboard-settings', 'dots-settings-gui'] {
+		'lxqt-config-input', 'horneroctl hardware keyboard settings'] {
 		os.chmod('/tmp/hx-hw-dtest/bin/${b}', 0o755) or { assert false }
 	}
 	os.mkdir_all('/tmp/hx-hw-dtest/conf') or { assert false }
@@ -56,13 +51,12 @@ fn hw_dispatch_setup() {
 	os.setenv('HORNERO_SETXKBMAP_BIN', '/tmp/hx-hw-dtest/bin/setxkbmap', true)
 	os.setenv('HORNERO_LXQT_CONFIG_INPUT_BIN', '/tmp/hx-hw-dtest/bin/lxqt-config-input',
 		true)
-	os.setenv('HORNERO_KEYBOARD_SETTINGS_BIN', '/tmp/hx-hw-dtest/bin/dots-keyboard-settings',
+	os.setenv('HORNERO_KEYBOARD_SETTINGS_BIN', '/tmp/hx-hw-dtest/bin/horneroctl hardware keyboard settings',
 		true)
-	os.setenv('HORNERO_SETTINGS_GUI_BIN', '/tmp/hx-hw-dtest/bin/dots-settings-gui', true)
 	os.setenv('HORNERO_PING_BIN', '/tmp/hx-hw-dtest/bin/ping', true)
 	os.setenv('HORNERO_IP_BIN', '/tmp/hx-hw-dtest/bin/ip', true)
 	os.setenv('HORNERO_KEYBINDINGS_FILE', '/tmp/hx-hw-dtest/conf/keybindings.conf', true)
-	os.setenv('DOTS_BYPASS_QUICKSHELL', '1', true)
+	os.setenv('HORNERO_BYPASS_QUICKSHELL', '1', true)
 	os.unsetenv('HYPRLAND_INSTANCE_SIGNATURE')
 	os.unsetenv('WAYLAND_DISPLAY')
 	os.unsetenv('I3SOCK')
@@ -72,8 +66,7 @@ fn hw_dispatch_teardown() {
 	for k in ['HORNERO_BRIGHTNESSCTL_BIN', 'HORNERO_BLIGHT_BIN', 'HORNERO_XBACKLIGHT_BIN',
 		'HORNERO_XRANDR_BIN', 'HORNERO_ACPI_BIN', 'HORNERO_UPOWER_BIN', 'HORNERO_POWERALERTD_BIN',
 		'HORNERO_NOTIFY_BIN', 'HORNERO_WPCTL_BIN', 'HORNERO_HYPRCTL_BIN', 'HORNERO_SETXKBMAP_BIN',
-		'HORNERO_LXQT_CONFIG_INPUT_BIN', 'HORNERO_KEYBOARD_SETTINGS_BIN', 'HORNERO_SETTINGS_GUI_BIN',
-		'HORNERO_PING_BIN', 'HORNERO_IP_BIN', 'HORNERO_KEYBINDINGS_FILE', 'DOTS_BYPASS_QUICKSHELL'] {
+		'HORNERO_PING_BIN', 'HORNERO_IP_BIN', 'HORNERO_KEYBINDINGS_FILE', 'HORNERO_BYPASS_QUICKSHELL'] {
 		os.unsetenv(k)
 	}
 }
@@ -239,7 +232,6 @@ fn test_hardware_dry_run_needs_no_backend() {
 	for b in ['HORNERO_BRIGHTNESSCTL_BIN', 'HORNERO_BLIGHT_BIN', 'HORNERO_XBACKLIGHT_BIN',
 		'HORNERO_XRANDR_BIN', 'HORNERO_ACPI_BIN', 'HORNERO_UPOWER_BIN', 'HORNERO_WPCTL_BIN',
 		'HORNERO_HYPRCTL_BIN', 'HORNERO_SETXKBMAP_BIN', 'HORNERO_LXQT_CONFIG_INPUT_BIN',
-		'HORNERO_KEYBOARD_SETTINGS_BIN', 'HORNERO_SETTINGS_GUI_BIN', 'HORNERO_PING_BIN',
 		'HORNERO_IP_BIN'] {
 		os.setenv(b, '/nonexistent-hw-backend-test', true)
 	}

@@ -4,9 +4,9 @@ import os
 import x.json2
 
 // Keyboard backend: layout toggle/readout (Hyprland or X11, mirroring
-// dots-keyboard-layout), the LXQt settings GUI opener (mirroring
-// dots-keyboard-settings), and the keybindings readout (mirroring
-// dots-keyboard-help).
+// horneroctl hardware keyboard), the LXQt settings GUI opener (mirroring
+// horneroctl hardware keyboard settings), and the keybindings readout (mirroring
+// horneroctl shortcuts).
 
 // resolve_hyprctl_bin lives in hypr.v (same HORNERO_HYPRCTL_BIN contract);
 // keyboard layout reuses it.
@@ -32,9 +32,9 @@ pub fn resolve_lxqt_bin() string {
 }
 
 // resolve_keyboard_settings_bin locates the keyboard settings GUI:
-// the HORNERO_KEYBOARD_SETTINGS_BIN pin (the dots-keyboard-settings
+// the HORNERO_KEYBOARD_SETTINGS_BIN pin (the horneroctl hardware keyboard settings
 // cycle guard pins it at the real lxqt-config-input binary), else
-// lxqt-config-input. The dots-keyboard-settings wrapper is retired.
+// lxqt-config-input. The horneroctl hardware keyboard settings wrapper is retired.
 pub fn resolve_keyboard_settings_bin() string {
 	env := os.getenv('HORNERO_KEYBOARD_SETTINGS_BIN')
 	if env.len > 0 {
@@ -58,7 +58,7 @@ fn keyboard_settings_native_bin() string {
 	return ''
 }
 
-// detect_session mirrors dots-keyboard-layout session detection:
+// detect_session mirrors horneroctl hardware keyboard session detection:
 // Hyprland signature first, then Wayland, i3, else X11.
 fn detect_session() string {
 	if os.getenv('HYPRLAND_INSTANCE_SIGNATURE').len > 0 {
@@ -74,7 +74,7 @@ fn detect_session() string {
 }
 
 // kb_layout_names mirrors the LAYOUT_NAMES display names in
-// dots-keyboard-layout.
+// horneroctl hardware keyboard.
 fn kb_layout_names() map[string]string {
 	return {
 		'us:':     'US'
@@ -88,7 +88,7 @@ fn kb_layout_names() map[string]string {
 }
 
 // kb_preferred_layouts mirrors the PREFERRED_LAYOUTS toggle cycle in
-// dots-keyboard-layout ("layout:variant", empty variant unqualified).
+// horneroctl hardware keyboard ("layout:variant", empty variant unqualified).
 fn kb_preferred_layouts() []string {
 	return ['us:', 'latam:']
 }
@@ -457,7 +457,7 @@ fn split_bind_rest(line string) string {
 	return tail[3..]
 }
 
-// parse_keybindings_text ports the dots-keyboard-help awk parser: 3-line
+// parse_keybindings_text ports the horneroctl shortcuts awk parser: 3-line
 // `# ===` headers set the category, bind lines render as
 // `[cat] mods + key -> action` with $mainMod rewritten to SUPER.
 fn parse_keybindings_text(text string) []string {
@@ -514,7 +514,7 @@ fn parse_keybindings_text(text string) []string {
 	return out
 }
 
-// quickshell_running mirrors the dots-keyboard-help quickshell branch.
+// quickshell_running mirrors the horneroctl shortcuts quickshell branch.
 fn quickshell_running() bool {
 	pg := find_on_path('pgrep')
 	if pg.len == 0 {

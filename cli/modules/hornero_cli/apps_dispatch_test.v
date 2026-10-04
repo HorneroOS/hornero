@@ -10,7 +10,7 @@ fn apps_dispatch_setup() {
 	os.setenv('HORNERO_EXO_OPEN_BIN', '/nonexistent-exo-hornero-test', true)
 	os.setenv('HORNERO_HANDLR_BIN', '/nonexistent-handlr-hornero-test', true)
 	os.setenv('HORNERO_XDG_OPEN_BIN', '/nonexistent-xdg-open-hornero-test', true)
-	os.setenv('HORNERO_DOTS_YAZI_BIN', '/nonexistent-dots-yazi-hornero-test', true)
+	os.setenv('HORNERO_YAZI_HELPER_BIN', '/nonexistent-hornero-yazi-hornero-test', true)
 	os.setenv('HORNERO_YAZI_BIN', '/nonexistent-yazi-hornero-test', true)
 	os.setenv('HORNERO_GIT_NOTIFY_BIN', '/nonexistent-git-notify-hornero-test', true)
 	os.setenv('HORNERO_SNAPPY_BIN', '/nonexistent-snappy-hornero-test', true)
@@ -22,7 +22,7 @@ fn apps_dispatch_teardown() {
 	os.unsetenv('HORNERO_EXO_OPEN_BIN')
 	os.unsetenv('HORNERO_HANDLR_BIN')
 	os.unsetenv('HORNERO_XDG_OPEN_BIN')
-	os.unsetenv('HORNERO_DOTS_YAZI_BIN')
+	os.unsetenv('HORNERO_YAZI_HELPER_BIN')
 	os.unsetenv('HORNERO_YAZI_BIN')
 	os.unsetenv('HORNERO_GIT_NOTIFY_BIN')
 	os.unsetenv('HORNERO_SNAPPY_BIN')
@@ -36,8 +36,6 @@ fn test_dispatch_apps_reads_dry_run() {
 	assert dispatch(['horneroctl', 'apps', 'terminal-file', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'terminal-file', '--cheatsheet', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'terminal-file', '--fix-previews', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'apps', 'weather', '--temp', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'apps', 'weather', '--getdata', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'jobs', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'watch', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'stop', '--dry-run']) == 0
@@ -68,7 +66,7 @@ fn test_dispatch_apps_files_open_live() {
 	}
 	os.chmod('/tmp/hx-apps-dtest/bin/exo-open', 0o755) or { assert false }
 	os.setenv('HORNERO_EXO_OPEN_BIN', '/tmp/hx-apps-dtest/bin/exo-open', true)
-	// The exact calls dots-file-manager delegates to (open needs no
+	// The exact calls horneroctl apps files delegates to (open needs no
 	// --yes; the launch itself is the action).
 	assert dispatch(['horneroctl', 'apps', 'files']) == 0
 	assert dispatch(['horneroctl', 'apps', 'files', '--path', '/tmp']) == 0
@@ -93,9 +91,6 @@ fn test_dispatch_apps_usage_errors() {
 	assert dispatch(['horneroctl', 'apps', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'apps', 'files', '--bogus']) == 2
 	assert dispatch(['horneroctl', 'apps', 'files', 'extra']) == 2
-	assert dispatch(['horneroctl', 'apps', 'weather']) == 2
-	assert dispatch(['horneroctl', 'apps', 'weather', '--temp', '--icon']) == 2
-	assert dispatch(['horneroctl', 'apps', 'weather', '--bogus']) == 2
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'jobs', '--async']) == 2
 	assert dispatch(['horneroctl', 'apps', 'git-status', 'watch', '--interval', 'soon']) == 2
@@ -127,22 +122,22 @@ fn test_dispatch_apps_performance_mode_set_live() {
 	os.chmod('/tmp/hx-apps-dtest-ppctl/powerprofilesctl', 0o755) or { assert false }
 	os.setenv('HORNERO_POWERPROFILESCTL_BIN', '/tmp/hx-apps-dtest-ppctl/powerprofilesctl',
 		true)
-	// The exact call dots-performance-mode delegates to after a menu pick.
+	// The exact call horneroctl apps performance mode delegates to after a menu pick.
 	assert dispatch(['horneroctl', 'apps', 'performance', 'mode', 'set', 'power-saver', '--yes']) == 0
 	assert dispatch(['horneroctl', 'apps', 'performance', 'mode', 'set', 'bogus-profile', '--yes']) == 1
 	apps_dispatch_teardown()
 }
 
 fn test_apps_help_carries_performance_mode_probe() {
-	// dots-performance-mode delegates only when `apps --help` contains
+	// horneroctl apps performance mode delegates only when `apps --help` contains
 	// this usage line; pin it so the probe can never silently break.
 	assert command_help('apps').contains('Usage: horneroctl apps')
 	assert !command_help('apps').contains('Later phases: default-apps set')
 }
 
 fn test_apps_help_has_examples() {
-	for cmd in ['apps', 'apps files', 'apps terminal-file', 'apps weather', 'apps git-status',
-		'apps audit', 'apps launch', 'apps toggle', 'apps switcher', 'apps performance'] {
+	for cmd in ['apps', 'apps files', 'apps terminal-file', 'apps git-status', 'apps audit',
+		'apps launch', 'apps toggle', 'apps switcher', 'apps performance'] {
 		h := command_help(cmd)
 		assert h.contains('Examples:')
 	}

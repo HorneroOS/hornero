@@ -13,17 +13,14 @@ fn b1_write(path string, content string) {
 }
 
 fn b1_setup_snapshots() {
-	b1_write('${b1_root}/snapshots/config_20260101_020000/metadata.json', '{"id":"config_20260101_020000","timestamp":"2026-01-01T02:00:00","hostname":"den","dotfiles_commit":"abc123"}')
-	b1_write('${b1_root}/snapshots/config_20260201_020000/metadata.json', '{"id":"config_20260201_020000","timestamp":"2026-02-01T02:00:00","hostname":"den","dotfiles_commit":"def456"}')
+	b1_write('${b1_root}/snapshots/config_20260101_020000/metadata.json', '{"id":"config_20260101_020000","timestamp":"2026-01-01T02:00:00","hostname":"den"}')
+	b1_write('${b1_root}/snapshots/config_20260201_020000/metadata.json', '{"id":"config_20260201_020000","timestamp":"2026-02-01T02:00:00","hostname":"den"}')
 	os.mkdir_all('${b1_root}/snapshots/junkdir') or { assert false }
 	os.setenv('HORNERO_SNAPSHOTS_DIR', '${b1_root}/snapshots', true)
-	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '/nonexistent-config-manager-hornero-test',
-		true)
 }
 
 fn b1_teardown_snapshots() {
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
-	os.unsetenv('HORNERO_CONFIG_MANAGER_BIN')
 }
 
 fn test_snapshot_list_reads_materialized_dirs() {
@@ -87,58 +84,28 @@ fn test_snapshot_restore_validates_and_previews() {
 	b1_teardown_snapshots()
 }
 
-fn test_snapshot_create_live() {
-	b1_setup_snapshots()
-	b1_write('${b1_root}/bin/dots-config-manager', '#!/bin/sh\necho "config-manager \$*"\nexit 0\n')
-	os.chmod('${b1_root}/bin/dots-config-manager', 0o755) or { assert false }
-	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '${b1_root}/bin/dots-config-manager', true)
-	// The exact call dots-config-manager --create delegates to (explicit
-	// helper; without it the native port takes over).
-	r := snapshot_create_report(SnapshotCreateOptions{
-		yes:    true
-		helper: '${b1_root}/bin/dots-config-manager'
-	})
-	assert r.ok
-	assert r.message.contains('--create')
-	b1_teardown_snapshots()
-}
-
-fn test_snapshot_restore_live() {
-	b1_setup_snapshots()
-	b1_write('${b1_root}/bin/dots-config-manager', '#!/bin/sh\necho "config-manager \$*"\nexit 0\n')
-	os.chmod('${b1_root}/bin/dots-config-manager', 0o755) or { assert false }
-	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '${b1_root}/bin/dots-config-manager', true)
-	// The exact call dots-config-manager --restore delegates to (explicit
-	// helper; without it the native port takes over).
-	r := snapshot_restore_report(SnapshotRestoreOptions{
-		id:     'config_20260101_020000'
-		yes:    true
-		helper: '${b1_root}/bin/dots-config-manager'
-	})
-	assert r.ok
-	assert r.message.contains('--restore config_20260101_020000')
-	b1_teardown_snapshots()
-}
-
 fn test_snapshot_create_native_round_trip() {
 	// Native port: create writes metadata + tarball + latest under a
 	// redirected HOME and snapshots dir; list sees the new snapshot.
+	os.rmdir_all(b1_root + '/native-snaps') or {}
 	old_home := os.getenv('HOME')
 	os.setenv('HOME', b1_root + '/fakehome', true)
-	os.mkdir_all(b1_root + '/fakehome/.config/app') or { assert false }
-	os.write_file(b1_root + '/fakehome/.config/app/conf', 'v1') or { assert false }
+	os.setenv('XDG_CONFIG_HOME', b1_root + '/fakehome/.config', true)
+	os.mkdir_all(b1_root + '/fakehome/.config/hornero') or { assert false }
+	os.write_file(b1_root + '/fakehome/.config/hornero/shell.json', 'v1') or { assert false }
 	os.setenv('HORNERO_SNAPSHOTS_DIR', b1_root + '/native-snaps', true)
 	r := snapshot_create_report(SnapshotCreateOptions{ yes: true })
 	assert r.ok
 	assert r.message.contains('Snapshot created:')
 	meta := os.read_file(r.data['dir'] + '/metadata.json') or { '' }
 	assert meta.contains(r.data['id'])
-	assert os.is_file(r.data['dir'] + '/dotfiles.tar.gz')
+	assert os.is_file(r.data['dir'] + '/hornero-config.tar.gz')
 	assert os.is_link(b1_root + '/native-snaps/latest')
 	l := snapshot_list_report()
 	assert l.ok
 	assert l.message.contains(r.data['id'])
 	os.setenv('HOME', old_home, true)
+	os.unsetenv('XDG_CONFIG_HOME')
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
 	os.rmdir_all(b1_root + '/fakehome') or {}
 	os.rmdir_all(b1_root + '/native-snaps') or {}
@@ -147,29 +114,181 @@ fn test_snapshot_create_native_round_trip() {
 fn test_snapshot_restore_native_round_trip() {
 	// Native port: modify a file after create, restore brings the
 	// original back; a pre-restore backup snapshot is recorded too.
+	os.rmdir_all(b1_root + '/native-snaps2') or {}
 	old_home := os.getenv('HOME')
 	os.setenv('HOME', b1_root + '/fakehome2', true)
-	os.mkdir_all(b1_root + '/fakehome2/.config/app') or { assert false }
-	os.write_file(b1_root + '/fakehome2/.config/app/conf', 'v1') or { assert false }
+	os.setenv('XDG_CONFIG_HOME', b1_root + '/fakehome2/.config', true)
+	os.mkdir_all(b1_root + '/fakehome2/.config/hornero') or { assert false }
+	os.write_file(b1_root + '/fakehome2/.config/hornero/shell.json', 'v1') or { assert false }
 	os.setenv('HORNERO_SNAPSHOTS_DIR', b1_root + '/native-snaps2', true)
 	c := snapshot_create_report(SnapshotCreateOptions{ yes: true })
 	assert c.ok
 	id := c.data['id']
-	os.write_file(b1_root + '/fakehome2/.config/app/conf', 'v2') or { assert false }
+	os.write_file(b1_root + '/fakehome2/.config/hornero/shell.json', 'v2') or { assert false }
 	r := snapshot_restore_report(SnapshotRestoreOptions{
 		id:  id
 		yes: true
 	})
 	assert r.ok
 	assert r.message.contains('Restore completed!')
-	assert os.read_file(b1_root + '/fakehome2/.config/app/conf') or { '' } == 'v1'
+	assert os.read_file(b1_root + '/fakehome2/.config/hornero/shell.json') or { '' } == 'v1'
 	l := snapshot_list_report()
 	assert l.ok
 	assert l.data['count'] == '2'
 	os.setenv('HOME', old_home, true)
+	os.unsetenv('XDG_CONFIG_HOME')
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
 	os.rmdir_all(b1_root + '/fakehome2') or {}
 	os.rmdir_all(b1_root + '/native-snaps2') or {}
+}
+
+fn test_snapshot_without_config_archive_is_not_reported_as_restored() {
+	root := b1_root + '/snapshot-without-config'
+	home := root + '/home'
+	config_home := home + '/.config'
+	snapshots := root + '/snapshots'
+	old_home := os.getenv('HOME')
+	old_config := os.getenv('XDG_CONFIG_HOME')
+	old_snapshots := os.getenv('HORNERO_SNAPSHOTS_DIR')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(home) or { assert false }
+	os.setenv('HOME', home, true)
+	os.setenv('XDG_CONFIG_HOME', config_home, true)
+	os.setenv('HORNERO_SNAPSHOTS_DIR', snapshots, true)
+	created := snapshot_create_report(SnapshotCreateOptions{ yes: true })
+	assert created.ok
+	assert !os.is_file(created.data['dir'] + '/hornero-config.tar.gz')
+	os.mkdir_all(config_home + '/hornero') or { assert false }
+	os.write_file(config_home + '/hornero/shell.json', 'new configuration') or { assert false }
+	restored := snapshot_restore_report(SnapshotRestoreOptions{
+		id:  created.data['id']
+		yes: true
+	})
+	assert !restored.ok
+	assert restored.message.contains('contains no Hornero configuration archive')
+	assert (os.read_file(config_home + '/hornero/shell.json') or { '' }) == 'new configuration'
+	os.setenv('HOME', old_home, true)
+	if old_config.len > 0 {
+		os.setenv('XDG_CONFIG_HOME', old_config, true)
+	} else {
+		os.unsetenv('XDG_CONFIG_HOME')
+	}
+	if old_snapshots.len > 0 {
+		os.setenv('HORNERO_SNAPSHOTS_DIR', old_snapshots, true)
+	} else {
+		os.unsetenv('HORNERO_SNAPSHOTS_DIR')
+	}
+	os.rmdir_all(root) or {}
+}
+
+fn test_snapshot_config_home_empty_value_falls_back_to_home() {
+	old_home := os.getenv('HOME')
+	old_config := os.getenv('XDG_CONFIG_HOME')
+	os.setenv('HOME', b1_root + '/empty-xdg-home', true)
+	os.setenv('XDG_CONFIG_HOME', '', true)
+	assert snapshot_config_home() == b1_root + '/empty-xdg-home/.config'
+	os.setenv('HOME', old_home, true)
+	if old_config.len > 0 {
+		os.setenv('XDG_CONFIG_HOME', old_config, true)
+	} else {
+		os.unsetenv('XDG_CONFIG_HOME')
+	}
+}
+
+fn test_snapshot_create_fails_when_tar_fails() {
+	root := b1_root + '/tar-create-failure'
+	home := root + '/home'
+	config_home := home + '/.config'
+	snapshots := root + '/snapshots'
+	fake_tar := root + '/tar'
+	old_home := os.getenv('HOME')
+	old_config := os.getenv('XDG_CONFIG_HOME')
+	old_snapshots := os.getenv('HORNERO_SNAPSHOTS_DIR')
+	old_tar := os.getenv('HORNERO_TAR_BIN')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(config_home + '/hornero') or { assert false }
+	os.write_file(config_home + '/hornero/shell.json', '{}') or { assert false }
+	os.write_file(fake_tar, '#!/bin/sh\necho simulated archive error >&2\nexit 7\n') or { assert false }
+	os.chmod(fake_tar, 0o755) or { assert false }
+	os.setenv('HOME', home, true)
+	os.setenv('XDG_CONFIG_HOME', config_home, true)
+	os.setenv('HORNERO_SNAPSHOTS_DIR', snapshots, true)
+	os.setenv('HORNERO_TAR_BIN', fake_tar, true)
+	r := snapshot_create_report(SnapshotCreateOptions{ yes: true })
+	assert !r.ok
+	assert r.message.contains('exit 7')
+	assert r.message.contains('simulated archive error')
+	assert !os.is_link(snapshots + '/latest')
+	entries := os.ls(snapshots) or { []string{} }
+	assert entries.len == 0
+	os.setenv('HOME', old_home, true)
+	if old_config.len > 0 {
+		os.setenv('XDG_CONFIG_HOME', old_config, true)
+	} else {
+		os.unsetenv('XDG_CONFIG_HOME')
+	}
+	if old_snapshots.len > 0 {
+		os.setenv('HORNERO_SNAPSHOTS_DIR', old_snapshots, true)
+	} else {
+		os.unsetenv('HORNERO_SNAPSHOTS_DIR')
+	}
+	if old_tar.len > 0 {
+		os.setenv('HORNERO_TAR_BIN', old_tar, true)
+	} else {
+		os.unsetenv('HORNERO_TAR_BIN')
+	}
+	os.rmdir_all(root) or {}
+}
+
+fn test_snapshot_restore_reports_tar_extraction_failure() {
+	root := b1_root + '/tar-restore-failure'
+	home := root + '/home'
+	config_home := home + '/.config'
+	snapshots := root + '/snapshots'
+	fake_tar := root + '/tar'
+	old_home := os.getenv('HOME')
+	old_config := os.getenv('XDG_CONFIG_HOME')
+	old_snapshots := os.getenv('HORNERO_SNAPSHOTS_DIR')
+	old_tar := os.getenv('HORNERO_TAR_BIN')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(config_home + '/hornero') or { assert false }
+	os.write_file(config_home + '/hornero/shell.json', 'before') or { assert false }
+	os.setenv('HOME', home, true)
+	os.setenv('XDG_CONFIG_HOME', config_home, true)
+	os.setenv('HORNERO_SNAPSHOTS_DIR', snapshots, true)
+	os.setenv('HORNERO_TAR_BIN', '/bin/tar', true)
+	created := snapshot_create_report(SnapshotCreateOptions{ yes: true })
+	assert created.ok
+	os.write_file(config_home + '/hornero/shell.json', 'after') or { assert false }
+	os.rmdir_all(config_home) or { assert false }
+	os.write_file(fake_tar, '#!/bin/sh\nif [ "$1" = "-xzf" ]; then echo simulated extraction error >&2; exit 9; fi\nexec /bin/tar "$@"\n') or { assert false }
+	os.chmod(fake_tar, 0o755) or { assert false }
+	os.setenv('HORNERO_TAR_BIN', fake_tar, true)
+	restored := snapshot_restore_report(SnapshotRestoreOptions{
+		id:  created.data['id']
+		yes: true
+	})
+	assert !restored.ok
+	assert restored.message.contains('exit 9')
+	assert restored.message.contains('simulated extraction error')
+	assert os.is_dir(config_home)
+	os.setenv('HOME', old_home, true)
+	if old_config.len > 0 {
+		os.setenv('XDG_CONFIG_HOME', old_config, true)
+	} else {
+		os.unsetenv('XDG_CONFIG_HOME')
+	}
+	if old_snapshots.len > 0 {
+		os.setenv('HORNERO_SNAPSHOTS_DIR', old_snapshots, true)
+	} else {
+		os.unsetenv('HORNERO_SNAPSHOTS_DIR')
+	}
+	if old_tar.len > 0 {
+		os.setenv('HORNERO_TAR_BIN', old_tar, true)
+	} else {
+		os.unsetenv('HORNERO_TAR_BIN')
+	}
+	os.rmdir_all(root) or {}
 }
 
 fn test_package_check_dry_run_needs_no_backend() {
@@ -203,7 +322,7 @@ fn test_package_check_missing_backend_fails_cleanly() {
 }
 
 fn test_package_updates_counts_backend_lines() {
-	bin := '${b1_root}/bin/dots-checkupdates'
+	bin := '${b1_root}/bin/checkupdates'
 	b1_write(bin, '#!/bin/sh\nprintf "pkg-a 1.0 -> 1.1\\npkg-b 2.0 -> 2.1\\npkg-c 3.0 -> 3.1\\n"')
 	os.chmod(bin, 0o755) or { assert false }
 	os.setenv('HORNERO_CHECKUPDATES_BIN', bin, true)
@@ -220,8 +339,8 @@ fn test_package_updates_counts_backend_lines() {
 
 fn test_backup_list_reads_materialized_archives() {
 	os.mkdir_all('${b1_root}/backups') or { assert false }
-	b1_write('${b1_root}/backups/dotfiles_backup_01.zip', 'fake-zip-a')
-	b1_write('${b1_root}/backups/dotfiles_backup_02.zip', 'fake-zip-b-longer')
+	b1_write('${b1_root}/backups/hornero-config_01.tar.gz', 'fake-archive-a')
+	b1_write('${b1_root}/backups/hornero-config_02.tar.gz', 'fake-archive-b-longer')
 	b1_write('${b1_root}/backups/notes.txt', 'not a backup')
 	os.setenv('HORNERO_BACKUP_DIR', '${b1_root}/backups', true)
 	backups := list_backups() or {
@@ -229,7 +348,7 @@ fn test_backup_list_reads_materialized_archives() {
 		return
 	}
 	assert backups.len == 2
-	assert backups[0].name == 'dotfiles_backup_01.zip'
+	assert backups[0].name == 'hornero-config_01.tar.gz'
 	r := backup_list_report()
 	assert r.ok
 	assert r.command == 'backup list'

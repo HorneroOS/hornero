@@ -90,18 +90,18 @@ fn test_power_logout_needs_session() {
 fn test_lock_plan_prefers_lockscreen() {
 	saved := power_test_save_env(['HORNERO_LOCKSCREEN_BIN', 'HORNERO_HYPRLOCK_BIN',
 		'HORNERO_LOGINCTL_BIN'])
-	os.setenv('HORNERO_LOCKSCREEN_BIN', '/fake/dots-lockscreen', true)
+	os.setenv('HORNERO_LOCKSCREEN_BIN', '/fake/horneroctl lock', true)
 	plan := lock_plan(true, '') or {
 		assert false, err.msg()
 		return
 	}
-	assert plan.prog == '/fake/dots-lockscreen'
+	assert plan.prog == '/fake/horneroctl lock'
 	assert plan.args == ['--lock']
 	power_test_restore_env(saved)
 }
 
 fn test_lock_plan_hyprlock_pin_runs_bare() {
-	// The delegating dots-lockscreen shim pins HORNERO_LOCKSCREEN_BIN at
+	// The delegating horneroctl lock shim pins HORNERO_LOCKSCREEN_BIN at
 	// the real hyprlock binary; the plan must run it bare, never --lock.
 	saved := power_test_save_env(['HORNERO_LOCKSCREEN_BIN', 'HORNERO_HYPRLOCK_BIN',
 		'HORNERO_LOGINCTL_BIN'])

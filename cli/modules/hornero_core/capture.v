@@ -5,17 +5,17 @@ import time
 
 // Screen capture: screenshots (`sss`), screen recordings
 // (`gpu-screen-recorder`), and the clipboard manager picker
-// (copyq/cliphist/wl-paste), mirroring the dots-screenshooter,
-// dots-recorder, and dots-clipboard reference scripts.
+// (copyq/cliphist/wl-paste), mirroring the horneroctl capture screenshot,
+// horneroctl capture recorder, and horneroctl capture clipboard reference scripts.
 //
 // Screenshot and record leaves mutate (files, processes) and need --yes;
 // --dry-run only previews. `clipboard` only opens read views (the picker,
 // a history list, or a paste preview), so it needs no --yes — like
 // `config gui` / `welcome open`. The interactive cliphist pick
-// (list → prompt → wl-copy) stays in dots-clipboard: horneroctl lists the
+// (list → prompt → wl-copy) stays in horneroctl capture clipboard: horneroctl lists the
 // history non-interactively and never prompts.
 // Recorder state (current file, pause flag) lives under XDG state
-// (dots/recorder), matching $XDG_STATE_HOME conventions; the output and
+// (hornero/recorder), matching $XDG_STATE_HOME conventions; the output and
 // picture directories follow CAELESTIA_RECORDINGS_DIR, XDG_VIDEOS_DIR,
 // and XDG_PICTURES_DIR exactly like the scripts.
 
@@ -144,7 +144,7 @@ fn recorder_state_dir() string {
 	if base.len == 0 {
 		base = os.join_path(os.home_dir(), '.local', 'state')
 	}
-	return os.join_path(base, 'dots', 'recorder')
+	return os.join_path(base, 'hornero', 'recorder')
 }
 
 fn recorder_current_file() string {
@@ -183,7 +183,7 @@ fn recorder_default_file() string {
 
 // recorder_primary_monitor reads the first monitor from
 // `gsr --list-monitors` (name before the first '|'), falling back to
-// eDP-1 like the dots-recorder wrapper. have_bin false (or any probe
+// eDP-1 like the horneroctl capture recorder wrapper. have_bin false (or any probe
 // failure) yields the fallback without executing anything.
 fn recorder_primary_monitor(gsr string, have_bin bool) string {
 	if !have_bin {
@@ -209,7 +209,7 @@ fn capture_notify(icon string, title string, body string) {
 	if bin.len == 0 {
 		return
 	}
-	os.execute('${command_line(bin, ['-i', icon, '-a', 'dots-recorder', title, body])} 2>/dev/null || true')
+	os.execute('${command_line(bin, ['-i', icon, '-a', 'horneroctl capture recorder', title, body])} 2>/dev/null || true')
 }
 
 // screenshot_timeout_sec bounds the sss backend run (default 30s).
@@ -236,7 +236,7 @@ pub:
 
 // screenshot_report implements `capture screenshot` via sss: fullscreen
 // (`--screen --current --copy --output <file>`) by default, or a bare
-// interactive region select with --region — the dots-screenshooter
+// interactive region select with --region — the horneroctl capture screenshot
 // contract. Mutating: needs --yes; --dry-run only previews.
 pub fn screenshot_report(opts ScreenshotOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
@@ -323,7 +323,7 @@ fn record_start_args(monitor string, region bool, sound bool, fps int, file stri
 }
 
 // record_start_report implements `capture record start`: detached launch,
-// state-file bookkeeping, and a pgrep confirmation — the dots-recorder
+// state-file bookkeeping, and a pgrep confirmation — the horneroctl capture recorder
 // start contract. Mutating: needs --yes; --dry-run only previews and
 // never launches. A live recorder turns start into an ok no-op.
 pub fn record_start_report(opts RecordStartOptions) CommandResult {
@@ -478,7 +478,7 @@ fn clipboard_is_wayland() bool {
 }
 
 // clipboard_pick_backend resolves the effective backend: explicit wins,
-// else the dots-clipboard order (Wayland: copyq, cliphist, minimal;
+// else the horneroctl capture clipboard order (Wayland: copyq, cliphist, minimal;
 // otherwise copyq, minimal).
 fn clipboard_pick_backend(explicit string) string {
 	if explicit.len > 0 && explicit != 'auto' {
@@ -500,7 +500,7 @@ fn clipboard_pick_backend(explicit string) string {
 }
 
 // clipboard_minimal_output runs `wl-paste | head -c 500` via the shell so
-// the byte limit matches the dots-clipboard minimal fallback exactly.
+// the byte limit matches the horneroctl capture clipboard minimal fallback exactly.
 fn clipboard_minimal_output(wl_paste string) ExecReport {
 	line := '${command_line(wl_paste, [])} | head -c 500'
 	r := os.execute(line)
@@ -601,7 +601,7 @@ pub fn clipboard_report(opts ClipboardOptions) CommandResult {
 					'backend':      'minimal'
 				})
 		}
-		return ok_result('capture clipboard', '[dots-clipboard] minimal fallback\n(no data)',
+		return ok_result('capture clipboard', '[horneroctl capture clipboard] minimal fallback\n(no data)',
 			{
 				'backend': 'minimal'
 			})
@@ -619,7 +619,7 @@ pub fn clipboard_report(opts ClipboardOptions) CommandResult {
 		return fail_result('capture clipboard', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 	}
 	msg := if rep.output.len > 0 { rep.output } else { '(empty)' }
-	return ok_result('capture clipboard', '[dots-clipboard] minimal fallback\n${msg}',
+	return ok_result('capture clipboard', '[horneroctl capture clipboard] minimal fallback\n${msg}',
 		{
 			'command_line': rep.command_line
 			'backend':      'minimal'

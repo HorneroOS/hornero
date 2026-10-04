@@ -2,26 +2,13 @@ module hornero_core
 
 import os
 
-// Everyday app launchers: file manager, terminal files, weather, git
-// watcher, security audit, launcher, toggles, window switcher, and
-// performance tooling — mirroring the dots-file-manager, dots-yazi,
-// dots-weather-info, dots-git-notify, dots-security-audit,
-// dots-default-apps (list already lives under `config default-apps`),
-// dots-config-manager (create/list/restore already live under `config
-// snapshot`), dots-launcher, dots-toggle, dots-snappy-switcher,
-// dots-performance, and dots-performance-mode reference scripts.
-//
-// Reads delegate to the dots-* wrappers (HORNEROCTL_DELEGATED=1 guard);
-// leaf tools (exo-open, yazi, powerprofilesctl) run directly. View-open
-// verbs (files open, terminal launch, launcher) need no --yes — like
-// `config gui` / `welcome open` / `capture clipboard`. State-changing
-// verbs (toggles, switcher control, git watch/stop, profile set) need
-// --yes; --dry-run only previews. `audit` ports checks plus --fix
-// (chmod/history scrub), --report, and --json.
+// Application-facing actions grouped under `horneroctl apps`. Stable policies,
+// validation and machine-readable results live here; external programs are
+// invoked through explicit, narrowly scoped backends.
 
-// dots_helper_bin resolves one dots-* wrapper: explicit override, then
+// hornero_helper_bin resolves one optional Hornero helper: explicit override, then
 // ~/.local/bin, then PATH.
-fn dots_helper_bin(env_key string, script string) string {
+fn hornero_helper_bin(env_key string, script string) string {
 	env := os.getenv(env_key)
 	if env.len > 0 {
 		return env
@@ -77,10 +64,10 @@ pub fn resolve_xdg_open_bin() string {
 	return leaf_bin('HORNERO_XDG_OPEN_BIN', 'xdg-open')
 }
 
-// resolve_dots_yazi_bin locates the dots-yazi wrapper.
-// Override with HORNERO_DOTS_YAZI_BIN.
-pub fn resolve_dots_yazi_bin() string {
-	return dots_helper_bin('HORNERO_DOTS_YAZI_BIN', 'dots-yazi')
+// resolve_hornero_yazi_bin locates the hornero-yazi wrapper.
+// Override with HORNERO_YAZI_HELPER_BIN.
+pub fn resolve_hornero_yazi_bin() string {
+	return hornero_helper_bin('HORNERO_YAZI_HELPER_BIN', 'hornero-yazi')
 }
 
 // resolve_yazi_bin locates yazi itself. Override with HORNERO_YAZI_BIN.
@@ -88,18 +75,18 @@ pub fn resolve_yazi_bin() string {
 	return leaf_bin('HORNERO_YAZI_BIN', 'yazi')
 }
 
-// resolve_dots_git_notify_bin locates dots-git-notify.
+// resolve_hornero_git_notify_bin locates hornero-git-notify.
 // Override with HORNERO_GIT_NOTIFY_BIN.
-pub fn resolve_dots_git_notify_bin() string {
-	return dots_helper_bin('HORNERO_GIT_NOTIFY_BIN', 'dots-git-notify')
+pub fn resolve_hornero_git_notify_bin() string {
+	return hornero_helper_bin('HORNERO_GIT_NOTIFY_BIN', 'hornero-git-notify')
 }
 
-// resolve_dots_launcher_bin locates dots-launcher.
+// resolve_hornero_launcher_bin locates hornero-launcher.
 // Override with HORNERO_LAUNCHER_BIN.
-// resolve_dots_snappy_bin locates dots-snappy-switcher.
+// resolve_hornero_snappy_bin locates hornero-snappy-switcher.
 // Override with HORNERO_SNAPPY_BIN.
-pub fn resolve_dots_snappy_bin() string {
-	return dots_helper_bin('HORNERO_SNAPPY_BIN', 'dots-snappy-switcher')
+pub fn resolve_hornero_snappy_bin() string {
+	return hornero_helper_bin('HORNERO_SNAPPY_BIN', 'hornero-snappy-switcher')
 }
 
 // resolve_snappy_switcher_bin locates the snappy-switcher binary itself
@@ -152,11 +139,10 @@ fn apps_quote_line(words []string) string {
 	return quoted.join(' ')
 }
 
-// apps_run_delegated invokes one dots-* wrapper under the
-// HORNEROCTL_DELEGATED re-entrancy guard via env(1), or previews the
-// guarded command on dry-run. Dry-run previews never execute.
-fn apps_run_delegated(bin string, args []string, dry_run bool) ExecReport {
-	mut words := ['env', 'HORNEROCTL_DELEGATED=1', bin]
+// apps_run_helper invokes an optional Hornero helper using argv and previews
+// without execution in dry-run mode.
+fn apps_run_helper(bin string, args []string, dry_run bool) ExecReport {
+	mut words := [bin]
 	for a in args {
 		words << a
 	}
@@ -230,13 +216,9 @@ pub:
 
 // files_report implements `apps files`: open the default file manager
 // at --path (view-open, needs no --yes) or show the default with
-// --info (read-only). Backend chain mirrors dots-file-manager:
-// exo-open, handlr, xdg-open. --dry-run only previews.
-// files_info_native implements `apps files --info` natively,
-// mirroring the retired dots-file-manager: handlr default plus the
-// .desktop providers, xdg-mime fallback, graceful notice when neither
-// XDG tool exists. The configure hint points at horneroctl (the legacy
-// --gui/--type leaves have no CLI equivalent by design).
+// --info (read-only). Open uses the selected XDG desktop association;
+// information reads MIME defaults and installed desktop providers. Interactive
+// association editing belongs to the Control Center.
 fn files_info_native() CommandResult {
 	handlr := resolve_handlr_bin()
 	if handlr.len > 0 {
@@ -369,7 +351,7 @@ pub fn files_report(opts FilesOptions) CommandResult {
 	return fail_result('apps files', 'no file manager launcher found (exo-open, handlr, or xdg-open). Set HORNERO_EXO_OPEN_BIN.\nExample: horneroctl apps files --dry-run')
 }
 
-// yazi_fix_previews_native replicates the retired dots-yazi preview
+// yazi_fix_previews_native replicates the retired hornero-yazi preview
 // diagnostics: required core deps, kitty check, optional preview and
 // power tools. Always succeeds like the script (exit 0); missing
 // required deps are flagged REQUIRED with install hints in the report.
@@ -441,10 +423,10 @@ pub:
 
 // terminal_file_report implements `apps terminal-file`: cheatsheet and
 // fix-previews read backend output (read-only); otherwise open yazi via
-// the dots-yazi wrapper (view-open, needs no --yes), falling back to
+// the hornero-yazi wrapper (view-open, needs no --yes), falling back to
 // bare yazi. --dry-run only previews.
 // yazi_cheatsheet_lines is the keybinding reference, kept verbatim from
-// the retired dots-yazi script (box-drawing, no ANSI: CLI output is plain).
+// the retired hornero-yazi script (box-drawing, no ANSI: CLI output is plain).
 const yazi_cheatsheet_lines = [
 	'╔══════════════════════════════════════════════════════════════════════════════════╗',
 	'║                          YAZI CHEATSHEET — HorneroConfig                      ║',
@@ -519,9 +501,9 @@ pub fn terminal_file_report(opts TerminalFileOptions) CommandResult {
 		args << '--path'
 		args << opts.path
 	}
-	wrapper := resolve_dots_yazi_bin()
+	wrapper := resolve_hornero_yazi_bin()
 	if wrapper.len > 0 {
-		rep := apps_run_delegated(wrapper, args, opts.dry_run)
+		rep := apps_run_helper(wrapper, args, opts.dry_run)
 		if opts.dry_run {
 			return ok_result('apps terminal-file', 'would run: ${rep.command_line}', {
 				'command_line': rep.command_line
@@ -543,41 +525,13 @@ pub fn terminal_file_report(opts TerminalFileOptions) CommandResult {
 		return apps_delegated_ok('apps terminal-file', rep, {})
 	}
 	if opts.dry_run {
-		rep := apps_run_delegated('dots-yazi', args, true)
+		rep := apps_run_helper('hornero-yazi', args, true)
 		return ok_result('apps terminal-file', 'would run: ${rep.command_line}', {
 			'command_line': rep.command_line
 			'dry_run':      'true'
 		})
 	}
-	return fail_result('apps terminal-file', 'no yazi backend found (dots-yazi or yazi). Set HORNERO_DOTS_YAZI_BIN.\nExample: horneroctl apps terminal-file --dry-run')
-}
-
-pub struct WeatherOptions {
-pub:
-	field   string // getdata | icon | temp | hex | stat | loc | quote | quote2
-	dry_run bool
-}
-
-// weather_report implements `apps weather`: read one cached weather
-// field, or refresh the cache with --getdata — the dots-weather-info
-// contract. Read-only; --dry-run only previews.
-pub fn weather_report(opts WeatherOptions) CommandResult {
-	if opts.field !in ['getdata', 'icon', 'temp', 'hex', 'stat', 'loc', 'quote', 'quote2'] {
-		return fail_result('apps weather', 'unknown weather field: ${opts.field}.\nRun: horneroctl apps weather --help')
-	}
-	if !opts.dry_run {
-		if opts.field == 'getdata' {
-			return weather_getdata_native()
-		}
-		return weather_field_native(opts.field)
-	}
-	rep := apps_run_delegated('dots-weather-info', ['--${opts.field}'], true)
-	return ok_result('apps weather --${opts.field}', 'would run: ${rep.command_line}',
-		{
-			'command_line': rep.command_line
-			'dry_run':      'true'
-			'field':        opts.field
-		})
+	return fail_result('apps terminal-file', 'no yazi backend found (hornero-yazi or yazi). Set HORNERO_YAZI_HELPER_BIN.\nExample: horneroctl apps terminal-file --dry-run')
 }
 
 pub struct GitStatusOptions {
@@ -592,7 +546,7 @@ pub:
 	yes        bool
 }
 
-// git_status_report implements `apps git-status` over dots-git-notify:
+// git_status_report implements `apps git-status` over hornero-git-notify:
 // `jobs` lists background watchers (read-only); `stop` kills them and
 // `watch` starts the notify loop (both mutating: need --yes);
 // --dry-run only previews.
@@ -600,12 +554,12 @@ pub fn git_status_report(opts GitStatusOptions) CommandResult {
 	if opts.leaf !in ['watch', 'jobs', 'stop'] {
 		return fail_result('apps git-status', 'unknown git-status leaf: ${opts.leaf}.\nRun: horneroctl apps git-status --help')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_git_notify_bin(), 'dots-git-notify',
+	bin := apps_backend_or_placeholder(resolve_hornero_git_notify_bin(), 'hornero-git-notify',
 		'HORNERO_GIT_NOTIFY_BIN', opts.dry_run, 'horneroctl apps git-status jobs --dry-run') or {
 		return fail_result('apps git-status ${opts.leaf}', err.msg())
 	}
 	if opts.leaf == 'jobs' {
-		rep := apps_run_delegated(bin, ['-l'], opts.dry_run)
+		rep := apps_run_helper(bin, ['-l'], opts.dry_run)
 		if opts.dry_run {
 			return ok_result('apps git-status jobs', 'would run: ${rep.command_line}',
 				{
@@ -641,7 +595,7 @@ pub fn git_status_report(opts GitStatusOptions) CommandResult {
 			args << '-v'
 		}
 	}
-	rep := apps_run_delegated(bin, args, opts.dry_run)
+	rep := apps_run_helper(bin, args, opts.dry_run)
 	if opts.dry_run {
 		return ok_result('apps git-status ${opts.leaf}', 'would run: ${rep.command_line}',
 			{
@@ -660,7 +614,7 @@ pub:
 	dry_run bool
 }
 
-// audit_report implements `apps audit` natively (no dots-security-audit):
+// audit_report implements `apps audit` natively (no hornero-security-audit):
 // the read-only checks (full audit by default) run in-process, and so do
 // --fix (permission changes, history scrub), --report (markdown file),
 // and --json (machine summary). --fix mutates: needs --yes.
@@ -679,7 +633,7 @@ pub fn audit_report(opts AuditOptions) CommandResult {
 	}
 	flag := if opts.check == 'full' { '--audit' } else { '--' + opts.check }
 	if opts.dry_run {
-		rep := apps_run_delegated('dots-security-audit', [flag], true)
+		rep := apps_run_helper('hornero-security-audit', [flag], true)
 		return ok_result('apps audit', 'would run: ${rep.command_line}', {
 			'command_line': rep.command_line
 			'dry_run':      'true'
@@ -699,11 +653,11 @@ pub:
 	dry_run bool
 }
 
-// launch_report implements `apps launch` natively (no dots-launcher):
+// launch_report implements `apps launch` natively (no hornero-launcher):
 // list detected backends in priority order (read-only) or open the launcher via quickshell ipc (auto falls back to a minimal stdin
-// prompt) — the dots-launcher contract. View-open, needs no --yes;
-// --dry-run only previews the legacy delegation.
-// launch_native implements `apps launch` without the dots-launcher
+// prompt) — the hornero-launcher contract. View-open, needs no --yes;
+// --dry-run only previews the selected backend.
+// launch_native implements `apps launch` without the hornero-launcher
 // wrapper (retired): --list prints quickshell (when its binary
 // resolves) then minimal; quickshell launch runs
 // `quickshell ipc call drawers toggle launcher`; auto falls back to a
@@ -776,7 +730,7 @@ pub fn launch_report(opts LaunchOptions) CommandResult {
 		args << '--backend'
 		args << opts.backend
 	}
-	rep := apps_run_delegated('dots-launcher', args, true)
+	rep := apps_run_helper('hornero-launcher', args, true)
 	name := if opts.list { 'apps launch --list' } else { 'apps launch' }
 	return ok_result(name, 'would run: ${rep.command_line}', {
 		'command_line': rep.command_line
@@ -791,11 +745,11 @@ pub:
 	yes       bool
 }
 
-// toggle_native implements `apps toggle` without the dots-toggle
+// toggle_native implements `apps toggle` without the hornero-toggle
 // wrapper (retired): quickshell components go through
 // `quickshell ipc call drawers toggle <component>`; redshift and
 // caffeine toggle one-shot via pidof plus pkill/killall or a detached
-// start — the dots-toggle --toggle contract.
+// start — the hornero-toggle --toggle contract.
 fn toggle_native(opts ToggleOptions) CommandResult {
 	name := 'apps toggle ${opts.component}'
 	if opts.component in ['redshift', 'caffeine'] {
@@ -883,12 +837,12 @@ fn toggle_daemon_native(name string, daemon string, dry_run bool) CommandResult 
 	})
 }
 
-// toggle_report implements `apps toggle` natively (no dots-toggle):
+// toggle_report implements `apps toggle` natively (no hornero-toggle):
 // quickshell component toggles go through
 // `quickshell ipc call drawers toggle <component>`; redshift and
 // caffeine toggle once via pidof plus pkill/killall or a detached start
-// (their monitor loops stay legacy).
-// Mutating: needs --yes; --dry-run only previews the legacy delegation.
+// (their monitor loops remain optional).
+// Mutating: needs --yes; --dry-run only previews the selected backend.
 pub fn toggle_report(opts ToggleOptions) CommandResult {
 	if opts.component !in ['bar', 'launcher', 'dashboard', 'sidebar', 'session', 'utilities', 'redshift',
 		'caffeine'] {
@@ -904,7 +858,7 @@ pub fn toggle_report(opts ToggleOptions) CommandResult {
 	if !opts.dry_run {
 		return toggle_native(opts)
 	}
-	rep := apps_run_delegated('dots-toggle', args, true)
+	rep := apps_run_helper('hornero-toggle', args, true)
 	return ok_result('apps toggle ${opts.component}', 'would run: ${rep.command_line}',
 		{
 			'command_line': rep.command_line
@@ -922,7 +876,7 @@ pub:
 }
 
 // switcher_daemon_native runs one snappy-switcher daemon/window command
-// without the dots-snappy-switcher wrapper (retired for control verbs):
+// without the hornero-snappy-switcher wrapper (retired for control verbs):
 // the snappy-switcher binary runs foreground, like run_snappy. Missing
 // binary fails closed with the AUR install hint.
 fn switcher_daemon_native(leaf string) CommandResult {
@@ -968,8 +922,8 @@ fn switcher_status_native() CommandResult {
 }
 
 // switcher_report implements `apps switcher`: daemon/window commands and
-// status run natively; apply-theme* still delegate to dots-snappy-switcher
-// (theme synthesis lives in the dots lib, like audit --fix):
+// status run natively; apply-theme* still delegate to hornero-snappy-switcher
+// (theme synthesis lives in the Hornero appearance library, like audit --fix):
 // `status` is read-only; every control leaf mutates (windows, daemon,
 // theme) and needs --yes. --dry-run only previews.
 pub fn switcher_report(opts SwitcherOptions) CommandResult {
@@ -992,7 +946,7 @@ pub fn switcher_report(opts SwitcherOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('apps switcher ${opts.leaf}', 'refusing to ${opts.leaf} without --yes (preview with --dry-run).\nExample: horneroctl apps switcher ${opts.leaf} --dry-run')
 	}
-	bin := apps_backend_or_placeholder(resolve_dots_snappy_bin(), 'dots-snappy-switcher',
+	bin := apps_backend_or_placeholder(resolve_hornero_snappy_bin(), 'hornero-snappy-switcher',
 		'HORNERO_SNAPPY_BIN', opts.dry_run, 'horneroctl apps switcher status --dry-run') or {
 		return fail_result('apps switcher ${opts.leaf}', err.msg())
 	}
@@ -1000,7 +954,7 @@ pub fn switcher_report(opts SwitcherOptions) CommandResult {
 	if opts.arg.len > 0 && opts.leaf in ['apply-theme', 'apply-theme-pack', 'apply-rice-theme'] {
 		args << opts.arg
 	}
-	rep := apps_run_delegated(bin, args, opts.dry_run)
+	rep := apps_run_helper(bin, args, opts.dry_run)
 	if opts.dry_run {
 		return ok_result('apps switcher ${opts.leaf}', 'would run: ${rep.command_line}',
 			{
@@ -1021,10 +975,10 @@ pub:
 }
 
 // performance_report implements `apps performance` natively (no
-// dots-performance): shell startup, memory, benchmark, and report
+// hornero-performance): shell startup, memory, benchmark, and report
 // reads run in-process (read-only); `mode` shows the powerprofilesctl
 // profile and `mode set` switches it (needs --yes).
-// --dry-run only previews the legacy delegation.
+// --dry-run only previews the selected backend.
 pub fn performance_report(opts PerformanceOptions) CommandResult {
 	if opts.leaf !in ['startup', 'memory', 'benchmark', 'report', 'mode'] {
 		return fail_result('apps performance', 'unknown performance leaf: ${opts.leaf}.\nRun: horneroctl apps performance --help')
@@ -1073,9 +1027,9 @@ fn performance_mode_profiles(bin string) ![]string {
 
 // performance_mode_report implements `apps performance mode [set]`:
 // show the current profile plus available ones (read-only), or switch
-// with `set` (needs --yes). Verbs mirror dots-performance-mode;
+// with `set` (needs --yes). Verbs mirror hornero-performance-mode;
 // the interactive menu, quickshell pane, and auto-cpufreq GUI stay
-// legacy.
+// configured backend.
 fn performance_mode_report(opts PerformanceOptions) CommandResult {
 	if opts.sub !in ['', 'set'] {
 		return fail_result('apps performance mode', 'unknown mode subcommand: ${opts.sub}.\nExample: horneroctl apps performance mode set balanced --dry-run')

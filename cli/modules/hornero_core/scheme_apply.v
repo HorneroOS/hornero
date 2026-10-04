@@ -3,7 +3,7 @@ module hornero_core
 import os
 import x.json2
 
-// Native scheme-state operations. Ports dots-color-scheme (state
+// Native scheme-state operations. Ports horneroctl appearance scheme (state
 // read/write, normalize, list/current/set/variant/mode/regenerate/
 // sync-state) plus the M3 regeneration orchestration. Only the M3
 // synthesizer (python + generate-m3-colors.py) and the optional shell
@@ -23,15 +23,6 @@ pub fn smart_colors_dir() string {
 	return os.join_path(base, 'hornero', 'smart-colors')
 }
 
-// smart_colors_dir_fallback is the legacy `dots/*` location (reads only).
-pub fn smart_colors_dir_fallback() string {
-	mut base := os.getenv('XDG_CACHE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
-	}
-	return os.join_path(base, 'dots', 'smart-colors')
-}
-
 // accent_override_file is the canonical accent seed location
 // (WRITE TARGET). Override with HORNERO_ACCENT_OVERRIDE_FILE.
 pub fn accent_override_file() string {
@@ -42,22 +33,8 @@ pub fn accent_override_file() string {
 	return os.join_path(smart_colors_dir(), 'accent-override')
 }
 
-// accent_override_file_fallback is the legacy `dots/*` location.
-pub fn accent_override_file_fallback() string {
-	return os.join_path(smart_colors_dir_fallback(), 'accent-override')
-}
-
-// read_accent_override returns the accent seed canonical-first.
 pub fn read_accent_override() string {
-	canon := accent_override_file()
-	if os.is_file(canon) {
-		return (os.read_file(canon) or { '' }).trim_space()
-	}
-	fb := accent_override_file_fallback()
-	if os.is_file(fb) {
-		return (os.read_file(fb) or { '' }).trim_space()
-	}
-	return ''
+	return (os.read_file(accent_override_file()) or { '' }).trim_space()
 }
 
 // write_scheme_state persists name/flavour/mode/variant to the canonical
@@ -82,7 +59,7 @@ pub fn write_scheme_state(name string, flavour string, mode string, variant stri
 pub fn ensure_scheme_state() SchemeState {
 	path := scheme_state_file()
 	if !os.is_file(path) {
-		scheme := color_scheme_file_for_read()
+		scheme := color_scheme_file()
 		mut flavour := 'tonal-spot'
 		mut mode := 'dark'
 		if os.is_file(scheme) {
@@ -106,7 +83,7 @@ pub fn scheme_flavours() []string {
 }
 
 // scheme_list_report implements the scheme `list` verb natively: the
-// live colours under every flavour key (the dots-color-scheme list shape).
+// live colours under every flavour key (the horneroctl appearance scheme list shape).
 pub fn scheme_list_report() CommandResult {
 	colours := scheme_colours_for_read()
 	mut inner := []string{}
@@ -115,13 +92,13 @@ pub fn scheme_list_report() CommandResult {
 	}
 	payload := '{"dynamic": {${inner.join(', ')}}}'
 	return ok_result('appearance scheme list', payload, {
-		'state_file': scheme_state_file_for_read()
+		'state_file': scheme_state_file()
 	})
 }
 
 // scheme_colours_for_read returns the live colours object (or `{}`).
 fn scheme_colours_for_read() string {
-	path := color_scheme_file_for_read()
+	path := color_scheme_file()
 	raw := os.read_file(path) or { return '{}' }
 	parsed := json2.decode[json2.Any](raw) or { return '{}' }
 	if parsed is map[string]json2.Any {
@@ -136,7 +113,7 @@ fn scheme_colours_for_read() string {
 // name, flavour, variant (one per line, like cmd_current).
 pub fn scheme_current_report() CommandResult {
 	st := read_scheme_state()
-	name_field := scheme_json_field(color_scheme_file_for_read(), 'name')
+	name_field := scheme_json_field(color_scheme_file(), 'name')
 	out_name := if name_field.len > 0 { name_field } else { 'dynamic' }
 	out_flavour := if st.flavour.len > 0 { st.flavour } else { 'tonal-spot' }
 	out_variant := if st.variant.len > 0 { st.variant } else { 'tonalspot' }
@@ -158,7 +135,7 @@ pub fn sync_state_from_scheme() !string {
 // sync_state_from_scheme_with_theme_id optionally preserves the selected
 // theme-pack identity while adopting generated flavour and mode metadata.
 pub fn sync_state_from_scheme_with_theme_id(theme_id string) !string {
-	scheme := color_scheme_file_for_read()
+	scheme := color_scheme_file()
 	if !os.is_file(scheme) {
 		return error('scheme.json missing at ${scheme} — regenerate first.')
 	}
@@ -250,8 +227,8 @@ pub fn scheme_set_mode_native(mode string, dry_run bool) CommandResult {
 		return fail_result('appearance scheme set-mode', 'invalid mode: ${mode} (want dark|light).\nExample: horneroctl appearance scheme set-mode dark --dry-run')
 	}
 	st := read_scheme_state()
-	name := if scheme_json_field(scheme_state_file_for_read(), 'name').len > 0 {
-		scheme_json_field(scheme_state_file_for_read(), 'name')
+	name := if scheme_json_field(scheme_state_file(), 'name').len > 0 {
+		scheme_json_field(scheme_state_file(), 'name')
 	} else {
 		'dynamic'
 	}
@@ -299,8 +276,8 @@ pub fn scheme_set_variant_native(variant_in string, dry_run bool) CommandResult 
 	variant := normalize_variant(variant_in)
 	flavour := variant_to_scheme_type(variant)
 	st := read_scheme_state()
-	name := if scheme_json_field(scheme_state_file_for_read(), 'name').len > 0 {
-		scheme_json_field(scheme_state_file_for_read(), 'name')
+	name := if scheme_json_field(scheme_state_file(), 'name').len > 0 {
+		scheme_json_field(scheme_state_file(), 'name')
 	} else {
 		'dynamic'
 	}
@@ -380,10 +357,6 @@ pub fn accent_report_native(action string, value string, dry_run bool) CommandRe
 					})
 			}
 			os.rm(accent_override_file()) or {}
-			fb := accent_override_file_fallback()
-			if fb != accent_override_file() {
-				os.rm(fb) or {}
-			}
 			reg := regenerate_scheme_native(read_wallpaper_pointer(), false)
 			if !reg.ok {
 				return fail_result('appearance accent clear', 'override cleared but regenerate failed: ${reg.message}')

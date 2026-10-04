@@ -3,11 +3,11 @@ module hornero_core
 import os
 
 // Privileged package backend: system upgrade plus dependency check and
-// install, ported from `dots-sysupdate` (31 lines) and
-// `dots-dependencies` (222 lines).
+// install, ported from `horneroctl package upgrade` (31 lines) and
+// `horneroctl package deps` (222 lines).
 //
 // - `upgrade` runs the full system upgrade through polkit
-//   (`pkexec pacman -Syu`). The legacy script preferred AUR helpers
+//   (`pkexec pacman -Syu`). Interactive system upgrades may use AUR helpers
 //   (yay/trizen/...) with a `sudo pacman -Syyuu` fallback; here pacman
 //   is pinned and polkit is required: without pkexec the command fails
 //   with guidance instead of falling back to sudo.
@@ -15,8 +15,8 @@ import os
 //   plus dev/media/AI groups with --optional) with pure PATH lookups
 //   (no execution, CI-hermetic), and installs the missing ones via
 //   `pkexec pacman -S --needed` (repo packages) plus `paru -S --needed`
-//   (AUR-only packages, user-level like the legacy yay flow).
-//   chezmoi installs from the repos instead of the legacy curl pipe.
+//   (AUR-only packages, user-level through the selected AUR helper).
+//   chezmoi installs from the repos from declared repositories.
 //
 // Mutations need --yes; --dry-run only previews.
 
@@ -152,7 +152,7 @@ fn package_dep_table(optional bool) []DepEntry {
 			DepEntry{'pi', '', 'pi-coding-agent', 'ai'},
 			DepEntry{'llmfit', '', 'llmfit-bin', 'ai'},
 		]
-		// The legacy script also pulls nodejs/npm for the AI tools.
+		// Optional AI tools may require nodejs/npm.
 		deps << [DepEntry{'node', 'nodejs', '', 'ai'}, DepEntry{'npm', 'npm', '', 'ai'}]
 	}
 	return deps

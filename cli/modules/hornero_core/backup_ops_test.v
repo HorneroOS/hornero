@@ -25,9 +25,6 @@ fn backup_ops_test_setup() {
 	os.write_file('/tmp/hx-backupops-test/source/file.txt', 'hello') or { assert false }
 	os.write_file('/tmp/hx-backupops-test/source/sub/nested.txt', 'nested') or { assert false }
 	os.mkdir_all('/tmp/hx-backupops-test/backups') or { assert false }
-	os.write_file('/tmp/hx-backupops-test/backups/legacy_dotfiles_backup.zip', 'fake-zip') or {
-		assert false
-	}
 	os.setenv('HORNERO_BACKUP_DIR', '/tmp/hx-backupops-test/backups', true)
 	os.setenv('HORNERO_BACKUP_SOURCE', '/tmp/hx-backupops-test/source', true)
 	os.setenv('HORNERO_TAR_BIN', '/bin/tar', true)
@@ -95,11 +92,11 @@ fn test_backup_create_and_restore_roundtrip() {
 	archive := c.data['archive']
 	assert os.is_file(archive)
 	assert archive.ends_with('.tar.gz')
-	// Listing sees both the new tarball and the legacy zip.
+	// Listing includes only Hornero archive formats.
 	l := backup_list_report()
 	assert l.ok
 	assert l.message.contains('.tar.gz')
-	assert l.message.contains('.zip')
+	assert !l.message.contains('.zip')
 	// Corrupt the source, restore, verify contents.
 	os.write_file('/tmp/hx-backupops-test/source/file.txt', 'corrupted') or { assert false }
 	base := os.file_name(archive)

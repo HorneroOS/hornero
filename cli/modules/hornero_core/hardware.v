@@ -3,10 +3,10 @@ module hornero_core
 import os
 
 // Hardware backends: display brightness, battery, microphone, keyboard,
-// and network state. Every leaf mirrors a dots-* reference script
-// (dots-brightness, dots-battery-monitor, dots-microphone,
-// dots-keyboard-layout, dots-keyboard-settings, dots-keyboard-help,
-// dots-check-network): reads report backend state, mutations delegate to
+// and network state. Each operation uses the platform backend directly
+// (horneroctl hardware brightness, horneroctl hardware battery, horneroctl hardware microphone,
+// horneroctl hardware keyboard, horneroctl hardware keyboard settings, horneroctl shortcuts,
+// horneroctl hardware network check): reads report backend state, mutations delegate to
 // the same backend CLIs with --yes gating and --dry-run previews.
 
 // resolve_brightnessctl_bin locates brightnessctl.
@@ -53,12 +53,12 @@ pub fn is_decimal_number(s string) bool {
 	if s.len == 0 {
 		return false
 	}
-	mut dots := 0
+	mut match_count := 0
 	mut digits := 0
 	for c in s {
 		if c == `.` {
-			dots++
-			if dots > 1 {
+			match_count++
+			if match_count > 1 {
 				return false
 			}
 			continue
@@ -72,7 +72,7 @@ pub fn is_decimal_number(s string) bool {
 }
 
 // brightness_backend picks the display-brightness backend in the same
-// precedence as dots-brightness: brightnessctl, blight, xbacklight,
+// precedence as horneroctl hardware brightness: brightnessctl, blight, xbacklight,
 // then xrandr. Returns '' when none is available.
 fn brightness_backend() string {
 	if resolve_brightnessctl_bin().len > 0 {
@@ -190,7 +190,7 @@ fn brightness_probe_cmd(backend string, display string, dry_run bool) BrightProg
 }
 
 // brightness_clamp folds a fraction into the 0.0-1.0 range, mirroring the
-// dots-brightness exec_op clamp.
+// horneroctl hardware brightness exec_op clamp.
 fn brightness_clamp(v f64) f64 {
 	if v < 0.0 {
 		return 0.0
@@ -203,7 +203,7 @@ fn brightness_clamp(v f64) f64 {
 
 // brightness_set_cmd builds the absolute-set invocation for a 0.0-1.0
 // fraction. brightnessctl and xbacklight take percent, xrandr takes the
-// fraction, blight takes raw device units (dots-brightness arithmetic).
+// fraction, blight takes raw device units (horneroctl hardware brightness arithmetic).
 fn brightness_set_cmd(backend string, value f64, display string, dry_run bool) !BrightProg {
 	v := brightness_clamp(value)
 	pct := int(v * 100.0 + 0.5)
@@ -360,7 +360,7 @@ pub:
 // brightness_status_report implements `hardware brightness status`
 // (read-only): current brightness via the picked backend. Without
 // --display, brightnessctl/blight report the global device(s) while
-// xrandr lists every connected display (dots-brightness --list).
+// xrandr lists every connected display (horneroctl hardware brightness --list).
 pub fn brightness_status_report(opts BrightnessStatusOptions) CommandResult {
 	backend := brightness_backend()
 	if opts.dry_run {
@@ -454,7 +454,7 @@ pub:
 
 // brightness_set_report implements `hardware brightness set <0.0-1.0>`
 // by delegating to the picked backend. The fraction is clamped into
-// range like dots-brightness. Mutating: needs --yes; --dry-run previews.
+// range like horneroctl hardware brightness. Mutating: needs --yes; --dry-run previews.
 pub fn brightness_set_report(opts BrightnessSetOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('hardware brightness set', 'refusing to set brightness without --yes (preview with --dry-run).\nExample: horneroctl hardware brightness set 0.8 --dry-run')
@@ -572,7 +572,7 @@ pub fn brightness_adjust_report(opts BrightnessAdjustOptions) CommandResult {
 }
 
 // brightness_gamma_ramps maps color temperature to xrandr gamma triplets
-// (3000K to 10000K, cribbed from redshift like dots-brightness). The
+// (3000K to 10000K, cribbed from redshift like horneroctl hardware brightness). The
 // temperature scale is the ramp index over 10 (0.0-1.0 in 0.1 steps).
 const brightness_gamma_ramps = ['1.0:0.7:0.4', '1.0:0.7:0.5', '1.0:0.8:0.6', '1.0:0.8:0.7',
 	'1.0:0.9:0.8', '1.0:0.9:0.9', '1.0:1.0:1.0', '0.9:0.9:1.0', '0.8:0.9:1.0', '0.8:0.8:1.0',
@@ -592,7 +592,7 @@ pub fn brightness_temp_of_gamma(gamma string) f64 {
 }
 
 // brightness_ramp_idx maps a temperature to its ramp index, clamped
-// into range like dots-brightness.
+// into range like horneroctl hardware brightness.
 fn brightness_ramp_idx(temp f64) int {
 	mut idx := int(temp * 10.0)
 	if idx < 0 {
@@ -668,7 +668,7 @@ pub:
 
 // brightness_temp_report implements `hardware brightness set|up|down
 // --temp`: color temperature on the 0.0-1.0 ramp scale via xrandr
-// --gamma, mirroring dots-brightness --temp. Mutating: needs --yes;
+// --gamma, mirroring horneroctl hardware brightness --temp. Mutating: needs --yes;
 // --dry-run previews the read plus the exact gamma command.
 pub fn brightness_temp_report(opts BrightnessTempOptions) CommandResult {
 	name := 'hardware brightness ${opts.op}'

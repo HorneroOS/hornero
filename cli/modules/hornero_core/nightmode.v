@@ -2,7 +2,7 @@ module hornero_core
 
 import os
 
-// Native night-mode control. Ports dots-night-mode: backend detection
+// Native night-mode control. Ports horneroctl appearance night-mode: backend detection
 // (redshift/gammastep/wlsunset/xrandr stay external tools with
 // HORNERO_*_BIN overrides), hybrid state detection (process table plus
 // a state file for daemon ambiguity), and the toggle/enable/disable/
@@ -22,30 +22,10 @@ pub fn resolve_night_state_file() string {
 	return os.join_path(base, 'hornero', 'night_mode_state')
 }
 
-// night_state_file_fallback is the legacy `dots/*` location (reads only).
-pub fn night_state_file_fallback() string {
-	env := os.getenv('NIGHT_MODE_STATE_FILE')
-	if env.len > 0 {
-		return env
-	}
-	mut base := os.getenv('XDG_CACHE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
-	}
-	return os.join_path(base, 'dots', 'night_mode_state')
-}
-
-// read_night_state_file returns the state content canonical-first.
+// read_night_state_file returns the state content from its canonical path.
 pub fn read_night_state_file() string {
 	canon := resolve_night_state_file()
-	if os.is_file(canon) {
-		return (os.read_file(canon) or { '' }).trim_space()
-	}
-	fb := night_state_file_fallback()
-	if os.is_file(fb) {
-		return (os.read_file(fb) or { '' }).trim_space()
-	}
-	return ''
+	return (os.read_file(canon) or { '' }).trim_space()
 }
 
 // write_night_state_file persists enabled/disabled to the canonical file.
@@ -293,7 +273,7 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 		'status' {
 			// An explicit override short-circuits to that backend
 			// (opaque passthrough, fails when broken); unset means
-			// fully native with zero dots-* calls.
+			// fully native.
 			override := os.getenv('HORNERO_NIGHT_MODE_BIN')
 			if override.len > 0 && !cmd.dry_run {
 				rep := strict_exec(override, ['status'], false)

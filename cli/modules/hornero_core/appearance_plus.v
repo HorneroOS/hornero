@@ -3,11 +3,11 @@ module hornero_core
 import os
 
 // Appearance-plus: smart-color generation, accent seeds, and night-mode
-// control, all native V. The dots-smart-colors palette engine, the
-// dots-accent-override seed file, and the dots-night-mode backend
+// control, all native V. The Hornero palette pipeline palette engine, the
+// accent override seed file, and the horneroctl appearance night-mode backend
 // orchestration live here; only genuinely external programs stay
 // backends (xrdb, the M3 python synthesizer, redshift/gammastep/
-// wlsunset/xrandr, gsettings) with HORNERO_*_BIN overrides. No dots-*
+// wlsunset/xrandr, gsettings) with HORNERO_*_BIN overrides. No external helper
 // delegation remains.
 
 pub struct ColorsOptions {
@@ -37,7 +37,7 @@ pub fn colors_report(opts ColorsOptions) CommandResult {
 			}
 			// An explicit override short-circuits to that backend
 			// (opaque passthrough, fails when broken); unset means
-			// fully native with zero dots-* calls.
+			// fully native.
 			override := os.getenv('HORNERO_SMART_COLORS_BIN')
 			if override.len > 0 {
 				rep := strict_exec(override, [], false)
@@ -90,7 +90,7 @@ pub:
 
 const hex_digits = '0123456789abcdefABCDEF'
 
-// accent_is_hex validates a hex seed the way dots-accent-override did:
+// accent_is_hex validates a hex seed the way accent override did:
 // six hex digits with an optional leading `#`.
 fn accent_is_hex(s string) bool {
 	mut c := s

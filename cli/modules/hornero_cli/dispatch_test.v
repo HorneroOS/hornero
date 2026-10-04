@@ -87,7 +87,7 @@ fn test_dispatch_shell_help_has_examples() {
 
 fn test_dry_run_needs_no_backend() {
 	// Hermetic: point both backends at nonexistent paths; dry-run must
-	// still preview successfully on any machine (CI has no qs/dots-*).
+	// still preview successfully on any machine (CI has no Quickshell helpers).
 	os.setenv('HORNERO_QS_BIN', '/nonexistent-qs-hornero-test', true)
 	assert dispatch(['horneroctl', 'shell', 'ipc', '--dry-run', '--', 'show']) == 0
 	os.unsetenv('HORNERO_QS_BIN')
@@ -108,13 +108,19 @@ fn test_dispatch_config_paths() {
 
 fn test_dispatch_completion() {
 	assert dispatch(['horneroctl', 'completion', 'bash']) == 0
+	assert !bash_completion().contains('scheme')
+	assert bash_completion().contains('welcome')
+	assert !zsh_completion().contains('scheme')
+	assert zsh_completion().contains('welcome')
+	assert !fish_completion().contains('scheme')
+	assert fish_completion().contains('-a welcome')
 	assert dispatch(['horneroctl', 'completion', 'powershell']) == 1
 }
 
 fn test_every_help_has_examples() {
 	for cmd in ['version', 'doctor', 'shell', 'shell preset', 'appearance', 'appearance theme',
 		'appearance scheme', 'appearance colors', 'appearance accent', 'appearance night-mode',
-		'scheme', 'config', 'completion'] {
+		'config', 'completion'] {
 		h := command_help(cmd)
 		assert h.contains('Examples:')
 	}
@@ -128,8 +134,6 @@ fn test_dispatch_nested_help_exit_zero() {
 	assert dispatch(['horneroctl', 'appearance', 'accent', '--help']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'night-mode', '--help']) == 0
 	assert dispatch(['horneroctl', 'shell', 'preset', '--help']) == 0
-	assert dispatch(['horneroctl', 'scheme', '--help']) == 0
-	assert dispatch(['horneroctl', 'help', 'scheme']) == 0
 }
 
 // Phase-2 dispatch fixtures reuse the /tmp tree the core tests build;
@@ -151,7 +155,6 @@ fn p2_dispatch_setup() {
 	os.setenv('HORNERO_PRESETS_DIR', '/tmp/hx-phase2-dtest/presets', true)
 	os.setenv('HORNERO_PRESET_STATE_FILE', '/tmp/hx-phase2-dtest/preset-missing', true)
 	os.setenv('XDG_CONFIG_HOME', '/tmp/hx-phase2-dtest/config', true)
-	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
 }
 
 fn p2_dispatch_teardown() {
@@ -159,7 +162,6 @@ fn p2_dispatch_teardown() {
 	os.unsetenv('HORNERO_PRESETS_DIR')
 	os.unsetenv('HORNERO_PRESET_STATE_FILE')
 	os.unsetenv('XDG_CONFIG_HOME')
-	os.unsetenv('HORNERO_DOTS_APPEARANCE_BIN')
 }
 
 fn test_dispatch_appearance_theme() {
@@ -179,18 +181,17 @@ fn test_dispatch_appearance_theme() {
 fn test_dispatch_appearance_scheme_and_alias() {
 	p2_dispatch_setup()
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'status']) == 0
-	assert dispatch(['horneroctl', 'scheme', 'status']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'set-mode', 'dark', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'scheme', 'set-mode', 'dark', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'set-mode', 'dim', '--dry-run']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'set-mode', 'dark']) == 1
+	assert dispatch(['horneroctl', 'scheme', 'status']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'bogus']) == 2
 	p2_dispatch_teardown()
 }
 
 fn test_dispatch_appearance_plus() {
 	// Hermetic: nonexistent backends; dry-run previews must still exit 0
-	// (CI has no dots-*), real runs must fail cleanly, usage errors exit 2.
+	// (CI has no optional helpers), real runs must fail cleanly, usage errors exit 2.
 	os.setenv('HORNERO_SMART_COLORS_BIN', '/nonexistent-colors-hornero-test', true)
 	os.setenv('HORNERO_M3_COLORS_BIN', '/nonexistent-m3-hornero-test', true)
 	os.setenv('HORNERO_NIGHT_MODE_BIN', '/nonexistent-night-hornero-test', true)

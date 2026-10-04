@@ -211,7 +211,7 @@ pub fn parse_backup_cmd(args []string) !BackupCmdOptions {
 		i++
 	}
 	if leaf == 'restore' && id.len == 0 {
-		return error('missing backup id.\nExample: horneroctl backup restore dotfiles_backup --dry-run')
+		return error('missing backup id.\nExample: horneroctl backup restore hornero-config --dry-run')
 	}
 	return BackupCmdOptions{
 		leaf:    leaf

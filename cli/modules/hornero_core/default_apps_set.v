@@ -3,7 +3,7 @@ module hornero_core
 import os
 
 // Default-application setter: `config default-apps set` over the
-// xdg-mime backend, ported from the `dots-default-apps --set` verb
+// xdg-mime backend, ported from the `horneroctl config default-apps --set` verb
 // (which never bound its arguments under EasyOptions, so the backend
 // moves to xdg-mime directly; handlr stays internal per
 // docs/cli-architecture.md section 5).

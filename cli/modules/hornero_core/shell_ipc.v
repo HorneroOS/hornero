@@ -18,14 +18,9 @@ pub:
 	qs_bin      string
 }
 
-// shell_ipc_bypassed controls the compatibility path that avoids shell IPC.
-// Prefer the Hornero-owned name while still honoring older dotfiles settings.
+// shell_ipc_bypassed provides a deterministic opt-out for headless callers.
 pub fn shell_ipc_bypassed() bool {
-	canonical := os.getenv('HORNERO_BYPASS_QUICKSHELL')
-	if canonical.len > 0 {
-		return canonical == '1'
-	}
-	return os.getenv('DOTS_BYPASS_QUICKSHELL') == '1'
+	return os.getenv('HORNERO_BYPASS_QUICKSHELL') == '1'
 }
 
 // shell_status reports whether a live shell session is reachable.

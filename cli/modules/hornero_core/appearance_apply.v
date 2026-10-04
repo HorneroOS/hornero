@@ -4,9 +4,9 @@ import os
 import time
 import x.json2
 
-// Native appearance apply pipeline. Ports dots-appearance (theme
-// list/show/apply, status, set-*, sync, doctor), dots-hyprlock-theme,
-// dots-wal-reload, and the apply-appearance.sh / wallpaper-resolver.sh
+// Native appearance apply pipeline. Ports horneroctl appearance (theme
+// list/show/apply, status, set-*, sync, doctor), Hornero lock theme generator,
+// horneroctl wallpaper reload, and the apply-appearance.sh / wallpaper-resolver.sh
 // helpers. Quickshell IPC stays the live-shell fast path (external
 // `quickshell`/`qs` backend, best-effort with shell fallback); every
 // file decision is V.
@@ -72,7 +72,7 @@ fn wait_appearance_ipc(dry_run bool) !string {
 }
 
 // shell_colours_reload_best_effort pings the shell colours target after
-// an M3 rewrite; absence/failure only adds a note (the dots-quickshell
+// an M3 rewrite; absence/failure only adds a note (the horneroctl shell
 // `ipc colours reload` handshake it replaces).
 pub fn shell_colours_reload_best_effort() string {
 	bin := resolve_quickshell_bin()
@@ -107,20 +107,14 @@ pub fn shell_running() bool {
 	return false
 }
 
-// PaletteBackends is the test seam for the apply pipeline: every
-// external step is injectable so verify/rollback stay hermetic (no wal,
-// no M3, no compositor). Production uses default_palette_backends().
+// PaletteBackends is the test seam for the native palette pipeline.
+// Production uses default_palette_backends().
 pub struct PaletteBackends {
-	wal_exec    fn (prog string, args []string, dry_run bool) ExecReport @[required]
 	m3_exec     fn (image string, output string, flavour string, mode string, accent string, dry_run bool) ExecReport @[required]
 	gtk_sync    fn (dry_run bool) CommandResult @[required]
 	gtk_apply   fn (theme string, icon string, policy string, dry_run bool) CommandResult @[required]
 	hyprlock    fn (wallpaper string, dry_run bool) CommandResult                         @[required]
 	hyprctl_run fn (dry_run bool) @[required]
-}
-
-fn default_wal_exec(prog string, args []string, dry_run bool) ExecReport {
-	return strict_exec(prog, args, dry_run)
 }
 
 fn default_m3_exec(image string, output string, flavour string, mode string, accent string, dry_run bool) ExecReport {
@@ -158,7 +152,6 @@ fn default_hyprctl_run(dry_run bool) {
 
 pub fn default_palette_backends() PaletteBackends {
 	return PaletteBackends{
-		wal_exec:    default_wal_exec
 		m3_exec:     default_m3_exec
 		gtk_sync:    default_gtk_sync
 		gtk_apply:   default_gtk_apply
@@ -255,27 +248,16 @@ fn resolve_theme_apply_wallpaper(id string, wallpaper_dir string, default_name s
 	return wallpaper
 }
 
-// run_palette_pipeline runs wal + pointer + wal-path-file + M3 + state
-// sync + GTK policy sync + hyprlock + hyprctl reload for one wallpaper
-// (the _dots_aa_run_palette port).
+// run_palette_pipeline generates Hornero M3 colours, then commits the selected
+// wallpaper pointer and synchronizes dependent appearance state.
 pub fn run_palette_pipeline(wallpaper string, flavour string, mode string, dry_run bool) CommandResult {
 	return run_palette_pipeline_with(wallpaper, flavour, mode, dry_run, default_palette_backends())
 }
 
 // run_palette_pipeline_with is the injectable worker behind
-// run_palette_pipeline.
+// run_palette_pipeline. M3 must succeed before the wallpaper pointer changes.
 pub fn run_palette_pipeline_with(wallpaper string, flavour string, mode string, dry_run bool, deps PaletteBackends) CommandResult {
-	wal := backend_or_empty('HORNERO_WAL_BIN', 'wal')
-	if wal.len == 0 && !dry_run {
-		return fail_result('appearance palette', 'wal not found on PATH. Set HORNERO_WAL_BIN.')
-	}
-	wal_prog := if wal.len > 0 { wal } else { 'wal' }
-	mut wal_args := ['-i', wallpaper, '-q']
-	if mode == 'light' {
-		wal_args << '-l'
-	}
 	pointer := resolve_wallpaper_pointer_file()
-	wal_path_file := os.join_path(os.home_dir(), '.cache', 'wal', 'wal')
 	out := os.join_path(smart_colors_dir(), 'scheme.json')
 	accent := read_accent_override()
 	if dry_run {
@@ -283,12 +265,11 @@ pub fn run_palette_pipeline_with(wallpaper string, flavour string, mode string, 
 			return fail_result('appearance palette', err.msg())
 		}
 		lines := [
-			'would run: ${strict_command_line(wal_prog, wal_args)}',
-			'would run: write ${wallpaper} to ${pointer} and ${wal_path_file}',
-			'would run: ${m3.command_line}',
-			'would run: sync state.json from scheme.json',
-			'would run: sync GTK color-scheme policy',
-			'would run: regenerate colors-hyprlock.conf',
+			m3.command_line
+			'would atomically write ${wallpaper} to ${pointer}'
+			'would run: sync state.json from scheme.json'
+			'would run: sync GTK color-scheme policy'
+			'would run: regenerate colors-hyprlock.conf'
 			'would run: hyprctl reload (when present)',
 		]
 		return ok_result('appearance palette', lines.join('\n'), {
@@ -299,27 +280,18 @@ pub fn run_palette_pipeline_with(wallpaper string, flavour string, mode string, 
 	if !os.is_file(wallpaper) {
 		return fail_result('appearance palette', 'wallpaper not found: ${wallpaper}')
 	}
-	wal_home := os.join_path(os.home_dir(), '.cache', 'wal')
-	os.mkdir_all(wal_home) or {}
-	os.rm(os.join_path(wal_home, 'wal')) or {}
-	wal_rep := deps.wal_exec(wal_prog, wal_args, false)
-	if !wal_rep.ok {
-		return fail_result('appearance palette', 'wal failed (exit ${wal_rep.exit_code}):\n${wal_rep.output}')
-	}
-	os.mkdir_all(os.dir(pointer)) or {
-		return fail_result('appearance palette', 'cannot create pointer dir: ${err.msg()}')
-	}
-	os.write_file(pointer, wallpaper + '\n') or {
-		return fail_result('appearance palette', 'cannot write pointer: ${err.msg()}')
-	}
-	os.rm(wal_path_file) or {}
-	os.write_file(wal_path_file, wallpaper + '\n') or {}
 	os.mkdir_all(os.dir(out)) or {
 		return fail_result('appearance palette', 'cannot create scheme dir: ${err.msg()}')
 	}
 	m3 := deps.m3_exec(wallpaper, out, flavour, mode, accent, false)
 	if !m3.ok {
 		return fail_result('appearance palette', 'M3 backend failed (exit ${m3.exit_code}):\n${m3.output}')
+	}
+	os.mkdir_all(os.dir(pointer)) or {
+		return fail_result('appearance palette', 'cannot create wallpaper pointer dir: ${err.msg()}')
+	}
+	write_wallpaper_pointer(pointer, wallpaper) or {
+		return fail_result('appearance palette', 'cannot commit wallpaper pointer: ${err.msg()}')
 	}
 	sync_state_from_scheme() or {
 		return fail_result('appearance palette', 'palette wrote ${out} but state sync failed: ${err.msg()}')
@@ -328,20 +300,28 @@ pub fn run_palette_pipeline_with(wallpaper string, flavour string, mode string, 
 	if !gtk.ok {
 		return fail_result('appearance palette', 'palette applied but GTK sync failed: ${gtk.message}')
 	}
-	hl := deps.hyprlock('', false)
-	deps.hyprctl_run(false)
-	mut msg := 'palette applied from ${wallpaper} (flavour ${flavour}, mode ${mode})'
-	if !hl.ok {
-		msg += '\nWARN: hyprlock refresh failed: ${hl.message}'
+	lock_result := deps.hyprlock(wallpaper, false)
+	if !lock_result.ok {
+		return fail_result('appearance palette', 'colour scheme applied, but lock screen refresh failed: ${lock_result.message}')
 	}
-	return ok_result('appearance palette', msg, {
-		'scheme': out
+	deps.hyprctl_run(false)
+	return ok_result('appearance palette', 'wallpaper and generated colours applied', {
+		'wallpaper': wallpaper
+		'scheme':    out
 	})
 }
 
+// write_wallpaper_pointer atomically replaces the canonical Hornero pointer.
+fn write_wallpaper_pointer(pointer string, wallpaper string) ! {
+	tmp := pointer + '.tmp.' + os.getpid().str()
+	defer { os.rm(tmp) or {} }
+	os.write_file(tmp, wallpaper + '\n') or { return err }
+	os.rename(tmp, pointer) or { return err }
+}
+
 // theme_apply_native applies one theme pack once (no sticky current
-// theme): IPC fast path when the shell is up, else the shell pipeline
-// (wal + M3 + GTK + kitty + recolor + qt), all natively.
+// theme): IPC fast path when the shell is up, else the native M3 + GTK +
+// Kitty + recolor + Qt palette pipeline.
 pub fn theme_apply_native(id string, wallpaper_override string, dry_run bool) CommandResult {
 	return theme_apply_native_with(id, wallpaper_override, dry_run, default_palette_backends())
 }
@@ -414,12 +394,12 @@ pub fn theme_apply_native_with(id string, wallpaper_override string, dry_run boo
 	if gtk_theme != 'auto' && gtk_theme.len > 0 {
 		gtk := deps.gtk_apply(gtk_theme, icon_theme, policy, false)
 		if !gtk.ok {
-			return fail_result('appearance theme apply', 'palette applied but GTK apply failed: ${gtk.message}')
+			return fail_result('appearance theme apply', 'colour scheme and wallpaper applied, but GTK apply failed: ${gtk.message}')
 		}
 	} else {
 		pack_gtk := theme_pack_gtk_apply(id, false)
 		if !pack_gtk.ok {
-			return fail_result('appearance theme apply', 'palette applied but pack GTK failed: ${pack_gtk.message}')
+			return fail_result('appearance theme apply', 'colour scheme and wallpaper applied, but pack GTK failed: ${pack_gtk.message}')
 		}
 	}
 	sync_kitty_include(id)
@@ -449,7 +429,7 @@ pub fn theme_pack_gtk_apply(id string, dry_run bool) CommandResult {
 	if gtk_theme.len == 0 || gtk_theme == 'auto' {
 		wall := read_wallpaper_pointer()
 		if wall.len > 0 && os.is_file(wall) {
-			bg := read_wal_colors_bg()
+			bg := scheme_json_colour('background')
 			detected, _ := detect_gtk_theme(if bg.len > 0 { bg } else { '000000' }, list_names_in_dirs(gtk_theme_search_dirs(),
 				false))
 			return apply_gtk_theme_native(detected, icon_theme, policy, dry_run)
@@ -462,24 +442,6 @@ pub fn theme_pack_gtk_apply(id string, dry_run bool) CommandResult {
 		return apply_gtk_theme_native(fallback, icon_theme, policy, dry_run)
 	}
 	return apply_gtk_theme_native(gtk_theme, icon_theme, policy, dry_run)
-}
-
-// read_wal_colors_bg returns the first pywal color (background).
-pub fn read_wal_colors_bg() string {
-	path := os.getenv('HORNERO_WAL_COLORS_FILE')
-	colors := if path.len > 0 {
-		path
-	} else {
-		os.join_path(os.home_dir(), '.cache', 'wal', 'colors')
-	}
-	raw := os.read_file(colors) or { return '' }
-	for line in raw.split_into_lines() {
-		t := line.trim_space()
-		if t.len > 0 {
-			return t
-		}
-	}
-	return ''
 }
 
 // sync_kitty_include swaps the kitty.conf include to the theme variant
@@ -583,7 +545,7 @@ pub fn sync_qt6ct_palette(theme_id string) {
 // snappy_pack_best_effort hands the pack id to the sibling
 // snappy-switcher family when installed; never fails.
 fn snappy_pack_best_effort(theme_id string) {
-	bin := find_on_path('dots-snappy-switcher')
+	bin := resolve_hornero_snappy_bin()
 	if bin.len == 0 {
 		return
 	}
@@ -600,9 +562,9 @@ fn notify_best_effort(title string, body string) {
 }
 
 // regenerate_hyprlock_native rebuilds colors-hyprlock.conf from the live
-// scheme.json colours (the dots-hyprlock-theme port).
+// scheme.json colours (the Hornero lock theme generator port).
 pub fn regenerate_hyprlock_native(wallpaper_arg string, dry_run bool) CommandResult {
-	scheme := color_scheme_file_for_read()
+	scheme := color_scheme_file()
 	if !os.is_file(scheme) && !dry_run {
 		return fail_result('appearance hyprlock', 'scheme.json not found at ${scheme} — regenerate first.')
 	}
@@ -806,38 +768,15 @@ pub fn appearance_sync_native(dry_run bool) CommandResult {
 	return ok_result('appearance sync', 'appearance state synced from scheme.json', {})
 }
 
-// legacy_rice_marker_paths resolves the three obsolete rice markers using
-// the same XDG roots as the rest of Hornero's user state.
-fn legacy_rice_marker_paths() []string {
-	mut data_home := os.getenv('XDG_DATA_HOME')
-	if data_home.len == 0 {
-		data_home = os.join_path(os.home_dir(), '.local', 'share')
-	}
-	mut cache_home := os.getenv('XDG_CACHE_HOME')
-	if cache_home.len == 0 {
-		cache_home = os.join_path(os.home_dir(), '.cache')
-	}
-	mut state_home := os.getenv('XDG_STATE_HOME')
-	if state_home.len == 0 {
-		state_home = os.join_path(os.home_dir(), '.local', 'state')
-	}
-	return [
-		os.join_path(data_home, 'dots', 'rices', '.current_rice'),
-		os.join_path(cache_home, 'dots', 'current_rice'),
-		os.join_path(state_home, 'dots', 'rice', 'current'),
-	]
-}
-
 // appearance_doctor_native checks appearance consistency (the doctor
 // port): scheme/state agreement, wallpaper pointer chain, hyprlock
-// output, GTK policy, M3 interpreter, and legacy orphans. It never
-// mutates user state; old rice markers are reported without removing them.
+// output, GTK policy, and M3 interpreter. It never mutates user state.
 pub fn appearance_doctor_native() CommandResult {
 	mut fails := []string{}
 	mut warns := []string{}
 	mut lines := []string{}
-	scheme := color_scheme_file_for_read()
-	state := scheme_state_file_for_read()
+	scheme := color_scheme_file()
+	state := scheme_state_file()
 	scheme_flavour := scheme_json_field(scheme, 'flavour')
 	state_flavour := scheme_json_field(state, 'flavour')
 	scheme_mode := scheme_json_field(scheme, 'mode')
@@ -850,26 +789,10 @@ pub fn appearance_doctor_native() CommandResult {
 	resolved := read_wallpaper_pointer()
 	lines << 'wallpaper.ptr  : ${if pointer_val.len > 0 { pointer_val } else { '(missing)' }}'
 	lines << 'wallpaper.res  : ${if resolved.len > 0 { resolved } else { '(missing)' }}'
-	wal_file := os.join_path(os.home_dir(), '.cache', 'wal', 'wal')
-	mut wal_target := ''
-	if os.is_link(wal_file) {
-		wal_target = os.real_path(wal_file)
-	} else if os.is_file(wal_file) {
-		first := (os.read_file(wal_file) or { '' }).split_into_lines()
-		if first.len > 0 {
-			wal_target = os.real_path(first[0])
-		}
-	}
-	lines << 'wal.target     : ${if wal_target.len > 0 { wal_target } else { '(missing)' }}'
 	hl_conf := os.join_path(smart_colors_dir(), 'colors-hyprlock.conf')
 	mut hl_bytes := 0
 	if os.is_file(hl_conf) {
 		hl_bytes = (os.read_file(hl_conf) or { '' }).len
-	} else {
-		fb := os.join_path(smart_colors_dir_fallback(), 'colors-hyprlock.conf')
-		if os.is_file(fb) {
-			hl_bytes = (os.read_file(fb) or { '' }).len
-		}
 	}
 	lines << 'hyprlock.conf  : ${hl_bytes} bytes'
 	gtk_theme, _, gtk_prefer := read_gtk3_ini()
@@ -887,11 +810,6 @@ pub fn appearance_doctor_native() CommandResult {
 	lines << 'gtk.preferDark : ${if gtk_prefer.len > 0 { gtk_prefer } else { '(missing)' }}'
 	lines << 'gtk.colorPolicy: ${policy}'
 	lines << 'gtk.colorScheme: ${if gtk_scheme.len > 0 { gtk_scheme } else { '(missing)' }}'
-	for marker in legacy_rice_marker_paths() {
-		if os.is_file(marker) {
-			warns << 'legacy rice marker remains: ${marker} (left unchanged)'
-		}
-	}
 	if scheme_flavour.len > 0 && state_flavour.len > 0 && scheme_flavour != state_flavour {
 		fails << 'scheme flavour != state flavour (${scheme_flavour} vs ${state_flavour})'
 	}
@@ -900,15 +818,12 @@ pub fn appearance_doctor_native() CommandResult {
 	}
 	if pointer_val.len == 0 {
 		fails << 'wallpaper pointer missing'
-	} else if !os.is_file(pointer_val) && os.real_path(pointer_val).len == 0 {
-		fails << 'wallpaper pointer does not exist: ${pointer_val}'
 	}
-	if pointer_val.len > 0 && os.is_file(pointer_val) {
-		if wal_target.len == 0 {
-			fails << '~/.cache/wal/wal missing or broken'
-		} else if os.real_path(pointer_val) != wal_target {
-			fails << 'wal target != wallpaper pointer (${wal_target} vs ${os.real_path(pointer_val)})'
-		}
+	if pointer_val.len > 0 && !os.is_file(pointer_val) {
+		fails << 'wallpaper file does not exist: ${pointer_val}'
+	}
+	if !os.is_file(scheme) {
+		fails << 'generated colour scheme is missing'
 	}
 	if hl_bytes == 0 {
 		fails << 'colors-hyprlock.conf missing or empty'
@@ -917,14 +832,6 @@ pub fn appearance_doctor_native() CommandResult {
 	lines << 'm3.python      : ${if m3py.len > 0 { m3py } else { '(missing)' }}'
 	if m3py.len == 0 {
 		fails << 'no Python with materialyoucolor (install python-materialyoucolor; pyenv shims alone are not enough)'
-	}
-	if os.is_file(os.join_path(os.home_dir(), '.local', 'state', 'dots', 'wallpaper',
-		'path.txt'))
-	{
-		fails << 'orphan wallpaper/path.txt present (use wallpaper/path)'
-	}
-	if os.is_file(os.join_path(os.home_dir(), '.cache', 'dots', 'smart-colors', 'wallpaper')) {
-		fails << 'orphan smart-colors/wallpaper cache present'
 	}
 	if policy == 'follow' {
 		if state_mode == 'dark' && gtk_prefer == 'false' {
@@ -936,15 +843,6 @@ pub fn appearance_doctor_native() CommandResult {
 			warns << 'gsettings color-scheme=${gtk_scheme} while follow-policy mode is dark'
 		} else if state_mode == 'light' && gtk_scheme.len > 0 && gtk_scheme != 'prefer-light' {
 			warns << 'gsettings color-scheme=${gtk_scheme} while follow-policy mode is light'
-		}
-	}
-	if wal_target.len > 0 && os.is_file(wal_target) {
-		fb := find_on_path('file')
-		if fb.len > 0 {
-			mime := strict_exec(fb, ['-b', '--mime-type', wal_target], false)
-			if mime.ok && !mime.output.starts_with('image/') {
-				warns << 'wal target is not an image: ${wal_target}'
-			}
 		}
 	}
 	for w in warns {
@@ -963,7 +861,7 @@ pub fn appearance_doctor_native() CommandResult {
 
 // wallpaper_reload_native re-applies the wallpaper color pipeline: shell
 // IPC reload when the shell is up (Hyprland sessions briefly wait for
-// IPC first), else the direct fallback (wal -R + M3 + GTK + hyprlock).
+// IPC first), else regenerate M3 colours and dependent state natively.
 pub fn wallpaper_reload_native(dry_run bool) CommandResult {
 	if !dry_run && os.getenv('HYPRLAND_INSTANCE_SIGNATURE').len > 0 {
 		for _ in 0 .. 30 {
@@ -989,14 +887,7 @@ pub fn wallpaper_reload_native(dry_run bool) CommandResult {
 	if wallpaper.len == 0 {
 		return fail_result('wallpaper reload', 'no wallpaper pointer; set one first.')
 	}
-	wal := backend_or_empty('HORNERO_WAL_BIN', 'wal')
 	mut lines := []string{}
-	if wal.len > 0 || dry_run {
-		rep := strict_exec(if wal.len > 0 { wal } else { 'wal' }, ['-R', '-q'], dry_run)
-		lines << rep.command_line
-	}
-	wal_path_file := os.join_path(os.home_dir(), '.cache', 'wal', 'wal')
-	lines << 'write ${wallpaper} to ${wal_path_file} (text path file)'
 	st := read_scheme_state()
 	flavour := normalize_scheme_type(if st.flavour.len > 0 { st.flavour } else { 'tonal-spot' })
 	mode := if st.mode == 'light' || st.mode == 'dark' { st.mode } else { 'dark' }
@@ -1004,6 +895,9 @@ pub fn wallpaper_reload_native(dry_run bool) CommandResult {
 	accent := read_accent_override()
 	m3 := run_m3_synthesis(wallpaper, out, flavour, mode, accent, dry_run) or {
 		return fail_result('wallpaper reload', err.msg())
+	}
+	if !m3.ok {
+		return fail_result('wallpaper reload', 'M3 backend failed (exit ${m3.exit_code}):\n${m3.output}')
 	}
 	lines << m3.command_line
 	lines << 'sync state.json from scheme.json'
@@ -1015,18 +909,17 @@ pub fn wallpaper_reload_native(dry_run bool) CommandResult {
 			'dry_run':      'true'
 		})
 	}
-	os.mkdir_all(os.join_path(os.home_dir(), '.cache', 'wal')) or {}
-	os.rm(wal_path_file) or {}
-	os.write_file(wal_path_file, wallpaper + '\n') or {}
-	m3real := run_m3_synthesis(wallpaper, out, flavour, mode, accent, false) or {
-		return fail_result('wallpaper reload', err.msg())
+	sync_state_from_scheme() or {
+		return fail_result('wallpaper reload', 'M3 colours regenerated but state synchronization failed: ${err.msg()}')
 	}
-	if !m3real.ok {
-		return fail_result('wallpaper reload', 'M3 backend failed (exit ${m3real.exit_code}):\n${m3real.output}')
+	gtk := sync_gtk_color_scheme_native(false)
+	if !gtk.ok {
+		return fail_result('wallpaper reload', 'M3 colours regenerated, but GTK synchronization failed: ${gtk.message}')
 	}
-	sync_state_from_scheme() or {}
-	sync_gtk_color_scheme_native(false)
-	regenerate_hyprlock_native('', false)
+	lock_result := regenerate_hyprlock_native('', false)
+	if !lock_result.ok {
+		return fail_result('wallpaper reload', 'M3 colours regenerated, but lock screen refresh failed: ${lock_result.message}')
+	}
 	return ok_result('wallpaper reload', 'wallpaper pipeline reloaded from ${wallpaper}',
 		{
 			'wallpaper': wallpaper

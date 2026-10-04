@@ -50,7 +50,7 @@ fn query_appearance_status() !AppearanceStatus {
 }
 
 // pack_expected_mode derives the mode a pack applies: the `mode` token
-// when present (flagship packs), else the legacy `darkMode` boolean.
+// when present (flagship packs), else the recipe `darkMode` boolean.
 fn pack_expected_mode(m map[string]json2.Any) string {
 	if v := m['mode'] {
 		s := v.str()
@@ -119,31 +119,13 @@ pub:
 // theme_get_report implements `appearance theme get` (read-only): the
 // live native state matched against the official trio. Unknown/custom
 // states still succeed; they report id '' with the observed values.
-// An explicit HORNERO_DOTS_APPEARANCE_BIN override short-circuits to
-// that backend (opaque passthrough, fails when broken); unset means
-// fully native with zero dots-* calls.
+// The current state is read directly from Hornero's theme, GTK and icon
+// configuration.
 pub fn theme_get_report(opts ThemeGetOptions) CommandResult {
-	override := os.getenv('HORNERO_DOTS_APPEARANCE_BIN')
-	if override.len > 0 {
-		if opts.dry_run {
-			return ok_result('appearance theme get', 'would run: ${override} status',
-				{
-					'command_line': '${override} status'
-					'dry_run':      'true'
-				})
-		}
-		rep := strict_exec(override, ['status'], false)
-		if rep.ok {
-			return ok_result('appearance theme get', rep.output, {
-				'command_line': rep.command_line
-			})
-		}
-		return fail_result('appearance theme get', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
-	}
 	if opts.dry_run {
 		return ok_result('appearance theme get', 'would run: read scheme state + gtk settings',
 			{
-				'command_line': 'read ${scheme_state_file_for_read()} + ${resolve_gtk3_file()}'
+				'command_line': 'read ${scheme_state_file()} + ${resolve_gtk3_file()}'
 				'dry_run':      'true'
 			})
 	}

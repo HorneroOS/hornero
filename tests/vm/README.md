@@ -62,11 +62,11 @@ with a clear message instead of silently testing shell-local only.
 ## Scope
 
 - IN: `horneroctl config materialize/paths/validate/show` in a pristine
-  Arch guest, theme-manifest parse, `bash -n` over `bin/dots-*`,
-  `lib/dots/*.sh`, `scripts/*.sh`.
+  Arch guest, theme-manifest parse, `bash -n` over `bin/hornero-*`,
+  `lib/hornero/*.sh`, `scripts/*.sh`.
 - OUT: anything graphical. There is no GPU/seat in this VM, so the
   quickshell shell never starts here. QML syntax is covered by shell CI
-  (`lint_qml.sh`); `dots-appearance doctor` runs in the guest for
+  (`lint_qml.sh`); `horneroctl appearance doctor` runs in the guest for
   information only (missing scheme/pointer on a fresh root is expected).
 
 ## Run

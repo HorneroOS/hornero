@@ -4,25 +4,24 @@ import hornero_core
 
 // Deferred groups (locked in docs/cli-architecture.md, no verified backend yet,
 // so no leaves here): device (monitors/compositor needs a pinned IPC path
-// first), system, and setup (installer-owned namespace). The dots-*
-// hardware surfaces (brightness, battery, mic, keyboard, network) ship
+// first), system, and setup (installer-owned namespace). The hardware surfaces (brightness, battery, mic, keyboard, network) ship
 // under `hardware` instead, delegating to the same backend CLIs.
 // Batch 1 ships
 // `package check|updates`, `backup list|schedule`, and `config snapshot`;
 // batch 2 ships `config default-apps list`, `config materialize`, and
-// `config gui`; preview 1 adds `config migrate`. R1 (lifecycle +
+// `config gui`. R1 (lifecycle +
 // privileged) adds `shell start|stop|restart|logs`, `package
 // upgrade|deps`, `backup create|restore`, `config default-apps set`,
 // and `hypr plugins install`. Still deferred: `shell config` (needs a
 // pinned merge backend), backup cron
-// install (interactive by design), and the dots-default-apps
+// install (interactive by design), and the horneroctl config default-apps
 // gui/info/type modes (interactive).
 // Each future leaf needs the same treatment as below: a verified backend,
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
-const known_commands = ['version', 'doctor', 'shell', 'appearance', 'scheme', 'config', 'package',
-	'backup', 'power', 'lock', 'hypr', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'apps', 'help']
+const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
+	'power', 'lock', 'hypr', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture', 'apps',
+	'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -69,7 +68,7 @@ pub fn dispatch(args []string) int {
 	}
 	if wants_help(rest) {
 		// Prefer the nested help (`config snapshot --help` prints the
-		// snapshot text the dots delegation probes grep for); fall back
+		// snapshot text the path safety tests inspect); fall back
 		// to the group help when no nested text exists, preserving the
 		// old output for leaf paths like `power lock --help`.
 		if rest.len > 2 {
@@ -91,14 +90,6 @@ pub fn dispatch(args []string) int {
 		}
 		'appearance' {
 			run_appearance(rest[1..], mode)
-		}
-		'scheme' {
-			// Compat shortcut: top-level `scheme` is `appearance scheme`.
-			if wants_help(rest) {
-				print(command_help('scheme'))
-				return 0
-			}
-			run_appearance_scheme(rest[1..], mode)
 		}
 		'config' {
 			run_config(rest[1..], mode)
@@ -514,13 +505,6 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 		}
 		return run_config_gui(args[1..], mode)
 	}
-	if args[0] == 'migrate' {
-		if wants_help(args) {
-			print(command_help('config migrate'))
-			return 0
-		}
-		return run_config_migrate(args[1..], mode)
-	}
 	match args[0] {
 		'paths' {
 			return render(hornero_core.config_paths_report(), mode)
@@ -597,18 +581,6 @@ fn run_config_materialize(args []string, mode hornero_core.RenderMode) int {
 	}), mode)
 }
 
-fn run_config_migrate(args []string, mode hornero_core.RenderMode) int {
-	opts := parse_migrate_cmd(args) or {
-		return render_error(hornero_core.err_usage('config.migrate.usage', err.msg()),
-			mode)
-	}
-	return render(hornero_core.migrate_report(hornero_core.MigrateOptions{
-		dry_run: opts.dry_run
-		yes:     opts.yes
-		helper:  opts.helper
-	}), mode)
-}
-
 fn run_config_gui(args []string, mode hornero_core.RenderMode) int {
 	opts := parse_gui_cmd(args) or {
 		return render_error(hornero_core.err_usage('config.gui.usage', err.msg()), mode)
@@ -616,7 +588,6 @@ fn run_config_gui(args []string, mode hornero_core.RenderMode) int {
 	return render(hornero_core.settings_gui_report(hornero_core.SettingsGuiOptions{
 		pane:    opts.pane
 		dry_run: opts.dry_run
-		helper:  hornero_core.resolve_settings_gui_bin()
 	}), mode)
 }
 
@@ -1133,16 +1104,6 @@ fn run_apps(args []string, mode hornero_core.RenderMode) int {
 				cheatsheet:   topts.cheatsheet
 				fix_previews: topts.fix_previews
 				dry_run:      topts.dry_run
-			}), mode)
-		}
-		'weather' {
-			wopts := parse_apps_weather(opts.rest) or {
-				return render_error(hornero_core.err_usage('apps.weather.usage', err.msg()),
-					mode)
-			}
-			return render(hornero_core.weather_report(hornero_core.WeatherOptions{
-				field:   wopts.field
-				dry_run: wopts.dry_run
 			}), mode)
 		}
 		'git-status' {

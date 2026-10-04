@@ -4,18 +4,13 @@ import os
 import x.json2
 
 // Scheme backend: materialized color-scheme state files plus the
-// `dots-appearance` setters for mutation.
+// `horneroctl appearance` setters for mutation.
 //
 // Reads are native: `$XDG_CACHE_HOME/hornero/smart-colors/scheme.json` is
-// the runtime source of truth (docs/PATH_CONTRACT.md row 4, WRITE TARGET)
-// and `$XDG_STATE_HOME/hornero/scheme/state.json` persists
-// (mode/flavour/variant plus the independent `gtkColorScheme` policy; a
-// missing policy key means `follow` for legacy boots per
-// docs/cli-architecture.md section 5). The legacy `dots/*` locations stay
-// readable as a canonical-first fallback. `dots-color-scheme` (dotfiles
-// reference) treats the legacy paths as its source of truth.
+// the runtime source of truth and `$XDG_STATE_HOME/hornero/scheme/state.json`
+// persists mode, flavour, variant and the independent GTK color policy.
 // Mutation (`set-mode`/`set-variant`) delegates to the verified
-// `dots-appearance set-mode|set-variant` verbs.
+// `horneroctl appearance set-mode|set-variant` verbs.
 //
 // Later phases (no verified backend from this repo, so intentionally absent
 // here): `device brightness ...` and other hardware/compositor controls.
@@ -45,30 +40,6 @@ pub fn scheme_state_file() string {
 	return os.join_path(base, 'hornero', 'scheme', 'state.json')
 }
 
-// scheme_state_file_fallback is the legacy `dots/*` location (row 5).
-// Reads only: nothing new is ever written here.
-pub fn scheme_state_file_fallback() string {
-	mut base := os.getenv('XDG_STATE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.local', 'state')
-	}
-	return os.join_path(base, 'dots', 'scheme', 'state.json')
-}
-
-// scheme_state_file_for_read picks the state file actually read:
-// canonical-first with legacy fallback.
-pub fn scheme_state_file_for_read() string {
-	canonical := scheme_state_file()
-	if os.is_file(canonical) {
-		return canonical
-	}
-	fallback := scheme_state_file_fallback()
-	if os.is_file(fallback) {
-		return fallback
-	}
-	return canonical
-}
-
 // color_scheme_file is the canonical scheme runtime location
 // (docs/PATH_CONTRACT.md row 4) and the WRITE TARGET.
 pub fn color_scheme_file() string {
@@ -79,84 +50,56 @@ pub fn color_scheme_file() string {
 	return os.join_path(base, 'hornero', 'smart-colors', 'scheme.json')
 }
 
-// color_scheme_file_fallback is the legacy `dots/*` location (row 4).
-// Reads only: nothing new is ever written here.
-pub fn color_scheme_file_fallback() string {
-	mut base := os.getenv('XDG_CACHE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
-	}
-	return os.join_path(base, 'dots', 'smart-colors', 'scheme.json')
-}
-
-// color_scheme_file_for_read picks the scheme file actually read:
-// canonical-first with legacy fallback.
-pub fn color_scheme_file_for_read() string {
-	canonical := color_scheme_file()
-	if os.is_file(canonical) {
-		return canonical
-	}
-	fallback := color_scheme_file_fallback()
-	if os.is_file(fallback) {
-		return fallback
-	}
-	return canonical
-}
-
 fn scheme_json_field(path string, key string) string {
 	raw := os.read_file(path) or { return '' }
 	parsed := json2.decode[json2.Any](raw) or { return '' }
 	if parsed is map[string]json2.Any {
-		m := parsed.clone()
-		if key !in m {
-			return ''
+		if value := parsed[key] {
+			return value.str()
 		}
-		return m[key].str()
 	}
 	return ''
 }
 
-// scheme_field reads one JSON field canonical-first: the legacy fallback is
-// consulted only when the canonical file lacks the key.
-fn scheme_field(canonical string, fallback string, key string) string {
-	v := scheme_json_field(canonical, key)
-	if v.len > 0 {
-		return v
-	}
-	return scheme_json_field(fallback, key)
+// scheme_json_colour reads one Material role from scheme.json's colours map.
+fn scheme_json_colour(key string) string {
+	return scheme_json_colour_from_file(color_scheme_file(), key)
 }
 
-// read_scheme_state loads mode/flavour/variant from the state file, falling
-// back to the scheme.json runtime meta. Each file resolves canonical-first
-// with a legacy `dots/*` fallback. Never fails: absent files yield empty
-// fields and the caller reports them as unknown.
+fn scheme_json_colour_from_file(path string, key string) string {
+	raw := os.read_file(path) or { return '' }
+	parsed := json2.decode[json2.Any](raw) or { return '' }
+	if parsed is map[string]json2.Any {
+		if colours := parsed['colours'] {
+			if colours is map[string]json2.Any {
+				if value := colours[key] {
+					return value.str()
+				}
+			}
+		}
+	}
+	return ''
+}
+
+// read_scheme_state loads persisted appearance from canonical Hornero state.
+// Scheme metadata supplies mode, flavour, and variant when state is incomplete.
 pub fn read_scheme_state() SchemeState {
-	state := scheme_state_file_for_read()
-	scheme := color_scheme_file_for_read()
+	state := scheme_state_file()
+	scheme := color_scheme_file()
 	state_present := os.is_file(state)
 	scheme_present := os.is_file(scheme)
-	canon_state := scheme_state_file()
-	legacy_state := scheme_state_file_fallback()
-	canon_scheme := color_scheme_file()
-	legacy_scheme := color_scheme_file_fallback()
-	mut mode := scheme_field(canon_state, legacy_state, 'mode')
-	mut flavour := scheme_field(canon_state, legacy_state, 'flavour')
-	mut variant := scheme_field(canon_state, legacy_state, 'variant')
-	if mode.len == 0 {
-		mode = scheme_field(canon_scheme, legacy_scheme, 'mode')
-	}
-	if flavour.len == 0 {
-		flavour = scheme_field(canon_scheme, legacy_scheme, 'flavour')
-	}
-	mut policy := scheme_field(canon_state, legacy_state, 'gtkColorScheme')
-	if policy.len == 0 {
-		policy = 'follow'
-	}
+	mut mode := scheme_json_field(state, 'mode')
+	mut flavour := scheme_json_field(state, 'flavour')
+	mut variant := scheme_json_field(state, 'variant')
+	if mode.len == 0 { mode = scheme_json_field(scheme, 'mode') }
+	if flavour.len == 0 { flavour = scheme_json_field(scheme, 'flavour') }
+	if variant.len == 0 { variant = scheme_json_field(scheme, 'variant') }
+	policy := scheme_json_field(state, 'gtkColorScheme')
 	return SchemeState{
 		mode:             mode
 		flavour:          flavour
 		variant:          variant
-		gtk_color_scheme: policy
+		gtk_color_scheme: if policy.len > 0 { policy } else { 'follow' }
 		state_file:       state
 		scheme_file:      scheme
 		state_present:    state_present

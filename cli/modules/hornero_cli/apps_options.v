@@ -1,6 +1,6 @@
 module hornero_cli
 
-// Apps option parsers: `apps <files|terminal-file|weather|git-status|
+// Apps option parsers: `apps <files|terminal-file|git-status|
 // audit|launch|toggle|switcher|performance> ...`. Error strings always
 // carry a correct Example (exit-2 contract). View-open verbs (files
 // open, terminal launch, launcher) need no --yes; state-changing verbs
@@ -8,8 +8,8 @@ module hornero_cli
 // with --dry-run previews. `audit` covers checks plus --fix/--report/
 // --json; default-apps set stays a deferral under `config default-apps`.
 
-pub const apps_verbs = ['files', 'terminal-file', 'weather', 'git-status', 'audit', 'launch', 'toggle',
-	'switcher', 'performance']
+pub const apps_verbs = ['files', 'terminal-file', 'git-status', 'audit', 'launch', 'toggle', 'switcher',
+	'performance']
 
 // AppsCmdOptions covers `apps <verb>`: the verb routes, the rest parses
 // per verb.
@@ -180,42 +180,6 @@ pub fn parse_apps_terminal_file(args []string) !TerminalFileCmdOptions {
 		cheatsheet:   cheatsheet
 		fix_previews: fix_previews
 		dry_run:      dry_run
-	}
-}
-
-// WeatherCmdOptions covers `apps weather <--field>`.
-pub struct WeatherCmdOptions {
-pub:
-	field   string
-	dry_run bool
-}
-
-pub fn parse_apps_weather(args []string) !WeatherCmdOptions {
-	mut field := ''
-	mut dry_run := false
-	for a in args {
-		if a == '--dry-run' {
-			dry_run = true
-			continue
-		}
-		if a in ['--getdata', '--icon', '--temp', '--hex', '--stat', '--loc', '--quote', '--quote2'] {
-			if field.len > 0 {
-				return error('weather takes exactly one field.\nExample: horneroctl apps weather --temp')
-			}
-			field = a.all_after('--')
-			continue
-		}
-		if a.starts_with('-') {
-			return error('unknown flag: ${a}.\nExample: horneroctl apps weather --temp')
-		}
-		return error('unexpected argument: ${a}.\nRun: horneroctl apps weather --help')
-	}
-	if field.len == 0 {
-		return error('missing weather field (one of --getdata --icon --temp --hex --stat --loc --quote --quote2).\nExample: horneroctl apps weather --temp')
-	}
-	return WeatherCmdOptions{
-		field:   field
-		dry_run: dry_run
 	}
 }
 

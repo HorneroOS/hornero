@@ -3,21 +3,8 @@ module hornero_core
 import os
 import time
 
-// Backup create/restore backend: tar archives of a source tree inside
-// the backup directory, ported from `dots-backup` (152 lines).
-//
-// - `create` writes `<backup-dir>/<stamp>_<name>.tar.gz` from the
-//   source tree (default `~/.dotfiles`, `HORNERO_BACKUP_SOURCE`
-//   override). The legacy script wrote gzip content under a `.zip`
-//   name; new archives use `.tar.gz`, and `list` reads both.
-// - `restore <id>` extracts one archive back into the source tree.
-//   The legacy rollback deleted the target first (`rm -rf`); here tar
-//   overwrites in place, which is safer and sufficient.
-// - The legacy interactive cron flows (`--register-cron`,
-//   `--unregister-cron` prompt) stay out by design: `schedule` prints
-//   the recipe and never installs it.
-//
-// Mutations need --yes; --dry-run only previews.
+// Backup create/restore archives the Hornero configuration directory.
+// Mutations require --yes; --dry-run previews without writing.
 
 // resolve_backup_source locates the tree `create` archives and
 // `restore` extracts into. Override with HORNERO_BACKUP_SOURCE.
@@ -26,7 +13,11 @@ pub fn resolve_backup_source() string {
 	if env.len > 0 {
 		return env
 	}
-	return os.join_path(os.home_dir(), '.dotfiles')
+	mut config_home := os.getenv('XDG_CONFIG_HOME')
+	if config_home.len == 0 {
+		config_home = os.join_path(os.home_dir(), '.config')
+	}
+	return os.join_path(config_home, 'hornero')
 }
 
 // resolve_tar_bin locates tar. Override with HORNERO_TAR_BIN.
@@ -60,13 +51,13 @@ fn valid_backup_id(id string) bool {
 }
 
 // resolve_backup_archive maps a restore id to an existing archive: the
-// exact filename first, then the `<id>.tar.gz` / `<id>.zip` stems.
+// exact filename first, then the `<id>.tar.gz` stem.
 fn resolve_backup_archive(id string) !string {
 	dir := resolve_backup_dir()
 	if !valid_backup_id(id) {
 		return error('invalid backup id: ${id}.\nRun: horneroctl backup list')
 	}
-	candidates := [id, id + '.tar.gz', id + '.zip']
+	candidates := [id, id + '.tar.gz']
 	for c in candidates {
 		if valid_backup_id(c) && os.is_file(os.join_path(dir, c)) {
 			return os.join_path(dir, c)
@@ -77,7 +68,7 @@ fn resolve_backup_archive(id string) !string {
 
 pub struct BackupCreateOptions {
 pub:
-	name    string // archive name stem (default dotfiles_backup)
+	name    string // archive name stem (default hornero-config)
 	dry_run bool
 	yes     bool
 }
@@ -89,7 +80,7 @@ pub fn backup_create_report(opts BackupCreateOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('backup create', 'refusing to create a backup without --yes (preview with --dry-run).\nExample: horneroctl backup create --dry-run')
 	}
-	name := if opts.name.len > 0 { opts.name } else { 'dotfiles_backup' }
+	name := if opts.name.len > 0 { opts.name } else { 'hornero-config' }
 	if !valid_backup_id(name) {
 		return fail_result('backup create', 'invalid backup name: ${name}.')
 	}
@@ -153,7 +144,7 @@ pub fn backup_restore_report(opts BackupRestoreOptions) CommandResult {
 		return fail_result('backup restore', 'refusing to restore a backup without --yes (preview with --dry-run).\nExample: horneroctl backup restore ${opts.id} --dry-run')
 	}
 	if opts.id.len == 0 {
-		return fail_result('backup restore', 'missing backup id.\nExample: horneroctl backup restore dotfiles_backup --dry-run')
+		return fail_result('backup restore', 'missing backup id.\nExample: horneroctl backup restore hornero-config --dry-run')
 	}
 	archive := resolve_backup_archive(opts.id) or {
 		return fail_result('backup restore', err.msg())
