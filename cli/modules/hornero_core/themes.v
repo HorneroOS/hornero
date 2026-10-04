@@ -329,12 +329,26 @@ fn theme_load_full_entry(themes_dir string, dirname string, roots []string) !map
 	for n in path_names {
 		wall_map[n] = json2.Any(paths[n])
 	}
+	collection := theme_str_field(m, 'collection')
+	mut collection_order := 0
+	if 'collectionOrder' in m {
+		order := m['collectionOrder']
+		if order is i64 {
+			collection_order = int(order.i64())
+		} else if order is f64 {
+			collection_order = int(order.f64())
+		}
+	}
+	model := if theme_str_field(m, 'family').len > 0 { 'semantic' } else { 'recipe' }
 	return {
 		'id':               json2.Any(theme_id)
 		'name':             json2.Any(name)
 		'colorOnly':        json2.Any(color_only)
 		'description':      json2.Any(description)
 		'tags':             json2.Any(tags)
+		'collection':       json2.Any(collection)
+		'collectionOrder':  json2.Any(collection_order)
+		'model':            json2.Any(model)
 		'darkMode':         json2.Any(dark)
 		'schemeType':       json2.Any(scheme)
 		'gtkTheme':         json2.Any(gtk)
