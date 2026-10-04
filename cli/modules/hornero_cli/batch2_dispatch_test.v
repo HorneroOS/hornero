@@ -75,6 +75,8 @@ fn test_config_default_apps_help_carries_delegation_probe() {
 	// contains these lines; pin them so the probes can never break.
 	assert command_help('config default-apps').contains('Usage: horneroctl config default-apps')
 	assert command_help('config default-apps').contains('set <mime> <app>')
+	assert command_help('config default-apps').contains('xdg-mime')
+	assert !command_help('config default-apps').contains('HORNERO_DEFAULT_APPS_BIN')
 }
 
 fn test_dispatch_config_materialize() {
