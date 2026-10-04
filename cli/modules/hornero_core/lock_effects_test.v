@@ -181,22 +181,6 @@ fn test_lock_colors_prefers_scheme_json() {
 	lock_tteardown()
 }
 
-fn test_lock_colors_falls_back_to_legacy_env_then_defaults() {
-	lock_tsetup()
-	os.mkdir_all('${lock_troot}/cache/dots/smart-colors') or { assert false }
-	os.write_file('${lock_troot}/cache/dots/smart-colors/current.env', 'SMART_BG="#010203"\nSMART_FG="#040506"\n') or {
-		assert false
-	}
-	c := lock_colors()
-	assert c.bg == '010203'
-	assert c.fg == '040506'
-	assert c.primary == '6495ed'
-	assert c.error == 'ff6b6b'
-	plain := lock_colors()
-	assert plain.bg == '010203'
-	lock_tteardown()
-}
-
 fn test_lock_colors_defaults_without_any_state() {
 	lock_tsetup()
 	c := lock_colors()

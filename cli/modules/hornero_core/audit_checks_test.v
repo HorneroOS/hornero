@@ -132,8 +132,8 @@ fn test_audit_fix_native_repairs_fixture_home() {
 	os.write_file(home + '/.ssh/id_ed25519.pub', 'fake-pub') or { assert false }
 	os.chmod(home + '/.ssh/id_ed25519.pub', 0o600) or { assert false }
 	os.mkdir_all(home + '/.local/bin') or { assert false }
-	os.write_file(home + '/.local/bin/executable_dots-fake', '#!/bin/sh\n') or { assert false }
-	os.chmod(home + '/.local/bin/executable_dots-fake', 0o644) or { assert false }
+	os.write_file(home + '/.local/bin/hornero-fake', '#!/bin/sh\n') or { assert false }
+	os.chmod(home + '/.local/bin/hornero-fake', 0o644) or { assert false }
 	os.write_file(home + '/vault.key', 'x') or { assert false }
 	os.chmod(home + '/vault.key', 0o644) or { assert false }
 	os.write_file(home + '/.zsh_history', 'export MY_TOKEN=abc\nls -la\n# password=hidden\nwaldorf\n') or {
@@ -148,7 +148,7 @@ fn test_audit_fix_native_repairs_fixture_home() {
 	assert audit_stat_mode(home + '/.ssh/id_ed25519') == '600'
 	assert audit_stat_mode(home + '/.ssh/config') == '600'
 	assert audit_stat_mode(home + '/.ssh/id_ed25519.pub') == '644'
-	assert audit_stat_mode(home + '/.local/bin/executable_dots-fake') == '755'
+	assert audit_stat_mode(home + '/.local/bin/hornero-fake') == '755'
 	assert audit_stat_mode(home + '/vault.key') == '600'
 	hist := os.read_file(home + '/.zsh_history') or { '' }
 	assert !hist.contains('MY_TOKEN')

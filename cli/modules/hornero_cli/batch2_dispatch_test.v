@@ -6,35 +6,24 @@ import os
 // overrides it needs and unsets them afterwards.
 fn b2_dispatch_setup() {
 	os.mkdir_all('/tmp/hx-batch2-dtest/bin') or { assert false }
-	os.write_file('/tmp/hx-batch2-dtest/bin/dots-default-apps', '#!/bin/sh\nif [ "\$1" = "--list" ]; then printf "web-browser: firefox.desktop\\n"; exit 0; fi\nexit 1\n') or {
-		assert false
+	os.write_file('/tmp/hx-batch2-dtest/bin/horneroctl config default-apps', '#!/bin/sh\nif [ "\$1" = "--list" ]; then printf "web-browser: firefox.desktop\\n"; exit 0; fi\nexit 1\n') or { assert false }
+	os.write_file('/tmp/hx-batch2-dtest/bin/materialize.sh', '#!/bin/sh\necho "materialized \$*"\nexit 0\n') or { assert false }
+	os.write_file('/tmp/hx-batch2-dtest/bin/handlr', '#!/bin/sh\necho "hx-test-fake-12345.desktop"\nexit 0\n') or { assert false }
+	os.write_file('/tmp/hx-batch2-dtest/bin/qs', '#!/bin/sh\ncase "\$*" in *bogus*) echo "error: unknown Control Center pane";; *) echo "opened";; esac\n') or { assert false }
+	for name in ['horneroctl config default-apps', 'materialize.sh', 'handlr', 'qs'] {
+		os.chmod('/tmp/hx-batch2-dtest/bin/${name}', 0o755) or { assert false }
 	}
-	os.write_file('/tmp/hx-batch2-dtest/bin/dots-settings-gui', '#!/bin/sh\necho "settings hub \$*"\nexit 0\n') or {
-		assert false
-	}
-	os.write_file('/tmp/hx-batch2-dtest/bin/materialize.sh', '#!/bin/sh\necho "materialized \$*"\nexit 0\n') or {
-		assert false
-	}
-	os.write_file('/tmp/hx-batch2-dtest/bin/handlr', '#!/bin/sh\necho "hx-test-fake-12345.desktop"\nexit 0\n') or {
-		assert false
-	}
-	os.chmod('/tmp/hx-batch2-dtest/bin/dots-default-apps', 0o755) or { assert false }
-	os.chmod('/tmp/hx-batch2-dtest/bin/dots-settings-gui', 0o755) or { assert false }
-	os.chmod('/tmp/hx-batch2-dtest/bin/materialize.sh', 0o755) or { assert false }
-	os.chmod('/tmp/hx-batch2-dtest/bin/handlr', 0o755) or { assert false }
-	os.setenv('HORNERO_DEFAULT_APPS_BIN', '/tmp/hx-batch2-dtest/bin/dots-default-apps',
-		true)
-	os.setenv('HORNERO_SETTINGS_GUI_BIN', '/tmp/hx-batch2-dtest/bin/dots-settings-gui',
-		true)
+	os.setenv('HORNERO_DEFAULT_APPS_BIN', '/tmp/hx-batch2-dtest/bin/horneroctl config default-apps', true)
 	os.setenv('HORNERO_MATERIALIZE_BIN', '/tmp/hx-batch2-dtest/bin/materialize.sh', true)
 	os.setenv('HORNERO_HANDLR_BIN', '/tmp/hx-batch2-dtest/bin/handlr', true)
+	os.setenv('HORNERO_QS_BIN', '/tmp/hx-batch2-dtest/bin/qs', true)
 }
 
 fn b2_dispatch_teardown() {
 	os.unsetenv('HORNERO_DEFAULT_APPS_BIN')
-	os.unsetenv('HORNERO_SETTINGS_GUI_BIN')
 	os.unsetenv('HORNERO_MATERIALIZE_BIN')
 	os.unsetenv('HORNERO_HANDLR_BIN')
+	os.unsetenv('HORNERO_QS_BIN')
 }
 
 fn test_dispatch_config_default_apps() {
@@ -63,7 +52,7 @@ fn test_dispatch_config_default_apps_live() {
 	}
 	os.chmod('/tmp/hx-batch2-dtest/bin/xdg-mime', 0o755) or { assert false }
 	os.setenv('HORNERO_XDG_MIME_BIN', '/tmp/hx-batch2-dtest/bin/xdg-mime', true)
-	// The exact call dots-default-apps --set delegates to.
+	// The exact call horneroctl config default-apps --set delegates to.
 	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'text/plain', 'nvim.desktop',
 		'--yes']) == 0
 	os.unsetenv('HORNERO_XDG_MIME_BIN')
@@ -71,7 +60,7 @@ fn test_dispatch_config_default_apps_live() {
 }
 
 fn test_config_default_apps_help_carries_delegation_probe() {
-	// dots-default-apps delegates only when `config default-apps --help`
+	// horneroctl config default-apps delegates only when `config default-apps --help`
 	// contains these lines; pin them so the probes can never break.
 	assert command_help('config default-apps').contains('Usage: horneroctl config default-apps')
 	assert command_help('config default-apps').contains('set <mime> <app>')
@@ -103,9 +92,8 @@ fn test_dispatch_config_gui() {
 	assert dispatch(['horneroctl', 'config', 'gui', '--pane=launcher']) == 0
 	assert dispatch(['horneroctl', 'config', 'gui', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'appearance', '--dry-run']) == 0
-	// An explicitly configured compatibility helper owns its own route
-	// validation; Hornero does not maintain a second pane-name list.
-	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'bogus']) == 0
+	// The Shell registry owns route validation; horneroctl does not keep a second pane list.
+	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'bogus']) == 1
 	assert dispatch(['horneroctl', 'config', 'gui', '--bogus']) == 2
 	assert dispatch(['horneroctl', 'config', 'gui', 'extra']) == 2
 	assert dispatch(['horneroctl', 'config', 'gui', '--help']) == 0
@@ -114,7 +102,6 @@ fn test_dispatch_config_gui() {
 
 fn test_settings_gui_uses_shell_registry_to_reject_unknown_panes() {
 	b2_dispatch_setup()
-	os.unsetenv('HORNERO_SETTINGS_GUI_BIN')
 	qs := '/tmp/hx-batch2-dtest/bin/qs'
 	os.write_file(qs, '#!/bin/sh\ncase "$*" in *bogus*) echo "error: unknown Control Center pane";; *) echo "opened";; esac\n') or {
 		assert false
@@ -132,10 +119,8 @@ fn test_batch2_dry_run_needs_no_backend() {
 	os.setenv('HORNERO_DEFAULT_APPS_BIN', '/nonexistent-default-apps-hornero-test', true)
 	assert dispatch(['horneroctl', 'config', 'default-apps', 'list', '--dry-run']) == 0
 	os.unsetenv('HORNERO_DEFAULT_APPS_BIN')
-	os.setenv('HORNERO_SETTINGS_GUI_BIN', '/nonexistent-settings-gui-hornero-test', true)
 	assert dispatch(['horneroctl', 'config', 'gui', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'config', 'gui', '--pane', 'appearance', '--dry-run']) == 0
-	os.unsetenv('HORNERO_SETTINGS_GUI_BIN')
 	os.setenv('HORNERO_MATERIALIZE_BIN', '/nonexistent-materialize-hornero-test', true)
 	assert dispatch(['horneroctl', 'config', 'materialize', '--dest', '/tmp/hx-batch2-dtest/dest',
 		'--dry-run']) == 0

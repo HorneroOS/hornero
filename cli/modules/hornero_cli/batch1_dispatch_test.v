@@ -3,10 +3,8 @@ module hornero_cli
 import os
 
 // Batch-1 dispatch fixtures reuse the core /tmp tree; each test sets the
-// overrides it needs and unsets them afterwards. HOME is redirected to a
-// tiny fake home: snapshot create/restore run natively (tar over HOME), and
-// without this the tests archived the developer's real home into /tmp
-// (~1 GB per run, on tmpfs) and restore targeted the real home.
+// overrides it needs and unsets them afterwards. HOME and XDG_CONFIG_HOME
+// are redirected so archive tests cannot read or write host configuration.
 const b1_fake_home = '/tmp/hx-batch1-dtest/fakehome'
 
 fn b1_dispatch_setup() {
@@ -14,34 +12,46 @@ fn b1_dispatch_setup() {
 	// a clean tree so a previous crash can never leave real-home archives.
 	os.rmdir_all('/tmp/hx-batch1-dtest') or {}
 	os.mkdir_all(b1_fake_home + '/.config/app') or { assert false }
+	os.mkdir_all(b1_fake_home + '/.config/hornero') or { assert false }
 	os.mkdir_all(b1_fake_home + '/.local/bin') or { assert false }
 	os.write_file(b1_fake_home + '/.config/app/conf', 'v1') or { assert false }
-	// Remember whether HOME was set at all, not only its value.
+	os.write_file(b1_fake_home + '/.config/hornero/shell.json', '{}') or { assert false }
+	// Remember whether HOME and XDG_CONFIG_HOME were set at all.
 	if real := os.getenv_opt('HOME') {
 		os.setenv('HX_B1_REAL_HOME', real, true)
 		os.setenv('HX_B1_HOME_WAS_SET', '1', true)
 	} else {
 		os.unsetenv('HX_B1_HOME_WAS_SET')
+		if os.getenv('HX_B1_XDG_CONFIG_HOME_WAS_SET') == '1' {
+			os.setenv('XDG_CONFIG_HOME', os.getenv('HX_B1_REAL_XDG_CONFIG_HOME'), true)
+		} else {
+			os.unsetenv('XDG_CONFIG_HOME')
+		}
+		os.unsetenv('HX_B1_REAL_XDG_CONFIG_HOME')
+		os.unsetenv('HX_B1_XDG_CONFIG_HOME_WAS_SET')
 	}
 	os.setenv('HOME', b1_fake_home, true)
+	if real := os.getenv_opt('XDG_CONFIG_HOME') {
+		os.setenv('HX_B1_REAL_XDG_CONFIG_HOME', real, true)
+		os.setenv('HX_B1_XDG_CONFIG_HOME_WAS_SET', '1', true)
+	} else {
+		os.unsetenv('HX_B1_XDG_CONFIG_HOME_WAS_SET')
+	}
+	os.setenv('XDG_CONFIG_HOME', b1_fake_home + '/.config', true)
 	os.mkdir_all('/tmp/hx-batch1-dtest/snapshots/config_20260101_020000') or { assert false }
 	os.write_file('/tmp/hx-batch1-dtest/snapshots/config_20260101_020000/metadata.json',
-		'{"id":"config_20260101_020000","timestamp":"2026-01-01T02:00:00","hostname":"den","dotfiles_commit":"abc123"}') or {
+		'{"id":"config_20260101_020000","timestamp":"2026-01-01T02:00:00","hostname":"den"}') or {
 		assert false
 	}
 	os.mkdir_all('/tmp/hx-batch1-dtest/backups') or { assert false }
-	os.write_file('/tmp/hx-batch1-dtest/backups/dotfiles_backup_01.zip', 'fake-zip') or {
-		assert false
-	}
+	os.write_file('/tmp/hx-batch1-dtest/backups/hornero-config_01.tar.gz', 'fake-archive') or { assert false }
 	os.mkdir_all('/tmp/hx-batch1-dtest/bin') or { assert false }
-	os.write_file('/tmp/hx-batch1-dtest/bin/dots-checkupdates', '#!/bin/sh\nprintf "pkg-a 1.0 -> 1.1\\n"') or {
+	os.write_file('/tmp/hx-batch1-dtest/bin/checkupdates', '#!/bin/sh\nprintf "pkg-a 1.0 -> 1.1\\n"') or {
 		assert false
 	}
-	os.chmod('/tmp/hx-batch1-dtest/bin/dots-checkupdates', 0o755) or { assert false }
+	os.chmod('/tmp/hx-batch1-dtest/bin/checkupdates', 0o755) or { assert false }
 	os.setenv('HORNERO_SNAPSHOTS_DIR', '/tmp/hx-batch1-dtest/snapshots', true)
-	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '/nonexistent-config-manager-hornero-test',
-		true)
-	os.setenv('HORNERO_CHECKUPDATES_BIN', '/tmp/hx-batch1-dtest/bin/dots-checkupdates',
+	os.setenv('HORNERO_CHECKUPDATES_BIN', '/tmp/hx-batch1-dtest/bin/checkupdates',
 		true)
 	os.setenv('HORNERO_BACKUP_DIR', '/tmp/hx-batch1-dtest/backups', true)
 }
@@ -54,9 +64,15 @@ fn b1_dispatch_teardown() {
 	}
 	os.unsetenv('HX_B1_REAL_HOME')
 	os.unsetenv('HX_B1_HOME_WAS_SET')
+	if os.getenv('HX_B1_XDG_CONFIG_HOME_WAS_SET') == '1' {
+		os.setenv('XDG_CONFIG_HOME', os.getenv('HX_B1_REAL_XDG_CONFIG_HOME'), true)
+	} else {
+		os.unsetenv('XDG_CONFIG_HOME')
+	}
+	os.unsetenv('HX_B1_REAL_XDG_CONFIG_HOME')
+	os.unsetenv('HX_B1_XDG_CONFIG_HOME_WAS_SET')
 	os.rmdir_all('/tmp/hx-batch1-dtest') or {}
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
-	os.unsetenv('HORNERO_CONFIG_MANAGER_BIN')
 	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
 	os.unsetenv('HORNERO_BACKUP_DIR')
 }
@@ -75,23 +91,7 @@ fn test_dispatch_config_snapshot() {
 	b1_dispatch_teardown()
 }
 
-fn test_dispatch_config_snapshot_live() {
-	b1_dispatch_setup()
-	os.write_file('/tmp/hx-batch1-dtest/bin/dots-config-manager', '#!/bin/sh\necho "config-manager \$*"\nexit 0\n') or {
-		assert false
-	}
-	os.chmod('/tmp/hx-batch1-dtest/bin/dots-config-manager', 0o755) or { assert false }
-	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '/tmp/hx-batch1-dtest/bin/dots-config-manager',
-		true)
-	// The exact calls dots-config-manager --create/--restore delegate to.
-	assert dispatch(['horneroctl', 'config', 'snapshot', 'create', '--yes']) == 0
-	assert dispatch(['horneroctl', 'config', 'snapshot', 'restore', 'config_20260101_020000', '--yes']) == 0
-	b1_dispatch_teardown()
-}
-
-fn test_config_snapshot_help_carries_delegation_probe() {
-	// dots-config-manager delegates only when `config snapshot --help`
-	// contains this usage line; pin it so the probe can never break.
+fn test_config_snapshot_help_is_present() {
 	assert command_help('config snapshot').contains('Usage: horneroctl config snapshot')
 }
 
@@ -125,8 +125,8 @@ fn test_dispatch_backup() {
 	assert dispatch(['horneroctl', 'backup', 'create', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'backup', 'create', '--name', 'dtest', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'backup', 'restore']) == 2
-	assert dispatch(['horneroctl', 'backup', 'restore', 'dotfiles_backup_01.zip']) == 1
-	assert dispatch(['horneroctl', 'backup', 'restore', 'dotfiles_backup_01.zip', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'backup', 'restore', 'hornero-config_01.tar.gz']) == 1
+	assert dispatch(['horneroctl', 'backup', 'restore', 'hornero-config_01.tar.gz', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'backup', 'restore', 'no-such-backup', '--dry-run']) == 1
 	assert dispatch(['horneroctl', 'backup', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'backup', 'list', '--bogus']) == 2
@@ -135,12 +135,9 @@ fn test_dispatch_backup() {
 
 fn test_batch1_dry_run_needs_no_backend() {
 	// Hermetic: nonexistent backends; dry-run previews must still pass.
-	os.setenv('HORNERO_CONFIG_MANAGER_BIN', '/nonexistent-config-manager-hornero-test',
-		true)
 	assert dispatch(['horneroctl', 'config', 'snapshot', 'create', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'config', 'snapshot', 'restore', 'config_20260101_020000',
 		'--dry-run']) == 0
-	os.unsetenv('HORNERO_CONFIG_MANAGER_BIN')
 	os.setenv('HORNERO_CHECKUPDATES_BIN', '/nonexistent-checkupdates-hornero-test', true)
 	assert dispatch(['horneroctl', 'package', 'check', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'package', 'updates', '--dry-run']) == 0
@@ -181,7 +178,7 @@ fn test_dispatch_snapshot_never_touches_real_home() {
 	assert dispatch(['horneroctl', 'config', 'snapshot', 'create', '--yes']) == 0
 	mut tarballs := 0
 	for d in os.ls('/tmp/hx-batch1-dtest/snapshots') or { []string{} } {
-		tb := '/tmp/hx-batch1-dtest/snapshots/${d}/dotfiles.tar.gz'
+		tb := '/tmp/hx-batch1-dtest/snapshots/${d}/hornero-config.tar.gz'
 		if os.is_file(tb) {
 			tarballs++
 			// The fake home archives to a few hundred bytes, never the real home.

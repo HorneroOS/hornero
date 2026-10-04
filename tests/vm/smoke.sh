@@ -209,7 +209,7 @@ fi
 pass "guest DNS resolves"
 # Guest appearance pre-requisites (network PREP phase, before the offline
 # boundary): pywal (`wal`) and materialyoucolor are hard requirements of
-# dots_apply_theme, and the wallpaper PNGs are rendered on the host
+# hornero_apply_theme, and the wallpaper PNGs are rendered on the host
 # (rsvg-convert) and shipped in, mirroring deploy-shell.sh. pip installs
 # with HOME pointed at the materialized root so the user site lands where
 # the apply runs.
@@ -255,7 +255,7 @@ GUEST_THEMES="$($SSH 'python3 -c "import json; print(len(json.load(open(\"hx-roo
   || fail "guest manifest entries"
 [[ $GUEST_THEMES == "$EXPECTED_THEMES" ]] || fail "guest manifest entries ($GUEST_THEMES != $EXPECTED_THEMES)"
 pass "guest theme manifest: $GUEST_THEMES entries (matches config pin)"
-$SSH 'for f in hx-config/bin/dots-* hx-config/lib/dots/*.sh hx-config/scripts/*.sh; do bash -n "$f" || exit 1; done' \
+$SSH 'for f in hx-config/bin/hornero-* hx-config/lib/hornero/*.sh hx-config/scripts/*.sh; do bash -n "$f" || exit 1; done' \
   || fail "guest shell syntax"
 pass "guest shell syntax of shipped scripts"
 # --- 4b. offline boundary ------------------------------------------------------
@@ -285,7 +285,7 @@ pass "guest is offline (firewall: no DNS, no HTTPS egress; host SSH alive)"
 # --- 4c. official trio matrix --------------------------------------------------
 # Each official theme goes through the real control plane
 # (`horneroctl appearance theme set --yes`: validate -> resolve -> apply via
-# dots-appearance -> verify mode+GTK), then `theme get` must read the id
+# horneroctl appearance -> verify mode+GTK), then `theme get` must read the id
 # back and the consumer files must agree. No hand-editing between themes.
 GENV='export HOME=$HOME/hx-root; unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME; export PATH=$HOME/.local/bin:$PATH'
 for spec in \
@@ -302,7 +302,7 @@ for spec in \
     || fail "guest theme get $id: $getout"
   echo "$getout" | grep -q "current theme: $id (" \
     || fail "guest theme get $id (no id match): $getout"
-  # mode/flavour live in scheme/state.json, which only `dots-color-scheme
+  # mode/flavour live in scheme/state.json, which only `horneroctl appearance scheme
   # sync-state` (absent in minimal guests) writes — so an empty mode with a
   # solid GTK match is the documented backend behavior, not a mismatch.
   # Assert mode when reported, note when absent.

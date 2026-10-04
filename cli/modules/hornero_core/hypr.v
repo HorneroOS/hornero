@@ -3,22 +3,22 @@ module hornero_core
 import os
 import x.json2
 
-// Hyprland desktop controls ported from the dots-* reference scripts:
-// - `dots-hypr-animations` profiles (default|cozy|cyberpunk|nature|minimal|
+// Hyprland desktop controls ported from the Hornero system operations:
+// - `horneroctl hypr animations` profiles (default|cozy|cyberpunk|nature|minimal|
 //   vaporwave) applied live via `hyprctl keyword bezier/animation` from the
 //   hyprland.conf.d profile confs, with the active profile persisted under
-//   XDG state (dots/hypr-animations/current).
-// - `dots-hypr-layout` profiles (scrolling|dwindle|master) applied via
+//   XDG state (hornero/hypr/animations/current).
+// - `horneroctl hypr layout` profiles (scrolling|dwindle|master) applied via
 //   `hyprctl keyword general:layout` (+ the scrolling tunables), persisted
-//   under XDG state (dots/hypr-layout/current).
-// - `dots-hypr-monitors` arrangements (internal-only, external-only,
+//   under XDG state (hornero/hypr/layout/current).
+// - `horneroctl hypr monitors` arrangements (internal-only, external-only,
 //   extend-*, mirror, disable-external) applied via `hyprctl keyword
 //   monitor`, with the internal/external split read from
 //   `hyprctl monitors -j` (eDP* first, else first/second entry).
-// - `dots-next-workspace` next/prev cycling via i3-msg (the legacy script
+// - `horneroctl hypr workspace` next/prev cycling via i3-msg (the configured Hyprland workflow
 //   is i3-msg based: ordered `set $WS` names from the config, focused
 //   workspace from get_workspaces, with wrap-around).
-// - `dots-hyprland-plugins` ScrollOverview status via `hyprpm list`
+// - `Hyprland plugin management` ScrollOverview status via `hyprpm list`
 //   (read-only) plus the idempotent install/enable/reload bootstrap
 //   via `hyprpm update/add/enable/reload`.
 //
@@ -79,7 +79,7 @@ pub fn resolve_hypr_animations_state_file() string {
 	if env.len > 0 {
 		return env
 	}
-	return os.join_path(hypr_state_base(), 'dots', 'hypr-animations', 'current')
+	return os.join_path(hypr_state_base(), 'hornero', 'hypr', 'animations', 'current')
 }
 
 // resolve_hypr_layout_state_file locates the persisted layout pointer.
@@ -89,7 +89,7 @@ pub fn resolve_hypr_layout_state_file() string {
 	if env.len > 0 {
 		return env
 	}
-	return os.join_path(hypr_state_base(), 'dots', 'hypr-layout', 'current')
+	return os.join_path(hypr_state_base(), 'hornero', 'hypr', 'layout', 'current')
 }
 
 fn hyprctl_or_fail(leaf string, dry_run bool) !string {
@@ -186,7 +186,7 @@ pub fn animation_next_profile() string {
 }
 
 // parse_animation_conf extracts the `bezier = ...` and `animation = ...`
-// values from a profile conf (beziers first, mirroring the legacy script
+// values from a profile conf (beziers first, mirroring the configured Hyprland workflow
 // which defines beziers before the animations referencing them).
 fn parse_animation_conf(path string) !([]string, []string) {
 	raw := os.read_file(path) or { return error('profile config not found: ${path}') }
@@ -334,7 +334,7 @@ fn layout_live() string {
 }
 
 // layout_restore_value is the persisted pointer `hypr layout restore`
-// re-applies (mirroring the legacy script; live state is ignored).
+// re-applies (mirroring the configured Hyprland workflow; live state is ignored).
 pub fn layout_restore_value() string {
 	return layout_persisted()
 }
@@ -530,7 +530,7 @@ fn monitor_needs_external(mode string) bool {
 }
 
 // monitor_keywords renders the `monitor ...` keyword specs for a mode,
-// mirroring the legacy script (preferred/auto placements, mirror,
+// mirroring the configured Hyprland workflow (preferred/auto placements, mirror,
 // disable). Callers pass the resolved split: empty names select the
 // eDP-1/HDMI-A-1 + 1920x1080 dry-run placeholders, so live callers must
 // validate reachability before calling.
@@ -812,7 +812,7 @@ fn parse_i3_workspaces(raw string) []I3Workspace {
 }
 
 // parse_i3_config_names extracts the ordered workspace names from
-// `i3-msg -t get_config` (`set $WS <name>` lines, mirroring the legacy
+// `i3-msg -t get_config` (`set $WS <name>` lines, following the configured
 // script's grep/cut pipeline; surrounding quotes are stripped).
 fn parse_i3_config_names(raw string) []string {
 	mut out := []string{}
@@ -930,7 +930,7 @@ pub fn workspace_cycle_report(opts WorkspaceCycleOptions) CommandResult {
 	return fail_result('hypr workspace', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }
 
-// ScrollOverview plugin identity (dots-hyprland-plugins): status match
+// ScrollOverview plugin identity (Hyprland plugin management): status match
 // strings plus the install coordinates used by `plugins install`.
 const scrolloverview_repo_match = 'hyprland-scroll-overview'
 
@@ -977,7 +977,7 @@ pub fn plugins_status_report() CommandResult {
 		data['installed'] = installed.str()
 		data['enabled'] = enabled.str()
 	}
-	lines << 'install: owned by dots-hyprland-plugins (hyprpm/AUR-helper flow, not ported)'
+	lines << 'install: owned by Hyprland plugin management (hyprpm/AUR-helper flow, not ported)'
 	return ok_result('hypr plugins status', lines.join('\n'), data)
 }
 
@@ -1001,7 +1001,7 @@ pub fn plugins_list_report() CommandResult {
 }
 
 // ScrollOverview install identity: the repository `hyprpm add` installs
-// and the handle `hyprpm enable` enables (dots-hyprland-plugins).
+// and the handle `hyprpm enable` enables (Hyprland plugin management).
 const scrolloverview_repo_url = 'https://github.com/yayuuu/hyprland-scroll-overview.git'
 
 fn hyprpm_or_fail(leaf string, dry_run bool) !string {
@@ -1026,7 +1026,7 @@ pub:
 // plugins_install_report implements `hypr plugins install`: ensure the
 // hyprpm headers, add/enable the ScrollOverview repository when needed,
 // and reload it into the running session — mirroring the idempotent
-// `dots-hyprland-plugins` bootstrap (safe no-op when everything is in
+// `Hyprland plugin management` bootstrap (safe no-op when everything is in
 // place). Mutating: needs --yes; --dry-run only previews.
 pub fn plugins_install_report(opts PluginsInstallOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {

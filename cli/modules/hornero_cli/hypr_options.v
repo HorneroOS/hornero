@@ -206,7 +206,6 @@ pub fn parse_hypr_workspace(args []string) !HyprWorkspaceOptions {
 	}
 	mut dry_run := false
 	mut yes := false
-	mut prev_alias := false
 	for i := 1; i < args.len; i++ {
 		a := args[i]
 		if a == '--dry-run' {
@@ -217,16 +216,12 @@ pub fn parse_hypr_workspace(args []string) !HyprWorkspaceOptions {
 			yes = true
 			continue
 		}
-		if a in ['--previous', '--left'] {
-			prev_alias = true
-			continue
-		}
 		if a.starts_with('-') {
 			return error('unknown flag: ${a}.\nExample: horneroctl hypr workspace ${leaf} --dry-run')
 		}
 		return error('unexpected argument: ${a}.\nRun: horneroctl hypr workspace --help')
 	}
-	direction := if leaf == 'prev' || prev_alias { 'prev' } else { 'next' }
+	direction := if leaf == 'prev' { 'prev' } else { 'next' }
 	return HyprWorkspaceOptions{
 		leaf:    direction
 		dry_run: dry_run

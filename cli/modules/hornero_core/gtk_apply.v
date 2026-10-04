@@ -3,7 +3,7 @@ module hornero_core
 import os
 import x.json2
 
-// Native GTK theme operations. Ports dots-gtk-theme plus
+// Native GTK theme operations. They update the configured GTK settings plus
 // gtk-theme-manager.sh: theme/icon listing, current reads, apply,
 // color-scheme policy persistence, wallpaper-based detection, and
 // theme-pack GTK resolution. Only gsettings stays a backend
@@ -597,7 +597,7 @@ pub fn gtk_stdin_choice() string {
 }
 
 // gtk_select_report implements `appearance gtk select`, the native
-// dots-theme-selector: with quickshell up it opens the control center
+// Appearance in Control Center: with quickshell up it opens the control center
 // via shell IPC; otherwise it shows a numbered menu and applies the
 // chosen theme natively. Needs --yes; --dry-run only previews.
 // read_choice is the stdin seam (tests inject it).

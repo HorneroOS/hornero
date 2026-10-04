@@ -9,11 +9,10 @@ import x.json2
 // Owner: HorneroOS/hornero. The state file is the single source of truth
 // for first-login/onboarding semantics; any future frontend (Quickshell
 // today, another session tomorrow) reads and writes this file without
-// migrating user data (docs/PATH_CONTRACT.md row 13).
+// user data (docs/PATH_CONTRACT.md row 13).
 //
 // File: `$XDG_STATE_HOME/hornero/welcome/state.json`
-// (override with HORNERO_WELCOME_STATE_FILE). There is no legacy
-// `dots/*` fallback: this file never existed before, so nothing migrates.
+// (override with HORNERO_WELCOME_STATE_FILE).
 //
 // Shape (schemaVersion 1):
 //

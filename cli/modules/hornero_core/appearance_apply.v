@@ -4,9 +4,9 @@ import os
 import time
 import x.json2
 
-// Native appearance apply pipeline. Ports dots-appearance (theme
-// list/show/apply, status, set-*, sync, doctor), dots-hyprlock-theme,
-// dots-wal-reload, and the apply-appearance.sh / wallpaper-resolver.sh
+// Native appearance apply pipeline. Ports horneroctl appearance (theme
+// list/show/apply, status, set-*, sync, doctor), Hornero lock theme generator,
+// horneroctl wallpaper reload, and the apply-appearance.sh / wallpaper-resolver.sh
 // helpers. Quickshell IPC stays the live-shell fast path (external
 // `quickshell`/`qs` backend, best-effort with shell fallback); every
 // file decision is V.
@@ -72,7 +72,7 @@ fn wait_appearance_ipc(dry_run bool) !string {
 }
 
 // shell_colours_reload_best_effort pings the shell colours target after
-// an M3 rewrite; absence/failure only adds a note (the dots-quickshell
+// an M3 rewrite; absence/failure only adds a note (the horneroctl shell
 // `ipc colours reload` handshake it replaces).
 pub fn shell_colours_reload_best_effort() string {
 	bin := resolve_quickshell_bin()
@@ -257,7 +257,7 @@ fn resolve_theme_apply_wallpaper(id string, wallpaper_dir string, default_name s
 
 // run_palette_pipeline runs wal + pointer + wal-path-file + M3 + state
 // sync + GTK policy sync + hyprlock + hyprctl reload for one wallpaper
-// (the _dots_aa_run_palette port).
+// (the native palette pipeline).
 pub fn run_palette_pipeline(wallpaper string, flavour string, mode string, dry_run bool) CommandResult {
 	return run_palette_pipeline_with(wallpaper, flavour, mode, dry_run, default_palette_backends())
 }
@@ -583,7 +583,7 @@ pub fn sync_qt6ct_palette(theme_id string) {
 // snappy_pack_best_effort hands the pack id to the sibling
 // snappy-switcher family when installed; never fails.
 fn snappy_pack_best_effort(theme_id string) {
-	bin := find_on_path('dots-snappy-switcher')
+	bin := find_on_path('snappy-switcher')
 	if bin.len == 0 {
 		return
 	}
@@ -600,9 +600,9 @@ fn notify_best_effort(title string, body string) {
 }
 
 // regenerate_hyprlock_native rebuilds colors-hyprlock.conf from the live
-// scheme.json colours (the dots-hyprlock-theme port).
+// scheme.json colours (the Hornero lock theme generator port).
 pub fn regenerate_hyprlock_native(wallpaper_arg string, dry_run bool) CommandResult {
-	scheme := color_scheme_file_for_read()
+	scheme := color_scheme_file()
 	if !os.is_file(scheme) && !dry_run {
 		return fail_result('appearance hyprlock', 'scheme.json not found at ${scheme} — regenerate first.')
 	}
@@ -806,38 +806,15 @@ pub fn appearance_sync_native(dry_run bool) CommandResult {
 	return ok_result('appearance sync', 'appearance state synced from scheme.json', {})
 }
 
-// legacy_rice_marker_paths resolves the three obsolete rice markers using
-// the same XDG roots as the rest of Hornero's user state.
-fn legacy_rice_marker_paths() []string {
-	mut data_home := os.getenv('XDG_DATA_HOME')
-	if data_home.len == 0 {
-		data_home = os.join_path(os.home_dir(), '.local', 'share')
-	}
-	mut cache_home := os.getenv('XDG_CACHE_HOME')
-	if cache_home.len == 0 {
-		cache_home = os.join_path(os.home_dir(), '.cache')
-	}
-	mut state_home := os.getenv('XDG_STATE_HOME')
-	if state_home.len == 0 {
-		state_home = os.join_path(os.home_dir(), '.local', 'state')
-	}
-	return [
-		os.join_path(data_home, 'dots', 'rices', '.current_rice'),
-		os.join_path(cache_home, 'dots', 'current_rice'),
-		os.join_path(state_home, 'dots', 'rice', 'current'),
-	]
-}
-
 // appearance_doctor_native checks appearance consistency (the doctor
 // port): scheme/state agreement, wallpaper pointer chain, hyprlock
-// output, GTK policy, M3 interpreter, and legacy orphans. It never
-// mutates user state; old rice markers are reported without removing them.
+// output, GTK policy, and M3 interpreter. It never mutates user state.
 pub fn appearance_doctor_native() CommandResult {
 	mut fails := []string{}
 	mut warns := []string{}
 	mut lines := []string{}
-	scheme := color_scheme_file_for_read()
-	state := scheme_state_file_for_read()
+	scheme := color_scheme_file()
+	state := scheme_state_file()
 	scheme_flavour := scheme_json_field(scheme, 'flavour')
 	state_flavour := scheme_json_field(state, 'flavour')
 	scheme_mode := scheme_json_field(scheme, 'mode')
@@ -865,11 +842,6 @@ pub fn appearance_doctor_native() CommandResult {
 	mut hl_bytes := 0
 	if os.is_file(hl_conf) {
 		hl_bytes = (os.read_file(hl_conf) or { '' }).len
-	} else {
-		fb := os.join_path(smart_colors_dir_fallback(), 'colors-hyprlock.conf')
-		if os.is_file(fb) {
-			hl_bytes = (os.read_file(fb) or { '' }).len
-		}
 	}
 	lines << 'hyprlock.conf  : ${hl_bytes} bytes'
 	gtk_theme, _, gtk_prefer := read_gtk3_ini()
@@ -887,11 +859,6 @@ pub fn appearance_doctor_native() CommandResult {
 	lines << 'gtk.preferDark : ${if gtk_prefer.len > 0 { gtk_prefer } else { '(missing)' }}'
 	lines << 'gtk.colorPolicy: ${policy}'
 	lines << 'gtk.colorScheme: ${if gtk_scheme.len > 0 { gtk_scheme } else { '(missing)' }}'
-	for marker in legacy_rice_marker_paths() {
-		if os.is_file(marker) {
-			warns << 'legacy rice marker remains: ${marker} (left unchanged)'
-		}
-	}
 	if scheme_flavour.len > 0 && state_flavour.len > 0 && scheme_flavour != state_flavour {
 		fails << 'scheme flavour != state flavour (${scheme_flavour} vs ${state_flavour})'
 	}
@@ -917,14 +884,6 @@ pub fn appearance_doctor_native() CommandResult {
 	lines << 'm3.python      : ${if m3py.len > 0 { m3py } else { '(missing)' }}'
 	if m3py.len == 0 {
 		fails << 'no Python with materialyoucolor (install python-materialyoucolor; pyenv shims alone are not enough)'
-	}
-	if os.is_file(os.join_path(os.home_dir(), '.local', 'state', 'dots', 'wallpaper',
-		'path.txt'))
-	{
-		fails << 'orphan wallpaper/path.txt present (use wallpaper/path)'
-	}
-	if os.is_file(os.join_path(os.home_dir(), '.cache', 'dots', 'smart-colors', 'wallpaper')) {
-		fails << 'orphan smart-colors/wallpaper cache present'
 	}
 	if policy == 'follow' {
 		if state_mode == 'dark' && gtk_prefer == 'false' {

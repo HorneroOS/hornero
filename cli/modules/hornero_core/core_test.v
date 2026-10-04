@@ -112,20 +112,20 @@ fn p2_setup_themes() {
 }
 
 fn p2_setup_scheme() {
-	p2_write('${p2_root}/state/dots/scheme/state.json', '{"name":"dynamic","flavour":"tonal-spot","mode":"dark","variant":"tonalspot","gtkColorScheme":"follow"}')
-	p2_write('${p2_root}/cache/dots/smart-colors/scheme.json', '{"flavour":"expressive","mode":"light"}')
+	p2_write('${p2_root}/state/hornero/scheme/state.json', '{"name":"dynamic","flavour":"tonal-spot","mode":"dark","variant":"tonalspot","gtkColorScheme":"follow"}')
+	p2_write('${p2_root}/cache/hornero/smart-colors/scheme.json', '{"flavour":"expressive","mode":"light"}')
 	os.setenv('XDG_STATE_HOME', '${p2_root}/state', true)
 	os.setenv('XDG_CACHE_HOME', '${p2_root}/cache', true)
 }
 
 fn p2_setup_shell_config() {
-	p2_write('${p2_root}/config/hornero/shell.json', '{"bar":{"position":"left","entries":[]},"theme":"vapor","debug":false,"count":3}')
+	p2_write('${p2_root}/config/hornero/shell.json', '{"bar":{"persistent":true,"bars":[{"edge":"left","style":"attached","groups":{"start":[],"center":[],"end":[]}}]},"theme":"vapor","debug":false,"count":3}')
 	os.setenv('XDG_CONFIG_HOME', '${p2_root}/config', true)
 }
 
 fn p2_setup_presets() {
-	p2_write('${p2_root}/presets/hornero-left.json', '{"_name":"Hornero Left","_description":"Left bar","bar":{"position":"left"}}')
-	p2_write('${p2_root}/presets/minimal-top.json', '{"_name":"Minimal Top","bar":{"position":"top"}}')
+	p2_write('${p2_root}/presets/hornero-left.json', '{"_name":"Hornero Left","_description":"Left bar","bar":{"bars":[{"edge":"left","style":"attached","groups":{"start":[],"center":[],"end":[]}}]}}')
+	p2_write('${p2_root}/presets/minimal-top.json', '{"_name":"Minimal Top","bar":{"bars":[{"edge":"top","style":"attached","groups":{"start":[],"center":[],"end":[]}}]}}')
 	p2_write('${p2_root}/presets/broken.json', '{oops')
 	os.setenv('HORNERO_PRESETS_DIR', '${p2_root}/presets', true)
 	os.setenv('HORNERO_PRESET_STATE_FILE', '${p2_root}/preset-current', true)
@@ -225,7 +225,7 @@ fn test_scheme_status_without_files_is_unknown_but_ok() {
 	r := scheme_status_report()
 	assert r.ok
 	assert r.message.contains('(unknown)')
-	// Missing policy key still defaults to follow (legacy-boot rule).
+	// Missing policy key defaults to follow.
 	assert r.data['gtk_color_scheme'] == 'follow'
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
@@ -261,13 +261,13 @@ fn test_config_show_values_and_lookups() {
 	assert all.data['count'] == '4'
 	assert all.message.contains('theme: vapor')
 	assert all.message.contains('bar: (object, 2 keys)')
-	one := config_show_report('bar.position')
+	one := config_show_report('bar.bars')
 	assert one.ok
-	assert one.message == 'left'
-	assert one.data['value'] == 'left'
+	assert one.message.contains('edge')
+	assert one.data['value'].contains('edge')
 	obj := config_show_report('bar')
 	assert obj.ok
-	assert obj.message.contains('"position"')
+	assert obj.message.contains('"bars"')
 	missing := config_show_report('bar.nope')
 	assert !missing.ok
 	assert missing.message.contains('Key not found')
@@ -288,7 +288,7 @@ fn test_preset_list_and_current() {
 	assert presets[1].name == 'minimal-top'
 	assert presets[1].active
 	assert !presets[0].active
-	assert presets[0].position == 'left'
+	assert presets[0].bars[0].as_map()['edge'].str() == 'left'
 	r := preset_list_report()
 	assert r.ok
 	assert r.data['count'] == '2'
@@ -314,7 +314,7 @@ fn test_preset_missing_dir_and_pointer() {
 	os.unsetenv('HORNERO_PRESET_STATE_FILE')
 }
 
-// --- preview-1: version release report, doctor legacy-paths section ---
+// --- release report and doctor path checks ---
 
 fn test_version_report_carries_release_metadata() {
 	r := version_result()
@@ -334,81 +334,6 @@ fn test_version_report_carries_release_metadata() {
 	assert r.message.contains('config: ${config_pin_sha()}')
 	assert r.message.contains('manifest: ${release_manifest()}')
 	assert r.message.contains('release: ${release_name()}')
-}
-
-fn p1_isolate_xdg() (string, string, string, string, string) {
-	old_data := os.getenv('XDG_DATA_HOME')
-	old_state := os.getenv('XDG_STATE_HOME')
-	old_cache := os.getenv('XDG_CACHE_HOME')
-	old_config := os.getenv('XDG_CONFIG_HOME')
-	old_home := os.getenv('HOME')
-	os.setenv('XDG_DATA_HOME', '/tmp/hx-p1-doctor-test/data', true)
-	os.setenv('XDG_STATE_HOME', '/tmp/hx-p1-doctor-test/state', true)
-	os.setenv('XDG_CACHE_HOME', '/tmp/hx-p1-doctor-test/cache', true)
-	os.setenv('XDG_CONFIG_HOME', '/tmp/hx-p1-doctor-test/config', true)
-	os.setenv('HOME', '/tmp/hx-p1-doctor-test', true)
-	os.rmdir_all('/tmp/hx-p1-doctor-test') or {}
-	os.mkdir_all('/tmp/hx-p1-doctor-test') or { assert false }
-	return old_data, old_state, old_cache, old_config, old_home
-}
-
-fn p1_restore_xdg(old_data string, old_state string, old_cache string, old_config string, old_home string) {
-	os.setenv('XDG_DATA_HOME', old_data, true)
-	os.setenv('XDG_STATE_HOME', old_state, true)
-	os.setenv('XDG_CACHE_HOME', old_cache, true)
-	os.setenv('XDG_CONFIG_HOME', old_config, true)
-	os.setenv('HOME', old_home, true)
-}
-
-fn test_doctor_legacy_paths_clean_without_dots_state() {
-	old_data, old_state, old_cache, old_config, old_home := p1_isolate_xdg()
-	states := detect_legacy_paths()
-	assert states.len == 7
-	for s in states {
-		assert !s.present
-	}
-	r := doctor_result(run_doctor())
-	assert r.command == 'doctor'
-	assert r.message.contains('legacy-paths:')
-	assert r.message.contains('themes (/tmp/hx-p1-doctor-test/data/dots/themes): absent')
-	assert !r.message.contains('migration available')
-	assert r.data['legacy_paths'] == 'clean'
-	assert r.data['legacy.themes'] == 'absent'
-	assert r.data['legacy.notifs'] == 'absent'
-	p1_restore_xdg(old_data, old_state, old_cache, old_config, old_home)
-}
-
-fn test_doctor_legacy_paths_detected_with_hint() {
-	old_data, old_state, old_cache, old_config, old_home := p1_isolate_xdg()
-	os.mkdir_all('/tmp/hx-p1-doctor-test/data/dots/themes/vapor') or { assert false }
-	os.write_file('/tmp/hx-p1-doctor-test/data/dots/themes/vapor/theme.json', '{"id":"vapor"}') or {
-		assert false
-	}
-	os.mkdir_all('/tmp/hx-p1-doctor-test/state/dots/wallpaper') or { assert false }
-	os.write_file('/tmp/hx-p1-doctor-test/state/dots/wallpaper/path', '/pics/wall.jpg\n') or {
-		assert false
-	}
-	states := detect_legacy_paths()
-	mut by_domain := map[string]LegacyPathState{}
-	for s in states {
-		by_domain[s.domain] = s
-	}
-	assert by_domain['themes'].present
-	assert by_domain['themes'].detail == '1 pack(s)'
-	assert by_domain['wallpaper-pointer'].present
-	assert by_domain['wallpaper-pointer'].detail == 'points at /pics/wall.jpg'
-	assert !by_domain['notifs'].present
-	r := doctor_result(run_doctor())
-	assert r.message.contains('legacy-paths:')
-	assert r.message.contains('themes (/tmp/hx-p1-doctor-test/data/dots/themes): present (1 pack(s))')
-	assert r.message.contains('migration available: horneroctl config migrate --dry-run')
-	assert r.data['legacy_paths'] == 'detected'
-	assert r.data['legacy.themes'] == 'present'
-	assert r.data['legacy.notifs'] == 'absent'
-	// Legacy presence is informational: the verdict follows the checks.
-	failed := run_doctor().filter(!it.ok).len
-	assert r.ok == (failed == 0)
-	p1_restore_xdg(old_data, old_state, old_cache, old_config, old_home)
 }
 
 fn test_command_line_escapes_single_quotes() {

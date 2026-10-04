@@ -4,7 +4,7 @@ import os
 import x.json2
 
 // Lockscreen effect images and hyprlock layout configs, native V port of
-// `dots-lockscreen`. `lock update` rebuilds the cached effect PNGs from a
+// `horneroctl lock`. `lock update` rebuilds the cached effect PNGs from a
 // wallpaper with ImageMagick; `lock now --effect=` picks one, infers the
 // layout style, renders a temporary hyprlock config, and locks.
 // Only ImageMagick and hyprlock stay external backends (HORNERO_MAGICK_BIN,
@@ -25,61 +25,23 @@ pub fn lockscreen_cache_dir() string {
 	return os.join_path(base, 'hornero', 'lockscreen')
 }
 
-// lockscreen_cache_dir_fallback is the legacy `dots-lockscreen` location,
-// kept as a read-only fallback (canonical-first).
-fn lockscreen_cache_dir_fallback() string {
-	mut base := os.getenv('XDG_CACHE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
-	}
-	return os.join_path(base, 'dots-lockscreen')
-}
-
-// lockscreen_current_dir resolves the `current/` image directory:
-// the canonical one when it holds images, else the legacy fallback,
-// else the canonical path (callers create it on update).
+// lockscreen_current_dir resolves the canonical `current/` image directory.
 fn lockscreen_current_dir() string {
-	canon := os.join_path(lockscreen_cache_dir(), 'current')
-	if lockscreen_dir_has_images(canon) {
-		return canon
-	}
-	legacy := os.join_path(lockscreen_cache_dir_fallback(), 'current')
-	if lockscreen_dir_has_images(legacy) {
-		return legacy
-	}
-	return canon
-}
-
-fn lockscreen_dir_has_images(dir string) bool {
-	for name in ['lock_resize.png', 'lock_dim.png', 'lock_blur.png', 'lock_dimblur.png',
-		'lock_pixel.png'] {
-		if os.is_file(os.join_path(dir, name)) {
-			return true
-		}
-	}
-	return false
+	return os.join_path(lockscreen_cache_dir(), 'current')
 }
 
 // lock_has_images reports whether any cached effect image exists
-// (canonical or legacy location).
+// (the Hornero cache location).
 fn lock_has_images() bool {
 	imgs := lock_effect_images()
 	return imgs.resize.len > 0 || imgs.dim.len > 0 || imgs.blur.len > 0 || imgs.dimblur.len > 0
 		|| imgs.pixel.len > 0
 }
 
-// lock_effect_image resolves one cached effect image (canonical-first
-// with legacy fallback). Returns '' when the image exists nowhere.
+// lock_effect_image resolves one cached effect image. Returns '' when missing.
 fn lock_effect_image(name string) string {
-	canon := os.join_path(lockscreen_cache_dir(), 'current', name)
-	if os.is_file(canon) {
-		return canon
-	}
-	legacy := os.join_path(lockscreen_cache_dir_fallback(), 'current', name)
-	if os.is_file(legacy) {
-		return legacy
-	}
-	return ''
+	path := os.join_path(lockscreen_cache_dir(), 'current', name)
+	return if os.is_file(path) { path } else { '' }
 }
 
 pub struct LockEffectImages {
@@ -108,7 +70,7 @@ pub fn lock_effect_valid(name string) bool {
 }
 
 // lock_image_for_effect picks the cached image for an effect, falling
-// back to the base resized image exactly like dots-lockscreen.
+// back to the base resized image exactly like horneroctl lock.
 pub fn lock_image_for_effect(imgs LockEffectImages, effect string) string {
 	img := match effect {
 		'dim' { imgs.dim }
@@ -125,7 +87,7 @@ pub fn lock_image_for_effect(imgs LockEffectImages, effect string) string {
 
 // lock_magick_bin resolves ImageMagick: an explicit HORNERO_MAGICK_BIN
 // override wins (returned as-is so callers fail loudly), else `magick`,
-// else legacy `convert`. Dry-run previews against the placeholder name.
+// else ImageMagick `convert`. Dry-run previews against the placeholder name.
 fn lock_magick_bin(dry_run bool) !string {
 	env := os.getenv('HORNERO_MAGICK_BIN')
 	if env.len > 0 {
@@ -301,7 +263,7 @@ pub fn lock_update_report(opts LockUpdateOptions) CommandResult {
 }
 
 // lock_layout_style infers the hyprlock layout from a wallpaper path,
-// mirroring dots-lockscreen: path-folder patterns first, then the
+// mirroring horneroctl lock: path-folder patterns first, then the
 // theme.json tags of the pack the path maps to. Empty path → default.
 pub fn lock_layout_style(wallpaper_path string) string {
 	if wallpaper_path.len == 0 {
@@ -350,7 +312,7 @@ fn lock_pack_tags(pack string) string {
 }
 
 // lock_layout_config maps aesthetic keywords to one layout name,
-// mirroring dots-lockscreen get_layout_config.
+// mirroring horneroctl lock get_layout_config.
 pub fn lock_layout_config(style string) string {
 	lower := style.to_lower()
 	if lower.contains('cyberpunk') || lower.contains('neon') || lower.contains('synthwave') {
@@ -378,29 +340,12 @@ pub:
 	error   string
 }
 
-// lock_colors resolves the lock palette: the native scheme.json colours
-// first, then the legacy dots current.env, then the dots-lockscreen
-// hardcoded fallbacks. Never fails.
+// lock_colors resolves the native scheme palette, then accessible defaults.
 pub fn lock_colors() LockColors {
 	mut bg := lock_scheme_colour('background')
 	mut fg := lock_scheme_colour('onBackground')
 	mut primary := lock_scheme_colour('primary')
 	mut error := lock_scheme_colour('error')
-	if bg.len == 0 || fg.len == 0 || primary.len == 0 || error.len == 0 {
-		legacy := lock_legacy_env()
-		if bg.len == 0 {
-			bg = lock_env_colour(legacy, 'SMART_BG')
-		}
-		if fg.len == 0 {
-			fg = lock_env_colour(legacy, 'SMART_FG')
-		}
-		if primary.len == 0 {
-			primary = lock_env_colour(legacy, 'SMART_PRIMARY')
-		}
-		if error.len == 0 {
-			error = lock_env_colour(legacy, 'SMART_ERROR')
-		}
-	}
 	if bg.len == 0 {
 		bg = '1e1e1e'
 	}
@@ -430,9 +375,9 @@ fn lock_hex(raw string) string {
 }
 
 // lock_scheme_colour reads one M3 colour from the native scheme.json
-// (canonical-first with legacy fallback).
+// (canonical Hornero cache path).
 fn lock_scheme_colour(key string) string {
-	scheme := color_scheme_file_for_read()
+	scheme := color_scheme_file()
 	raw := os.read_file(scheme) or { return '' }
 	parsed := json2.decode[json2.Any](raw) or { return '' }
 	if parsed is map[string]json2.Any {
@@ -445,35 +390,6 @@ fn lock_scheme_colour(key string) string {
 		}
 	}
 	return ''
-}
-
-// lock_legacy_env loads the legacy dots smart-colors current.env
-// (`KEY=value` lines, optional quoting) into a map.
-fn lock_legacy_env() map[string]string {
-	mut out := map[string]string{}
-	mut base := os.getenv('XDG_CACHE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
-	}
-	raw := os.read_file(os.join_path(base, 'dots', 'smart-colors', 'current.env')) or { return out }
-	for line in raw.split_into_lines() {
-		t := line.trim_space()
-		if t.len == 0 || t.starts_with('#') || !t.contains('=') {
-			continue
-		}
-		k := t.all_before('=').trim_space()
-		mut v := t.all_after('=').trim_space()
-		if v.len >= 2 && ((v.starts_with('"') && v.ends_with('"'))
-			|| (v.starts_with("'") && v.ends_with("'"))) {
-			v = v[1..v.len - 1]
-		}
-		out[k] = v
-	}
-	return out
-}
-
-fn lock_env_colour(env map[string]string, key string) string {
-	return env[key] or { '' }
 }
 
 // render_hyprlock_config renders one temporary hyprlock config for a

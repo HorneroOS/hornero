@@ -4,7 +4,7 @@ import os
 import time
 
 // Battery backend: threshold monitoring plus a single-shot readout,
-// mirroring dots-battery-monitor (poweralertd fast path, else a polling
+// mirroring horneroctl hardware battery (poweralertd fast path, else a polling
 // loop with notify-send alerts).
 
 // resolve_acpi_bin locates acpi. Override with HORNERO_ACPI_BIN.
@@ -88,7 +88,7 @@ fn battery_pct_before(s string) int {
 }
 
 // read_battery returns the current charge via acpi, else upower (the
-// dots-battery-monitor precedence). present is false on machines with no
+// horneroctl hardware battery precedence). present is false on machines with no
 // battery instead of the script's 100% fallback.
 fn read_battery() !BatteryInfo {
 	acpi := resolve_acpi_bin()
@@ -245,7 +245,7 @@ pub:
 }
 
 // battery_monitor_report implements `hardware battery monitor`: the
-// dots-battery-monitor polling loop (poweralertd fast path, else poll
+// horneroctl hardware battery polling loop (poweralertd fast path, else poll
 // every interval seconds with low/critical notifications). With daemon
 // set it detaches a background copy of itself via nohup. Long-running:
 // needs --yes; --dry-run only previews.

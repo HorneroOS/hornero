@@ -22,18 +22,16 @@ fn sw_dsetup() {
 		assert false
 	}
 	os.setenv('HORNERO_THEMES_DIR', '${sw_droot}/themes', true)
-	os.setenv('HORNERO_DOTS_APPEARANCE_BIN', '/nonexistent-appearance-hornero-test', true)
 }
 
 fn sw_dteardown() {
 	os.unsetenv('HORNERO_THEMES_DIR')
-	os.unsetenv('HORNERO_DOTS_APPEARANCE_BIN')
 }
 
 fn test_dispatch_appearance_theme_get() {
 	sw_dsetup()
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'get', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'appearance', 'theme', 'get']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'theme', 'get']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'get', 'hornero-dark']) == 2
 	assert dispatch(['horneroctl', 'appearance', 'theme', 'get', '--yes']) == 2
 	sw_dteardown()

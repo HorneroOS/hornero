@@ -3,8 +3,7 @@ module hornero_core
 import os
 import time
 
-// Native performance backend: mirrors the retired dots-performance
-// legacy body. The four reads (startup, memory, benchmark, report)
+// Native performance backend for shell startup, process memory and benchmarks. The four reads (startup, memory, benchmark, report)
 // run natively; only `mode` still shells to powerprofilesctl.
 // Seams (hermetic tests): HORNERO_PERF_LOG_DIR, HORNERO_PS_BIN,
 // HORNERO_ZSH_BIN, HORNERO_FREE_BIN.
@@ -21,7 +20,9 @@ pub fn perf_log_dir() string {
 	if env.len > 0 {
 		return env
 	}
-	return os.join_path(os.home_dir(), '.cache', 'dots', 'performance')
+	mut base := os.getenv('XDG_CACHE_HOME')
+	if base.len == 0 { base = os.join_path(os.home_dir(), '.cache') }
+	return os.join_path(base, 'hornero', 'performance')
 }
 
 fn perf_ps_bin() string {
@@ -334,14 +335,14 @@ fn perf_benchmark_report(dry_run bool) CommandResult {
 	body << perf_memory_lines(perf_stack_rows()).join('\n')
 	body << ''
 	body << 'Script execution performance:'
-	for script in ['brightness', 'check-network', 'monitor'] {
-		bin := find_on_path('dots-${script}')
-		home_bin := os.join_path(os.home_dir(), '.local', 'bin', 'dots-${script}')
+	for script in ['hornero-appearance', 'hornero-night-mode', 'hornero-gtk-theme'] {
+		bin := find_on_path(script)
+		home_bin := os.join_path(os.home_dir(), '.local', 'bin', script)
 		target := if os.is_file(home_bin) { home_bin } else { bin }
 		if target.len > 0 && os.is_executable(target) {
-			body << '  dots ${script}: ${perf_script_time(target)}'
+			body << '  ${script}: ${perf_script_time(target)}'
 		} else {
-			body << '  dots ${script}: not installed'
+			body << '  ${script}: not installed'
 		}
 	}
 	stamp := perf_stamp(time.now())

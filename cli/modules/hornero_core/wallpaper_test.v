@@ -6,7 +6,6 @@ fn wp_setup() string {
 	base := '/tmp/hx-wallpaper-test'
 	os.rmdir_all(base) or {}
 	os.mkdir_all(base + '/state/hornero/wallpaper') or { assert false }
-	os.mkdir_all(base + '/state/dots/wallpaper') or { assert false }
 	os.mkdir_all(base + '/cache') or { assert false }
 	os.write_file(base + '/wall.jpg', 'fake-image') or { assert false }
 	os.setenv('HORNERO_WALLPAPER_POINTER_FILE', base + '/state/hornero/wallpaper/path',
@@ -39,19 +38,11 @@ fn test_wallpaper_current_from_canonical_pointer() {
 	wp_teardown()
 }
 
-fn test_wallpaper_current_prefers_canonical_over_dots_fallback() {
+fn test_wallpaper_ignores_obsolete_pointer_path() {
 	base := wp_setup()
-	os.write_file(base + '/wall2.jpg', 'fake-image-2') or { assert false }
-	os.write_file(base + '/state/hornero/wallpaper/path', base + '/wall.jpg\n') or { assert false }
-	os.write_file(base + '/state/dots/wallpaper/path', base + '/wall2.jpg\n') or { assert false }
-	assert current_wallpaper('') == base + '/wall.jpg'
-	wp_teardown()
-}
-
-fn test_wallpaper_current_falls_back_to_dots_pointer() {
-	base := wp_setup()
-	os.write_file(base + '/state/dots/wallpaper/path', base + '/wall.jpg\n') or { assert false }
-	assert current_wallpaper('') == base + '/wall.jpg'
+	os.mkdir_all(base + '/state/retired/wallpaper') or { assert false }
+	os.write_file(base + '/state/retired/wallpaper/path', base + '/wall.jpg\n') or { assert false }
+	assert current_wallpaper('') == ''
 	wp_teardown()
 }
 
@@ -65,7 +56,6 @@ fn test_wallpaper_current_from_symlink_pointer() {
 fn test_wallpaper_current_explicit_path_wins() {
 	base := wp_setup()
 	os.write_file(base + '/wall2.jpg', 'fake-image-2') or { assert false }
-	os.write_file(base + '/state/dots/wallpaper/path', base + '/wall.jpg\n') or { assert false }
 	assert current_wallpaper(base + '/wall2.jpg') == base + '/wall2.jpg'
 	wp_teardown()
 }
@@ -120,9 +110,9 @@ fn test_wallpaper_set_dry_run_needs_no_backend() {
 	})
 	assert r.ok
 	assert r.message.contains('would run:')
-	assert !r.message.contains('dots-wallpaper-set')
+	assert !r.message.contains('horneroctl wallpaper set')
 	assert r.message.contains('/nonexistent-wallpaper-set-hornero-test')
-	assert r.message.contains('HORNEROCTL_DELEGATED=1')
+	assert !r.message.contains('HORNEROCTL_INTERNAL_CALL')
 	assert r.data['path'] == base + '/wall.jpg'
 	wp_teardown()
 }
@@ -176,17 +166,17 @@ fn test_wallpaper_set_native_falls_back_without_wal() {
 	wp_teardown()
 }
 
-fn test_wallpaper_set_runs_backend_with_guard() {
+fn test_wallpaper_set_runs_backend_uses_backend() {
 	base := wp_setup()
-	os.write_file(base + '/dots-wallpaper-set', '#!/bin/sh\n[ -n "\$HORNEROCTL_DELEGATED" ] || { echo missing delegation guard >&2; exit 3; }\necho "wallpaper applied \$*"\nexit 0\n') or {
+	os.write_file(base + '/horneroctl wallpaper set', '#!/bin/sh\n\necho "wallpaper applied \$*"\nexit 0\n') or {
 		assert false
 	}
-	os.chmod(base + '/dots-wallpaper-set', 0o755) or { assert false }
+	os.chmod(base + '/horneroctl wallpaper set', 0o755) or { assert false }
 	r := wallpaper_report(WallpaperOptions{
 		action:     'set'
 		path:       base + '/wall.jpg'
 		yes:        true
-		set_helper: base + '/dots-wallpaper-set'
+		set_helper: base + '/horneroctl wallpaper set'
 	})
 	assert r.ok
 	assert r.message.contains('wallpaper applied')
@@ -250,20 +240,20 @@ fn test_wallpaper_reload_dry_run_needs_no_backend() {
 	assert r.ok
 	assert r.message.contains('would run:')
 	assert r.message.contains('/nonexistent-wal-reload-hornero-test')
-	assert r.message.contains('HORNEROCTL_DELEGATED=1')
+	assert !r.message.contains('HORNEROCTL_INTERNAL_CALL')
 	wp_teardown()
 }
 
-fn test_wallpaper_reload_runs_backend_with_guard() {
+fn test_wallpaper_reload_runs_backend_uses_backend() {
 	base := wp_setup()
-	os.write_file(base + '/dots-wal-reload', '#!/bin/sh\n[ -n "\$HORNEROCTL_DELEGATED" ] || { echo missing delegation guard >&2; exit 3; }\necho reloaded\nexit 0\n') or {
+	os.write_file(base + '/horneroctl wallpaper reload', '#!/bin/sh\n\necho reloaded\nexit 0\n') or {
 		assert false
 	}
-	os.chmod(base + '/dots-wal-reload', 0o755) or { assert false }
+	os.chmod(base + '/horneroctl wallpaper reload', 0o755) or { assert false }
 	r := wallpaper_report(WallpaperOptions{
 		action:        'reload'
 		yes:           true
-		reload_helper: base + '/dots-wal-reload'
+		reload_helper: base + '/horneroctl wallpaper reload'
 	})
 	assert r.ok
 	assert r.message.contains('reloaded')

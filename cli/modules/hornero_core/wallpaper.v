@@ -2,29 +2,22 @@ module hornero_core
 
 import os
 
-// Wallpaper control: `set <path> | current [path] | reload`.
-//
-// `current` reads the wallpaper pointer natively (canonical hornero/*
-// pointer first, legacy dots/* fallback, then the pywal link — the same
-// priority as dots_current_wallpaper in wallpaper-resolver.sh). `set` and
-// `reload` delegates to the verified dots-wal-reload backend; `set`
-// runs natively (shell IPC, else the wal+M3 pipeline). Every backend
-// invocation carries HORNEROCTL_DELEGATED=1 so the delegating dots-* shims
-// run their legacy body instead of calling back into horneroctl.
-// Mutating verbs require --yes; --dry-run only previews.
+// Wallpaper control uses the Hornero state pointer and native palette
+// pipeline. Only the optional reload hook is an external session action.
+// Mutations require --yes; --dry-run only previews.
 
-// resolve_wal_reload_bin locates the dots-wal-reload backend.
+// resolve_wal_reload_bin locates the horneroctl wallpaper reload backend.
 // Override with HORNERO_WAL_RELOAD_BIN.
 pub fn resolve_wal_reload_bin() string {
 	env := os.getenv('HORNERO_WAL_RELOAD_BIN')
 	if env.len > 0 {
 		return env
 	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-wal-reload')
+	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'horneroctl wallpaper reload')
 	if os.is_file(home_helper) {
 		return home_helper
 	}
-	return find_on_path('dots-wal-reload')
+	return find_on_path('horneroctl wallpaper reload')
 }
 
 pub struct WallpaperOptions {
@@ -37,7 +30,7 @@ pub:
 	reload_helper string
 }
 
-// wallpaper_strip_uri drops a file:// prefix, mirroring dots_strip_file_uri.
+// wallpaper_strip_uri drops a file:// prefix, normalizing a file URI.
 fn wallpaper_strip_uri(s string) string {
 	if s.starts_with('file://') {
 		return s[7..]
@@ -46,7 +39,7 @@ fn wallpaper_strip_uri(s string) string {
 }
 
 // resolve_wallpaper_candidate resolves an explicit path to an existing file,
-// mirroring dots_resolve_path_candidate (real path first, then as-given).
+// preferring the canonical path when it resolves.
 fn resolve_wallpaper_candidate(candidate string) string {
 	c := wallpaper_strip_uri(candidate.trim_space())
 	if c.len == 0 {
@@ -72,8 +65,8 @@ fn wallpaper_wal_link() string {
 }
 
 // wallpaper_from_pointer reads one pointer file: a symlink-to-image resolves
-// directly, otherwise the first text line names the image (with the
-// self-reference guard from dots_resolve_from_pointer_file). Returns '' when
+// directly, otherwise the first text line names the image (with a
+// self-reference guard). Returns '' when
 // the pointer yields no existing file.
 fn wallpaper_from_pointer(pointer_file string) string {
 	if pointer_file.len == 0 {
@@ -111,7 +104,7 @@ fn wallpaper_from_pointer(pointer_file string) string {
 }
 
 // current_wallpaper resolves the live wallpaper: an explicit path wins,
-// then the canonical pointer, the legacy dots/* fallback, then the pywal
+// then the canonical Hornero pointer, then the optional pywal
 // link. Returns '' when nothing resolves to an existing file.
 pub fn current_wallpaper(explicit string) string {
 	if explicit.len > 0 {
@@ -120,8 +113,7 @@ pub fn current_wallpaper(explicit string) string {
 			return resolved
 		}
 	}
-	candidates := [resolve_wallpaper_pointer_file(), resolve_wallpaper_pointer_file_fallback(),
-		wallpaper_wal_link()]
+	candidates := [resolve_wallpaper_pointer_file(), wallpaper_wal_link()]
 	for c in candidates {
 		resolved := wallpaper_from_pointer(c)
 		if resolved.len > 0 {
@@ -152,12 +144,10 @@ fn wallpaper_shell_quote(s string) string {
 	return "'" + s.replace("'", '\'"\'"\'') + "'"
 }
 
-// wallpaper_run_backend invokes one dots-* backend under the HORNEROCTL_DELEGATED
-// re-entrancy guard via env(1), or previews the guarded command on dry-run.
-// The command line is built with strict quoting per word and executed the
-// same way run_exec does; dry-run previews never execute.
+// wallpaper_run_backend invokes the optional reload action with strict
+// argument quoting; dry-run previews never execute it.
 fn wallpaper_run_backend(bin string, args []string, dry_run bool) ExecReport {
-	mut words := ['env', 'HORNEROCTL_DELEGATED=1', bin]
+	mut words := ['env', bin]
 	for a in args {
 		words << a
 	}
@@ -186,12 +176,12 @@ fn wallpaper_run_backend(bin string, args []string, dry_run bool) ExecReport {
 }
 
 // wallpaper_report implements the wallpaper subcommands. `current` reads the
-// pointer natively; `set`/`reload` delegate to the dots-* backends.
+// pointer and set palette natively; reload uses the optional session hook.
 // Mutating verbs require --yes; --dry-run only previews.
 // wallpaper_set_native applies one wallpaper without the
-// dots-wallpaper-set wrapper (retired): quickshell IPC setWallpaper
+// horneroctl wallpaper set wrapper (retired): quickshell IPC setWallpaper
 // first (when the shell runs), else the wal+M3 palette pipeline for
-// the new path — the dots_apply_wallpaper_only contract. An explicit
+// the new path — the native wallpaper-only contract. An explicit
 // set_helper still delegates (caller override).
 fn wallpaper_set_native(path string, dry_run bool) CommandResult {
 	if !dry_run && shell_running() {

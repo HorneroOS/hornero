@@ -12,15 +12,15 @@ fn power_dispatch_setup() {
 	os.write_file('/tmp/hx-power-dtest/bin/loginctl', '#!/bin/sh\necho "loginctl \$*"\nexit 0\n') or {
 		assert false
 	}
-	os.write_file('/tmp/hx-power-dtest/bin/dots-lockscreen', '#!/bin/sh\nif [ "\$1" = "--lock" ]; then echo "locked"; exit 0; fi\nexit 1\n') or {
+	os.write_file('/tmp/hx-power-dtest/bin/horneroctl', '#!/bin/sh\nif [ "\$1" = "--lock" ]; then echo "locked"; exit 0; fi\nexit 1\n') or {
 		assert false
 	}
 	os.chmod('/tmp/hx-power-dtest/bin/systemctl', 0o755) or { assert false }
 	os.chmod('/tmp/hx-power-dtest/bin/loginctl', 0o755) or { assert false }
-	os.chmod('/tmp/hx-power-dtest/bin/dots-lockscreen', 0o755) or { assert false }
+	os.chmod('/tmp/hx-power-dtest/bin/horneroctl', 0o755) or { assert false }
 	os.setenv('HORNERO_SYSTEMCTL_BIN', '/tmp/hx-power-dtest/bin/systemctl', true)
 	os.setenv('HORNERO_LOGINCTL_BIN', '/tmp/hx-power-dtest/bin/loginctl', true)
-	os.setenv('HORNERO_LOCKSCREEN_BIN', '/tmp/hx-power-dtest/bin/dots-lockscreen', true)
+	os.setenv('HORNERO_LOCKSCREEN_BIN', '/tmp/hx-power-dtest/bin/horneroctl', true)
 	os.setenv('HORNERO_HYPRLOCK_BIN', '/nonexistent-hyprlock-hornero-test', true)
 	os.setenv('XDG_SESSION_ID', 'test-session', true)
 }

@@ -30,7 +30,7 @@ pub fn config_paths_report() CommandResult {
 
 // load_shell_config reads the materialized shell settings: the user file
 // first, the shipped system default as fallback. Returns the path used and
-// the parsed document. Mirrors the `dots-quickshell config get` lookup
+// the parsed document. Mirrors the `horneroctl shell config get` lookup
 // order without spawning the backend.
 fn load_shell_config() !(string, map[string]json2.Any) {
 	p := resolve_paths()
@@ -63,7 +63,7 @@ fn config_scalar_summary(key string, v json2.Any) string {
 }
 
 // config_lookup walks one dot-notation key (`bar.position`) through nested
-// objects, mirroring `dots-quickshell config get` (dictionaries only;
+// objects, mirroring `horneroctl shell config get` (dictionaries only;
 // a container result prints as JSON).
 fn config_lookup(doc map[string]json2.Any, key string) !json2.Any {
 	return lookup_parts(doc, key, key.split('.'))

@@ -25,9 +25,8 @@ fn hw_test_keys() []string {
 		'HORNERO_XRANDR_BIN', 'HORNERO_ACPI_BIN', 'HORNERO_UPOWER_BIN', 'HORNERO_POWERALERTD_BIN',
 		'HORNERO_NOTIFY_BIN', 'HORNERO_WPCTL_BIN', 'HORNERO_MIC_SOURCE', 'HORNERO_HYPRCTL_BIN',
 		'HORNERO_SETXKBMAP_BIN', 'HORNERO_LXQT_CONFIG_INPUT_BIN', 'HORNERO_KEYBOARD_SETTINGS_BIN',
-		'HORNERO_SETTINGS_GUI_BIN', 'HORNERO_QS_BIN', 'HORNERO_BYPASS_QUICKSHELL', 'PATH',
-		'HORNERO_PING_BIN', 'HORNERO_IP_BIN', 'HORNERO_KEYBINDINGS_FILE', 'DOTS_BYPASS_QUICKSHELL',
-		'DOTS_PING_HOST', 'HYPRLAND_INSTANCE_SIGNATURE', 'WAYLAND_DISPLAY', 'I3SOCK', 'XDG_CONFIG_HOME']
+		'HORNERO_PING_BIN', 'HORNERO_IP_BIN', 'HORNERO_KEYBINDINGS_FILE', 'HORNERO_BYPASS_QUICKSHELL',
+		'HYPRLAND_INSTANCE_SIGNATURE', 'WAYLAND_DISPLAY', 'I3SOCK', 'XDG_CONFIG_HOME']
 }
 
 fn hw_test_break_backends() {
@@ -44,7 +43,6 @@ fn hw_test_break_backends() {
 	os.setenv('HORNERO_SETXKBMAP_BIN', '/nonexistent-setxkbmap-hw-test', true)
 	os.setenv('HORNERO_LXQT_CONFIG_INPUT_BIN', '/nonexistent-lxqt-hw-test', true)
 	os.setenv('HORNERO_KEYBOARD_SETTINGS_BIN', '/nonexistent-kbsettings-hw-test', true)
-	os.setenv('HORNERO_SETTINGS_GUI_BIN', '/nonexistent-settings-gui-hw-test', true)
 	os.setenv('HORNERO_PING_BIN', '/nonexistent-ping-hw-test', true)
 	os.setenv('HORNERO_IP_BIN', '/nonexistent-ip-hw-test', true)
 }
@@ -175,7 +173,7 @@ fn test_hw_missing_backends_fail() {
 
 fn test_hw_keyboard_settings_native_opens() {
 	// Native port: the pinned opener (/bin/true fixture) launches
-	// detached; dots-keyboard-settings is never consulted.
+	// detached; horneroctl hardware keyboard settings is never consulted.
 	saved := hw_test_save_env(hw_test_keys())
 	hw_test_break_backends()
 	os.setenv('HORNERO_KEYBOARD_SETTINGS_BIN', '/bin/true', true)
@@ -270,7 +268,7 @@ fn test_hw_keys_parse_fixture() {
 		assert false
 	}
 	os.setenv('HORNERO_KEYBINDINGS_FILE', '/tmp/hx-hw-ctest/keybindings.conf', true)
-	os.setenv('DOTS_BYPASS_QUICKSHELL', '1', true)
+	os.setenv('HORNERO_BYPASS_QUICKSHELL', '1', true)
 	r := keyboard_keys_report(KeyboardKeysOptions{})
 	assert r.ok
 	assert r.message.contains('[Window] SUPER + Return -> exec, kitty')
@@ -293,17 +291,14 @@ fn test_hw_keys_parse_fixture() {
 	hw_test_restore_env(saved)
 }
 
-fn test_shell_ipc_bypass_prefers_hornero_name_and_keeps_legacy_alias() {
-	saved := hw_test_save_env(['HORNERO_BYPASS_QUICKSHELL', 'DOTS_BYPASS_QUICKSHELL'])
+fn test_shell_ipc_bypass_uses_hornero_environment_contract() {
+	saved := hw_test_save_env(['HORNERO_BYPASS_QUICKSHELL'])
 	os.unsetenv('HORNERO_BYPASS_QUICKSHELL')
-	os.unsetenv('DOTS_BYPASS_QUICKSHELL')
-	assert !shell_ipc_bypassed()
-	os.setenv('DOTS_BYPASS_QUICKSHELL', '1', true)
-	assert shell_ipc_bypassed()
-	os.setenv('HORNERO_BYPASS_QUICKSHELL', '0', true)
 	assert !shell_ipc_bypassed()
 	os.setenv('HORNERO_BYPASS_QUICKSHELL', '1', true)
 	assert shell_ipc_bypassed()
+	os.setenv('HORNERO_BYPASS_QUICKSHELL', '0', true)
+	assert !shell_ipc_bypassed()
 	hw_test_restore_env(saved)
 }
 
@@ -318,13 +313,11 @@ fn test_hw_keys_opens_hornero_system_settings_over_shell_ipc() {
 	os.chmod(dir + '/bin/qs', 0o755) or { assert false }
 	os.setenv('PATH', dir + '/bin', true)
 	os.setenv('HORNERO_QS_BIN', dir + '/bin/qs', true)
-	os.unsetenv('HORNERO_SETTINGS_GUI_BIN')
 	os.unsetenv('HORNERO_BYPASS_QUICKSHELL')
-	os.unsetenv('DOTS_BYPASS_QUICKSHELL')
+	os.unsetenv('HORNERO_BYPASS_QUICKSHELL')
 	preview := keyboard_keys_report(KeyboardKeysOptions{ dry_run: true })
 	assert preview.ok
 	assert preview.data['command_line'].contains('ipc call controlCenter open system')
-	assert !preview.message.contains('dots-settings-gui')
 	actual := keyboard_keys_report(KeyboardKeysOptions{})
 	assert actual.ok
 	assert actual.message.contains('ipc call controlCenter open system')
@@ -332,12 +325,12 @@ fn test_hw_keys_opens_hornero_system_settings_over_shell_ipc() {
 }
 
 fn test_hw_brightness_temp_tables() {
-	// Ramps cribbed from redshift like dots-brightness: index 0 is
+	// Ramps cribbed from redshift like horneroctl hardware brightness: index 0 is
 	// 3000K, index 6 neutral 6500K, index 10 is 10000K.
 	assert brightness_gamma_of_temp(0.0) == '1.0:0.7:0.4'
 	assert brightness_gamma_of_temp(0.6) == '1.0:1.0:1.0'
 	assert brightness_gamma_of_temp(1.0) == '0.7:0.8:1.0'
-	// Out-of-range clamps like the dots-brightness exec_op.
+	// Out-of-range clamps like the horneroctl hardware brightness exec_op.
 	assert brightness_gamma_of_temp(-0.5) == '1.0:0.7:0.4'
 	assert brightness_gamma_of_temp(2.5) == '0.7:0.8:1.0'
 	assert brightness_temp_of_gamma('1.0:1.0:1.0') == 0.6
@@ -414,7 +407,7 @@ fn test_hw_brightness_temp_live() {
 	}
 	os.chmod('/tmp/hx-hw-temp-live/bin/xrandr', 0o755) or { assert false }
 	// Break every backend except xrandr so temperature resolves
-	// hermetically (dots-brightness --temp always drives xrandr).
+	// hermetically (horneroctl hardware brightness --temp always drives xrandr).
 	hw_test_break_backends()
 	os.setenv('HORNERO_XRANDR_BIN', '/tmp/hx-hw-temp-live/bin/xrandr', true)
 	// set needs no gamma read: the fixture exits 0 on the --gamma call.

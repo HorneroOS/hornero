@@ -4,16 +4,8 @@ import os
 import time
 import x.json2
 
-// Snapshot backend: configuration snapshots materialized on disk.
-//
-// `dots-config-manager` (dotfiles reference, read-only) owns the verbs:
-// `--create` writes `$SNAPSHOTS_DIR/config_<timestamp>/` with a
-// `metadata.json` (`id`, `timestamp`, `hostname`, `dotfiles_commit`),
-// `--list` tabulates those directories, `--restore <id>` restores one.
-// Listing here is a native reader of the same directories (no backend
-// process needed, mirroring `preset list` / `theme list`); create/restore
-// run natively too, with an explicit helper override still delegating
-// to `dots-config-manager`.
+// Hornero configuration snapshots are native, user-owned state under XDG.
+// They capture Hornero settings, package inventory and host metadata.
 
 // resolve_snapshots_dir locates materialized configuration snapshots: the
 // canonical `hornero/*` location (docs/PATH_CONTRACT.md row 7) and the
@@ -23,56 +15,17 @@ pub fn resolve_snapshots_dir() string {
 	if env.len > 0 {
 		return env
 	}
-	mut base := os.getenv('XDG_CACHE_HOME')
+	mut base := os.getenv('XDG_DATA_HOME')
 	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
+		base = os.join_path(os.home_dir(), '.local', 'share')
 	}
 	return os.join_path(base, 'hornero', 'snapshots')
 }
 
-// resolve_snapshots_dir_fallback is the legacy `dots/*` location (row 7).
-// Reads only: nothing new is ever written here.
-pub fn resolve_snapshots_dir_fallback() string {
-	mut base := os.getenv('XDG_CACHE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
-	}
-	return os.join_path(base, 'dots', 'snapshots')
-}
-
-// resolve_snapshots_dirs_for_read lists the directories actually read,
-// canonical-first. An explicit HORNERO_SNAPSHOTS_DIR override wins outright;
-// otherwise every existing directory is returned so readers merge both
-// locations with canonical precedence.
+// Snapshots are user-owned state and never read from package directories.
 pub fn resolve_snapshots_dirs_for_read() []string {
-	env := os.getenv('HORNERO_SNAPSHOTS_DIR')
-	if env.len > 0 {
-		return [env]
-	}
-	mut dirs := []string{}
-	canonical := resolve_snapshots_dir()
-	fallback := resolve_snapshots_dir_fallback()
-	if os.is_dir(canonical) {
-		dirs << canonical
-	}
-	if os.is_dir(fallback) && fallback != canonical {
-		dirs << fallback
-	}
-	return dirs
-}
-
-// resolve_config_manager locates the `dots-config-manager` backend CLI
-// for explicit helper overrides. Override with HORNERO_CONFIG_MANAGER_BIN.
-pub fn resolve_config_manager() string {
-	env := os.getenv('HORNERO_CONFIG_MANAGER_BIN')
-	if env.len > 0 {
-		return env
-	}
-	home_helper := os.join_path(os.home_dir(), '.local', 'bin', 'dots-config-manager')
-	if os.is_file(home_helper) {
-		return home_helper
-	}
-	return find_on_path('dots-config-manager')
+	dir := resolve_snapshots_dir()
+	return if os.is_dir(dir) { [dir] } else { []string{} }
 }
 
 pub struct SnapshotEntry {
@@ -80,7 +33,6 @@ pub:
 	id        string
 	timestamp string
 	hostname  string
-	commit    string
 }
 
 // snapshot_metadata_file mirrors metadata.json; read and write share it
@@ -94,12 +46,11 @@ pub:
 
 pub struct SnapshotMetadataFile {
 pub:
-	id              string
-	timestamp       string
-	hostname        string
-	user            string
-	dotfiles_commit string
-	system_info     SnapshotSystemInfo
+	id          string
+	timestamp   string
+	hostname    string
+	user        string
+	system_info SnapshotSystemInfo
 }
 
 fn snapshot_or_unknown(s string) string {
@@ -130,13 +81,11 @@ fn read_snapshot(dir string, id string) !SnapshotEntry {
 		id:        id
 		timestamp: snapshot_or_unknown(meta.timestamp)
 		hostname:  snapshot_or_unknown(meta.hostname)
-		commit:    snapshot_or_unknown(meta.dotfiles_commit)
 	}
 }
 
 // list_snapshots returns materialized snapshots sorted by id.
-// Canonical-first with legacy fallback: both directories are merged and a
-// snapshot present in both resolves from the canonical side.
+// Reads the configured Hornero snapshot catalogue.
 pub fn list_snapshots() ![]SnapshotEntry {
 	dirs := resolve_snapshots_dirs_for_read().filter(os.is_dir(it))
 	if dirs.len == 0 {
@@ -177,7 +126,7 @@ pub fn snapshot_list_report() CommandResult {
 	mut ids := []string{}
 	for s in snaps {
 		ids << s.id
-		lines << '${s.id} ${s.timestamp} ${s.hostname} ${s.commit}'
+		lines << '${s.id} ${s.timestamp} ${s.hostname}'
 	}
 	lines << '${snaps.len} snapshot(s)'
 	return ok_result('config snapshot list', lines.join('\n'), {
@@ -190,50 +139,13 @@ pub struct SnapshotCreateOptions {
 pub:
 	dry_run bool
 	yes     bool
-	helper  string
 }
 
-fn config_manager_or_fail(helper string, dry_run bool) !string {
-	bin := if helper.len > 0 { helper } else { resolve_config_manager() }
-	if bin.len == 0 {
-		if dry_run {
-			return 'dots-config-manager'
-		}
-		return error('config snapshot backend not found. Set HORNERO_CONFIG_MANAGER_BIN.\nExample: horneroctl config snapshot create --dry-run')
-	}
-	return bin
-}
-
-// snapshot_create_report implements `config snapshot create` natively
-// (metadata, tarball, package lists, latest link); an explicit helper
-// still delegates to `dots-config-manager --create`. Mutating: needs
+// snapshot_create_report implements `config snapshot create` natively. Mutating: needs
 // --yes; --dry-run only previews.
 pub fn snapshot_create_report(opts SnapshotCreateOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('config snapshot create', 'refusing to snapshot without --yes (preview with --dry-run).\nExample: horneroctl config snapshot create --dry-run')
-	}
-	if opts.helper.len > 0 {
-		bin := config_manager_or_fail(opts.helper, opts.dry_run) or {
-			return fail_result('config snapshot create', err.msg())
-		}
-		rep := run_exec(ExecSpec{
-			prog:    bin
-			args:    ['--create']
-			dry_run: opts.dry_run
-		})
-		if opts.dry_run {
-			return ok_result('config snapshot create', 'would run: ${rep.command_line}',
-				{
-					'command_line': rep.command_line
-					'dry_run':      'true'
-				})
-		}
-		if rep.ok {
-			return ok_result('config snapshot create', rep.output, {
-				'command_line': rep.command_line
-			})
-		}
-		return fail_result('config snapshot create', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 	}
 	return snapshot_create_native(opts.dry_run)
 }
@@ -243,41 +155,16 @@ pub:
 	id      string
 	dry_run bool
 	yes     bool
-	helper  string
 }
 
 // snapshot_restore_report implements `config snapshot restore <id>`
-// natively (pre-backup, then tarball extraction); an explicit helper
-// still delegates. Mutating: needs --yes; --dry-run only previews.
+// natively (pre-restore backup, then tarball extraction). Mutating: needs --yes; --dry-run only previews.
 pub fn snapshot_restore_report(opts SnapshotRestoreOptions) CommandResult {
 	if !valid_snapshot_id(opts.id) {
 		return fail_result('config snapshot restore', 'invalid snapshot id: ${opts.id}.\nRun: horneroctl config snapshot list')
 	}
 	if !opts.yes && !opts.dry_run {
 		return fail_result('config snapshot restore', 'refusing to restore without --yes (preview with --dry-run).\nExample: horneroctl config snapshot restore ${opts.id} --dry-run')
-	}
-	if opts.helper.len > 0 {
-		bin := config_manager_or_fail(opts.helper, opts.dry_run) or {
-			return fail_result('config snapshot restore', err.msg())
-		}
-		rep := run_exec(ExecSpec{
-			prog:    bin
-			args:    ['--restore', opts.id]
-			dry_run: opts.dry_run
-		})
-		if opts.dry_run {
-			return ok_result('config snapshot restore', 'would run: ${rep.command_line}',
-				{
-					'command_line': rep.command_line
-					'dry_run':      'true'
-				})
-		}
-		if rep.ok {
-			return ok_result('config snapshot restore', rep.output, {
-				'command_line': rep.command_line
-			})
-		}
-		return fail_result('config snapshot restore', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 	}
 	return snapshot_restore_native(opts.id, opts.dry_run)
 }
@@ -287,34 +174,13 @@ fn snapshot_iso_now() string {
 	return time.now().custom_format('YYYY-MM-DDTHH:mm:ss')
 }
 
-// snapshot_dotfiles_commit reads the dotfiles HEAD, 'unknown' when the
-// checkout is absent (mirrors the script's git-or-unknown).
-fn snapshot_dotfiles_commit() string {
-	rep := run_exec(ExecSpec{
-		prog: 'git'
-		args: ['-C', os.join_path(os.home_dir(), '.dotfiles'), 'rev-parse', 'HEAD']
-	})
-	if !rep.ok {
-		return 'unknown'
-	}
-	out := rep.output.trim_space()
-	if out.len == 0 {
-		return 'unknown'
-	}
-	return out
-}
-
-// snapshot_create_native implements `config snapshot create` without
-// the dots-config-manager wrapper (retired): metadata.json,
-// dotfiles.tar.gz (tar -czf over the live HOME), pacman lists, ps
-// capture, and the latest symlink — the create_snapshot contract.
-// Writes go to the canonical snapshots dir; HOME redirection (tests)
-// scopes the tarball source.
+// snapshot_create_native captures only Hornero-owned configuration and the
+// installed package inventory. It never archives the full home directory.
 pub fn snapshot_create_native(dry_run bool) CommandResult {
 	name := 'config snapshot create'
 	base := resolve_snapshots_dir()
 	if dry_run {
-		return ok_result(name, 'would create ${base}/config_<timestamp> (metadata.json, dotfiles.tar.gz, package lists, processes.txt)',
+		return ok_result(name, 'would create ${base}/config_<timestamp> (metadata.json, hornero-config.tar.gz, package inventory)',
 			{
 				'dry_run': 'true'
 			})
@@ -333,12 +199,11 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 	os.mkdir_all(dir) or { return fail_result(name, 'cannot create snapshot dir: ${err.msg()}') }
 	host := os.hostname() or { 'unknown' }
 	meta := json2.encode(SnapshotMetadataFile{
-		id:              id
-		timestamp:       snapshot_iso_now()
-		hostname:        host
-		user:            os.getenv('USER')
-		dotfiles_commit: snapshot_dotfiles_commit()
-		system_info:     SnapshotSystemInfo{
+		id:          id
+		timestamp:   snapshot_iso_now()
+		hostname:    host
+		user:        os.getenv('USER')
+		system_info: SnapshotSystemInfo{
 			os:     perf_os_pretty()
 			kernel: os.uname().release
 			shell:  os.getenv('SHELL')
@@ -349,13 +214,18 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 	}
 	home := os.home_dir()
 	tar := tar_or_fail('create', false) or { return fail_result(name, err.msg()) }
-	// Best-effort like the script's `|| true`: missing members must not
-	// fail the snapshot.
-	run_exec(ExecSpec{
-		prog: tar
-		args: ['-czf', os.join_path(dir, 'dotfiles.tar.gz'), '-C', home, '.config', '.local/bin',
-			'.local/lib', '.zshrc', '.p10k.zsh']
-	})
+	// Missing optional configuration roots do not prevent collecting package
+	// metadata; tar runs only when at least one Hornero config root exists.
+	config_home := os.getenv_opt('XDG_CONFIG_HOME') or { os.join_path(home, '.config') }
+	config_roots := ['hornero', 'quickshell'].filter(os.is_dir(os.join_path(config_home, it)))
+	if config_roots.len > 0 {
+		mut args := ['-czf', os.join_path(dir, 'hornero-config.tar.gz'), '-C', config_home]
+		args << config_roots
+		run_exec(ExecSpec{
+			prog: tar
+			args: args
+		})
+	}
 	pacman := backend_or_empty('HORNERO_PACMAN_BIN', 'pacman')
 	if pacman.len > 0 {
 		ex := run_exec(ExecSpec{
@@ -371,16 +241,6 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 		})
 		if aur.ok {
 			os.write_file(os.join_path(dir, 'packages_aur.txt'), aur.output) or {}
-		}
-	}
-	ps := perf_ps_bin()
-	if ps.len > 0 {
-		proc := run_exec(ExecSpec{
-			prog: ps
-			args: ['aux']
-		})
-		if proc.ok {
-			os.write_file(os.join_path(dir, 'processes.txt'), proc.output) or {}
 		}
 	}
 	latest := os.join_path(base, 'latest')
@@ -404,17 +264,14 @@ fn snapshot_find_dir(id string) string {
 	return ''
 }
 
-// snapshot_restore_native implements `config snapshot restore <id>`
-// without the wrapper: info lines, a pre-restore backup of the
-// current state, then tarball extraction over HOME — the
-// restore_snapshot contract.
+// snapshot_restore_native restores only the Hornero configuration roots.
 pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	name := 'config snapshot restore'
 	if !valid_snapshot_id(id) {
 		return fail_result(name, 'invalid snapshot id: ${id}.\nRun: horneroctl config snapshot list')
 	}
 	if dry_run {
-		return ok_result(name, 'would back up current state, then restore ${id} over ${os.home_dir()}',
+		return ok_result(name, 'would back up current Hornero configuration, then restore ${id}',
 			{
 				'dry_run': 'true'
 				'id':      id
@@ -426,20 +283,20 @@ pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	}
 	entry := read_snapshot(os.dir(dir), id) or { SnapshotEntry{} }
 	mut lines := ['Restoring configuration from snapshot: ${id}', '  Snapshot info:',
-		'    Date: ${entry.timestamp}', '    Host: ${entry.hostname}', '    Commit: ${entry.commit}',
+		'    Date: ${entry.timestamp}', '    Host: ${entry.hostname}',
 		'  Creating backup of current state...']
 	backup := snapshot_create_native(false)
 	if !backup.ok {
 		return fail_result(name, 'pre-restore backup failed: ${backup.message}')
 	}
-	tarball := os.join_path(dir, 'dotfiles.tar.gz')
+	tarball := os.join_path(dir, 'hornero-config.tar.gz')
 	if os.is_file(tarball) {
-		lines << '  Restoring dotfiles...'
+		lines << '  Restoring Hornero configuration...'
 		tar := tar_or_fail('restore', false) or { return fail_result(name, err.msg()) }
-		// Best-effort like the script's `|| true`.
+		config_home := os.getenv_opt('XDG_CONFIG_HOME') or { os.join_path(os.home_dir(), '.config') }
 		run_exec(ExecSpec{
 			prog: tar
-			args: ['-xzf', tarball, '-C', os.home_dir()]
+			args: ['-xzf', tarball, '-C', config_home]
 		})
 	}
 	lines << 'Restore completed!'

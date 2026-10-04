@@ -158,7 +158,7 @@ bash "$SHELL_HARNESS/lib/deploy-shell.sh" || fail "guest deploy (shell + config 
 pass "guest deployed (shell, composed config, factory defaults, wallpapers)"
 
 # --- 4. P2 overlay preparation (network PREP phase) -----------------------------
-# Appearance deps (hard requirements of dots_apply_theme: wal,
+# Appearance deps (hard requirements of hornero_apply_theme: wal,
 # materialyoucolor, ImageMagick for pywal's wal backend) plus the demo apps
 # the matrix captures (gtk3/gtk4 widget factories, hyprlock). Runs after
 # deploy so the composition owns HOME first; pip --user lands in the real
@@ -386,7 +386,7 @@ for spec in \
     || fail "guest theme get $id: $getout"
   echo "$getout" | grep -q "current theme: $id (" \
     || fail "guest theme get $id (no id match): $getout"
-  # mode lives in scheme/state.json (dots-color-scheme writer, absent in
+  # mode lives in scheme/state.json (horneroctl appearance scheme writer, absent in
   # minimal guests): assert it when reported, note when the GTK match
   # governs (same contract as tests/vm/smoke.sh).
   if ! echo "$getout" | grep -q "(mode=$mode,"; then

@@ -2,16 +2,8 @@ module hornero_core
 
 import os
 
-// Backup backend: dotfiles/config backups materialized on disk.
-//
-// `dots-backup` (dotfiles reference, read-only) writes `<backup-dir>/`
-// `*.zip` archives (`--backup-dir`, default `~/.dotfiles/backup`) and
-// lists them with `--list`. Listing here is a native reader of the same
-// directory (no backend process needed, mirroring `preset list`).
-// Scheduling (`schedule`) is documentation-only by design: horneroctl
-// prints the cron/systemd recipe and never installs it. Create/restore
-// are native tar file operations (the legacy interactive cron
-// register/unregister flows stay out, which the CLI contract forbids).
+// Hornero configuration archives live in user state. Scheduling is
+// documentation-only; create and restore operate on Hornero config only.
 
 // resolve_backup_dir locates materialized backups.
 // Override with HORNERO_BACKUP_DIR.
@@ -20,7 +12,11 @@ pub fn resolve_backup_dir() string {
 	if env.len > 0 {
 		return env
 	}
-	return os.join_path(os.home_dir(), '.dotfiles', 'backup')
+	mut base := os.getenv('XDG_STATE_HOME')
+	if base.len == 0 {
+		base = os.join_path(os.home_dir(), '.local', 'state')
+	}
+	return os.join_path(base, 'hornero', 'backups')
 }
 
 pub struct BackupEntry {
@@ -29,9 +25,7 @@ pub:
 	size string
 }
 
-// list_backups returns materialized backups sorted by name: `*.tar.gz`
-// written by `backup create` plus legacy `*.zip` archives from
-// `dots-backup --list`.
+// list_backups returns Hornero configuration archives sorted by name.
 pub fn list_backups() ![]BackupEntry {
 	dir := resolve_backup_dir()
 	if !os.is_dir(dir) {
@@ -40,7 +34,7 @@ pub fn list_backups() ![]BackupEntry {
 	files := os.ls(dir)!
 	mut names := []string{}
 	for f in files {
-		if !f.ends_with('.tar.gz') && !f.ends_with('.zip') {
+		if !f.ends_with('.tar.gz') {
 			continue
 		}
 		if !os.is_file(os.join_path(dir, f)) {

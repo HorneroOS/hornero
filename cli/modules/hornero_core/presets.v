@@ -8,18 +8,12 @@ import x.json2
 // pointer. Both are materialized files, so listing is native (no backend
 // process needed).
 //
-// `dots-quickshell preset list/current` (dotfiles reference) reads the same
-// catalogue: `$XDG_DATA_HOME/hornero/shell-presets/*.json` canonical
-// (docs/PATH_CONTRACT.md row 2, WRITE TARGET) with the legacy
-// `$XDG_DATA_HOME/dots/shell-presets/*.json` as read-only fallback
-// (the shell repo vendors the same dataset under `presets/*.json` as its
-// in-shell fallback); `$XDG_STATE_HOME/hornero/current-shell-preset` for
-// the active pointer (row 3) with `$XDG_STATE_HOME/dots/...` fallback.
+// The installed catalogue is read from user data first, then the read-only
+// system package catalogue. The active pointer lives in Hornero state.
 // Unparseable preset files are skipped, mirroring the backend.
 //
 // `shell preset apply <name>` mutates the materialized shell.json through
-// the native merger below (a fresh V port of the dotfiles
-// apply-shell-preset.py reference): validate, reset owned settings,
+// the native merger below: validate, reset owned settings,
 // deep-merge, atomic write, pointer update. Mutating: needs --yes;
 // --dry-run only previews.
 
@@ -38,35 +32,13 @@ pub fn resolve_presets_dir() string {
 	return os.join_path(base, 'hornero', 'shell-presets')
 }
 
-// resolve_presets_dir_fallback is the legacy `dots/*` location (row 2).
-// Reads only: nothing new is ever written here.
-pub fn resolve_presets_dir_fallback() string {
-	mut base := os.getenv('XDG_DATA_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.local', 'share')
-	}
-	return os.join_path(base, 'dots', 'shell-presets')
-}
-
-// resolve_presets_dirs_for_read lists the directories actually read,
-// canonical-first. An explicit HORNERO_PRESETS_DIR override wins outright;
-// otherwise every existing directory is returned so readers merge them with
-// canonical precedence: user canonical, user legacy, then the read-only
-// system catalogues from XDG_DATA_DIRS (package installs, hornero#96).
+// Return user presets first, followed by package-installed presets.
 pub fn resolve_presets_dirs_for_read() []string {
 	env := os.getenv('HORNERO_PRESETS_DIR')
-	if env.len > 0 {
-		return [env]
-	}
+	if env.len > 0 { return [env] }
 	mut dirs := []string{}
-	canonical := resolve_presets_dir()
-	fallback := resolve_presets_dir_fallback()
-	if os.is_dir(canonical) {
-		dirs << canonical
-	}
-	if os.is_dir(fallback) && fallback != canonical {
-		dirs << fallback
-	}
+	user := resolve_presets_dir()
+	if os.is_dir(user) { dirs << user }
 	append_system_catalogues(mut dirs, os.join_path('hornero', 'shell-presets'))
 	return dirs
 }
@@ -86,31 +58,9 @@ pub fn resolve_preset_state_file() string {
 	return os.join_path(base, 'hornero', 'current-shell-preset')
 }
 
-// resolve_preset_state_file_fallback is the legacy read-only location.
-pub fn resolve_preset_state_file_fallback() string {
-	mut base := os.getenv('XDG_STATE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.local', 'state')
-	}
-	return os.join_path(base, 'dots', 'current-shell-preset')
-}
-
-// resolve_preset_state_file_for_read picks the pointer actually read:
-// the explicit override, else canonical-first with legacy fallback.
+// Read the active preset from its canonical Hornero state file.
 pub fn resolve_preset_state_file_for_read() string {
-	env := os.getenv('HORNERO_PRESET_STATE_FILE')
-	if env.len > 0 {
-		return env
-	}
-	canonical := resolve_preset_state_file()
-	if os.is_file(canonical) {
-		return canonical
-	}
-	fallback := resolve_preset_state_file_fallback()
-	if os.is_file(fallback) {
-		return fallback
-	}
-	return canonical
+	return resolve_preset_state_file()
 }
 
 pub struct PresetEntry {
@@ -120,8 +70,6 @@ pub:
 	description   string
 	icon          string
 	icon_material string
-	position      string
-	style         string
 	active        bool
 	lineage       string
 	// bars: topology summary for previews (preset_bars_summary), one
@@ -132,7 +80,7 @@ pub:
 const preset_bar_edges = ['top', 'bottom', 'left', 'right']
 const preset_bar_styles = ['attached', 'inset', 'floating', 'islands', 'dock']
 
-// preset_enabled_count counts enabled, non-spacer entries in a group.
+// preset_enabled_count counts enabled entries in a group.
 fn preset_enabled_count(list []json2.Any) int {
 	mut n := 0
 	for e in list {
@@ -140,7 +88,7 @@ fn preset_enabled_count(list []json2.Any) int {
 			continue
 		}
 		m := e.as_map()
-		if 'id' !in m || m['id'].str() == 'spacer' {
+		if 'id' !in m {
 			continue
 		}
 		if 'enabled' in m && m['enabled'].str() == 'false' {
@@ -171,11 +119,7 @@ fn preset_bar_summary_item(edge string, style string, backdrop string, reserve b
 	})
 }
 
-// preset_bars_summary resolves a preset's bar topology the way the shell
-// does (BarConfig.barsFor): valid v2 `bars` specs, first spec wins on a
-// duplicated edge, unknown styles fall back to attached; with no usable
-// spec, one legacy bar from position/style/entries split at enabled
-// spacers (before first -> start, between -> center, after last -> end).
+// preset_bars_summary summarizes explicit multi-bar topology for previews.
 pub fn preset_bars_summary(bar map[string]json2.Any) []json2.Any {
 	mut out := []json2.Any{}
 	if 'bars' in bar && bar['bars'] is []json2.Any {
@@ -216,52 +160,17 @@ pub fn preset_bars_summary(bar map[string]json2.Any) []json2.Any {
 				counts[1], counts[2])
 		}
 	}
-	if out.len > 0 {
-		return out
-	}
-	raw_pos := if 'position' in bar { bar['position'].str() } else { '' }
-	edge := if raw_pos in preset_bar_edges { raw_pos } else { 'left' }
-	raw_style := if 'style' in bar { bar['style'].str() } else { '' }
-	style := if raw_style in preset_bar_styles { raw_style } else { 'attached' }
-	entries := if 'entries' in bar && bar['entries'] is []json2.Any {
-		bar['entries'].as_array()
-	} else {
-		[]json2.Any{}
-	}
-	mut cuts := []int{}
-	for i, e in entries {
-		if e is map[string]json2.Any {
-			m := e.as_map()
-			if 'id' in m && m['id'].str() == 'spacer'
-				&& !('enabled' in m && m['enabled'].str() == 'false') {
-				cuts << i
-			}
-		}
-	}
-	if cuts.len == 0 {
-		return [preset_bar_summary_item(edge, style, 'solid', preset_style_reserves(style),
-			preset_enabled_count(entries), 0, 0)]
-	}
-	first := cuts[0]
-	last := cuts[cuts.len - 1]
-	start := preset_enabled_count(entries[..first])
-	end := preset_enabled_count(entries[last + 1..])
-	center := if cuts.len == 1 { 0 } else { preset_enabled_count(entries[first + 1..last]) }
-	return [preset_bar_summary_item(edge, style, 'solid', preset_style_reserves(style),
-		start, center, end)]
+	return out
 }
 
-// current_preset_name returns the active preset id, or '' when unset.
-// Canonical-first: the legacy pointer is read only when no canonical one
-// exists.
+// current_preset_name returns the active preset id, or empty when unset.
 pub fn current_preset_name() string {
 	raw := os.read_file(resolve_preset_state_file_for_read()) or { return '' }
 	return raw.trim_space()
 }
 
 // preset_entry_from_map builds one catalogue entry from a parsed preset.
-// Field defaults mirror the `dots-quickshell preset list --json` backend
-// (dotfiles reference): 📦 icon, widgets material icon, left/attached bar.
+// Display metadata defaults stay neutral when a pack omits optional labels.
 fn preset_entry_from_map(name string, m map[string]json2.Any, current string) PresetEntry {
 	mut title := name
 	if '_name' in m && m['_name'].str().len > 0 {
@@ -283,18 +192,10 @@ fn preset_entry_from_map(name string, m map[string]json2.Any, current string) Pr
 	if '_lineage' in m {
 		lineage = m['_lineage'].str()
 	}
-	mut position := 'left'
-	mut style := 'attached'
 	mut bars := []json2.Any{}
 	if 'bar' in m && m['bar'] is map[string]json2.Any {
 		bar := m['bar'].as_map()
 		bars = preset_bars_summary(bar)
-		if 'position' in bar && bar['position'].str().len > 0 {
-			position = bar['position'].str()
-		}
-		if 'style' in bar && bar['style'].str().len > 0 {
-			style = bar['style'].str()
-		}
 	}
 	return PresetEntry{
 		name:          name
@@ -302,17 +203,14 @@ fn preset_entry_from_map(name string, m map[string]json2.Any, current string) Pr
 		description:   about
 		icon:          icon
 		icon_material: icon_material
-		position:      position
-		style:         style
 		active:        name == current
 		lineage:       lineage
 		bars:          bars
 	}
 }
 
-// list_presets returns installed presets sorted by name.
-// Canonical-first with legacy fallback: both directories are merged and a
-// preset present in both resolves from the canonical side.
+// list_presets returns installed presets sorted by name. User presets
+// override package-installed presets.
 pub fn list_presets() ![]PresetEntry {
 	dirs := resolve_presets_dirs_for_read().filter(os.is_dir(it))
 	if dirs.len == 0 {
@@ -363,8 +261,12 @@ pub fn preset_list_report() CommandResult {
 	for p in presets {
 		names << p.name
 		mut line := '${p.name}: ${p.display}'
-		if p.position.len > 0 {
-			line += ' [${p.position}]'
+		if p.bars.len > 0 {
+			mut edges := []string{}
+			for bar in p.bars {
+				edges << bar.as_map()['edge'].str()
+			}
+			line += ' [${edges.join(' + ')}]'
 		}
 		if p.active {
 			line += ' (active)'
@@ -394,12 +296,9 @@ pub fn preset_current_report() CommandResult {
 	})
 }
 
-// preset_list_full_report implements `shell preset list --full`
-// (read-only). The message is the full entry array as JSON — same shape
-// as the retired `dots-quickshell preset list --json` backend the
-// in-shell layout picker consumes: name, display, description, icon,
-// iconMaterial, position, style, active — plus additive lineage and a
-// bars topology summary (preset_bars_summary) for multi-bar previews.
+// preset_list_full_report implements `shell preset list --full`.
+// The JSON contains display metadata and the explicit bar topology used by
+// the in-shell layout picker.
 pub fn preset_list_full_report() CommandResult {
 	presets := list_presets() or { return fail_result('shell preset list', err.msg()) }
 	mut names := []string{}
@@ -416,8 +315,6 @@ pub fn preset_list_full_report() CommandResult {
 			'description':  json2.Any(p.description)
 			'icon':         json2.Any(p.icon)
 			'iconMaterial': json2.Any(p.icon_material)
-			'position':     json2.Any(p.position)
-			'style':        json2.Any(p.style)
 			'active':       json2.Any(p.active)
 			'lineage':      json2.Any(p.lineage)
 			'bars':         json2.Any(p.bars)
@@ -431,10 +328,9 @@ pub fn preset_list_full_report() CommandResult {
 	})
 }
 
-// preset_owned_defaults_json mirrors OWNED_DEFAULTS in the dotfiles
-// apply-shell-preset.py reference: owned settings reset before a preset
-// merges over them, so stale keys from a previous preset never linger.
-const preset_owned_defaults_json = '{"appearance":{"padding":{"scale":1.0},"rounding":{"scale":1.0},"spacing":{"scale":1.0},"transparency":{"base":0.85,"enabled":false,"layers":0.4}},"background":{"desktopClock":{"enabled":false},"visualiser":{"autoHide":true,"enabled":false}},"bar":{"floatingMargin":14,"perScreen":[],"persistent":true,"position":"left","scrollActions":{"brightness":true,"volume":true,"workspaces":true},"showOnHover":true,"sizes":{"innerWidth":40},"status":{"showAudio":false,"showBattery":true,"showBluetooth":true,"showKbLayout":false,"showLockStatus":true,"showMicrophone":false,"showNetwork":true,"showWifi":true},"style":"attached"},"border":{"frameEnabled":true},"notifs":{"defaultExpireTimeout":5000},"osd":{"hideDelay":2000}}'
+// preset_owned_defaults_json contains current Shell-owned settings
+// reset before a preset is merged, preventing stale layout state.
+const preset_owned_defaults_json = '{"appearance":{"padding":{"scale":1.0},"rounding":{"scale":1.0},"spacing":{"scale":1.0},"transparency":{"base":0.85,"enabled":false,"layers":0.4}},"background":{"desktopClock":{"enabled":false},"visualiser":{"autoHide":true,"enabled":false}},"bar":{"bars":[{"edge":"left","style":"attached","reserve":true,"margin":8,"thickness":40,"density":"values","backdrop":"solid","groups":{"start":[{"id":"logo","enabled":true},{"id":"workspaces","enabled":true}],"center":[{"id":"activeWindow","enabled":true}],"end":[{"id":"tray","enabled":true},{"id":"clock","enabled":true},{"id":"statusIcons","enabled":true},{"id":"power","enabled":true}]}}],"perScreen":[],"persistent":true,"scrollActions":{"brightness":true,"volume":true,"workspaces":true},"showOnHover":true,"sizes":{"innerWidth":40},"status":{"showAudio":false,"showBattery":true,"showBluetooth":true,"showKbLayout":false,"showLockStatus":true,"showMicrophone":false,"showNetwork":true,"showWifi":true}},"border":{"frameEnabled":true},"notifs":{"defaultExpireTimeout":5000},"osd":{"hideDelay":2000}}'
 
 // preset_owned_defaults decodes a fresh copy of the owned defaults.
 fn preset_owned_defaults() map[string]json2.Any {
@@ -521,38 +417,60 @@ fn preset_validate(preset map[string]json2.Any, source string) !map[string]json2
 	mut normalized := preset_deep_merge(preset_owned_defaults(), preset)
 	normalized['_name'] = preset['_name']
 	bar := normalized['bar'].as_map()
-	if bar['position'].str() !in ['left', 'right', 'top', 'bottom'] {
-		return error('${source}: invalid bar.position')
+	bars_ok := 'bars' in bar && bar['bars'] is []json2.Any && bar['bars'].as_array().len > 0
+	if !bars_ok {
+		return error('${source}: bar.bars must contain at least one v2 bar')
 	}
-	if bar['style'].str() !in ['attached', 'floating', 'dock'] {
-		return error('${source}: invalid bar.style')
-	}
-	if 'floatingMargin' !in bar || !preset_is_int(bar['floatingMargin'])
-		|| preset_as_i64(bar['floatingMargin']) < 0
-		|| preset_as_i64(bar['floatingMargin']) > 256 {
-		return error('${source}: bar.floatingMargin must be an integer from 0 to 256')
+	mut seen_edges := []string{}
+	for raw_bar in bar['bars'].as_array() {
+		if raw_bar !is map[string]json2.Any {
+			return error('${source}: each bar must be an object')
+		}
+		b := raw_bar.as_map()
+		edge_ok := 'edge' in b && b['edge'].str() in preset_bar_edges && b['edge'].str() !in seen_edges
+		if !edge_ok {
+			return error('${source}: bar.bars entries require unique top/bottom/left/right edges')
+		}
+		seen_edges << b['edge'].str()
+		if 'style' !in b || b['style'].str() !in preset_bar_styles {
+			return error('${source}: bar style is invalid')
+		}
+		if 'reserve' in b && b['reserve'] !is bool {
+			return error('${source}: bar.reserve must be a boolean')
+		}
+		for field in ['margin', 'thickness'] {
+			if field in b && !preset_is_int(b[field]) {
+				return error('${source}: bar.${field} must be an integer')
+			}
+			if field in b {
+				value := preset_as_i64(b[field])
+				min := if field == 'margin' { i64(0) } else { i64(16) }
+				if value < min || value > 256 {
+					return error('${source}: bar.${field} is outside its supported range')
+				}
+			}
+		}
+		if 'groups' !in b || b['groups'] !is map[string]json2.Any {
+			return error('${source}: each bar requires grouped start/center/end entries')
+		}
+		groups := b['groups'].as_map()
+		for group in ['start', 'center', 'end'] {
+			if group !in groups || groups[group] !is []json2.Any {
+				return error('${source}: bar.groups.${group} must be a list')
+			}
+			for entry in groups[group].as_array() {
+				if entry !is map[string]json2.Any {
+					return error('${source}: bar entries must be objects')
+				}
+				e := entry.as_map()
+				if 'id' !in e || e['id'] !is string || 'enabled' !in e || e['enabled'] !is bool {
+					return error('${source}: each bar entry requires a string id and boolean enabled')
+				}
+			}
+		}
 	}
 	hover_ok := 'showOnHover' in bar && bar['showOnHover'] is bool
-	entries_ok := 'entries' in bar && bar['entries'] is []json2.Any
-		&& bar['entries'].as_array().len > 0
-	if !hover_ok {
-		return error('${source}: bar.showOnHover must be a boolean')
-	}
-	if !entries_ok {
-		return error('${source}: bar.entries must be a non-empty list')
-	}
-	for entry in bar['entries'].as_array() {
-		entry_ok := entry is map[string]json2.Any
-		mut em := map[string]json2.Any{}
-		if entry_ok {
-			em = entry.as_map()
-		}
-		id_ok := entry_ok && 'id' in em && em['id'] is string
-		enabled_ok := entry_ok && 'enabled' in em && em['enabled'] is bool
-		if !id_ok || !enabled_ok {
-			return error('${source}: each bar entry requires a string id and boolean enabled')
-		}
-	}
+	if !hover_ok { return error('${source}: bar.showOnHover must be a boolean') }
 	mut inner_width := i64(0)
 	width_ok := 'sizes' in bar && bar['sizes'] is map[string]json2.Any
 		&& 'innerWidth' in bar['sizes'].as_map()

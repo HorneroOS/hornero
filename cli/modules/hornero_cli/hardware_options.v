@@ -38,7 +38,7 @@ fn hw_is_int(s string) bool {
 
 // HardwareBrightnessOptions covers
 // `hardware brightness <status|set|up|down>`. With temp set, set/up/down
-// adjust color temperature on the 0.0-1.0 ramp scale (dots-brightness
+// adjust color temperature on the 0.0-1.0 ramp scale (horneroctl hardware brightness
 // --temp) instead of the brightness fraction.
 pub struct HardwareBrightnessOptions {
 pub:

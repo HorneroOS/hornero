@@ -3,9 +3,9 @@ module hornero_core
 import os
 
 // Network backend: single-shot connectivity probe mirroring
-// dots-check-network --once (ping plus interface class). The polling loop
+// horneroctl hardware network check --once (ping plus interface class). The polling loop
 // streams per-poll status-bar icons, which core cannot emit (core never
-// prints), so it stays in the dots-check-network shim.
+// prints), so it stays in the horneroctl hardware network check shim.
 
 // resolve_ping_bin locates ping. Override with HORNERO_PING_BIN.
 pub fn resolve_ping_bin() string {
@@ -25,13 +25,8 @@ pub fn resolve_ip_bin() string {
 	return find_on_path('ip')
 }
 
-// ping_host returns the probe target: DOTS_PING_HOST, else 1.1.1.1 (the
-// dots-check-network default).
+// ping_host returns the configured probe target or Cloudflare's public DNS.
 pub fn ping_host() string {
-	env := os.getenv('DOTS_PING_HOST')
-	if env.len > 0 {
-		return env
-	}
 	return '1.1.1.1'
 }
 

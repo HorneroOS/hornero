@@ -9,11 +9,11 @@ import x.json2
 
 const preset_root = '/tmp/hx-preset-test'
 
-const preset_valid_json = '{"_name":"Test Left","_description":"fixture","_icon":"🏠","_iconMaterial":"dock_to_left","bar":{"position":"left","style":"attached","floatingMargin":14,"persistent":true,"showOnHover":true,"sizes":{"innerWidth":40},"entries":[{"id":"workspaces","enabled":true},{"id":"clock","enabled":true}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
+const preset_valid_json = '{"_name":"Test Left","_description":"fixture","_icon":"🏠","_iconMaterial":"dock_to_left","bar":{"persistent":true,"showOnHover":true,"sizes":{"innerWidth":40},"bars":[{"edge":"left","style":"attached","reserve":true,"margin":14,"thickness":40,"groups":{"start":[{"id":"workspaces","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[]}}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
 
-const preset_bad_position_json = '{"_name":"Bad","bar":{"position":"diagonal","style":"attached","floatingMargin":14,"showOnHover":true,"sizes":{"innerWidth":40},"entries":[{"id":"workspaces","enabled":true}]}}'
+const preset_bad_edge_json = '{"_name":"Bad","bar":{"showOnHover":true,"sizes":{"innerWidth":40},"bars":[{"edge":"diagonal","style":"attached","groups":{"start":[],"center":[],"end":[]}}]}}'
 
-const preset_default_json = '{"_name":"Hornero Left","_description":"default fallback","_icon":"🏠","_iconMaterial":"dock_to_left","bar":{"position":"left","style":"attached","floatingMargin":14,"persistent":true,"showOnHover":true,"sizes":{"innerWidth":40},"entries":[{"id":"workspaces","enabled":true},{"id":"clock","enabled":true}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
+const preset_default_json = '{"_name":"Hornero Left","_description":"default fallback","_icon":"🏠","_iconMaterial":"dock_to_left","bar":{"persistent":true,"showOnHover":true,"sizes":{"innerWidth":40},"bars":[{"edge":"left","style":"attached","reserve":true,"margin":14,"thickness":40,"groups":{"start":[{"id":"workspaces","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[]}}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
 
 fn preset_test_write(path string, content string) {
 	os.mkdir_all(os.dir(path)) or { assert false, 'mkdir ${os.dir(path)}' }
@@ -29,7 +29,7 @@ fn preset_test_isolate() (string, string, string) {
 	os.setenv('XDG_CONFIG_HOME', preset_root + '/config', true)
 	os.rmdir_all(preset_root) or {}
 	preset_test_write(preset_root + '/presets/test-left.json', preset_valid_json)
-	preset_test_write(preset_root + '/presets/bad.json', preset_bad_position_json)
+	preset_test_write(preset_root + '/presets/bad.json', preset_bad_edge_json)
 	preset_test_write(preset_root + '/presets/broken.json', '{oops not json')
 	preset_test_write(preset_root + '/presets/hornero-left.json', preset_default_json)
 	return old_presets, old_marker, old_xdg
@@ -94,7 +94,7 @@ fn test_preset_apply_unknown_name_resolves_to_default() {
 		assert false, 'shell.json is a JSON object'
 		map[string]json2.Any{}
 	}
-	assert merged['bar'].as_map()['position'].str() == 'left'
+	assert merged['bar'].as_map()['bars'].as_array()[0].as_map()['edge'].str() == 'left'
 	pointer := os.read_file(marker) or { assert false, 'marker written' }
 	assert pointer.trim_space() == 'hornero-left'
 	preset_test_restore(old_presets, old_marker, old_xdg)
@@ -121,14 +121,14 @@ fn test_preset_apply_invalid_falls_back_to_safe_layout() {
 	old_presets, old_marker, old_xdg := preset_test_isolate()
 	conf := preset_root + '/config/hornero/shell.json'
 	marker := preset_root + '/state/current-shell-preset'
-	preset_test_write(conf, '{"custom":"keep","bar":{"position":"right"}}')
+	preset_test_write(conf, '{"custom":"keep","bar":{"bars":[{"edge":"right","style":"attached","groups":{"start":[],"center":[],"end":[]}}]}}')
 	r := preset_apply_report(PresetApplyOptions{
 		name: 'bad'
 		yes:  true
 	})
 	assert r.ok
 	assert r.message.contains('safe layout')
-	assert r.message.contains('bar.position')
+	assert r.message.contains('bar.bars')
 	assert r.data['fallback'] == 'safe-reset'
 	raw := os.read_file(conf) or { assert false, 'shell.json written' }
 	merged := json2.decode[map[string]json2.Any](raw) or {
@@ -136,7 +136,7 @@ fn test_preset_apply_invalid_falls_back_to_safe_layout() {
 		map[string]json2.Any{}
 	}
 	assert merged['custom'].str() == 'keep'
-	assert merged['bar'].as_map()['position'].str() == 'left'
+	assert merged['bar'].as_map()['bars'].as_array()[0].as_map()['edge'].str() == 'left'
 	pointer := os.read_file(marker) or { assert false, 'marker written' }
 	assert pointer.trim_space() == 'bad'
 	preset_test_restore(old_presets, old_marker, old_xdg)
@@ -208,7 +208,7 @@ fn test_preset_apply_merges_and_marks() {
 	old_presets, old_marker, old_xdg := preset_test_isolate()
 	conf := preset_root + '/config/hornero/shell.json'
 	marker := preset_root + '/state/current-shell-preset'
-	preset_test_write(conf, '{"custom":"keep","bar":{"position":"right"}}')
+	preset_test_write(conf, '{"custom":"keep","bar":{"bars":[{"edge":"right","style":"attached","groups":{"start":[],"center":[],"end":[]}}]}}')
 	r := preset_apply_report(PresetApplyOptions{
 		name: 'test-left'
 		yes:  true
@@ -221,7 +221,7 @@ fn test_preset_apply_merges_and_marks() {
 		map[string]json2.Any{}
 	}
 	assert merged['custom'].str() == 'keep'
-	assert merged['bar'].as_map()['position'].str() == 'left'
+	assert merged['bar'].as_map()['bars'].as_array()[0].as_map()['edge'].str() == 'left'
 	assert 'border' in merged
 	assert '_name' !in merged
 	assert '_description' !in merged
@@ -235,7 +235,7 @@ fn test_preset_apply_resets_stale_owned_keys() {
 	old_presets, old_marker, old_xdg := preset_test_isolate()
 	conf := preset_root + '/config/hornero/shell.json'
 	// A previous preset left floatingMargin 200; the new preset says 14.
-	preset_test_write(conf, '{"bar":{"position":"right","floatingMargin":200}}')
+	preset_test_write(conf, '{"bar":{"bars":[{"edge":"right","style":"floating","margin":200,"groups":{"start":[],"center":[],"end":[]}}]}}')
 	r := preset_apply_report(PresetApplyOptions{
 		name: 'test-left'
 		yes:  true
@@ -246,7 +246,7 @@ fn test_preset_apply_resets_stale_owned_keys() {
 		assert false, 'shell.json is a JSON object'
 		map[string]json2.Any{}
 	}
-	assert merged['bar'].as_map()['floatingMargin'].i64() == 14
+	assert merged['bar'].as_map()['bars'].as_array()[0].as_map()['margin'].i64() == 14
 	preset_test_restore(old_presets, old_marker, old_xdg)
 }
 
@@ -266,8 +266,7 @@ fn test_preset_list_full_is_json_array() {
 		assert 'name' in m
 		assert 'display' in m
 		assert 'iconMaterial' in m
-		assert 'position' in m
-		assert 'style' in m
+		assert 'bars' in m
 		assert 'active' in m
 		seen[m['name'].str()] = true
 	}
@@ -300,17 +299,8 @@ fn test_preset_bars_summary_v2_dedupes_and_counts() {
 	assert bottom['reserve'].str() == 'true' // invalid style -> attached reserves
 }
 
-fn test_preset_bars_summary_v1_splits_at_spacers() {
-	s := preset_summary_of('{"position":"left","style":"floating","bars":[],"entries":[{"id":"logo"},{"id":"workspaces"},{"id":"spacer"},{"id":"clock"},{"id":"spacer","enabled":false},{"id":"spacer"},{"id":"power"},{"id":"tray","enabled":false}]}')
-	assert s.len == 1
-	m := s[0].as_map()
-	assert m['edge'].str() == 'left'
-	assert m['style'].str() == 'floating'
-	assert m['reserve'].str() == 'false'
-	g := m['groups'].as_map()
-	assert g['start'].int() == 2
-	assert g['center'].int() == 1
-	assert g['end'].int() == 1
+fn test_preset_bars_summary_requires_explicit_v2_bars() {
+	assert preset_summary_of('{"position":"left","entries":[]}').len == 0
 }
 
 fn test_preset_list_full_carries_bars_and_lineage() {

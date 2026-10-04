@@ -1,7 +1,7 @@
 module hornero_core
 
 // Native smart-colors engine: palette analysis, semantic color selection,
-// and smart-color file generation. Ports dots-smart-colors (dotfiles
+// and smart-color file generation. Ports Hornero palette pipeline (dotfiles
 // reference) so the xrdb palette math lives in V; only genuinely external
 // tools stay backends (xrdb for palette input via HORNERO_XRDB_BIN, the M3
 // python synthesizer via HORNERO_M3_SCRIPT, wallpaper setters).
@@ -59,7 +59,7 @@ pub fn rgb_to_hex(r int, g int, b int) string {
 }
 
 // color_luminance returns the relative luminance on a 0-255 scale using
-// the same integer formula as dots-smart-colors:
+// the same integer formula as Hornero palette pipeline:
 // (red*299 + green*587 + blue*114) / 1000.
 pub fn color_luminance(color string) int {
 	r, g, b := parse_hex6(color) or { return 0 }
@@ -422,7 +422,7 @@ pub fn smart_color_for(concept string, pal map[string]string) !string {
 }
 
 // normalize_scheme_type canonicalizes an M3 scheme-type name the way
-// dots-color-scheme does (fruitsalad/rainbow are expressive aliases).
+// horneroctl appearance scheme does (fruitsalad/rainbow are expressive aliases).
 pub fn normalize_scheme_type(raw string) string {
 	n := raw.to_lower().replace('_', '-').replace(' ', '')
 	match n {
@@ -508,7 +508,7 @@ pub fn effective_gtk_policy(policy string, shell_mode string) string {
 // pack_gtk_policy derives the canonical gtkColorScheme policy for a
 // theme pack: explicit gtkColorScheme wins, then gtkPreferDark, then the
 // gtk theme name, then the shell dark mode. Ports both
-// _dots_aa_resolve_gtk_color_scheme and the gtk-theme-manager meta read.
+// theme_resolve_gtk_color_scheme and the gtk-theme-manager meta read.
 pub fn pack_gtk_policy(gtk_color_scheme string, gtk_prefer_dark string, gtk_theme string, dark_mode string) string {
 	if gtk_color_scheme.len > 0 {
 		p := normalize_gtk_color_scheme(gtk_color_scheme)
@@ -948,7 +948,7 @@ pub:
 }
 
 // render_hyprlock_conf renders colors-hyprlock.conf from M3 scheme colors,
-// mirroring dots-hyprlock-theme byte-for-byte in structure.
+// mirroring Hornero lock theme generator byte-for-byte in structure.
 pub fn render_hyprlock_conf(s HyprlockScheme) string {
 	def := fn (v string, fallback string) string {
 		return if v.len > 0 { v } else { fallback }

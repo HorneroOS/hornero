@@ -3,11 +3,11 @@ module hornero_cli
 // Batch-2 option parsers: `config default-apps`, `config materialize`,
 // `config gui`. Error strings always carry a correct Example (exit-2
 // contract); `default-apps set` stays a deferral: the upstream
-// `dots-default-apps --set` verb never binds its arguments, and handlr
+// `horneroctl config default-apps --set` verb never binds its arguments, and handlr
 // stays internal per docs/cli-architecture.md section 5.
 
 // DefaultAppsCmdOptions covers `config default-apps <list|set>`.
-// `list` delegates to dots-default-apps; `set <mime> <app>` writes via
+// `list` delegates to horneroctl config default-apps; `set <mime> <app>` writes via
 // xdg-mime (mutating: needs --yes).
 pub struct DefaultAppsCmdOptions {
 pub:

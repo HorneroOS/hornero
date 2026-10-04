@@ -4,7 +4,7 @@ import os
 import time
 
 // Shell lifecycle backend: quickshell process management ported from the
-// `dots-quickshell` reference script (start/stop/restart/status).
+// `horneroctl shell` reference script (start/stop/restart/status).
 //
 // Semantics preserved from the script:
 // - `start` refuses when a shell is already running, requires the
@@ -14,7 +14,7 @@ import time
 //   graceful `quickshell kill` first, waits ~1s, and escalates to
 //   SIGKILL (`pkill -9 -x qs|quickshell`) when needed.
 // - `restart` is stop, wait ~1s, start.
-// - `logs` tails the shell log file the `start` leaf writes (the legacy
+// - `logs` tails the shell log file the `start` leaf writes (the
 //   script discarded stdout to /dev/null; here it is kept so `logs`
 //   has something to show).
 //
@@ -140,7 +140,7 @@ fn quickshell_or_fail(leaf string, dry_run bool) !string {
 	return bin
 }
 
-// shell_start_env applies the launcher environment the legacy script
+// shell_start_env applies the launcher environment the native shell service
 // exports (QML import paths, plugin path, Qt platform theme), keeping
 // any caller-provided values.
 fn shell_start_env() {
@@ -200,7 +200,7 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 	}
 	conf := resolve_quickshell_config_dir()
 	logf := resolve_shell_log_file()
-	// Mirrors the legacy `nohup "$QUICKSHELL_BIN" >/dev/null 2>&1 &`,
+	// Uses the established `nohup "$QUICKSHELL_BIN" >/dev/null 2>&1 &`,
 	// keeping stdout in the shell log so `shell logs` can tail it.
 	line := 'nohup ${bin} >>${logf} 2>&1 &'
 	if opts.dry_run {

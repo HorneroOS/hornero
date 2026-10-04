@@ -7,7 +7,7 @@ module hornero_cli
 // --dry-run (no --yes, like `welcome open`).
 
 // CaptureCmdOptions covers the whole capture group. group selects the
-// dots-* surface; leaf is the record action (start|stop|pause).
+// capture surface; leaf is the record action (start|stop|pause).
 pub struct CaptureCmdOptions {
 pub:
 	group      string // screenshot | record | clipboard

@@ -2,11 +2,9 @@ module hornero_core
 
 import os
 
-// Native external-tool backends for the appearance domain. Everything
-// implemented IN dots-* bash lives in V now; only genuinely external
-// programs (compositor tools, settings daemons, interpreters) stay
-// backends, each with a HORNERO_*_BIN override. No dots-* delegation
-// remains: HORNEROCTL_DELEGATED shims are gone with the scripts.
+// Native external-tool backends for appearance operations. Hornero owns the
+// coordination logic; compositor tools, settings daemons, and interpreters
+// remain platform dependencies with HORNERO_*_BIN test/override seams.
 
 // strict_command_line quotes every word with single quotes (the shared
 // strict quoter): appearance args are caller-controlled (theme ids,
@@ -106,21 +104,21 @@ pub fn resolve_pkill_bin() string {
 
 // resolve_m3_script locates the M3 synthesis script
 // (generate-m3-colors.py, needs a Python with materialyoucolor).
-// Order: HORNERO_M3_SCRIPT, the user install (~/.local/lib/dots), then the
+// Order: HORNERO_M3_SCRIPT, the user install (~/.local/lib/hornero), then the
 // hornero-config package copy under XDG_DATA_DIRS
-// (`<dir>/hornero/lib/dots`, hornero#96). When none exists the user path is
+// (`<dir>/hornero/lib/hornero`). When none exists the user path is
 // returned so error messages name the documented location.
 pub fn resolve_m3_script() string {
 	env := os.getenv('HORNERO_M3_SCRIPT')
 	if env.len > 0 {
 		return env
 	}
-	user := os.join_path(os.home_dir(), '.local', 'lib', 'dots', 'generate-m3-colors.py')
+	user := os.join_path(os.home_dir(), '.local', 'lib', 'hornero', 'generate-m3-colors.py')
 	if os.exists(user) {
 		return user
 	}
 	for base in system_data_dirs() {
-		cand := os.join_path(base, 'hornero', 'lib', 'dots', 'generate-m3-colors.py')
+		cand := os.join_path(base, 'hornero', 'lib', 'hornero', 'generate-m3-colors.py')
 		if os.exists(cand) {
 			return cand
 		}
@@ -190,7 +188,7 @@ pub fn resolve_m3_python(dry_run bool) !string {
 
 // run_m3_synthesis invokes the M3 backend natively (python + script +
 // args), or previews the exact line on dry-run. Accent seeds pass through
-// --source-color exactly like dots-color-scheme did.
+// --source-color exactly like horneroctl appearance scheme did.
 pub fn run_m3_synthesis(image string, output string, flavour string, mode string, accent string, dry_run bool) !ExecReport {
 	script := resolve_m3_script()
 	if !dry_run && !os.is_file(script) {

@@ -89,7 +89,7 @@ fn test_default_apps_set_missing_backend() {
 }
 
 fn test_default_apps_set_live() {
-	// Live set through a fixture xdg-mime (the dots-default-apps
+	// Live set through a fixture xdg-mime (the horneroctl config default-apps
 	// delegation path): validates the pair, then runs xdg-mime.
 	saved := default_apps_set_test_save_env(['HORNERO_XDG_MIME_BIN'])
 	os.mkdir_all('/tmp/hx-default-apps-set-test/bin') or { assert false }
