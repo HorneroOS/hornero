@@ -15,7 +15,7 @@ fn system_profile_file() string {
 }
 
 fn system_profile_string(m map[string]json2.Any, key string) string {
-	if key !in m {
+	if key !in m || m[key] !is string {
 		return ''
 	}
 	return m[key].str()
@@ -30,7 +30,11 @@ fn system_profile_string_list(value json2.Any) !string {
 		if item !is string {
 			return error('expected an array of strings')
 		}
-		items << item.str()
+		item_value := item.str()
+		if item_value.trim_space().len == 0 {
+			return error('expected non-empty strings')
+		}
+		items << item_value
 	}
 	if items.len == 0 {
 		return error('expected a non-empty array')
@@ -57,12 +61,15 @@ fn system_profile_is_commit(value string) bool {
 pub fn system_profile_result() CommandResult {
 	path := system_profile_file()
 	active := active_compositor()
-	if !os.is_file(path) {
+	if !os.exists(path) {
 		return ok_result('system info', 'No installed edition profile is recorded. Active compositor: ${active}.', {
 			'activeCompositor': active
 			'edition':          'unrecorded'
 			'profileRecorded':  'false'
 		})
+	}
+	if !os.is_file(path) {
+		return fail_result('system info', 'Installed profile path is not a regular file at ${path}. Reinstall its Hornero profile package.')
 	}
 	raw := os.read_file(path) or {
 		return fail_result('system info', 'Cannot read the installed profile at ${path}: ${err.msg()}')
