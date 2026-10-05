@@ -24,6 +24,7 @@ Commands:
   wallpaper     Wallpaper image (set, current, reload)
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
+  system        Installed edition and active compositor information
   completion    Print shell completions
   help          Show help for a command
 
@@ -40,6 +41,7 @@ Examples:
   horneroctl config validate
   horneroctl package check --dry-run
   horneroctl backup list
+  horneroctl system info --json
 '
 }
 
@@ -73,6 +75,12 @@ Examples:
   horneroctl doctor
   horneroctl doctor --json
 '
+		}
+		'system' {
+			return 'Usage: horneroctl system info [--json|--quiet]\n\nRead the installed HorneroOS edition profile and report the active supported compositor. A profile is recorded by the Hornero installer; other installation methods report the edition as unrecorded rather than guessing from installed packages.\n\nExamples:\n  horneroctl system info\n  horneroctl system info --json\n'
+		}
+		'system info' {
+			return 'Usage: horneroctl system info [--json|--quiet]\n\nReport the installed edition, its package-set composition, configured compositor and maturity, the source revision, and the compositor active in this session. If this installation has no profile record, the command says so explicitly.\n\nExamples:\n  horneroctl system info\n  horneroctl system info --json\n'
 		}
 		'shell' {
 			return 'Usage: horneroctl shell <status|ipc|preset|start|stop|restart|logs> [options]
@@ -1234,7 +1242,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps system help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1248,7 +1256,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-  cmds=(version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps help)
+	cmds=(version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps system help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1273,5 +1281,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a welcome -d "First-run guid
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, recording, clipboard"
 complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"
+complete -c horneroctl -f -n __fish_use_subcommand -a system -d "Installed edition and compositor"
 '
 }

@@ -25,8 +25,17 @@ Run `horneroctl --help` for the installed command list and
   package materialization, and opening Control Center panes;
 - `package`, `backup`, and `power` for updates, user-owned configuration
   archives, and session actions;
+- `system info` for the installed edition/compositor record and current
+  compositor session;
 - `lock`, `capture`, `hypr`, `hardware`, `apps`, and `welcome` for their
   corresponding platform and desktop capabilities.
+
+`horneroctl system info` reads the immutable profile record installed by a
+HorneroOS installer composition. It reports the installed edition, role,
+package-set layers, maturity and configured compositor separately from the
+compositor active in the current session. An installation without that record
+is reported as unrecorded; the command never guesses an edition from packages
+that happen to be present.
 
 `horneroctl config gui --pane <id>` asks the running Hornero Shell to open a
 registered Control Center destination over Shell IPC. The Shell registry is
