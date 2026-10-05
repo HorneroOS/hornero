@@ -61,8 +61,9 @@ Examples:
 		'doctor' {
 			return 'Usage: horneroctl doctor [--json]
 
-Read-only health checks: Wayland/Hyprland session, required binaries,
-and shell configuration presence. Never changes anything.
+Read-only health checks: a recognized Wayland compositor session
+(Hyprland or Niri), required binaries, and shell configuration presence.
+Never changes anything.
 
 Exit codes:
   0  all checks passed

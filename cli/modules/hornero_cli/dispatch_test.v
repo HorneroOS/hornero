@@ -12,6 +12,13 @@ fn test_dispatch_help_exit_zero() {
 	assert dispatch(['horneroctl', 'doctor', '--help']) == 0
 }
 
+fn test_doctor_help_names_each_wayland_backend_without_defining_the_desktop_by_one() {
+	help := command_help('doctor')
+	assert help.contains('recognized Wayland compositor session')
+	assert help.contains('Hyprland or Niri')
+	assert !help.contains('Wayland/Hyprland session')
+}
+
 fn test_scheme_sync_state_theme_id_flag() {
 	opts := parse_appearance_scheme(['sync-state', '--theme-id', 'pampa', '--yes']) or {
 		assert false, err.msg()
