@@ -129,6 +129,21 @@ fn shell_running_pids() []string {
 	return pids
 }
 
+// SIGKILL delivery and process-table removal are not synchronous. Poll briefly
+// after escalation so a dying Quickshell process is not reported as a failed
+// stop simply because `pgrep` observed it before the kernel reaped it.
+fn shell_wait_until_stopped(attempts int) bool {
+	for attempt in 0 .. attempts {
+		if !shell_is_running() {
+			return true
+		}
+		if attempt + 1 < attempts {
+			time.sleep(100 * time.millisecond)
+		}
+	}
+	return !shell_is_running()
+}
+
 // shell_wait_for_hornero_ipc waits until the product shell has registered
 // its stable drawers IPC target. A Quickshell process alone is not enough:
 // shell restart temporarily launches a separate reload-cover process with
@@ -297,7 +312,7 @@ pub fn shell_stop_report(opts ShellStopOptions) CommandResult {
 		prog: resolve_pkill_bin()
 		args: ['-9', '-x', 'quickshell']
 	})
-	if !shell_is_running() {
+	if shell_wait_until_stopped(10) {
 		return ok_result('shell stop', 'Quickshell stopped (SIGKILL)', {
 			'command_line': kill_line
 		})
