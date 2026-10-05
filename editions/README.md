@@ -20,6 +20,11 @@ Hermes is the first workload target, not the host architecture. Studio inherits
 Desktop and records REAPER/yabridge as optional user-licensed integrations;
 those packages and proprietary plugins are excluded from the core package set.
 
+The shared base carries the filesystem, encryption, and GRUB tools needed by
+the Calamares installation path across editions. Desktop also owns SDDM and the
+Hornero greeter packages so the selected desktop composition can boot to its
+configured login screen.
+
 Niri exposes real event-driven compositor state and uses its native screencast
 path through the GNOME portal backend, with GTK providing the fallback and file
 chooser portal, over PipeWire. Labwc remains planned and is not offered as an
