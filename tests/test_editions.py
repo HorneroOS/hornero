@@ -37,6 +37,18 @@ def test_desktop_uses_one_selected_compositor_backend():
     assert {"xdg-desktop-portal-gtk", "xdg-desktop-portal-gnome"} <= set(niri["packages"])
 
 
+def test_shared_base_contains_filesystems_encryption_and_bootloaders():
+    packages = set(resolver.load_catalogue()["base"]["packages"])
+    required = {"btrfs-progs", "cryptsetup", "dosfstools", "efibootmgr", "e2fsprogs", "grub", "lvm2"}
+    assert required <= packages
+
+
+def test_desktop_composition_contains_a_login_manager_and_hornero_greeter():
+    packages = set(resolver.resolve_edition(resolver.load_catalogue(), "desktop")["packages"])
+    required = {"sddm", "hornero-greeter", "hornero-greeter-media-base"}
+    assert required <= packages
+
+
 def test_server_is_headless_and_remote_admin_focused():
     result = resolver.resolve_edition(resolver.load_catalogue(), "server")
     assert result["compositor"] is None

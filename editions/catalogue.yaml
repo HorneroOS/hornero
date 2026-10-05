@@ -11,6 +11,13 @@ base:
     - linux
     - linux-firmware
     - sudo
+    - btrfs-progs
+    - cryptsetup
+    - dosfstools
+    - efibootmgr
+    - e2fsprogs
+    - grub
+    - lvm2
 packageSets:
   desktop:
     packages:
@@ -22,6 +29,9 @@ packageSets:
       - thunar
       - networkmanager
       - xdg-desktop-portal
+      - sddm
+      - hornero-greeter
+      - hornero-greeter-media-base
   compositor:hyprland:
     packages:
       - hyprland
