@@ -71,7 +71,7 @@ fn test_system_profile_rejects_invalid_metadata() {
 
 fn test_system_profile_rejects_existing_non_file_path() {
 	saved := system_profile_test_save_env()
-	path := '/tmp/hornero-system-profile-directory-test'
+	path := '/tmp/hornero-system-profile-directory-test-${os.getpid()}'
 	os.mkdir(path) or { assert false, err.msg() }
 	os.setenv('HORNERO_SYSTEM_PROFILE_FILE', path, true)
 	result := system_profile_result()
@@ -87,6 +87,7 @@ fn test_system_profile_rejects_wrong_types_and_empty_package_set_names() {
 	os.setenv('HORNERO_SYSTEM_PROFILE_FILE', path, true)
 	malformed_profiles := [
 		'{"apiVersion":"hornero.os/v1","kind":"InstalledProfile","sourceRevision":"0123456789abcdef0123456789abcdef01234567","profilePackage":"hornero-profile-desktop-hyprland","edition":{"edition":7,"title":"HorneroOS Desktop","role":"desktop","maturity":"preview","packageSets":["base"]}}',
+		'{"apiVersion":"hornero.os/v1","kind":"InstalledProfile","sourceRevision":"0123456789abcdef0123456789abcdef01234567","profilePackage":"hornero-profile-desktop-hyprland","edition":{"edition":"desktop","title":123,"role":"desktop","maturity":"preview","packageSets":["base"]}}',
 		'{"apiVersion":"hornero.os/v1","kind":"InstalledProfile","sourceRevision":"0123456789abcdef0123456789abcdef01234567","profilePackage":"hornero-profile-desktop-hyprland","edition":{"edition":"desktop","title":"HorneroOS Desktop","role":"desktop","maturity":"preview","packageSets":[""]}}',
 	]
 	for profile in malformed_profiles {
