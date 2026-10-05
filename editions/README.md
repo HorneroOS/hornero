@@ -21,6 +21,7 @@ Desktop and records REAPER/yabridge as optional user-licensed integrations;
 those packages and proprietary plugins are excluded from the core package set.
 
 Niri exposes real event-driven compositor state and uses its native screencast
-path through XDG portals and PipeWire. Labwc remains planned and is not offered
-as an install choice. Package and feature maturity must stay tied to the
-integration evidence, not just the presence of a package name.
+path through the GNOME portal backend, with GTK providing the fallback and file
+chooser portal, over PipeWire. Labwc remains planned and is not offered as an
+install choice. Package and feature maturity must stay tied to the integration
+evidence, not just the presence of a package name.

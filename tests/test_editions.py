@@ -29,11 +29,12 @@ def test_desktop_uses_one_selected_compositor_backend():
     assert default["compositor"] == "hyprland"
     assert "hyprland" in default["packages"]
     assert "niri" not in default["packages"]
+    assert not {"xdg-desktop-portal-gtk", "xdg-desktop-portal-gnome"} & set(default["packages"])
     assert niri["compositor"] == "niri"
     assert niri["compositorMaturity"] == "experimental"
     assert "niri" in niri["packages"]
     assert "hyprland" not in niri["packages"]
-    assert "xdg-desktop-portal-gnome" in niri["packages"]
+    assert {"xdg-desktop-portal-gtk", "xdg-desktop-portal-gnome"} <= set(niri["packages"])
 
 
 def test_server_is_headless_and_remote_admin_focused():
