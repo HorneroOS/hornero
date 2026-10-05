@@ -30,6 +30,7 @@ packageSets:
     packages:
       - niri
       - xwayland-satellite
+      - xdg-desktop-portal-gtk
       - xdg-desktop-portal-gnome
   server:
     packages:
