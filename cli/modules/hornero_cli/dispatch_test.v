@@ -12,6 +12,13 @@ fn test_dispatch_help_exit_zero() {
 	assert dispatch(['horneroctl', 'doctor', '--help']) == 0
 }
 
+fn test_system_help_has_machine_readable_examples() {
+	assert command_help('system').contains('Examples:')
+	assert command_help('system info').contains('horneroctl system info --json')
+	assert dispatch(['horneroctl', 'system', '--help']) == 0
+	assert dispatch(['horneroctl', 'system', 'info', '--help']) == 0
+}
+
 fn test_doctor_help_names_each_wayland_backend_without_defining_the_desktop_by_one() {
 	help := command_help('doctor')
 	assert help.contains('recognized Wayland compositor session')

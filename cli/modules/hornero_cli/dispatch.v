@@ -21,7 +21,7 @@ import hornero_core
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture', 'apps',
-	'help']
+	'system', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -127,6 +127,9 @@ pub fn dispatch(args []string) int {
 		'apps' {
 			run_apps(rest[1..], mode)
 		}
+		'system' {
+			run_system(rest[1..], mode)
+		}
 		'help' {
 			print(root_help())
 			0
@@ -136,6 +139,18 @@ pub fn dispatch(args []string) int {
 				mode)
 		}
 	}
+}
+
+fn run_system(args []string, mode hornero_core.RenderMode) int {
+	if args.len == 0 || args[0] != 'info' {
+		return render_error(hornero_core.err_usage('system.usage', 'expected info.\nExample: horneroctl system info --json'),
+			mode)
+	}
+	if args.len > 1 {
+		return render_error(hornero_core.err_usage('system.usage', 'unexpected argument: ${args[1]}.\nExample: horneroctl system info'),
+			mode)
+	}
+	return render(hornero_core.system_profile_result(), mode)
 }
 
 fn run_shell(args []string, mode hornero_core.RenderMode) int {

@@ -30,3 +30,8 @@ path through the GNOME portal backend, with GTK providing the fallback and file
 chooser portal, over PipeWire. Labwc remains planned and is not offered as an
 install choice. Package and feature maturity must stay tied to the integration
 evidence, not just the presence of a package name.
+
+The Calamares image builder generates a small `hornero-profile-*` package for
+each installable composition. Its `/usr/lib/hornero/system-profile.json` file
+records the resolved profile and catalogue revision for post-install
+introspection; it does not define or duplicate package composition.

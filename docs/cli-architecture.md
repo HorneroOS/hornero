@@ -17,6 +17,11 @@ configuration owns defaults and read-only catalogue data.
   owns the capability, such as `gsettings`, `xdg-mime`, `hyprctl`, `pacman`,
   or `systemctl`. Paths are passed as individual arguments and mutations
   require explicit consent.
+- `horneroctl system info` reads `/usr/lib/hornero/system-profile.json`, an
+  immutable install record generated from the edition catalogue and resolver.
+  It distinguishes the selected compositor from the active session and reports
+  installations without a record as unrecorded instead of inferring a product
+  edition from package coincidence.
 
 ## State and package data
 
