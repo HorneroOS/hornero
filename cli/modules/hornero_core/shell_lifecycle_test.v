@@ -251,6 +251,35 @@ fn test_shell_stop_idle_is_success() {
 	shell_lifecycle_test_restore_env(saved)
 }
 
+fn test_shell_stop_waits_for_process_table_after_sigkill() {
+	saved := shell_lifecycle_test_save_env(['HORNERO_QUICKSHELL_BIN', 'HORNERO_PGREP_BIN',
+		'HORNERO_PKILL_BIN'])
+	dir := os.join_path(os.temp_dir(), 'hornero-shell-stop-reap-${os.getpid()}')
+	os.mkdir_all(dir) or { assert false, 'mkdir ${dir}' }
+	count_file := os.join_path(dir, 'pgrep-count')
+	fake_pgrep := os.join_path(dir, 'pgrep')
+	// Simulate the short interval where SIGKILL has been sent but pgrep can
+	// still observe the process. The first post-escalation poll remains true;
+	// a later poll sees the process-table entry disappear.
+	os.write_file(fake_pgrep, '#!/bin/sh\nif [ "$2" = "qs" ]; then exit 1; fi\ncount=$(cat ' +
+		count_file + ' 2>/dev/null || echo 0)\ncount=$((count + 1))\nprintf "%s" "$count" > ' +
+		count_file + '\nif [ "$count" -le 3 ]; then echo 99999; exit 0; fi\nexit 1\n') or {
+		assert false, 'write fake pgrep'
+	}
+	os.chmod(fake_pgrep, 0o755) or { assert false, 'chmod fake pgrep' }
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/true', true)
+	os.setenv('HORNERO_PGREP_BIN', fake_pgrep, true)
+	os.setenv('HORNERO_PKILL_BIN', '/bin/true', true)
+	r := shell_stop_report(ShellStopOptions{
+		yes: true
+	})
+	assert r.ok, r.message
+	assert r.message.contains('stopped (SIGKILL)')
+	assert (os.read_file(count_file) or { '' }) == '4'
+	os.rmdir_all(dir) or {}
+	shell_lifecycle_test_restore_env(saved)
+}
+
 fn test_shell_logs_roundtrip() {
 	saved := shell_lifecycle_test_save_env(['HORNERO_SHELL_LOG_FILE'])
 	os.setenv('HORNERO_SHELL_LOG_FILE', '/tmp/hx-shell-logs-test.log', true)
