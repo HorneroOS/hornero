@@ -18,7 +18,11 @@ fn b1_package_root(name string) string {
 
 fn b1_setup_timeout(root string) {
 	os.mkdir_all('${root}/bin') or { assert false }
-	os.symlink('/usr/bin/timeout', '${root}/bin/timeout') or { assert false }
+	timeout_bin := find_on_path('timeout')
+	if timeout_bin.len == 0 {
+		panic('GNU timeout is required to run package command tests')
+	}
+	os.symlink(timeout_bin, '${root}/bin/timeout') or { assert false }
 }
 
 fn b1_setup_snapshots() {
@@ -342,8 +346,8 @@ fn test_package_updates_counts_backend_lines() {
 		os.rmdir_all(root) or {}
 	}
 	old_path := os.getenv('PATH')
-	os.setenv('PATH', '${root}/bin', true)
 	b1_setup_timeout(root)
+	os.setenv('PATH', '${root}/bin', true)
 	bin := '${root}/bin/checkupdates'
 	b1_write(bin, '#!/bin/sh\nprintf "pkg-a 1.0 -> 1.1\\npkg-b 2.0 -> 2.1\\npkg-c 3.0 -> 3.1\\n"')
 	os.chmod(bin, 0o755) or { assert false }
@@ -392,8 +396,8 @@ fn test_package_updates_include_read_only_aur_helper_results() {
 		os.rmdir_all(root) or {}
 	}
 	old_path := os.getenv('PATH')
-	os.setenv('PATH', '${root}/bin', true)
 	b1_setup_timeout(root)
+	os.setenv('PATH', '${root}/bin', true)
 	checkupdates := '${root}/bin/checkupdates'
 	yay := '${root}/bin/yay'
 	b1_write(checkupdates, '#!/bin/sh\nprintf "linux 1.0 -> 1.1\\n"')
@@ -428,8 +432,8 @@ fn test_package_updates_fail_loudly_when_aur_helper_fails() {
 		os.rmdir_all(root) or {}
 	}
 	old_path := os.getenv('PATH')
-	os.setenv('PATH', '${root}/bin', true)
 	b1_setup_timeout(root)
+	os.setenv('PATH', '${root}/bin', true)
 	checkupdates := '${root}/bin/checkupdates'
 	yay := '${root}/bin/yay-fails'
 	b1_write(checkupdates, '#!/bin/sh\nexit 0\n')
