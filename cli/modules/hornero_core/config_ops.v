@@ -68,6 +68,7 @@ fn default_apps_terminal_default() string {
 			return match v {
 				'kitty' { 'Kitty Terminal' }
 				'alacritty' { 'Alacritty' }
+				'ghostty' { 'Ghostty' }
 				'xterm' { 'XTerm' }
 				else { v }
 			}
