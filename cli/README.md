@@ -37,6 +37,13 @@ compositor active in the current session. An installation without that record
 is reported as unrecorded; the command never guesses an edition from packages
 that happen to be present.
 
+`horneroctl package check` and `package updates` report repository updates
+through `checkupdates` and AUR updates through `yay -Qua` or `paru -Qua` when an
+AUR helper is available. The AUR lane is read-only and bounded to 30 seconds;
+without a helper the CLI reports that AUR updates were not checked instead of
+presenting repository results as a complete system status. `package upgrade`
+remains a separate, explicit full-system operation.
+
 `horneroctl config gui --pane <id>` asks the running Hornero Shell to open a
 registered Control Center destination over Shell IPC. The Shell registry is
 the source of truth for pane IDs; when the Shell is not running, the command

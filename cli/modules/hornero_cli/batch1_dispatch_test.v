@@ -42,10 +42,15 @@ fn b1_dispatch_setup() {
 	os.write_file('/tmp/hx-batch1-dtest/bin/checkupdates', '#!/bin/sh\nprintf "pkg-a 1.0 -> 1.1\\n"') or {
 		assert false
 	}
+	os.write_file('/tmp/hx-batch1-dtest/bin/yay', '#!/bin/sh\n[ "\$1" = "-Qua" ] || exit 8\nexit 0\n') or {
+		assert false
+	}
 	os.chmod('/tmp/hx-batch1-dtest/bin/checkupdates', 0o755) or { assert false }
+	os.chmod('/tmp/hx-batch1-dtest/bin/yay', 0o755) or { assert false }
 	os.setenv('HORNERO_SNAPSHOTS_DIR', '/tmp/hx-batch1-dtest/snapshots', true)
 	os.setenv('HORNERO_CHECKUPDATES_BIN', '/tmp/hx-batch1-dtest/bin/checkupdates',
 		true)
+	os.setenv('HORNERO_AUR_HELPER_BIN', '/tmp/hx-batch1-dtest/bin/yay', true)
 	os.setenv('HORNERO_BACKUP_DIR', '/tmp/hx-batch1-dtest/backups', true)
 }
 
@@ -67,6 +72,7 @@ fn b1_dispatch_teardown() {
 	os.rmdir_all('/tmp/hx-batch1-dtest') or {}
 	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
 	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+	os.unsetenv('HORNERO_AUR_HELPER_BIN')
 	os.unsetenv('HORNERO_BACKUP_DIR')
 }
 

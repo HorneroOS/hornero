@@ -19,6 +19,15 @@ fn test_system_help_has_machine_readable_examples() {
 	assert dispatch(['horneroctl', 'system', 'info', '--help']) == 0
 }
 
+fn test_package_help_documents_repository_and_aur_update_sources() {
+	help := command_help('package')
+	assert help.contains('checkupdates')
+	assert help.contains('yay -Qua')
+	assert help.contains('paru -Qua')
+	assert help.contains('AUR checks are read-only')
+	assert help.contains('Examples:')
+}
+
 fn test_doctor_help_names_each_wayland_backend_without_defining_the_desktop_by_one() {
 	help := command_help('doctor')
 	assert help.contains('recognized Wayland compositor session')

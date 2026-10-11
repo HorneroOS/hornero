@@ -1,4 +1,5 @@
 #!/usr/bin/env -S v run
+
 // horneroctl build tasks (agent-toolkit make.vsh pattern).
 // Usage: ./make.vsh [--tasks] [help|fmt|fmt-check|vet|test|build|build-cli|install-cli]
 // Optional: ./make.vsh build-cli && ./build/horneroctl version
@@ -122,7 +123,7 @@ context.task(
 	help: 'Type-check modules (no binary)'
 	run:  fn (_ build.Task) ! {
 		r := root()
-		each_mod(r, 'build', 'build -o /dev/null')
+		each_mod(r, 'build', '-shared -check')
 	}
 )
 
