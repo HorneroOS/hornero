@@ -440,7 +440,9 @@ fn terminal_file_new_window_report(opts TerminalFileOptions) CommandResult {
 			args << '-e'
 		}
 		'ghostty' {
-			args << '--class=yazi-popup'
+			// Ghostty's GTK application ID must be reverse-DNS; a plain
+			// window class is ignored and breaks compositor matching.
+			args << '--class=com.horneroos.yazi-popup'
 			args << '-e'
 		}
 		else {

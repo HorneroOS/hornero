@@ -113,12 +113,12 @@ fn test_terminal_file_new_window_uses_selected_terminal() {
 		assert r.ok
 		assert r.data['terminal'] == terminal
 		assert r.data['command_line'].contains(os.executable())
-		assert r.data['command_line'].contains('yazi-popup')
 		assert r.data['command_line'].contains('Folder With Spaces')
 		assert r.data['command_line'].contains('--last-dir')
 		if terminal == 'ghostty' {
-			assert r.data['command_line'].contains('ghostty --class=yazi-popup -e')
+			assert r.data['command_line'].contains('ghostty --class=com.horneroos.yazi-popup -e')
 		} else {
+			assert r.data['command_line'].contains('yazi-popup')
 			assert r.data['command_line'].contains('${terminal} --class yazi-popup -e')
 		}
 	}
