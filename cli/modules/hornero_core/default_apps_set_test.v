@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import x.json2
 
 fn default_apps_set_test_save_env(keys []string) map[string]string {
 	mut saved := map[string]string{}
@@ -122,6 +123,7 @@ fn test_default_terminal_set_dry_run_is_read_only() {
 	assert r.data['path'] == '${root}/xfce4/helpers.rc'
 	assert r.data['exo_path'] == '${root}/xfce4/helpers.rc'
 	assert r.data['xdg_path'] == '${root}/xdg-terminals.list'
+	assert r.data['shell_path'] == '${root}/hornero/shell.json'
 	assert !os.exists('${root}/xfce4/helpers.rc')
 	assert !os.exists('${root}/xdg-terminals.list')
 	os.rmdir_all(root) or {}
@@ -144,12 +146,16 @@ fn test_default_terminal_set_updates_exo_and_xdg_preferences() {
 	config_dir := '${root}/config/xfce4'
 	os.mkdir_all(bin_dir) or { assert false }
 	os.mkdir_all(config_dir) or { assert false }
+	os.mkdir_all('${root}/config/hornero') or { assert false }
 	os.write_file('${bin_dir}/ghostty', '#!/bin/sh\nexit 0\n') or { assert false }
 	os.chmod('${bin_dir}/ghostty', 0o755) or { assert false }
 	os.write_file('${config_dir}/helpers.rc', '# Keep this helper\nTerminalEmulator=kitty\nOtherHelper=filemanager\nTerminalEmulator=alacritty\n') or {
 		assert false
 	}
 	os.write_file('${root}/config/xdg-terminals.list', '# Preferred terminal\nkitty.desktop\nAlacritty.desktop\n') or {
+		assert false
+	}
+	os.write_file('${root}/config/hornero/shell.json', '{"appearance":{"theme":"hornero-light"},"general":{"apps":{"audio":["pavucontrol"],"terminal":["kitty"],"explorer":["thunar"]}},"custom":{"keep":true}}') or {
 		assert false
 	}
 	os.setenv('XDG_CONFIG_HOME', '${root}/config', true)
@@ -167,6 +173,69 @@ fn test_default_terminal_set_updates_exo_and_xdg_preferences() {
 	assert updated.count('TerminalEmulator=') == 1
 	xdg_updated := os.read_file('${root}/config/xdg-terminals.list') or { '' }
 	assert xdg_updated == '# Preferred terminal\ncom.mitchellh.ghostty.desktop\nkitty.desktop\nAlacritty.desktop\n'
+	shell_updated := os.read_file('${root}/config/hornero/shell.json') or { '' }
+	shell_config := json2.decode[map[string]json2.Any](shell_updated) or { map[string]json2.Any{} }
+	appearance := shell_config['appearance'] or { json2.Any('missing') }
+	custom := shell_config['custom'] or { json2.Any('missing') }
+	assert appearance is map[string]json2.Any
+	assert custom is map[string]json2.Any
+	general_value := shell_config['general'] or { json2.Any('missing') }
+	general := general_value as map[string]json2.Any
+	apps_value := general['apps'] or { json2.Any('missing') }
+	apps := apps_value as map[string]json2.Any
+	terminal_value := apps['terminal'] or { json2.Any('missing') }
+	terminal := terminal_value as []json2.Any
+	assert terminal.len == 1
+	assert terminal[0] == json2.Any('ghostty')
+	os.rmdir_all(root) or {}
+	default_apps_set_test_restore_env(saved)
+}
+
+fn test_shell_config_with_terminal_preserves_other_values_for_each_supported_terminal() {
+	for terminal in supported_terminal_defaults {
+		updated := shell_config_with_terminal('{"appearance":{"theme":"pampa"},"general":{"apps":{"audio":["pavucontrol"],"terminal":["kitty"]}},"extra":17}', terminal) or {
+			assert false
+			continue
+		}
+		config := json2.decode[map[string]json2.Any](updated) or { map[string]json2.Any{} }
+		appearance := config['appearance'] or { json2.Any('missing') }
+		extra := config['extra'] or { json2.Any('missing') }
+		assert appearance is map[string]json2.Any
+		assert extra.str() == '17'
+		general_value := config['general'] or { json2.Any('missing') }
+		general := general_value as map[string]json2.Any
+		apps_value := general['apps'] or { json2.Any('missing') }
+		apps := apps_value as map[string]json2.Any
+		selected_value := apps['terminal'] or { json2.Any('missing') }
+		selected := selected_value as []json2.Any
+		assert selected == [json2.Any(terminal)]
+		audio_value := apps['audio'] or { json2.Any('missing') }
+		assert audio_value == json2.Any([json2.Any('pavucontrol')])
+	}
+}
+
+fn test_invalid_shell_config_does_not_update_other_terminal_defaults() {
+	saved := default_apps_set_test_save_env(['HOME', 'XDG_CONFIG_HOME', 'PATH'])
+	root := '/tmp/hx-terminal-default-invalid-shell-test'
+	os.rmdir_all(root) or {}
+	os.mkdir_all('${root}/bin') or { assert false }
+	os.mkdir_all('${root}/config/xfce4') or { assert false }
+	os.mkdir_all('${root}/config/hornero') or { assert false }
+	os.write_file('${root}/bin/ghostty', '#!/bin/sh\nexit 0\n') or { assert false }
+	os.chmod('${root}/bin/ghostty', 0o755) or { assert false }
+	os.write_file('${root}/config/xfce4/helpers.rc', 'TerminalEmulator=kitty\n') or { assert false }
+	os.write_file('${root}/config/hornero/shell.json', '{broken json') or { assert false }
+	os.setenv('XDG_CONFIG_HOME', '${root}/config', true)
+	os.setenv('PATH', '${root}/bin', true)
+	r := default_apps_set_report(DefaultAppsSetOptions{
+		mime: 'terminal'
+		app:  'ghostty'
+		yes:  true
+	})
+	assert !r.ok
+	assert r.message.contains('cannot parse Hornero Shell config JSON')
+	assert os.read_file('${root}/config/xfce4/helpers.rc') or { '' } == 'TerminalEmulator=kitty\n'
+	assert !os.exists('${root}/config/xdg-terminals.list')
 	os.rmdir_all(root) or {}
 	default_apps_set_test_restore_env(saved)
 }

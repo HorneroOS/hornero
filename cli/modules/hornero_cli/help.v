@@ -415,14 +415,16 @@ Examples:
                     Set the default .desktop app for a MIME type
                     via xdg-mime (needs --yes)
   set terminal <kitty|alacritty|ghostty> [--dry-run|--yes]
-                    Set the installed terminal in Exo and XDG preferences
+                    Set the installed terminal in Exo, XDG, and Shell
 
 List source: handlr MIME associations and installed desktop names;
-terminal comes from the Exo helper and generic XDG preference. Selecting a
-terminal removes its matching fallback exclusion. MIME backend:
+terminal sources include the Exo helper, generic XDG preference, and
+Hornero Shell config. Selecting a terminal removes its matching fallback
+exclusion. MIME backend:
 xdg-mime (HORNERO_XDG_MIME_BIN). Terminal changes write only
-\$XDG_CONFIG_HOME/xfce4/helpers.rc and xdg-terminals.list (or ~/.config
-when unset). xdg-terminal-exec reads the latter when installed.
+\$XDG_CONFIG_HOME/xfce4/helpers.rc, xdg-terminals.list, and
+hornero/shell.json (or ~/.config when unset). xdg-terminal-exec reads the
+preference list; Hornero Shell reloads its updated terminal choice.
 
 Examples:
   horneroctl config default-apps list
