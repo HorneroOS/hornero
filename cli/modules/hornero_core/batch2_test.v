@@ -58,6 +58,11 @@ fn test_default_apps_list_runs_native() {
 	assert r.message.contains('Kitty Terminal')
 	assert r.data['terminal'] == 'Kitty Terminal'
 	assert r.data['web-browser'] == 'hx-test-fake-12345.desktop'
+	b2_write('${b2_root}/config/xfce4/helpers.rc', 'TerminalEmulator=ghostty\n')
+	ghostty := default_apps_list_report(DefaultAppsListOptions{})
+	assert ghostty.ok
+	assert ghostty.message.contains('Ghostty')
+	assert ghostty.data['terminal'] == 'Ghostty'
 	os.unsetenv('HORNERO_HANDLR_BIN')
 	os.unsetenv('XDG_CONFIG_HOME')
 	b2_teardown_backends()
