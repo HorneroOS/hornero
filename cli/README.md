@@ -51,7 +51,8 @@ returns a clear error instead of launching a differently owned GUI.
 
 `horneroctl config default-apps set terminal <kitty|alacritty|ghostty> --yes`
 keeps the Exo terminal helper and the generic `xdg-terminals.list` preference
-in sync. The latter is consumed by the optional `xdg-terminal-exec` package;
+in sync, removing a fallback exclusion for the selected terminal. The latter
+is consumed by the optional `xdg-terminal-exec` package;
 desktop-specific XDG terminal lists can still override the generic preference.
 `config default-apps list` reports the Exo terminal and generic XDG preference
 separately.

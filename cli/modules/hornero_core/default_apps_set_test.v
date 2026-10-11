@@ -187,6 +187,12 @@ fn test_terminal_preference_content_keeps_xdg_directives_before_terminal_choices
 	assert updated == '# terminals\n/execarg_compat\n+kitty.desktop\ncom.mitchellh.ghostty.desktop\nAlacritty.desktop\n'
 }
 
+fn test_terminal_preference_content_removes_selected_terminal_fallback_exclusion() {
+	existing := '-com.mitchellh.ghostty.desktop\nkitty.desktop\n'
+	updated := terminal_preference_content(existing, 'com.mitchellh.ghostty.desktop')
+	assert updated == 'com.mitchellh.ghostty.desktop\nkitty.desktop\n'
+}
+
 fn test_default_xdg_terminal_id_skips_comments_and_blank_lines() {
 	saved := default_apps_set_test_save_env(['HOME', 'XDG_CONFIG_HOME'])
 	root := '/tmp/hx-xdg-terminal-list-test'

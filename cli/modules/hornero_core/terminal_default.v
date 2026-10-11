@@ -38,6 +38,9 @@ fn terminal_preference_content(existing string, selected_id string) string {
 	mut lines := []string{}
 	for line in existing.split_into_lines() {
 		trimmed := line.trim_space()
+		if trimmed.starts_with('-') && trimmed['-'.len..].split(':')[0] == selected_id {
+			continue
+		}
 		if terminal_preference_is_control_line(trimmed) {
 			lines << line
 			continue

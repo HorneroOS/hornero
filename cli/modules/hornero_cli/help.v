@@ -418,7 +418,8 @@ Examples:
                     Set the installed terminal in Exo and XDG preferences
 
 List source: handlr MIME associations and installed desktop names;
-terminal comes from the Exo helper and generic XDG preference. MIME backend:
+terminal comes from the Exo helper and generic XDG preference. Selecting a
+terminal removes its matching fallback exclusion. MIME backend:
 xdg-mime (HORNERO_XDG_MIME_BIN). Terminal changes write only
 \$XDG_CONFIG_HOME/xfce4/helpers.rc and xdg-terminals.list (or ~/.config
 when unset). xdg-terminal-exec reads the latter when installed.
