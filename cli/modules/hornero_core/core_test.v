@@ -341,4 +341,6 @@ fn test_command_line_escapes_single_quotes() {
 	assert command_line('prog', ["a'b"]) == "prog 'a'\\''b'"
 	assert command_line('prog', ['a b', 'plain']) == "prog 'a b' plain"
 	assert command_line('prog', ['']) == "prog ''"
+	assert command_line('prog;touch', ['$(touch /tmp/hornero-command-injection)']) ==
+		"'prog;touch' '$(touch /tmp/hornero-command-injection)'"
 }

@@ -25,14 +25,23 @@ pub:
 }
 
 fn quote_arg(a string) string {
-	if a.contains(' ') || a.contains('"') || a.contains("'") || a.len == 0 {
-		return "'${a.replace("'", "'\\''")}'"
+	if a.len > 0 {
+		mut shell_safe := true
+		for c in a.bytes() {
+			if !(c.is_alnum() || c in [`_`, `-`, `.`, `/`, `:`, `+`, `=`, `,`, `@`, `%`]) {
+				shell_safe = false
+				break
+			}
+		}
+		if shell_safe {
+			return a
+		}
 	}
-	return a
+	return os.quoted_path(a)
 }
 
 pub fn command_line(prog string, args []string) string {
-	mut parts := [prog]
+	mut parts := [quote_arg(prog)]
 	for a in args {
 		parts << quote_arg(a)
 	}

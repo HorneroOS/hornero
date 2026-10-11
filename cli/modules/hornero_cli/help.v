@@ -478,16 +478,20 @@ Examples:
 		'package' {
 			return 'Usage: horneroctl package <check|updates|upgrade|deps> [options]
 
-  check [--dry-run]   List pending system updates (read-only)
-  updates [--dry-run] Pending-update count readout (read-only)
+  check [--dry-run]   List repository and AUR updates (read-only)
+  updates [--dry-run] Count repository and AUR updates (read-only)
   upgrade [--dry-run|--yes]
                       Full system upgrade via polkit (needs --yes)
   deps [--optional]   Check pinned dependencies (read-only)
   deps --install [--optional] [--dry-run|--yes]
                       Install missing dependencies (needs --yes)
 
-Update source: checkupdates on PATH
-(HORNERO_CHECKUPDATES_BIN override). Upgrade runs
+Update sources: checkupdates on PATH for repository packages and
+yay -Qua (or paru -Qua) for AUR packages when an AUR helper is installed.
+Set HORNERO_CHECKUPDATES_BIN or HORNERO_AUR_HELPER_BIN to override either
+backend. AUR checks are read-only and time out after 30 seconds; without a
+helper, repository results remain available and AUR status is marked unchecked.
+Upgrade runs
 `pkexec pacman -Syu` (HORNERO_PKEXEC_BIN/HORNERO_PACMAN_BIN);
 without pkexec it fails with guidance: installs need polkit.
 Deps checks the core + Wayland table (git, curl, wget, chezmoi,

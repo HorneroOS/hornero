@@ -12,6 +12,15 @@ fn b1_write(path string, content string) {
 	os.write_file(path, content) or { assert false }
 }
 
+fn b1_package_root(name string) string {
+	return '${b1_root}/package-${name}'
+}
+
+fn b1_setup_timeout(root string) {
+	os.mkdir_all('${root}/bin') or { assert false }
+	os.symlink('/usr/bin/timeout', '${root}/bin/timeout') or { assert false }
+}
+
 fn b1_setup_snapshots() {
 	b1_write('${b1_root}/snapshots/config_20260101_020000/metadata.json', '{"id":"config_20260101_020000","timestamp":"2026-01-01T02:00:00","hostname":"den"}')
 	b1_write('${b1_root}/snapshots/config_20260201_020000/metadata.json', '{"id":"config_20260201_020000","timestamp":"2026-02-01T02:00:00","hostname":"den"}')
@@ -293,16 +302,21 @@ fn test_snapshot_restore_reports_tar_extraction_failure() {
 
 fn test_package_check_dry_run_needs_no_backend() {
 	os.setenv('HORNERO_CHECKUPDATES_BIN', '/nonexistent-checkupdates-hornero-test', true)
+	os.setenv('HORNERO_AUR_HELPER_BIN', '/nonexistent-aur-helper-hornero-test', true)
 	c := package_check_report(PackageCheckOptions{
 		dry_run: true
 	})
 	assert c.ok
 	assert c.data['dry_run'] == 'true'
+	assert c.data['count'] == '0'
+	assert c.data['aur_status'] == 'planned'
+	assert c.message.contains('/nonexistent-aur-helper-hornero-test -Qua')
 	u := package_updates_report(PackageCheckOptions{
 		dry_run: true
 	})
 	assert u.ok
 	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+	os.unsetenv('HORNERO_AUR_HELPER_BIN')
 }
 
 fn test_package_check_missing_backend_fails_cleanly() {
@@ -322,19 +336,115 @@ fn test_package_check_missing_backend_fails_cleanly() {
 }
 
 fn test_package_updates_counts_backend_lines() {
-	bin := '${b1_root}/bin/checkupdates'
+	root := b1_package_root('count')
+	os.rmdir_all(root) or {}
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	old_path := os.getenv('PATH')
+	os.setenv('PATH', '${root}/bin', true)
+	b1_setup_timeout(root)
+	bin := '${root}/bin/checkupdates'
 	b1_write(bin, '#!/bin/sh\nprintf "pkg-a 1.0 -> 1.1\\npkg-b 2.0 -> 2.1\\npkg-c 3.0 -> 3.1\\n"')
 	os.chmod(bin, 0o755) or { assert false }
 	os.setenv('HORNERO_CHECKUPDATES_BIN', bin, true)
+	os.unsetenv('HORNERO_AUR_HELPER_BIN')
 	c := package_check_report(PackageCheckOptions{})
 	assert c.ok
-	assert c.data['count'] == '3'
+	assert c.data['count'] == '3', 'count=${c.data['count']} repo=${c.data['repository_count']} aur=${c.data['aur_count']} status=${c.data['aur_status']} message=${c.message}'
+	assert c.data['repository_count'] == '3'
+	assert c.data['aur_count'] == '0'
+	assert c.data['aur_status'] == 'unavailable'
 	assert c.message.contains('pkg-a')
 	u := package_updates_report(PackageCheckOptions{})
 	assert u.ok
-	assert u.message == '3 update(s) pending'
+	assert u.message == '3 repository update(s) pending; AUR updates were not checked (install yay or paru)'
 	assert u.data['count'] == '3'
 	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+	os.setenv('PATH', old_path, true)
+}
+
+fn test_aur_helper_resolution_prefers_yay_then_falls_back_to_paru() {
+	root := b1_package_root('aur-resolution')
+	os.rmdir_all(root) or {}
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	old_path := os.getenv('PATH')
+	os.setenv('PATH', '${root}/bin', true)
+	os.unsetenv('HORNERO_AUR_HELPER_BIN')
+	paru := '${root}/bin/paru'
+	b1_write(paru, '#!/bin/sh\nexit 0\n')
+	os.chmod(paru, 0o755) or { assert false }
+	assert resolve_aur_helper_bin() == paru
+	yay := '${root}/bin/yay'
+	b1_write(yay, '#!/bin/sh\nexit 0\n')
+	os.chmod(yay, 0o755) or { assert false }
+	assert resolve_aur_helper_bin() == yay
+	os.setenv('PATH', old_path, true)
+	os.rmdir_all(root) or {}
+}
+
+fn test_package_updates_include_read_only_aur_helper_results() {
+	root := b1_package_root('aur')
+	os.rmdir_all(root) or {}
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	old_path := os.getenv('PATH')
+	os.setenv('PATH', '${root}/bin', true)
+	b1_setup_timeout(root)
+	checkupdates := '${root}/bin/checkupdates'
+	yay := '${root}/bin/yay'
+	b1_write(checkupdates, '#!/bin/sh\nprintf "linux 1.0 -> 1.1\\n"')
+	b1_write(yay, '#!/bin/sh\n[ "\$1" = "-Qua" ] || exit 8\nprintf "hornero-shell 1.2.4-1 -> 1.2.5-1\\nhornero-config 0.3.2-1 -> 0.3.3-1\\n"')
+	os.chmod(checkupdates, 0o755) or { assert false }
+	os.chmod(yay, 0o755) or { assert false }
+	os.setenv('HORNERO_CHECKUPDATES_BIN', checkupdates, true)
+	os.setenv('HORNERO_AUR_HELPER_BIN', yay, true)
+	c := package_check_report(PackageCheckOptions{})
+	assert c.ok, c.message
+	assert c.data['count'] == '3'
+	assert c.data['repository_count'] == '1'
+	assert c.data['aur_count'] == '2'
+	assert c.data['aur_status'] == 'checked'
+	assert c.message.contains('Repository updates:')
+	assert c.message.contains('AUR updates (${yay}):')
+	assert c.message.contains('hornero-shell 1.2.4-1 -> 1.2.5-1')
+	u := package_updates_report(PackageCheckOptions{})
+	assert u.ok
+	assert u.message == '1 repository update(s), 2 AUR update(s) pending'
+	assert u.data['count'] == '3'
+	assert u.data['aur_helper'] == yay
+	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+	os.unsetenv('HORNERO_AUR_HELPER_BIN')
+	os.setenv('PATH', old_path, true)
+}
+
+fn test_package_updates_fail_loudly_when_aur_helper_fails() {
+	root := b1_package_root('aur-fails')
+	os.rmdir_all(root) or {}
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	old_path := os.getenv('PATH')
+	os.setenv('PATH', '${root}/bin', true)
+	b1_setup_timeout(root)
+	checkupdates := '${root}/bin/checkupdates'
+	yay := '${root}/bin/yay-fails'
+	b1_write(checkupdates, '#!/bin/sh\nexit 0\n')
+	b1_write(yay, '#!/bin/sh\nexit 9\n')
+	os.chmod(checkupdates, 0o755) or { assert false }
+	os.chmod(yay, 0o755) or { assert false }
+	os.setenv('HORNERO_CHECKUPDATES_BIN', checkupdates, true)
+	os.setenv('HORNERO_AUR_HELPER_BIN', yay, true)
+	r := package_updates_report(PackageCheckOptions{})
+	assert !r.ok
+	assert r.message.contains('AUR update check failed')
+	assert r.message.contains('exit 9'), r.message
+	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+	os.unsetenv('HORNERO_AUR_HELPER_BIN')
+	os.setenv('PATH', old_path, true)
 }
 
 fn test_backup_list_reads_materialized_archives() {
