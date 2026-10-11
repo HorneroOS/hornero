@@ -416,9 +416,74 @@ pub:
 	path         string
 	selected     string
 	last_dir     bool
+	new_window   bool
 	cheatsheet   bool
 	fix_previews bool
 	dry_run      bool
+}
+
+fn terminal_file_new_window_report(opts TerminalFileOptions) CommandResult {
+	terminal := default_terminal_id()
+	if terminal !in ['kitty', 'alacritty', 'ghostty'] {
+		return fail_result('apps terminal-file --new-window', 'no supported default terminal is configured (expected kitty, alacritty, or ghostty in ~/.config/xfce4/helpers.rc). Set one with `horneroctl config default-apps set terminal <kitty|alacritty|ghostty> --yes`.')
+	}
+	bin := find_on_path(terminal)
+	if bin.len == 0 && !opts.dry_run {
+		return fail_result('apps terminal-file --new-window', 'the configured terminal `${terminal}` is not installed or not on PATH.')
+	}
+	prog := if bin.len > 0 { bin } else { terminal }
+	mut args := []string{cap: 16}
+	match terminal {
+		'kitty', 'alacritty' {
+			args << '--class'
+			args << 'yazi-popup'
+			args << '-e'
+		}
+		'ghostty' {
+			// Ghostty's GTK application ID must be reverse-DNS; a plain
+			// window class is ignored and breaks compositor matching.
+			args << '--class=com.horneroos.yazi-popup'
+			args << '-e'
+		}
+		else {
+			return fail_result('apps terminal-file --new-window', 'unsupported terminal `${terminal}`.')
+		}
+	}
+	args << os.executable()
+	args << 'apps'
+	args << 'terminal-file'
+	if opts.path.len > 0 {
+		args << '--path'
+		args << opts.path
+	}
+	if opts.selected.len > 0 {
+		args << '--select'
+		args << opts.selected
+	}
+	if opts.last_dir {
+		args << '--last-dir'
+	}
+	line := command_line(prog, args)
+	if opts.dry_run {
+		return ok_result('apps terminal-file --new-window', 'would open Yazi in ${terminal}: ${line}', {
+			'command_line': line
+			'terminal':     terminal
+			'dry_run':      'true'
+		})
+	}
+	mut process := os.new_process(prog)
+	process.set_args(args)
+	process.set_stdin_path('/dev/null')
+	process.run()
+	if process.pid <= 0 {
+		process.close()
+		return fail_result('apps terminal-file --new-window', 'could not start ${terminal}.')
+	}
+	process.close()
+	return ok_result('apps terminal-file --new-window', 'Opened Yazi in ${terminal}.', {
+		'command_line': line
+		'terminal':     terminal
+	})
 }
 
 // terminal_file_report implements `apps terminal-file`: cheatsheet and
@@ -488,6 +553,9 @@ pub fn terminal_file_report(opts TerminalFileOptions) CommandResult {
 				})
 		}
 		return yazi_fix_previews_native()
+	}
+	if opts.new_window {
+		return terminal_file_new_window_report(opts)
 	}
 	mut args := []string{}
 	if opts.last_dir {

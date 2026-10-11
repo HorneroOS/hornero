@@ -1004,9 +1004,10 @@ Examples:
 '
 		}
 		'apps terminal-file' {
-			return 'Usage: horneroctl apps terminal-file [--path PATH] [--select FILE] [--last-dir] [--cheatsheet] [--fix-previews] [--dry-run]
+			return 'Usage: horneroctl apps terminal-file [--path PATH] [--select FILE] [--last-dir] [--new-window] [--cheatsheet] [--fix-previews] [--dry-run]
 
   open (default)      Open yazi via hornero-yazi (view-open, no --yes)
+  --new-window        Open Yazi in the configured Kitty, Alacritty, or Ghostty terminal
   --cheatsheet        Print the keybinding reference (read-only)
   --fix-previews      Diagnose preview dependencies (read-only)
 
@@ -1018,6 +1019,8 @@ Examples:
   horneroctl apps terminal-file --path ~/Documents --dry-run
   horneroctl apps terminal-file --select ~/notes.txt --dry-run
   horneroctl apps terminal-file --last-dir --dry-run
+  horneroctl apps terminal-file --new-window --last-dir --dry-run
+  horneroctl apps terminal-file --new-window --path ~/Documents --dry-run
   horneroctl apps terminal-file --cheatsheet
   horneroctl apps terminal-file --fix-previews
 '

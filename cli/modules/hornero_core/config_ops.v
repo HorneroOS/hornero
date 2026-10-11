@@ -50,30 +50,37 @@ const default_apps_categories = [
 	['pdf-viewer', '📄 PDF Viewer', 'application/pdf'],
 ]
 
-// default_apps_terminal_default reads the terminal emulator from
-// xfce4/helpers.rc, or reports 'Not set' when absent.
-fn default_apps_terminal_default() string {
+// default_terminal_id reads the selected terminal from the user's Exo helper.
+// It returns an empty string when no selection is configured.
+pub fn default_terminal_id() string {
 	mut base := os.getenv('XDG_CONFIG_HOME')
 	if base.len == 0 {
 		base = os.join_path(os.home_dir(), '.config')
 	}
-	raw := os.read_file(os.join_path(base, 'xfce4', 'helpers.rc')) or { return 'Not set' }
+	raw := os.read_file(os.join_path(base, 'xfce4', 'helpers.rc')) or { return '' }
 	for line in raw.split_into_lines() {
 		if line.starts_with('TerminalEmulator=') {
 			v := line['TerminalEmulator='.len..].trim_space()
-			if v.len == 0 {
-				return 'Not set'
-			}
-			return match v {
-				'kitty' { 'Kitty Terminal' }
-				'alacritty' { 'Alacritty' }
-				'ghostty' { 'Ghostty' }
-				'xterm' { 'XTerm' }
-				else { v }
-			}
+			return v
 		}
 	}
-	return 'Not set'
+	return ''
+}
+
+// default_apps_terminal_default reads the terminal emulator from
+// xfce4/helpers.rc, or reports 'Not set' when absent.
+fn default_apps_terminal_default() string {
+	terminal := default_terminal_id()
+	if terminal.len == 0 {
+		return 'Not set'
+	}
+	return match terminal {
+		'kitty' { 'Kitty Terminal' }
+		'alacritty' { 'Alacritty' }
+		'ghostty' { 'Ghostty' }
+		'xterm' { 'XTerm' }
+		else { terminal }
+	}
 }
 
 // default_apps_friendly_name resolves a desktop id to its Name= entry,

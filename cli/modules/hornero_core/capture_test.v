@@ -333,21 +333,33 @@ fn test_recorder_pgrep_pattern_matches_live_target() {
 	os.unsetenv('HORNERO_RECORDER_MATCH')
 	pat := recorder_pgrep_pattern()
 	assert pat == '[g]pu-screen-recorder'
-	// Fake one recorder command line via argv[0]; it must be found,
-	// then reaped so no stray process survives the test.
-	os.execute("bash -c 'exec -a gpu-screen-recorder sleep 30' >/dev/null 2>&1 &")
+	// Fake one recorder command line via argv[0]. Keep its Process handle so
+	// cleanup can only signal this test-owned process, never a real recording.
+	mut fake := os.new_process('bash')
+	fake.set_args(['-c', 'exec -a gpu-screen-recorder sleep 30'])
+	fake.run()
 	mut found := false
 	for _ in 0 .. 50 {
 		r := os.execute("pgrep -f '${pat}'")
 		if r.exit_code == 0 {
-			found = true
+			for pid in r.output.split_into_lines() {
+				if pid.trim_space() == '${fake.pid}' {
+					found = true
+					break
+				}
+			}
+		}
+		if found {
 			break
 		}
 		os.execute('sleep 0.1')
 	}
-	os.execute("pkill -f '${pat}' >/dev/null 2>&1")
+	fake.signal_kill()
+	fake.wait()
+	fake.close()
 	assert found
-	assert os.execute("pgrep -f '${pat}'").exit_code != 0
+	r := os.execute("pgrep -f '${pat}'")
+	assert r.exit_code != 0 || !r.output.split_into_lines().any(it.trim_space() == '${fake.pid}')
 	capture_test_restore_env(saved)
 }
 
