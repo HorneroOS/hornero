@@ -283,6 +283,36 @@ fn test_colors_generate_dry_run() {
 	os.rmdir_all(tmp) or {}
 }
 
+fn test_ghostty_reload_falls_back_when_user_service_reload_fails() {
+	tmp := '/tmp/hx-ghostty-reload-test'
+	os.rmdir_all(tmp) or {}
+	bin := os.join_path(tmp, 'bin')
+	os.mkdir_all(bin) or { assert false }
+	systemctl_log := os.join_path(tmp, 'systemctl.log')
+	pkill_log := os.join_path(tmp, 'pkill.log')
+	os.write_file(os.join_path(bin, 'systemctl'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HORNERO_TEST_SYSTEMCTL_LOG"\ncase "$2" in\n  is-active) exit 0 ;;\n  reload) exit 1 ;;\nesac\nexit 2\n') or {
+		assert false
+	}
+	os.write_file(os.join_path(bin, 'pkill'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HORNERO_TEST_PKILL_LOG"\n') or {
+		assert false
+	}
+	os.chmod(os.join_path(bin, 'systemctl'), 0o755) or { assert false }
+	os.chmod(os.join_path(bin, 'pkill'), 0o755) or { assert false }
+	old_path := os.getenv('PATH')
+	os.setenv('PATH', bin, true)
+	os.setenv('HORNERO_TEST_SYSTEMCTL_LOG', systemctl_log, true)
+	os.setenv('HORNERO_TEST_PKILL_LOG', pkill_log, true)
+	reload_ghostty_theme()
+	systemctl_calls := os.read_file(systemctl_log) or { '' }
+	pkill_calls := os.read_file(pkill_log) or { '' }
+	assert systemctl_calls == '--user is-active --quiet app-com.mitchellh.ghostty.service\n--user reload app-com.mitchellh.ghostty.service\n'
+	assert pkill_calls == '-USR2 -x ghostty\n'
+	os.setenv('PATH', old_path, true)
+	os.unsetenv('HORNERO_TEST_SYSTEMCTL_LOG')
+	os.unsetenv('HORNERO_TEST_PKILL_LOG')
+	os.rmdir_all(tmp) or {}
+}
+
 fn test_wallpaper_reload_dry_run() {
 	tmp := os.join_path(os.temp_dir(), 'hornero-walreload')
 	os.rmdir_all(tmp) or {}

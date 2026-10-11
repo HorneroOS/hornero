@@ -228,9 +228,11 @@ fn reload_ghostty_theme() {
 		active := os.execute(strict_command_line(systemctl, ['--user', 'is-active', '--quiet',
 			'app-com.mitchellh.ghostty.service']))
 		if active.exit_code == 0 {
-			_ = os.execute(strict_command_line(systemctl, ['--user', 'reload',
+			reloaded := os.execute(strict_command_line(systemctl, ['--user', 'reload',
 				'app-com.mitchellh.ghostty.service']))
-			return
+			if reloaded.exit_code == 0 {
+				return
+			}
 		}
 	}
 	_ = os.execute(strict_command_line(resolve_pkill_bin(), ['-USR2', '-x', 'ghostty']))
