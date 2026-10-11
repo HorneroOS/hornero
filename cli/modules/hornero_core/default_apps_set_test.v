@@ -107,3 +107,97 @@ fn test_default_apps_set_live() {
 	assert r.message.contains('Set nvim.desktop as default for text/plain')
 	default_apps_set_test_restore_env(saved)
 }
+
+fn test_default_terminal_set_dry_run_is_read_only() {
+	saved := default_apps_set_test_save_env(['HOME', 'XDG_CONFIG_HOME'])
+	root := '/tmp/hx-terminal-default-dry-test'
+	os.mkdir_all(root) or { assert false }
+	os.setenv('XDG_CONFIG_HOME', root, true)
+	r := default_apps_set_report(DefaultAppsSetOptions{
+		mime:    'terminal'
+		app:     'ghostty'
+		dry_run: true
+	})
+	assert r.ok
+	assert r.data['path'] == '${root}/xfce4/helpers.rc'
+	assert !os.exists('${root}/xfce4/helpers.rc')
+	os.rmdir_all(root) or {}
+	default_apps_set_test_restore_env(saved)
+}
+
+fn test_default_terminal_set_requires_yes() {
+	r := default_apps_set_report(DefaultAppsSetOptions{
+		mime: 'terminal'
+		app:  'kitty'
+	})
+	assert !r.ok
+	assert r.message.contains('--yes')
+}
+
+fn test_default_terminal_set_updates_only_exo_terminal_key() {
+	saved := default_apps_set_test_save_env(['HOME', 'XDG_CONFIG_HOME', 'PATH'])
+	root := '/tmp/hx-terminal-default-live-test'
+	bin_dir := '${root}/bin'
+	config_dir := '${root}/config/xfce4'
+	os.mkdir_all(bin_dir) or { assert false }
+	os.mkdir_all(config_dir) or { assert false }
+	os.write_file('${bin_dir}/ghostty', '#!/bin/sh\nexit 0\n') or { assert false }
+	os.chmod('${bin_dir}/ghostty', 0o755) or { assert false }
+	os.write_file('${config_dir}/helpers.rc', '# Keep this helper\nTerminalEmulator=kitty\nOtherHelper=filemanager\nTerminalEmulator=alacritty\n') or {
+		assert false
+	}
+	os.setenv('XDG_CONFIG_HOME', '${root}/config', true)
+	os.setenv('PATH', bin_dir, true)
+	r := default_apps_set_report(DefaultAppsSetOptions{
+		mime: 'terminal'
+		app:  'ghostty'
+		yes:  true
+	})
+	assert r.ok
+	updated := os.read_file('${config_dir}/helpers.rc') or { '' }
+	assert updated.contains('# Keep this helper')
+	assert updated.contains('OtherHelper=filemanager')
+	assert updated.contains('TerminalEmulator=ghostty')
+	assert updated.count('TerminalEmulator=') == 1
+	os.rmdir_all(root) or {}
+	default_apps_set_test_restore_env(saved)
+}
+
+fn test_default_terminal_set_rejects_missing_program() {
+	saved := default_apps_set_test_save_env(['PATH'])
+	os.setenv('PATH', '/nonexistent-hx-terminal-test', true)
+	r := default_apps_set_report(DefaultAppsSetOptions{
+		mime: 'terminal'
+		app:  'kitty'
+		yes:  true
+	})
+	assert !r.ok
+	assert r.message.contains('not installed')
+	default_apps_set_test_restore_env(saved)
+}
+
+fn test_default_terminal_set_refuses_stale_temp_file() {
+	saved := default_apps_set_test_save_env(['HOME', 'XDG_CONFIG_HOME', 'PATH'])
+	root := '/tmp/hx-terminal-default-stale-temp-test'
+	os.rmdir_all(root) or {}
+	config_dir := '${root}/config/xfce4'
+	bin_dir := '${root}/bin'
+	os.mkdir_all(config_dir) or { assert false }
+	os.mkdir_all(bin_dir) or { assert false }
+	os.write_file('${bin_dir}/ghostty', '') or { assert false }
+	os.chmod('${bin_dir}/ghostty', 0o755) or { assert false }
+	os.symlink('${root}/untrusted-target', '${config_dir}/helpers.rc.hornero-tmp') or { assert false }
+	os.setenv('XDG_CONFIG_HOME', '${root}/config', true)
+	os.setenv('PATH', bin_dir, true)
+	r := default_apps_set_report(DefaultAppsSetOptions{
+		mime: 'terminal'
+		app:  'ghostty'
+		yes:  true
+	})
+	assert !r.ok
+	assert r.message.contains('temporary file already exists')
+	assert os.is_link('${config_dir}/helpers.rc.hornero-tmp')
+	assert !os.exists('${root}/untrusted-target')
+	os.rmdir_all(root) or {}
+	default_apps_set_test_restore_env(saved)
+}

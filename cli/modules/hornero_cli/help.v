@@ -414,11 +414,13 @@ Examples:
   set <mime> <app> [--dry-run|--yes]
                     Set the default .desktop app for a MIME type
                     via xdg-mime (needs --yes)
+  set terminal <kitty|alacritty|ghostty> [--dry-run|--yes]
+                    Set the installed terminal in the user Exo helper
 
 List source: handlr MIME associations and installed desktop names;
-TerminalEmulator comes from the Xfce helper configuration. Set backend:
-xdg-mime (HORNERO_XDG_MIME_BIN). The terminal emulator stays out:
-it lives in the exo helper configuration, not in MIME.
+TerminalEmulator comes from the Xfce helper configuration. MIME backend:
+xdg-mime (HORNERO_XDG_MIME_BIN). Terminal changes write only
+\$XDG_CONFIG_HOME/xfce4/helpers.rc (or ~/.config when unset).
 
 Examples:
   horneroctl config default-apps list
@@ -426,6 +428,8 @@ Examples:
   horneroctl config default-apps list --json
   horneroctl config default-apps set text/plain nvim.desktop --dry-run
   horneroctl config default-apps set text/plain nvim.desktop --yes
+  horneroctl config default-apps set terminal ghostty --dry-run
+  horneroctl config default-apps set terminal ghostty --yes
 '
 		}
 		'config materialize' {

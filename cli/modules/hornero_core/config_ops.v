@@ -37,8 +37,8 @@ pub:
 	dry_run bool
 }
 
-// default_apps_categories mirrors the retired horneroctl config default-apps table:
-// category id, display label, probe MIME (terminal reads helpers.rc).
+// default_apps_categories lists the desktop application categories shown by
+// `config default-apps list`: category id, display label, and probe MIME.
 const default_apps_categories = [
 	['file-manager', '📁 File Manager', 'inode/directory'],
 	['terminal', '💻 Terminal', 'x-scheme-handler/terminal'],
@@ -51,8 +51,7 @@ const default_apps_categories = [
 ]
 
 // default_apps_terminal_default reads the terminal emulator from
-// xfce4/helpers.rc, mirroring the retired script (kitty/alacritty/xterm
-// get friendly names), or 'Not set' when absent.
+// xfce4/helpers.rc, or reports 'Not set' when absent.
 fn default_apps_terminal_default() string {
 	mut base := os.getenv('XDG_CONFIG_HOME')
 	if base.len == 0 {
@@ -78,8 +77,7 @@ fn default_apps_terminal_default() string {
 }
 
 // default_apps_friendly_name resolves a desktop id to its Name= entry,
-// searching the XDG application dirs like the retired script, falling
-// back to the id itself when no .desktop file exists.
+// falling back to the id itself when no .desktop file exists.
 fn default_apps_friendly_name(id string, app_dirs []string) string {
 	for dir in app_dirs {
 		p := os.join_path(dir, id)

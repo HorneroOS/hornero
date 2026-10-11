@@ -40,6 +40,9 @@ fn test_dispatch_config_default_apps() {
 	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'text/plain']) == 2
 	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'not-a-mime', 'nvim.desktop',
 		'--dry-run']) == 1
+	assert dispatch(['horneroctl', 'config', 'default-apps', 'set', 'terminal', 'ghostty', '--dry-run']) == 0
+	assert dispatch(['horneroctl', '--json', 'config', 'default-apps', 'set', 'terminal', 'alacritty',
+		'--dry-run']) == 0
 	assert dispatch(['horneroctl', 'config', 'default-apps', 'bogus']) == 2
 	assert dispatch(['horneroctl', 'config', 'default-apps', '--help']) == 0
 	b2_dispatch_teardown()
@@ -64,6 +67,7 @@ fn test_config_default_apps_help_carries_delegation_probe() {
 	// contains these lines; pin them so the probes can never break.
 	assert command_help('config default-apps').contains('Usage: horneroctl config default-apps')
 	assert command_help('config default-apps').contains('set <mime> <app>')
+	assert command_help('config default-apps').contains('set terminal <kitty|alacritty|ghostty>')
 	assert command_help('config default-apps').contains('xdg-mime')
 	assert !command_help('config default-apps').contains('HORNERO_DEFAULT_APPS_BIN')
 }
