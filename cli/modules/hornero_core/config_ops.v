@@ -83,6 +83,34 @@ fn default_apps_terminal_default() string {
 	}
 }
 
+// default_xdg_terminal_id returns the first explicit entry in the generic
+// xdg-terminal-exec preference file. Desktop-specific files can override this
+// preference, so the list command labels it as the generic XDG preference.
+pub fn default_xdg_terminal_id() string {
+	mut base := os.getenv('XDG_CONFIG_HOME')
+	if base.len == 0 {
+		base = os.join_path(os.home_dir(), '.config')
+	}
+	raw := os.read_file(os.join_path(base, 'xdg-terminals.list')) or { return '' }
+	for line in raw.split_into_lines() {
+		trimmed := line.trim_space()
+		if terminal_preference_is_control_line(trimmed) {
+			continue
+		}
+		return trimmed
+	}
+	return ''
+}
+
+fn default_apps_xdg_terminal_name(id string) string {
+	return match id.split(':')[0] {
+		'kitty.desktop' { 'Kitty Terminal' }
+		'Alacritty.desktop' { 'Alacritty' }
+		'com.mitchellh.ghostty.desktop' { 'Ghostty' }
+		else { id }
+	}
+}
+
 // default_apps_friendly_name resolves a desktop id to its Name= entry,
 // falling back to the id itself when no .desktop file exists.
 fn default_apps_friendly_name(id string, app_dirs []string) string {
@@ -99,7 +127,7 @@ fn default_apps_friendly_name(id string, app_dirs []string) string {
 }
 
 // default_apps_list_report implements `config default-apps list`
-// (read-only) natively: terminal via helpers.rc, MIME categories via
+// (read-only) natively: Exo and XDG terminal preferences, MIME categories via
 // handlr, friendly names via .desktop lookup. Needs no external helper;
 // --dry-run previews the handlr probe command.
 pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
@@ -147,6 +175,15 @@ pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
 		lines << '${row} ${name}'
 		data[id] = if name == 'Not set' { 'Not set' } else { name }
 	}
+	xdg_terminal := default_xdg_terminal_id()
+	xdg_terminal_name := if xdg_terminal.len == 0 {
+		'Not set'
+	} else {
+		default_apps_xdg_terminal_name(xdg_terminal)
+	}
+	lines << ''
+	lines << 'XDG Terminal Preference  ${xdg_terminal_name}'
+	data['terminal_xdg'] = if xdg_terminal.len == 0 { 'Not set' } else { xdg_terminal }
 	return ok_result('config default-apps list', lines.join('\n'), data)
 }
 

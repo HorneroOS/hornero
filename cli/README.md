@@ -49,6 +49,13 @@ registered Control Center destination over Shell IPC. The Shell registry is
 the source of truth for pane IDs; when the Shell is not running, the command
 returns a clear error instead of launching a differently owned GUI.
 
+`horneroctl config default-apps set terminal <kitty|alacritty|ghostty> --yes`
+keeps the Exo terminal helper and the generic `xdg-terminals.list` preference
+in sync. The latter is consumed by the optional `xdg-terminal-exec` package;
+desktop-specific XDG terminal lists can still override the generic preference.
+`config default-apps list` reports the Exo terminal and generic XDG preference
+separately.
+
 ## Ownership
 
 The Shell owns live session state and visual interactions. `horneroctl` owns

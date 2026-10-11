@@ -42,7 +42,7 @@ fn b2_restore_resolution(old_home string, old_path string) {
 }
 
 fn test_default_apps_list_runs_native() {
-	// Native port: list reads helpers.rc + handlr directly; the
+	// Native port: list reads the terminal preferences + handlr directly; the
 	// horneroctl config default-apps backend is gone, so the fixture backend below
 	// must stay unused (a fake desktop id proves it: no .desktop file
 	// exists for it, and the id itself is reported).
@@ -50,6 +50,7 @@ fn test_default_apps_list_runs_native() {
 	b2_write('${b2_root}/bin/handlr', '#!/bin/sh\necho "hx-test-fake-12345.desktop"\nexit 0\n')
 	os.setenv('HORNERO_HANDLR_BIN', '${b2_root}/bin/handlr', true)
 	b2_write('${b2_root}/config/xfce4/helpers.rc', 'TerminalEmulator=kitty\n')
+	b2_write('${b2_root}/config/xdg-terminals.list', '# default\nkitty.desktop\nAlacritty.desktop\n')
 	os.setenv('XDG_CONFIG_HOME', '${b2_root}/config', true)
 	r := default_apps_list_report(DefaultAppsListOptions{})
 	assert r.ok
@@ -57,6 +58,8 @@ fn test_default_apps_list_runs_native() {
 	assert r.message.contains('Current Default Applications:')
 	assert r.message.contains('Kitty Terminal')
 	assert r.data['terminal'] == 'Kitty Terminal'
+	assert r.data['terminal_xdg'] == 'kitty.desktop'
+	assert r.message.contains('XDG Terminal Preference  Kitty Terminal')
 	assert r.data['web-browser'] == 'hx-test-fake-12345.desktop'
 	b2_write('${b2_root}/config/xfce4/helpers.rc', 'TerminalEmulator=ghostty\n')
 	ghostty := default_apps_list_report(DefaultAppsListOptions{})
