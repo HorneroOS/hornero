@@ -2,17 +2,14 @@ module hornero_core
 
 import os
 
-// Default-application setter: `config default-apps set` over the
-// xdg-mime backend, ported from the `horneroctl config default-apps --set` verb
-// (which never bound its arguments under EasyOptions, so the backend
-// moves to xdg-mime directly; handlr stays internal per
-// docs/cli-architecture.md section 5).
+// Default-application setter: MIME associations use xdg-mime, and the
+// `terminal` category updates the user's Exo helper configuration.
+// The terminal setting is separate because TerminalEmulator is not a MIME
+// association.
 //
-// Only MIME associations are covered (`xdg-mime default <app>
-// <mime>`). The terminal emulator stays out: it lives in the exo
-// config (`~/.config/xfce4/helpers.rc`), not in MIME.
-//
-// Mutating: needs --yes; --dry-run only previews.
+// The `terminal` category is handled through
+// the Xfce/Exo helper file because TerminalEmulator is not a MIME association.
+// Mutating operations need --yes; --dry-run only previews.
 
 // resolve_xdg_mime_bin locates xdg-mime. Override with
 // HORNERO_XDG_MIME_BIN.
@@ -50,6 +47,9 @@ pub:
 pub fn default_apps_set_report(opts DefaultAppsSetOptions) CommandResult {
 	if opts.mime.len == 0 || opts.app.len == 0 {
 		return fail_result('config default-apps set', 'missing MIME type or application.\nExample: horneroctl config default-apps set text/plain nvim.desktop --dry-run')
+	}
+	if opts.mime == 'terminal' {
+		return default_terminal_set_report(opts.app, opts.dry_run, opts.yes)
 	}
 	if !opts.mime.contains('/') {
 		return fail_result('config default-apps set', 'invalid MIME type: ${opts.mime} (expected type/subtype, e.g. text/plain).\nExample: horneroctl config default-apps set text/plain nvim.desktop --dry-run')

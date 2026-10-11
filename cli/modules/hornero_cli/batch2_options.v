@@ -2,13 +2,12 @@ module hornero_cli
 
 // Batch-2 option parsers: `config default-apps`, `config materialize`,
 // `config gui`. Error strings always carry a correct Example (exit-2
-// contract); `default-apps set` stays a deferral: the upstream
-// `horneroctl config default-apps --set` verb never binds its arguments, and handlr
-// stays internal per docs/cli-architecture.md section 5.
+// contract); MIME defaults use xdg-mime, while the terminal target edits
+// the user's Exo helper configuration.
 
 // DefaultAppsCmdOptions covers `config default-apps <list|set>`.
-// `list` delegates to horneroctl config default-apps; `set <mime> <app>` writes via
-// xdg-mime (mutating: needs --yes).
+// `list` reports active defaults; `set <mime> <app>` changes MIME defaults or
+// the special `terminal` target (mutating: needs --yes).
 pub struct DefaultAppsCmdOptions {
 pub:
 	leaf    string // list | set
@@ -60,7 +59,7 @@ pub fn parse_default_apps_cmd(args []string) !DefaultAppsCmdOptions {
 		return error('default-apps list takes no --yes.\nExample: horneroctl config default-apps list --dry-run')
 	}
 	if leaf == 'set' && (mime.len == 0 || app.len == 0) {
-		return error('missing MIME type or application.\nExample: horneroctl config default-apps set text/plain nvim.desktop --dry-run')
+		return error('missing MIME type/category or application.\nExample: horneroctl config default-apps set text/plain nvim.desktop --dry-run')
 	}
 	return DefaultAppsCmdOptions{
 		leaf:    leaf
