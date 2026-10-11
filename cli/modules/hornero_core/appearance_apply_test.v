@@ -273,6 +273,11 @@ fn test_colors_generate_dry_run() {
 		rep2 := colors_generate_native(true, true)
 		assert rep2.ok, rep2.message
 		assert rep2.message.contains('gen-m3.py')
+		assert rep2.message.contains('--kitty-output')
+		assert rep2.message.contains('--alacritty-output')
+		assert rep2.message.contains('--ghostty-output')
+		assert rep2.message.contains(os.join_path(tmp, 'config', 'ghostty', 'themes',
+			'Hornero Dynamic'))
 		os.unsetenv('HORNERO_XRDB_BIN')
 	})
 	os.rmdir_all(tmp) or {}

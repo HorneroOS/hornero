@@ -197,9 +197,41 @@ pub fn run_m3_synthesis(image string, output string, flavour string, mode string
 	py := resolve_m3_python(dry_run)!
 	mut full := [script, '--image', image, '--output', output, '--mode', mode, '--scheme-type',
 		flavour]
+	config_home := if os.getenv('XDG_CONFIG_HOME').len > 0 {
+		os.getenv('XDG_CONFIG_HOME')
+	} else {
+		os.join_path(os.home_dir(), '.config')
+	}
+	full << '--kitty-output'
+	full << os.join_path(smart_colors_dir(), 'colors-kitty.conf')
+	full << '--alacritty-output'
+	full << os.join_path(config_home, 'alacritty', 'hornero-colors.toml')
+	full << '--ghostty-output'
+	full << os.join_path(config_home, 'ghostty', 'themes', 'Hornero Dynamic')
 	if accent.len > 0 {
 		full << '--source-color'
 		full << accent
 	}
-	return strict_exec(py, full, dry_run)
+	result := strict_exec(py, full, dry_run)
+	if !dry_run && result.ok {
+		reload_ghostty_theme()
+	}
+	return result
+}
+
+// reload_ghostty_theme asks an already-running Ghostty instance to read the
+// regenerated named theme. Prefer Ghostty's documented user service; regular
+// foreground instances receive the same SIGUSR2 through pkill.
+fn reload_ghostty_theme() {
+	systemctl := find_on_path('systemctl')
+	if systemctl.len > 0 {
+		active := os.execute(strict_command_line(systemctl, ['--user', 'is-active', '--quiet',
+			'app-com.mitchellh.ghostty.service']))
+		if active.exit_code == 0 {
+			_ = os.execute(strict_command_line(systemctl, ['--user', 'reload',
+				'app-com.mitchellh.ghostty.service']))
+			return
+		}
+	}
+	_ = os.execute(strict_command_line(resolve_pkill_bin(), ['-USR2', '-x', 'ghostty']))
 }
