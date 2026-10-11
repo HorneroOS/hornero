@@ -1116,6 +1116,7 @@ fn run_apps(args []string, mode hornero_core.RenderMode) int {
 				path:         topts.path
 				selected:     topts.selected
 				last_dir:     topts.last_dir
+				new_window:   topts.new_window
 				cheatsheet:   topts.cheatsheet
 				fix_previews: topts.fix_previews
 				dry_run:      topts.dry_run

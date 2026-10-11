@@ -26,7 +26,7 @@ const apps_test_keys = ['HORNERO_FILE_MANAGER_BIN', 'HORNERO_EXO_OPEN_BIN', 'HOR
 	'HORNERO_SNAPPY_BIN', 'HORNERO_SNAPPY_SWITCHER_BIN', 'HORNERO_PIDOF_BIN', 'HORNERO_PGREP_BIN',
 	'HORNERO_KILLALL_BIN', 'HORNERO_PKILL_BIN', 'HORNERO_QUICKSHELL_BIN', 'HORNERO_REDSHIFT_BIN',
 	'HORNERO_CAFFEINE_BIN', 'XDG_CONFIG_HOME', 'HORNERO_BYPASS_QUICKSHELL', 'PATH',
-	'HORNERO_POWERPROFILESCTL_BIN']
+	'HORNERO_POWERPROFILESCTL_BIN', 'HORNERO_TEST_CAPTURE']
 
 fn apps_test_break_backends() {
 	os.setenv('HORNERO_FILE_MANAGER_BIN', '/nonexistent-fm-hornero-test', true)
@@ -87,6 +87,101 @@ fn test_terminal_cheatsheet_native_needs_no_backend() {
 	assert p.ok
 	assert p.message.contains('Yazi Preview Diagnostics')
 	apps_test_restore_env(saved)
+}
+
+fn test_terminal_file_new_window_uses_selected_terminal() {
+	saved := apps_test_save_env(apps_test_keys)
+	root := os.join_path(os.temp_dir(), 'hornero-terminal-file-new-window-${os.getpid()}')
+	config_home := os.join_path(root, 'config')
+	os.mkdir_all(os.join_path(config_home, 'xfce4')) or { assert false }
+	os.setenv('XDG_CONFIG_HOME', config_home, true)
+	defer {
+		apps_test_restore_env(saved)
+		os.rmdir_all(root) or {}
+	}
+
+	for terminal in ['kitty', 'alacritty', 'ghostty'] {
+		os.write_file(os.join_path(config_home, 'xfce4', 'helpers.rc'), 'TerminalEmulator=${terminal}\n') or {
+			assert false
+		}
+		r := terminal_file_report(TerminalFileOptions{
+			path:       '/tmp/Folder With Spaces'
+			last_dir:   true
+			new_window: true
+			dry_run:    true
+		})
+		assert r.ok
+		assert r.data['terminal'] == terminal
+		assert r.data['command_line'].contains(os.executable())
+		assert r.data['command_line'].contains('yazi-popup')
+		assert r.data['command_line'].contains('Folder With Spaces')
+		assert r.data['command_line'].contains('--last-dir')
+		if terminal == 'ghostty' {
+			assert r.data['command_line'].contains('ghostty --class=yazi-popup -e')
+		} else {
+			assert r.data['command_line'].contains('${terminal} --class yazi-popup -e')
+		}
+	}
+}
+
+fn test_terminal_file_new_window_rejects_unknown_terminal() {
+	saved := apps_test_save_env(apps_test_keys)
+	root := os.join_path(os.temp_dir(), 'hornero-terminal-file-unsupported-${os.getpid()}')
+	config_home := os.join_path(root, 'config')
+	os.mkdir_all(os.join_path(config_home, 'xfce4')) or { assert false }
+	os.write_file(os.join_path(config_home, 'xfce4', 'helpers.rc'), 'TerminalEmulator=foot\n') or {
+		assert false
+	}
+	os.setenv('XDG_CONFIG_HOME', config_home, true)
+	defer {
+		apps_test_restore_env(saved)
+		os.rmdir_all(root) or {}
+	}
+	r := terminal_file_report(TerminalFileOptions{ new_window: true, dry_run: true })
+	assert !r.ok
+	assert r.message.contains('no supported default terminal')
+}
+
+fn test_terminal_file_new_window_launches_literal_arguments() {
+	saved := apps_test_save_env(apps_test_keys)
+	root := os.join_path(os.temp_dir(), 'hornero-terminal-file-launch-${os.getpid()}')
+	bin_dir := os.join_path(root, 'bin')
+	config_home := os.join_path(root, 'config')
+	capture := os.join_path(root, 'arguments.txt')
+	os.mkdir_all(bin_dir) or { assert false }
+	os.mkdir_all(os.join_path(config_home, 'xfce4')) or { assert false }
+	os.write_file(os.join_path(bin_dir, 'kitty'), '#!/bin/sh\nprintf \'%s\\n\' "\$@" > "\$HORNEROS_TEST_CAPTURE"\n') or {
+		assert false
+	}
+	os.chmod(os.join_path(bin_dir, 'kitty'), 0o755) or { assert false }
+	os.write_file(os.join_path(config_home, 'xfce4', 'helpers.rc'), 'TerminalEmulator=kitty\n') or {
+		assert false
+	}
+	os.setenv('PATH', bin_dir, true)
+	os.setenv('XDG_CONFIG_HOME', config_home, true)
+	os.setenv('HORNEROS_TEST_CAPTURE', capture, true)
+	defer {
+		apps_test_restore_env(saved)
+		os.rmdir_all(root) or {}
+	}
+
+	r := terminal_file_report(TerminalFileOptions{
+		path:       '/tmp/Folder With Spaces'
+		selected:   '/tmp/Selected File.txt'
+		last_dir:   true
+		new_window: true
+	})
+	assert r.ok
+	assert r.data['terminal'] == 'kitty'
+	mut captured := ''
+	for _ in 0 .. 200 {
+		captured = os.read_file(capture) or { '' }
+		if captured.contains('--last-dir') {
+			break
+		}
+		time.sleep(10 * time.millisecond)
+	}
+	assert captured == '--class\nyazi-popup\n-e\n${os.executable()}\napps\nterminal-file\n--path\n/tmp/Folder With Spaces\n--select\n/tmp/Selected File.txt\n--last-dir\n'
 }
 
 fn test_apps_toggle_native_daemon_stop() {

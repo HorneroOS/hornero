@@ -165,3 +165,27 @@ fn test_dispatch_apps_git_watch_flags_preview() {
 	assert dispatch(['horneroctl', 'apps', 'switcher', 'apply-theme-pack', 'nord', '--dry-run']) == 0
 	apps_dispatch_teardown()
 }
+
+fn test_dispatch_apps_terminal_file_new_window_preview() {
+	apps_dispatch_setup()
+	root := os.join_path(os.temp_dir(), 'hornero-terminal-file-dispatch-${os.getpid()}')
+	config_home := os.join_path(root, 'config')
+	old_config_home := os.getenv('XDG_CONFIG_HOME')
+	os.mkdir_all(os.join_path(config_home, 'xfce4')) or { assert false }
+	os.write_file(os.join_path(config_home, 'xfce4', 'helpers.rc'), 'TerminalEmulator=ghostty\n') or {
+		assert false
+	}
+	os.setenv('XDG_CONFIG_HOME', config_home, true)
+	defer {
+		if old_config_home.len > 0 {
+			os.setenv('XDG_CONFIG_HOME', old_config_home, true)
+		} else {
+			os.unsetenv('XDG_CONFIG_HOME')
+		}
+		apps_dispatch_teardown()
+		os.rmdir_all(root) or {}
+	}
+	assert command_help('apps terminal-file').contains('--new-window')
+	assert command_help('apps terminal-file').contains('Examples:')
+	assert dispatch(['horneroctl', 'apps', 'terminal-file', '--new-window', '--dry-run']) == 0
+}

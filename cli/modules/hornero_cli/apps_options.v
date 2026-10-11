@@ -95,6 +95,7 @@ pub:
 	path         string
 	selected     string
 	last_dir     bool
+	new_window   bool
 	cheatsheet   bool
 	fix_previews bool
 	dry_run      bool
@@ -104,6 +105,7 @@ pub fn parse_apps_terminal_file(args []string) !TerminalFileCmdOptions {
 	mut path := ''
 	mut selected := ''
 	mut last_dir := false
+	mut new_window := false
 	mut cheatsheet := false
 	mut fix_previews := false
 	mut dry_run := false
@@ -117,6 +119,11 @@ pub fn parse_apps_terminal_file(args []string) !TerminalFileCmdOptions {
 		}
 		if a == '--last-dir' {
 			last_dir = true
+			i++
+			continue
+		}
+		if a == '--new-window' {
+			new_window = true
 			i++
 			continue
 		}
@@ -167,16 +174,17 @@ pub fn parse_apps_terminal_file(args []string) !TerminalFileCmdOptions {
 		}
 		return error('unexpected argument: ${a}.\nRun: horneroctl apps terminal-file --help')
 	}
-	if cheatsheet && (fix_previews || path.len > 0 || selected.len > 0 || last_dir) {
+	if cheatsheet && (fix_previews || path.len > 0 || selected.len > 0 || last_dir || new_window) {
 		return error('terminal-file --cheatsheet takes no other flags.\nExample: horneroctl apps terminal-file --cheatsheet')
 	}
-	if fix_previews && (path.len > 0 || selected.len > 0 || last_dir) {
+	if fix_previews && (path.len > 0 || selected.len > 0 || last_dir || new_window) {
 		return error('terminal-file --fix-previews takes no other flags.\nExample: horneroctl apps terminal-file --fix-previews')
 	}
 	return TerminalFileCmdOptions{
 		path:         path
 		selected:     selected
 		last_dir:     last_dir
+		new_window:   new_window
 		cheatsheet:   cheatsheet
 		fix_previews: fix_previews
 		dry_run:      dry_run
