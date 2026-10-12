@@ -63,6 +63,33 @@ fn hypr_conf_dir() string {
 	return os.join_path(base, 'hypr', 'hyprland.conf.d')
 }
 
+// hypr_lua_config_enabled detects the current Lua provider at Hyprland's
+// standard per-user path. Nonstandard `--config` sessions are not inferred.
+fn hypr_lua_config_enabled() bool {
+	mut base := os.getenv('XDG_CONFIG_HOME')
+	if base.len == 0 {
+		base = os.join_path(os.home_dir(), '.config')
+	}
+	return os.is_file(os.join_path(base, 'hypr', 'hyprland.lua'))
+}
+
+fn hypr_lua_string(value string) string {
+	return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') + '"'
+}
+
+fn hypr_lua_eval(bin string, expression string, dry_run bool) !ExecReport {
+	if !hypr_lua_config_enabled() {
+		return error('Lua configuration is not active at the standard XDG Hyprland path.')
+	}
+	if dry_run {
+		return ExecReport{}
+	}
+	return run_exec(ExecSpec{
+		prog: bin
+		args: ['eval', expression]
+	})
+}
+
 // hypr_state_base is $XDG_STATE_HOME (else $HOME/.local/state).
 fn hypr_state_base() string {
 	mut base := os.getenv('XDG_STATE_HOME')
@@ -203,6 +230,52 @@ fn parse_animation_conf(path string) !([]string, []string) {
 	return beziers, anims
 }
 
+fn hypr_numeric_literal(value string) bool {
+	mut digits := 0
+	mut dots := 0
+	for i, c in value.bytes() {
+		if c >= `0` && c <= `9` {
+			digits++
+		} else if c == `.` {
+			dots++
+		} else if c == `-` && i == 0 {
+			continue
+		} else {
+			return false
+		}
+	}
+	return digits > 0 && dots <= 1
+}
+
+fn animation_lua_calls(beziers []string, anims []string) ![]string {
+	mut calls := []string{}
+	for raw in beziers {
+		parts := raw.split(',').map(it.trim_space())
+		if parts.len != 5 || !hypr_numeric_literal(parts[1]) || !hypr_numeric_literal(parts[2]) || !hypr_numeric_literal(parts[3]) || !hypr_numeric_literal(parts[4]) {
+			return error('invalid bezier profile entry: ${raw}')
+		}
+		calls << 'hl.curve(' + hypr_lua_string(parts[0]) + ', {type="bezier", points={{' + parts[1] + ', ' + parts[2] + '}, {' + parts[3] + ', ' + parts[4] + '}}})'
+	}
+	for raw in anims {
+		parts := raw.split(',').map(it.trim_space())
+		if parts.len < 3 || parts.len > 5 || !hypr_numeric_literal(parts[2]) {
+			return error('invalid animation profile entry: ${raw}')
+		}
+		if parts[1] !in ['0', '1', 'true', 'false'] {
+			return error('invalid animation enabled value: ${parts[1]}')
+		}
+		mut fields := ['leaf=' + hypr_lua_string(parts[0]),
+			'enabled=' + if parts[1] in ['1', 'true'] { 'true' } else { 'false' }]
+		if parts[1] in ['1', 'true'] {
+			fields << 'speed=' + parts[2]
+			if parts.len >= 4 { fields << 'bezier=' + hypr_lua_string(parts[3]) }
+			if parts.len == 5 { fields << 'style=' + hypr_lua_string(parts[4]) }
+		}
+		calls << 'hl.animation({' + fields.join(', ') + '})'
+	}
+	return calls
+}
+
 pub struct AnimationApplyOptions {
 pub:
 	profile   string
@@ -225,15 +298,21 @@ pub fn animation_apply_report(opts AnimationApplyOptions) CommandResult {
 	beziers, anims := parse_animation_conf(conf) or {
 		return fail_result('hypr animations set', '[ERROR] ${err.msg()}')
 	}
+	use_lua := hypr_lua_config_enabled()
+	lua_calls := if use_lua {
+		animation_lua_calls(beziers, anims) or { return fail_result('hypr animations set', err.msg()) }
+	} else {
+		[]string{}
+	}
 	bin := hyprctl_or_fail('animations set', opts.dry_run) or {
 		return fail_result('hypr animations set', err.msg())
 	}
 	mut previews := []string{}
-	for b in beziers {
-		previews << command_line(bin, ['keyword', 'bezier', b])
-	}
-	for a in anims {
-		previews << command_line(bin, ['keyword', 'animation', a])
+	if use_lua {
+		for call in lua_calls { previews << command_line(bin, ['eval', call]) }
+	} else {
+		for b in beziers { previews << command_line(bin, ['keyword', 'bezier', b]) }
+		for a in anims { previews << command_line(bin, ['keyword', 'animation', a]) }
 	}
 	if opts.dry_run {
 		mut lines := ['would apply profile ${opts.profile} from ${conf}:']
@@ -246,22 +325,22 @@ pub fn animation_apply_report(opts AnimationApplyOptions) CommandResult {
 			'dry_run':      'true'
 		})
 	}
-	for b in beziers {
-		rep := run_exec(ExecSpec{
-			prog: bin
-			args: ['keyword', 'bezier', b]
-		})
-		if !rep.ok {
-			return fail_result('hypr animations set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	if use_lua {
+		for call in lua_calls {
+			rep := hypr_lua_eval(bin, call, false) or { return fail_result('hypr animations set', err.msg()) }
+			if !rep.ok {
+				return fail_result('hypr animations set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
 		}
-	}
-	for a in anims {
-		rep := run_exec(ExecSpec{
-			prog: bin
-			args: ['keyword', 'animation', a]
-		})
-		if !rep.ok {
-			return fail_result('hypr animations set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	} else {
+		for args in [beziers.map(['keyword', 'bezier', it]), anims.map(['keyword', 'animation',
+			it])] {
+			for a in args {
+				rep := run_exec(ExecSpec{ prog: bin, args: a })
+				if !rep.ok {
+					return fail_result('hypr animations set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+				}
+			}
 		}
 	}
 	if !opts.ephemeral {
@@ -304,7 +383,8 @@ fn layout_live() string {
 	}
 	rep := run_exec(ExecSpec{
 		prog: bin
-		args: ['getoption', 'general:layout', '-j']
+		args: ['getoption',
+			if hypr_lua_config_enabled() { 'general.layout' } else { 'general:layout' }, '-j']
 	})
 	if rep.ok {
 		parsed := json2_decode_map(rep.output)
@@ -317,7 +397,8 @@ fn layout_live() string {
 	}
 	rep2 := run_exec(ExecSpec{
 		prog: bin
-		args: ['getoption', 'general:layout']
+		args: ['getoption',
+			if hypr_lua_config_enabled() { 'general.layout' } else { 'general:layout' }]
 	})
 	if rep2.ok {
 		for line in rep2.output.split_into_lines() {
@@ -368,6 +449,13 @@ pub fn layout_toggle_value(active string) string {
 // layout_keywords renders the hyprctl keyword invocations applying a layout:
 // scrolling sets the full scrolling profile, dwindle/master set one keyword.
 fn layout_keywords(bin string, layout string) [][]string {
+	if hypr_lua_config_enabled() {
+		if layout == 'scrolling' {
+			return [[bin, 'eval',
+				'hl.config({general={layout="scrolling"}, scrolling={fullscreen_on_one_column=true, column_width=0.62, focus_fit_method=1, follow_focus=true, follow_min_visible=0.45, explicit_column_widths="0.333, 0.5, 0.618, 0.75, 1.0", direction="right"}})']]
+		}
+		return [[bin, 'eval', 'hl.config({general={layout=' + hypr_lua_string(layout) + '}})']]
+	}
 	if layout == 'scrolling' {
 		return [
 			[bin, 'keyword', 'general:layout', 'scrolling'],
@@ -589,6 +677,55 @@ fn monitor_keywords(mode string, internal string, external string, mons []Monito
 	}
 }
 
+fn monitor_lua_calls(mode string, internal string, external string, mons []MonitorInfo, by_name map[string]MonitorInfo) []string {
+	iname := if internal.len > 0 { internal } else { 'eDP-1' }
+	ename := if external.len > 0 { external } else { 'HDMI-A-1' }
+	iw := if iname in by_name { by_name[iname].width } else { 1920 }
+	ih := if iname in by_name { by_name[iname].height } else { 1080 }
+	ew := if ename in by_name { by_name[ename].width } else { 1920 }
+	eh := if ename in by_name { by_name[ename].height } else { 1080 }
+	match mode {
+		'internal-only' {
+			if external.len == 0 && mons.len > 0 { return [monitor_lua_preferred(iname, 0, 0)] }
+			return [monitor_lua_disabled(ename), monitor_lua_preferred(iname, 0, 0)]
+		}
+		'external-only' {
+			if external.len == 0 && mons.len > 0 { return [monitor_lua_preferred(iname, 0, 0)] }
+			return [monitor_lua_disabled(iname), monitor_lua_preferred(ename, 0, 0)]
+		}
+		'extend-right' {
+			return [monitor_lua_preferred(iname, 0, 0), monitor_lua_preferred(ename, iw, 0)]
+		}
+		'extend-left' {
+			return [monitor_lua_preferred(ename, 0, 0), monitor_lua_preferred(iname, ew, 0)]
+		}
+		'extend-above' {
+			return [monitor_lua_preferred(ename, 0, 0), monitor_lua_preferred(iname, 0, eh)]
+		}
+		'extend-below' {
+			return [monitor_lua_preferred(iname, 0, 0), monitor_lua_preferred(ename, 0, ih)]
+		}
+		'mirror' {
+			return ['hl.monitor({output=' + hypr_lua_string(iname) + ', mode="preferred", position="0x0", scale=1, mirror=' + hypr_lua_string(ename) + '})']
+		}
+		'disable-external' {
+			mut out := []string{}
+			for m in mons { if !m.is_inner { out << monitor_lua_disabled(m.name) } }
+			if out.len == 0 { out << monitor_lua_disabled(ename) }
+			return out
+		}
+		else { return [] }
+	}
+}
+
+fn monitor_lua_preferred(name string, x int, y int) string {
+	return 'hl.monitor({output=' + hypr_lua_string(name) + ', mode="preferred", position="${x}x${y}", scale=1})'
+}
+
+fn monitor_lua_disabled(name string) string {
+	return 'hl.monitor({output=' + hypr_lua_string(name) + ', disabled=true})'
+}
+
 // monitors_list_report implements `hypr monitors list` (read-only): one
 // `name - WxH@refresh (Scale: s)` line per monitor from hyprctl.
 pub fn monitors_list_report() CommandResult {
@@ -678,10 +815,16 @@ pub fn monitors_set_report(opts MonitorsSetOptions) CommandResult {
 			})
 		}
 	}
-	specs := monitor_keywords(opts.mode, internal, external, mons, by_name)
+	mut specs := monitor_keywords(opts.mode, internal, external, mons, by_name)
+	mut lua_calls := []string{}
+	if hypr_lua_config_enabled() {
+		lua_calls = monitor_lua_calls(opts.mode, internal, external, mons, by_name)
+	}
 	mut previews := []string{}
-	for s in specs {
-		previews << command_line(bin, ['keyword', 'monitor', s])
+	if hypr_lua_config_enabled() {
+		for call in lua_calls { previews << command_line(bin, ['eval', call]) }
+	} else {
+		for s in specs { previews << command_line(bin, ['keyword', 'monitor', s]) }
 	}
 	if opts.dry_run {
 		mut lines := ['would apply monitor mode ${opts.mode}:']
@@ -694,13 +837,22 @@ pub fn monitors_set_report(opts MonitorsSetOptions) CommandResult {
 			'dry_run':      'true'
 		})
 	}
-	for s in specs {
-		rep := run_exec(ExecSpec{
-			prog: bin
-			args: ['keyword', 'monitor', s]
-		})
-		if !rep.ok {
-			return fail_result('hypr monitors set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+	if hypr_lua_config_enabled() {
+		for call in lua_calls {
+			rep := hypr_lua_eval(bin, call, false) or { return fail_result('hypr monitors set', err.msg()) }
+			if !rep.ok {
+				return fail_result('hypr monitors set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
+		}
+	} else {
+		for s in specs {
+			rep := run_exec(ExecSpec{
+				prog: bin
+				args: ['keyword', 'monitor', s]
+			})
+			if !rep.ok {
+				return fail_result('hypr monitors set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
 		}
 	}
 	return ok_result('hypr monitors set', 'applied monitor mode ${opts.mode}', {
