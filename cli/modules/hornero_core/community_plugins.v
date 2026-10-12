@@ -53,6 +53,18 @@ fn community_plugin_valid_id(id string) bool {
 	return true
 }
 
+fn community_plugin_valid_revision(revision string) bool {
+	if revision.len != 40 && revision.len != 64 {
+		return false
+	}
+	for c in revision.bytes() {
+		if !(c >= `0` && c <= `9`) && !(c >= `a` && c <= `f`) && !(c >= `A` && c <= `F`) {
+			return false
+		}
+	}
+	return true
+}
+
 fn community_plugin_safe_source(source string) bool {
 	if !source.starts_with('https://') || source.contains('@') || source.contains('?')
 		|| source.contains('#') || source.contains('\\') || source.contains('..') {
@@ -150,8 +162,16 @@ pub fn community_plugin_install_report(opts CommunityPluginOptions) CommandResul
 		os.rmdir_all(stage) or {}
 		return fail_result('plugin install', 'git clone failed: ${clone.output}')
 	}
-	revision_result := run_exec(ExecSpec{ prog: git, args: ['-C', stage, 'rev-parse', 'HEAD'], timeout_sec: 10 })
-	revision := if revision_result.ok { revision_result.output.trim_space() } else { '' }
+	revision_result := run_exec(ExecSpec{
+		prog:        git
+		args:        ['-C', stage, 'rev-parse', '--verify', 'HEAD^{commit}']
+		timeout_sec: 10
+	})
+	revision := revision_result.output.trim_space()
+	if !revision_result.ok || !community_plugin_valid_revision(revision) {
+		os.rmdir_all(stage) or {}
+		return fail_result('plugin install', 'cannot record a valid Git commit for the staged plugin; refusing to install unpinned data')
+	}
 	if os.is_dir(os.join_path(stage, '.git')) {
 		os.rmdir_all(os.join_path(stage, '.git')) or {
 			os.rmdir_all(stage) or {}

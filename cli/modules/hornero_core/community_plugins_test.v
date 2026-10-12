@@ -21,7 +21,7 @@ fn community_plugins_test_restore(saved map[string]string) {
 
 fn community_plugins_test_env() map[string]string {
 	keys := ['XDG_DATA_HOME', 'XDG_STATE_HOME', 'HORNERO_PLUGIN_VALIDATOR', 'HORNERO_GIT_BIN',
-		'HORNERO_TEST_PLUGIN_SOURCE']
+		'HORNERO_TEST_PLUGIN_SOURCE', 'HORNERO_TEST_REVISION']
 	mut saved := map[string]string{}
 	for key in keys { saved[key] = os.getenv(key) }
 	os.setenv('XDG_DATA_HOME', '${community_plugins_test_root}/data', true)
@@ -51,7 +51,7 @@ fn test_community_plugin_install_validate_list_remove_round_trip() {
 	validator := '${community_plugins_test_root}/validator'
 	git := '${community_plugins_test_root}/git'
 	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
-	community_plugins_test_write_executable(git, '#!/usr/bin/env python3\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nif "clone" in args:\n dst=pathlib.Path(args[-1]); shutil.copytree(os.environ["HORNERO_TEST_PLUGIN_SOURCE"], dst); (dst/".git").mkdir()\nelif "rev-parse" in args:\n print("0123456789abcdef")\nelse:\n raise SystemExit(2)\n')
+	community_plugins_test_write_executable(git, '#!/usr/bin/env python3\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nif "clone" in args:\n dst=pathlib.Path(args[-1]); shutil.copytree(os.environ["HORNERO_TEST_PLUGIN_SOURCE"], dst); (dst/".git").mkdir()\nelif "rev-parse" in args:\n revision=os.environ.get("HORNERO_TEST_REVISION", "0123456789abcdef0123456789abcdef01234567")\n if revision == "fail": raise SystemExit(1)\n print(revision)\nelse:\n raise SystemExit(2)\n')
 	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
 	os.setenv('HORNERO_GIT_BIN', git, true)
 	os.setenv('HORNERO_TEST_PLUGIN_SOURCE', fixture, true)
@@ -78,7 +78,7 @@ fn test_community_plugin_rejected_by_validator_is_not_installed() {
 	validator := '${community_plugins_test_root}/validator'
 	git := '${community_plugins_test_root}/git'
 	community_plugins_test_write_executable(validator, '#!/bin/sh\necho contract violation >&2\nexit 1\n')
-	community_plugins_test_write_executable(git, '#!/usr/bin/env python3\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nif "clone" in args:\n dst=pathlib.Path(args[-1]); shutil.copytree(os.environ["HORNERO_TEST_PLUGIN_SOURCE"], dst); (dst/".git").mkdir()\nelif "rev-parse" in args:\n print("0123456789abcdef")\n')
+	community_plugins_test_write_executable(git, '#!/usr/bin/env python3\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nif "clone" in args:\n dst=pathlib.Path(args[-1]); shutil.copytree(os.environ["HORNERO_TEST_PLUGIN_SOURCE"], dst); (dst/".git").mkdir()\nelif "rev-parse" in args:\n print("0123456789abcdef0123456789abcdef01234567")\n')
 	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
 	os.setenv('HORNERO_GIT_BIN', git, true)
 	os.setenv('HORNERO_TEST_PLUGIN_SOURCE', fixture, true)
@@ -89,6 +89,31 @@ fn test_community_plugin_rejected_by_validator_is_not_installed() {
 	assert !r.ok
 	assert r.message.contains('contract violation')
 	assert !os.exists('${community_plugins_test_root}/data/hornero/plugins/example-clock')
+	community_plugins_test_restore(saved)
+	os.rmdir_all(community_plugins_test_root) or {}
+}
+
+fn test_community_plugin_install_refuses_missing_or_invalid_commit_revision() {
+	community_plugins_test_reset()
+	saved := community_plugins_test_env()
+	fixture := community_plugins_test_fixture()
+	validator := '${community_plugins_test_root}/validator'
+	git := '${community_plugins_test_root}/git'
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	community_plugins_test_write_executable(git, '#!/usr/bin/env python3\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nif "clone" in args:\n dst=pathlib.Path(args[-1]); shutil.copytree(os.environ["HORNERO_TEST_PLUGIN_SOURCE"], dst); (dst/".git").mkdir()\nelif "rev-parse" in args:\n revision=os.environ.get("HORNERO_TEST_REVISION", "fail")\n if revision == "fail": raise SystemExit(1)\n print(revision)\nelse:\n raise SystemExit(2)\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	os.setenv('HORNERO_GIT_BIN', git, true)
+	os.setenv('HORNERO_TEST_PLUGIN_SOURCE', fixture, true)
+	for revision in ['fail', 'not-a-commit'] {
+		os.setenv('HORNERO_TEST_REVISION', revision, true)
+		result := community_plugin_install_report(CommunityPluginOptions{
+			value: 'https://example.invalid/community/example-clock.git'
+			yes:   true
+		})
+		assert !result.ok
+		assert result.message.contains('valid Git commit')
+		assert !os.exists('${community_plugins_test_root}/data/hornero/plugins/example-clock')
+	}
 	community_plugins_test_restore(saved)
 	os.rmdir_all(community_plugins_test_root) or {}
 }
