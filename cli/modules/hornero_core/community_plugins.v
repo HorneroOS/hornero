@@ -4,6 +4,13 @@ import os
 import time
 import x.json2
 
+#flag linux -D_GNU_SOURCE
+#include <errno.h>
+#include <sys/stat.h>
+
+fn C.renameat2(oldfd int, oldpath &char, newfd int, newpath &char, flags u32) int
+fn C.lstat(path &char, metadata voidptr) int
+
 pub struct CommunityPluginOptions {
 pub:
 	value   string
@@ -225,6 +232,107 @@ pub fn community_plugin_install_report(opts CommunityPluginOptions) CommandResul
 		'path':     destination
 		'revision': revision
 	})
+}
+
+// community_plugin_new_report creates a reviewable static package scaffold.
+// It deliberately does not install or load the generated QML.
+pub fn community_plugin_new_report(opts CommunityPluginOptions, name string, author string, description string, license string, output_dir string) CommandResult {
+	if opts.value.len == 0 || !community_plugin_valid_id(opts.value) {
+		return fail_result('plugin new', 'plugin id must use lowercase letters, digits, and internal hyphens (1–48 characters)')
+	}
+	if name.trim_space().len == 0 || name.len > 64 || author.trim_space().len == 0 || author.len > 120
+		|| description.trim_space().len == 0 || description.len > 280 {
+		return fail_result('plugin new', 'name, author, and description must be non-empty and within the manifest limits')
+	}
+	if license != 'MIT' {
+		return fail_result('plugin new', 'only the MIT license text is generated; other licenses must be added manually')
+	}
+	if output_dir.trim_space().len == 0 {
+		return fail_result('plugin new', 'missing output directory.\nExample: horneroctl plugin new example-clock --name "Example Clock" --author "Your Name" --description "A clock widget" --license MIT --dir ./example-clock --dry-run')
+	}
+	path := os.abs_path(output_dir)
+	if community_plugin_path_occupied(path) {
+		return fail_result('plugin new', 'output path already exists; refusing to overwrite: ${path}')
+	}
+	parent := os.dir(path)
+	if !os.is_dir(parent) {
+		return fail_result('plugin new', 'output parent directory does not exist: ${parent}')
+	}
+	if opts.dry_run {
+		return ok_result('plugin new', 'would create an inert plugin scaffold at ${path}; no files were written or loaded', {
+			'dry_run': 'true'
+			'id':      opts.value
+			'path':    path
+		})
+	}
+	if !opts.yes {
+		return fail_result('plugin new', 'refusing to create files without --yes (preview with --dry-run).\nExample: horneroctl plugin new example-clock --name "Example Clock" --author "Your Name" --description "A clock widget" --license MIT --dir ./example-clock --yes')
+	}
+	stage := os.join_path(parent, '.${os.file_name(path)}.hornero-${os.getpid()}')
+	if os.exists(stage) {
+		return fail_result('plugin new', 'temporary scaffold path already exists: ${stage}')
+	}
+	os.mkdir(stage) or { return fail_result('plugin new', 'cannot create temporary scaffold directory: ${err.msg()}') }
+	manifest := '{\n' +
+		'  "schemaVersion": 1,\n' +
+		'  "id": ${community_plugin_json_string(opts.value)},\n' +
+		'  "name": ${community_plugin_json_string(name)},\n' +
+		'  "version": "0.1.0",\n' +
+		'  "description": ${community_plugin_json_string(description)},\n' +
+		'  "author": ${community_plugin_json_string(author)},\n' +
+		'  "license": "MIT",\n' +
+		'  "entrypoint": "Main.qml",\n' +
+		'  "files": ["Main.qml", "README.md", "LICENSE"],\n' +
+		'  "capabilities": {"processCommands": [], "networkHosts": [], "settings": {}}\n' +
+		'}\n'
+	qml := 'import QtQuick\nimport QtQuick.Controls\n\nItem {\n    id: root\n\n    implicitWidth: 240\n    implicitHeight: 64\n\n    Rectangle {\n        anchors.fill: parent\n        radius: 12\n        color: "#202127"\n        border.color: "#41434c"\n\n        Label {\n            anchors.centerIn: parent\n            text: qsTr("Plugin scaffold")\n            color: "#f0eee9"\n        }\n    }\n}\n'
+	readme := '# ${name}\n\n${description}\n\n## Package contract\n\nThis repository is a static community extension package for Hornero Shell. The current Shell does not discover or load third-party QML packages. The horneroctl plugin new command creates files only; it does not install or execute them.\n\nQuickshell QML runs with the logged-in user’s permissions and is not sandboxed. Manifest capability declarations and static validation support review; they are not enforcement or a security certification. Review every source file before running code.\n\n## Validate\n\nFrom this directory, run:\n\n```sh\nhorneroctl plugin validate .\n```\n\n## License\n\nThis package declares MIT. Keep the manifest and LICENSE file aligned if you choose a different license.\n'
+	license_text := 'MIT License\n\nCopyright (c) ${time.now().year} ${author}\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the "Software"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n'
+	for file, contents in {
+		'manifest.json': manifest
+		'Main.qml':      qml
+		'README.md':     readme
+		'LICENSE':       license_text
+	} {
+		os.write_file(os.join_path(stage, file), contents) or {
+			os.rmdir_all(stage) or {}
+			return fail_result('plugin new', 'cannot write ${file}: ${err.msg()}')
+		}
+	}
+	community_plugin_rename_noreplace(stage, path) or {
+		os.rmdir_all(stage) or {}
+		return fail_result('plugin new', 'cannot publish scaffold at ${path} without replacing an existing path: ${err.msg()}')
+	}
+	return ok_result('plugin new', 'created inert plugin scaffold at ${path}; inspect and validate it before distribution', {
+		'id':   opts.value
+		'path': path
+	})
+}
+
+fn community_plugin_path_occupied(path string) bool {
+	mut metadata := C.stat{}
+	if C.lstat(&char(path.str), &metadata) == 0 {
+		return true
+	}
+	// Read errno immediately; even constructing an error object may overwrite it.
+	return C.errno != C.ENOENT
+}
+
+fn community_plugin_rename_noreplace(source string, destination string) ! {
+	$if linux {
+		// RENAME_NOREPLACE makes publication atomic and preserves any path that
+		// appears after the preflight check. A missing kernel/libc capability
+		// fails safely rather than falling back to an overwriting rename.
+		if C.renameat2(-100, &char(source.str), -100, &char(destination.str), 1) != 0 {
+			return error(os.get_error_msg(int(C.errno)))
+		}
+	} $else {
+		return error('atomic no-replace directory publication is only supported on Linux')
+	}
+}
+
+fn community_plugin_json_string(value string) string {
+	return json2.encode(value, escape_unicode: true)
 }
 
 pub fn community_plugin_list_report() CommandResult {

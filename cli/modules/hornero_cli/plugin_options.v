@@ -6,6 +6,11 @@ pub:
 	value   string
 	dry_run bool
 	yes     bool
+	name    string
+	author  string
+	desc    string
+	license string
+	dir     string
 }
 
 pub fn parse_plugin(args []string) !PluginCmdOptions {
@@ -13,19 +18,44 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl plugin list')
 	}
 	leaf := args[0]
-	if leaf !in ['install', 'remove', 'list', 'validate'] {
+	if leaf !in ['install', 'remove', 'list', 'validate', 'new'] {
 		return error('unknown plugin subcommand: ${leaf}.\nRun: horneroctl plugin --help')
 	}
 	mut value := ''
+	mut name := ''
+	mut author := ''
+	mut desc := ''
+	mut license := ''
+	mut dir := ''
 	mut dry_run := false
 	mut yes := false
-	for arg in args[1..] {
+	mut i := 1
+	for i < args.len {
+		arg := args[i]
 		if arg == '--dry-run' {
 			dry_run = true
+			i++
 			continue
 		}
 		if arg == '--yes' {
 			yes = true
+			i++
+			continue
+		}
+		if arg in ['--name', '--author', '--description', '--license', '--dir'] {
+			if i + 1 >= args.len || args[i + 1].starts_with('--') {
+				return error('missing value for ${arg}.\nExample: horneroctl plugin new example-clock --name "Example Clock" --author "Your Name" --description "A clock widget" --license MIT --dir ./example-clock --dry-run')
+			}
+			option_value := args[i + 1]
+			match arg {
+				'--name' { name = option_value }
+				'--author' { author = option_value }
+				'--description' { desc = option_value }
+				'--license' { license = option_value }
+				'--dir' { dir = option_value }
+				else {}
+			}
+			i += 2
 			continue
 		}
 		if arg.starts_with('-') {
@@ -35,6 +65,23 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 			return error('unexpected argument: ${arg}.\nRun: horneroctl plugin --help')
 		}
 		value = arg
+		i++
+	}
+	if leaf == 'new' {
+		if value.len == 0 {
+			return error('missing plugin id.\nExample: horneroctl plugin new example-clock --name "Example Clock" --author "Your Name" --description "A clock widget" --license MIT --dir ./example-clock --dry-run')
+		}
+		if name.trim_space().len == 0 || author.trim_space().len == 0 || desc.trim_space().len == 0 || license.len == 0 || dir.len == 0 {
+			return error('plugin new requires --name, --author, --description, --license, and --dir.\nExample: horneroctl plugin new example-clock --name "Example Clock" --author "Your Name" --description "A clock widget" --license MIT --dir ./example-clock --dry-run')
+		}
+		if license != 'MIT' {
+			return error('plugin new currently generates the MIT license text only; create other license files manually and validate the package.')
+		}
+		if dry_run == yes {
+			return error('plugin new requires exactly one of --dry-run or --yes.')
+		}
+	} else if name.len > 0 || author.len > 0 || desc.len > 0 || license.len > 0 || dir.len > 0 {
+		return error('plugin metadata flags are only valid with plugin new.\nRun: horneroctl plugin new --help')
 	}
 	if leaf == 'list' && (value.len > 0 || dry_run || yes) {
 		return error('plugin list takes no arguments.\nExample: horneroctl plugin list --json')
@@ -50,5 +97,10 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		value:   value
 		dry_run: dry_run
 		yes:     yes
+		name:    name
+		author:  author
+		desc:    desc
+		license: license
+		dir:     dir
 	}
 }
