@@ -74,6 +74,10 @@ fn default_apps_terminal_default() string {
 	if terminal.len == 0 {
 		return 'Not set'
 	}
+	return default_apps_terminal_name(terminal)
+}
+
+fn default_apps_terminal_name(terminal string) string {
 	return match terminal {
 		'kitty' { 'Kitty Terminal' }
 		'alacritty' { 'Alacritty' }
@@ -184,6 +188,20 @@ pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
 	lines << ''
 	lines << 'XDG Terminal Preference  ${xdg_terminal_name}'
 	data['terminal_xdg'] = if xdg_terminal.len == 0 { 'Not set' } else { xdg_terminal }
+	shell_terminal := shell_terminal_id()
+	shell_terminal_name := if shell_terminal == 'Invalid shell.json' {
+		'Invalid shell.json'
+	} else if shell_terminal.len == 0 {
+		'Kitty Terminal (factory default)'
+	} else {
+		default_apps_terminal_name(shell_terminal)
+	}
+	lines << 'Hornero Shell Terminal  ${shell_terminal_name}'
+	data['terminal_shell'] = if shell_terminal.len == 0 {
+		'kitty (factory default)'
+	} else {
+		shell_terminal
+	}
 	return ok_result('config default-apps list', lines.join('\n'), data)
 }
 
