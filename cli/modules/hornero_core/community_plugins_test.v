@@ -5,6 +5,9 @@ import time
 
 fn community_plugins_test_new_root(suffix string) string {
 	root := os.join_path(os.temp_dir(), 'hornero-community-plugins-${os.getpid()}-${time.now().unix_milli()}-${suffix}')
+	if os.exists(root) {
+		panic('refusing to reuse an existing plugin test directory: ${root}')
+	}
 	os.mkdir_all(root) or { panic(err) }
 	return root
 }
@@ -48,6 +51,10 @@ fn community_plugins_test_fixture(root string) string {
 fn test_community_plugin_install_validate_list_remove_round_trip() {
 	root := community_plugins_test_new_root('round-trip')
 	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
 	fixture := community_plugins_test_fixture(root)
 	validator := os.join_path(root, 'validator')
 	git := os.join_path(root, 'git')
@@ -68,13 +75,15 @@ fn test_community_plugin_install_validate_list_remove_round_trip() {
 	assert removed.ok, removed.message
 	assert !os.exists('${root}/data/hornero/plugins/example-clock')
 	assert !os.exists('${root}/state/hornero/plugins/receipts/example-clock.json')
-	community_plugins_test_restore(saved)
-	os.rmdir_all(root) or {}
 }
 
 fn test_community_plugin_rejected_by_validator_is_not_installed() {
 	root := community_plugins_test_new_root('validator-reject')
 	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
 	fixture := community_plugins_test_fixture(root)
 	validator := os.join_path(root, 'validator')
 	git := os.join_path(root, 'git')
@@ -90,13 +99,15 @@ fn test_community_plugin_rejected_by_validator_is_not_installed() {
 	assert !r.ok
 	assert r.message.contains('contract violation')
 	assert !os.exists('${root}/data/hornero/plugins/example-clock')
-	community_plugins_test_restore(saved)
-	os.rmdir_all(root) or {}
 }
 
 fn test_community_plugin_install_refuses_missing_or_invalid_commit_revision() {
 	root := community_plugins_test_new_root('revision-reject')
 	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
 	fixture := community_plugins_test_fixture(root)
 	validator := os.join_path(root, 'validator')
 	git := os.join_path(root, 'git')
@@ -115,8 +126,6 @@ fn test_community_plugin_install_refuses_missing_or_invalid_commit_revision() {
 		assert result.message.contains('valid Git commit')
 		assert !os.exists('${root}/data/hornero/plugins/example-clock')
 	}
-	community_plugins_test_restore(saved)
-	os.rmdir_all(root) or {}
 }
 
 fn test_community_plugin_mutations_require_yes_and_sources_are_restricted() {
