@@ -144,7 +144,7 @@ fn test_community_plugin_new_writes_complete_mit_scaffold_and_refuses_overwrite(
 	defer {
 		os.rmdir_all(base) or {}
 	}
-	destination := os.join_path(base, 'example-clock')
+	destination := os.join_path(base, 'custom-location')
 	preview := community_plugin_new_report(CommunityPluginOptions{
 		value:   'example-clock'
 		dry_run: true
@@ -167,11 +167,49 @@ fn test_community_plugin_new_writes_complete_mit_scaffold_and_refuses_overwrite(
 	assert manifest.contains('example-clock')
 	assert manifest.contains('MIT')
 	assert manifest.contains('Main.qml')
+	readme := os.read_file(os.join_path(destination, 'README.md')) or { '' }
+	assert readme.contains('horneroctl plugin validate .')
+	assert !readme.contains('horneroctl plugin validate ./example-clock')
 	assert os.read_file(os.join_path(destination, 'LICENSE')) or { '' }.contains('MIT License')
 	assert !community_plugin_new_report(CommunityPluginOptions{
 		value: 'example-clock'
 		yes:   true
 	}, 'Example Clock', 'Your Name', 'A clock widget', 'MIT', destination).ok
+}
+
+fn test_community_plugin_new_refuses_dangling_symlink_destination() {
+	base := community_plugins_test_new_root('dangling-destination')
+	defer {
+		os.rmdir_all(base) or {}
+	}
+	destination := os.join_path(base, 'occupied')
+	os.symlink(os.join_path(base, 'missing-target'), destination) or { panic(err) }
+	assert community_plugin_path_occupied(destination)
+	result := community_plugin_new_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	}, 'Example Clock', 'Your Name', 'A clock widget', 'MIT', destination)
+	assert !result.ok
+	assert os.is_link(destination)
+	assert !os.exists(os.join_path(base, 'missing-target'))
+}
+
+fn test_community_plugin_publish_never_replaces_existing_directory() {
+	base := community_plugins_test_new_root('no-replace-publish')
+	defer {
+		os.rmdir_all(base) or {}
+	}
+	source := os.join_path(base, 'staged')
+	destination := os.join_path(base, 'destination')
+	os.mkdir(source) or { panic(err) }
+	os.write_file(os.join_path(source, 'owned.txt'), 'staged') or { panic(err) }
+	os.mkdir(destination) or { panic(err) }
+	os.write_file(os.join_path(destination, 'keep.txt'), 'preserve') or { panic(err) }
+	mut refused := false
+	community_plugin_rename_noreplace(source, destination) or { refused = true }
+	assert refused
+	assert os.read_file(os.join_path(destination, 'keep.txt')) or { '' } == 'preserve'
+	assert os.is_file(os.join_path(source, 'owned.txt'))
 }
 
 fn test_community_plugin_new_validates_license_metadata_and_output_parent() {
