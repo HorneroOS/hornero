@@ -5,8 +5,11 @@ import time
 import x.json2
 
 #flag linux -D_GNU_SOURCE
+#include <errno.h>
+#include <sys/stat.h>
 
 fn C.renameat2(oldfd int, oldpath &char, newfd int, newpath &char, flags u32) int
+fn C.lstat(path &char, metadata voidptr) int
 
 pub struct CommunityPluginOptions {
 pub:
@@ -307,12 +310,12 @@ pub fn community_plugin_new_report(opts CommunityPluginOptions, name string, aut
 }
 
 fn community_plugin_path_occupied(path string) bool {
-	os.lstat(path) or {
-		// Fail closed for every error except a missing path; unlike exists(),
-		// lstat sees dangling symlinks as occupied paths.
-		return C.errno != C.ENOENT
+	mut metadata := C.stat{}
+	if C.lstat(&char(path.str), &metadata) == 0 {
+		return true
 	}
-	return true
+	// Read errno immediately; even constructing an error object may overwrite it.
+	return C.errno != C.ENOENT
 }
 
 fn community_plugin_rename_noreplace(source string, destination string) ! {
