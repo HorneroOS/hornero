@@ -522,11 +522,14 @@ fn test_package_updates_fail_loudly_when_aur_helper_fails() {
 }
 
 fn test_backup_list_reads_materialized_archives() {
-	os.mkdir_all('${b1_root}/backups') or { assert false }
-	b1_write('${b1_root}/backups/hornero-config_01.tar.gz', 'fake-archive-a')
-	b1_write('${b1_root}/backups/hornero-config_02.tar.gz', 'fake-archive-b-longer')
-	b1_write('${b1_root}/backups/notes.txt', 'not a backup')
-	os.setenv('HORNERO_BACKUP_DIR', '${b1_root}/backups', true)
+	// Isolate this list fixture from archives left by other tests or prior runs.
+	backup_dir := '${b1_root}/backup-list'
+	os.rmdir_all(backup_dir) or {}
+	os.mkdir_all(backup_dir) or { assert false }
+	b1_write('${backup_dir}/hornero-config_01.tar.gz', 'fake-archive-a')
+	b1_write('${backup_dir}/hornero-config_02.tar.gz', 'fake-archive-b-longer')
+	b1_write('${backup_dir}/notes.txt', 'not a backup')
+	os.setenv('HORNERO_BACKUP_DIR', backup_dir, true)
 	backups := list_backups() or {
 		assert false
 		return
@@ -539,6 +542,7 @@ fn test_backup_list_reads_materialized_archives() {
 	assert r.data['count'] == '2'
 	assert r.message.contains('2 backup(s)')
 	os.unsetenv('HORNERO_BACKUP_DIR')
+	os.rmdir_all(backup_dir) or {}
 }
 
 fn test_backup_list_missing_dir_fails_cleanly() {

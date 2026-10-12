@@ -96,6 +96,13 @@ fn test_dispatch_shell_status_codes() {
 	assert code == 0
 }
 
+fn test_dispatch_unknown_shell_preset_is_usage_error() {
+	old_presets := os.getenv('HORNERO_PRESETS_DIR')
+	os.setenv('HORNERO_PRESETS_DIR', '/nonexistent-presets-hornero-test', true)
+	assert dispatch(['horneroctl', 'shell', 'preset', 'apply', 'hornero-lft', '--dry-run']) == 2
+	os.setenv('HORNERO_PRESETS_DIR', old_presets, true)
+}
+
 fn test_dispatch_shell_ipc_dry_run() {
 	code := dispatch(['horneroctl', 'shell', 'ipc', '--dry-run', '--', 'show'])
 	assert code == 0
