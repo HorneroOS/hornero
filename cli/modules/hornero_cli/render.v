@@ -34,17 +34,23 @@ pub fn render_error(err hornero_core.DomainError, mode hornero_core.RenderMode) 
 	match mode {
 		.quiet {}
 		.json {
-			println(json2.encode({
-				'ok':      'false'
-				'code':    err.code
-				'message': err.message
-			},
-				escape_unicode: true
-			))
+			println(error_json(err))
 		}
 		.human {
 			eprintln(err.message)
 		}
 	}
 	return err.exit_code()
+}
+
+// error_json keeps error envelopes aligned with the typed JSON success
+// envelope: `ok` is a JSON boolean, not the string "false".
+pub fn error_json(err hornero_core.DomainError) string {
+	return json2.encode({
+		'ok':      json2.Any(false)
+		'code':    json2.Any(err.code)
+		'message': json2.Any(err.message)
+	},
+		escape_unicode: true
+	)
 }
