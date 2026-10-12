@@ -20,7 +20,7 @@ components:
     ref: main
     sha: 6abfa29e5ca52c30fbbe6272cb52de086f8259d8
     status: pinned
-    subject: "fix(bar): guard tray menus during model updates"
+    subject: "Merge pull request #174 from HorneroOS/fix/tray-menu-null-entry-guards"
     notes: Desktop shell / Quickshell UX and the packaged static plugin contract validator.
   config:
     repo: https://github.com/HorneroOS/config
