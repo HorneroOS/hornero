@@ -6,8 +6,8 @@ edition and package-set source of truth is [`../editions/catalogue.yaml`](../edi
 
 ## Files
 
-- `base.yaml`, `desktop.yaml`, `developer.yaml` — release-era composition
-  profiles referenced by the frozen Preview 14 release record.
+- `base.yaml`, `desktop.yaml`, `developer.yaml` — composition profiles
+  referenced by the current candidate and its corresponding release record.
 
 ## Rules
 
