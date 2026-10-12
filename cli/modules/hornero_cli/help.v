@@ -523,8 +523,11 @@ Examples:
 Update sources: checkupdates on PATH for repository packages and
 yay -Qua (or paru -Qua) for AUR packages when an AUR helper is installed.
 Set HORNERO_CHECKUPDATES_BIN or HORNERO_AUR_HELPER_BIN to override either
-backend. AUR checks are read-only and time out after 30 seconds; without a
-helper, repository results remain available and AUR status is marked unchecked.
+backend. `pacman-conf` reports configured IgnorePkg and IgnoreGroup patterns;
+set HORNERO_PACMAN_CONF_BIN to override that read-only source. AUR checks are read-only
+and time out after 30 seconds; without a helper, repository results remain
+available and AUR status is marked unchecked. Missing pacman-conf is
+reported as unavailable, never as an empty ignore list.
 Upgrade runs
 `pkexec pacman -Syu` (HORNERO_PKEXEC_BIN/HORNERO_PACMAN_BIN);
 without pkexec it fails with guidance: installs need polkit.

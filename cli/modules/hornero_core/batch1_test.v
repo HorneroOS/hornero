@@ -362,10 +362,80 @@ fn test_package_updates_counts_backend_lines() {
 	assert c.message.contains('pkg-a')
 	u := package_updates_report(PackageCheckOptions{})
 	assert u.ok
-	assert u.message == '3 repository update(s) pending; AUR updates were not checked (install yay or paru)'
+	assert u.message == '3 repository update(s) pending; AUR updates were not checked (install yay or paru); Pacman ignored updates: not checked (pacman-conf unavailable)'
 	assert u.data['count'] == '3'
+	assert u.data['ignored_status'] == 'unavailable'
+	assert u.data['ignored_package_count'] == ''
 	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
 	os.setenv('PATH', old_path, true)
+}
+
+fn test_package_updates_report_resolved_pacman_ignore_patterns() {
+	root := b1_package_root('pacman-ignores')
+	os.rmdir_all(root) or {}
+	old_path := os.getenv('PATH')
+	defer {
+		os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+		os.unsetenv('HORNERO_AUR_HELPER_BIN')
+		os.unsetenv('HORNERO_PACMAN_CONF_BIN')
+		os.setenv('PATH', old_path, true)
+		os.rmdir_all(root) or {}
+	}
+	b1_setup_timeout(root)
+	checkupdates := '${root}/bin/checkupdates'
+	pacman_conf := '${root}/bin/pacman-conf'
+	b1_write(checkupdates, '#!/bin/sh\nprintf "linux 1.0 -> 1.1\\n"')
+	b1_write(pacman_conf, '#!/bin/sh\ncase "\$1" in\n  IgnorePkg) printf "linux linux-lts\\n" ;;\n  IgnoreGroup) printf "gnome\\n" ;;\n  *) exit 4 ;;\nesac\n')
+	os.chmod(checkupdates, 0o755) or { assert false }
+	os.chmod(pacman_conf, 0o755) or { assert false }
+	os.setenv('PATH', '${root}/bin', true)
+	os.setenv('HORNERO_CHECKUPDATES_BIN', checkupdates, true)
+	os.setenv('HORNERO_PACMAN_CONF_BIN', pacman_conf, true)
+	os.unsetenv('HORNERO_AUR_HELPER_BIN')
+	c := package_check_report(PackageCheckOptions{})
+	assert c.ok, c.message
+	assert c.data['ignored_status'] == 'checked'
+	assert c.data['ignored_package_count'] == '2'
+	assert c.data['ignored_group_count'] == '1'
+	assert c.data['ignored_package_patterns'] == 'linux, linux-lts'
+	assert c.data['ignored_group_patterns'] == 'gnome'
+	assert c.message.contains('IgnorePkg: linux, linux-lts')
+	assert c.message.contains('IgnoreGroup: gnome')
+	u := package_updates_report(PackageCheckOptions{})
+	assert u.ok, u.message
+	assert u.message.contains('Pacman ignored upgrade patterns')
+}
+
+fn test_package_updates_dry_run_never_executes_pacman_conf() {
+	root := b1_package_root('pacman-ignores-dry-run')
+	os.rmdir_all(root) or {}
+	old_path := os.getenv('PATH')
+	defer {
+		os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+		os.unsetenv('HORNERO_AUR_HELPER_BIN')
+		os.unsetenv('HORNERO_PACMAN_CONF_BIN')
+		os.setenv('PATH', old_path, true)
+		os.rmdir_all(root) or {}
+	}
+	b1_setup_timeout(root)
+	checkupdates := '${root}/bin/checkupdates'
+	pacman_conf := '${root}/bin/pacman-conf'
+	marker := '${root}/ran'
+	b1_write(checkupdates, '#!/bin/sh\nexit 0\n')
+	b1_write(pacman_conf, '#!/bin/sh\nprintf "ran\\n" >> "${marker}"\n')
+	os.chmod(checkupdates, 0o755) or { assert false }
+	os.chmod(pacman_conf, 0o755) or { assert false }
+	os.setenv('PATH', '${root}/bin', true)
+	os.setenv('HORNERO_CHECKUPDATES_BIN', checkupdates, true)
+	os.setenv('HORNERO_PACMAN_CONF_BIN', pacman_conf, true)
+	r := package_updates_report(PackageCheckOptions{
+		dry_run: true
+	})
+	assert r.ok, r.message
+	assert r.data['ignored_status'] == 'planned'
+	assert r.data['ignored_package_count'] == ''
+	assert r.data['ignored_group_count'] == ''
+	assert !os.exists(marker), 'pacman-conf executed during dry-run'
 }
 
 fn test_aur_helper_resolution_prefers_yay_then_falls_back_to_paru() {
@@ -417,7 +487,7 @@ fn test_package_updates_include_read_only_aur_helper_results() {
 	assert c.message.contains('hornero-shell 1.2.4-1 -> 1.2.5-1')
 	u := package_updates_report(PackageCheckOptions{})
 	assert u.ok
-	assert u.message == '1 repository update(s), 2 AUR update(s) pending'
+	assert u.message == '1 repository update(s), 2 AUR update(s) pending; Pacman ignored updates: not checked (pacman-conf unavailable)'
 	assert u.data['count'] == '3'
 	assert u.data['aur_helper'] == yay
 	os.unsetenv('HORNERO_CHECKUPDATES_BIN')
