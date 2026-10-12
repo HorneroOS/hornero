@@ -936,6 +936,7 @@ pub fn smart_file_outputs(dir string) map[string]string {
 		'colors-waybar.css':    os.join_path(dir, 'colors-waybar.css')
 		'colors-mako.conf':     os.join_path(dir, 'colors-mako.conf')
 		'colors-hyprland.conf': os.join_path(dir, 'colors-hyprland.conf')
+		'colors-hyprland.lua':  os.join_path(dir, 'colors-hyprland.lua')
 		'colors-wlogout.css':   os.join_path(dir, 'colors-wlogout.css')
 		'colors-copyq.ini':     os.join_path(dir, 'colors-copyq.ini')
 		'colors-hyprlock.env':  os.join_path(dir, 'colors-hyprlock.env')
@@ -957,7 +958,7 @@ pub fn colors_generate_native(with_m3 bool, dry_run bool) CommandResult {
 		xr_line := strict_command_line(if xrdb.len > 0 { xrdb } else { 'xrdb' }, [
 			'-query',
 		])
-		mut lines := ['would run: ${xr_line}', 'would run: write 12 smart-color files to ${dir}']
+		mut lines := ['would run: ${xr_line}', 'would run: write 13 smart-color files to ${dir}']
 		if with_m3 {
 			m3 := run_m3_synthesis('<wallpaper>', os.join_path(dir, 'scheme.json'), 'tonal-spot',
 				'dark', read_accent_override(), true) or {
@@ -989,6 +990,7 @@ pub fn colors_generate_native(with_m3 bool, dry_run bool) CommandResult {
 		'colors-waybar.css':    render_waybar(sp)
 		'colors-mako.conf':     render_mako(sp)
 		'colors-hyprland.conf': render_hyprland(sp)
+		'colors-hyprland.lua':  render_hyprland_lua(sp)
 		'colors-wlogout.css':   render_wlogout(sp)
 		'colors-copyq.ini':     render_copyq(sp)
 		'colors-hyprlock.env':  hypr_env
