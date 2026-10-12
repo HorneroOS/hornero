@@ -18,16 +18,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: e02a65be88a81fec61bd6520a3937e4bf7de3d0c
+    sha: 4ef16d9cb148651d6a5401b68264d6dc41b4efc2
     status: pinned
-    subject: "fix(lock): require Quickshell 0.3.2 acquisition guard (#167)"
+    subject: "docs: date UX baseline and record follow-up status (#171)"
     notes: Desktop shell / Quickshell UX and the packaged static plugin contract validator.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 1dbb041fa31f84c20c67533aa719f60954087e0b
+    sha: 4ef767d13ca1474031c1ac7c034c4639ea9dadb8
     status: pinned
-    subject: "fix(config): pin AUR source to verified release commit (#72)"
+    subject: "fix(config): keep dynamic terminal cursors readable (#73)"
     notes: Reusable desktop and system defaults.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
