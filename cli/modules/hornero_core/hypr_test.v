@@ -34,6 +34,7 @@ fn hypr_test_keys() []string {
 fn hypr_test_setup() {
 	os.mkdir_all(hx_hypr_root + '/config/hypr/hyprland.conf.d') or { assert false }
 	os.rm(hx_hypr_root + '/config/hypr/hyprland.lua') or {}
+	os.rm(hx_hypr_root + '/hyprctl-calls') or {}
 	os.write_file(hx_hypr_root + '/config/hypr/hyprland.conf.d/animations.conf', 'bezier = easeOut, 0.22, 1, 0.36, 1\nanimation = windows, 1, 3, easeOut\n') or {
 		assert false
 	}
