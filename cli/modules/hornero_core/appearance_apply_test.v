@@ -330,8 +330,9 @@ fn test_wallpaper_reload_dry_run() {
 
 fn test_smart_file_outputs_count() {
 	m := smart_file_outputs('/d')
-	assert m.len == 12
+	assert m.len == 13
 	assert m['current.env'] == '/d/current.env'
+	assert m['colors-hyprland.lua'] == '/d/colors-hyprland.lua'
 }
 
 // Regression (experience baseline §5.4): the shell-IPC fast path of

@@ -18,9 +18,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 4ef16d9cb148651d6a5401b68264d6dc41b4efc2
+    sha: 6abfa29e5ca52c30fbbe6272cb52de086f8259d8
     status: pinned
-    subject: "docs: date UX baseline and record follow-up status (#171)"
+    subject: "Merge pull request #174 from HorneroOS/fix/tray-menu-null-entry-guards"
     notes: Desktop shell / Quickshell UX and the packaged static plugin contract validator.
   config:
     repo: https://github.com/HorneroOS/config

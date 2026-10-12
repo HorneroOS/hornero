@@ -188,6 +188,13 @@ fn test_render_scss_spots() {
 	hypr := render_hyprland(p)
 	assert hypr.contains('col.active_border = rgba(9d33b0ee) rgba(9d33b0ee) 45deg')
 	assert hypr.contains('col.border_locked_inactive')
+	hypr_lua := render_hyprland_lua(p)
+	assert hypr_lua.contains('active_border = { colors = { "rgba(9d33b0ee)", "rgba(9d33b0ee)" }, angle = 45 }')
+	assert hypr_lua.contains('border_locked_inactive = "rgba(414868aa)"')
+	assert hypr_lua.contains('groupbar = {\n            col = {')
+	assert hypr_lua.contains('locked_active = "rgba(e22b6bee)"')
+	assert !hypr_lua.contains('general {')
+	assert smart_hyprland_rgba('ff0000\" } })\nmalicious = true --', 'ee', 'e07856') == 'rgba(e07856ee)'
 	wlogout := render_wlogout(p)
 	assert wlogout.contains('@define-color wlogout-bg #1a1b26;')
 	henv := render_hyprlock_env(p)
