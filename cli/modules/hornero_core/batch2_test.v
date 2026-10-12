@@ -47,7 +47,11 @@ fn test_default_apps_list_runs_native() {
 	// must stay unused (a fake desktop id proves it: no .desktop file
 	// exists for it, and the id itself is reported).
 	b2_setup_backends()
+	old_path := os.getenv('PATH')
+	os.setenv('PATH', '${b2_root}/bin', true)
 	b2_write('${b2_root}/bin/handlr', '#!/bin/sh\necho "hx-test-fake-12345.desktop"\nexit 0\n')
+	b2_write('${b2_root}/bin/kitty', '#!/bin/sh\nexit 0\n')
+	b2_write('${b2_root}/bin/ghostty', '#!/bin/sh\nexit 0\n')
 	os.setenv('HORNERO_HANDLR_BIN', '${b2_root}/bin/handlr', true)
 	b2_write('${b2_root}/config/xfce4/helpers.rc', 'TerminalEmulator=kitty\n')
 	b2_write('${b2_root}/config/xdg-terminals.list', '# default\nkitty.desktop\nAlacritty.desktop\n')
@@ -62,6 +66,8 @@ fn test_default_apps_list_runs_native() {
 	assert r.data['terminal_xdg'] == 'kitty.desktop'
 	assert r.message.contains('XDG Terminal Preference  Kitty Terminal')
 	assert r.data['terminal_shell'] == 'kitty'
+	assert r.data['terminal_shell_id'] == 'kitty'
+	assert r.data['terminals_available'] == 'kitty,ghostty'
 	assert r.message.contains('Hornero Shell Terminal  Kitty Terminal')
 	assert r.data['web-browser'] == 'hx-test-fake-12345.desktop'
 	b2_write('${b2_root}/config/xfce4/helpers.rc', 'TerminalEmulator=ghostty\n')
@@ -72,6 +78,7 @@ fn test_default_apps_list_runs_native() {
 	assert ghostty.data['terminal_shell'] == 'kitty'
 	os.unsetenv('HORNERO_HANDLR_BIN')
 	os.unsetenv('XDG_CONFIG_HOME')
+	os.setenv('PATH', old_path, true)
 	b2_teardown_backends()
 }
 
@@ -86,13 +93,15 @@ fn test_default_apps_list_dry_run_needs_no_backend() {
 	os.unsetenv('HORNERO_DEFAULT_APPS_BIN')
 }
 
-fn test_default_apps_list_missing_handlr_fails_cleanly() {
+fn test_default_apps_list_reports_terminal_when_handlr_is_missing() {
 	old_home, old_path := b2_isolate_resolution()
 	os.unsetenv('HORNERO_HANDLR_BIN')
 	r := default_apps_list_report(DefaultAppsListOptions{})
 	assert r.command == 'config default-apps list'
-	assert !r.ok
-	assert r.message.contains('HORNERO_HANDLR_BIN')
+	assert r.ok
+	assert r.message.contains('Unavailable (handlr not found)')
+	assert r.data['terminal_shell_id'] == 'kitty'
+	assert r.data['terminals_available'] == ''
 	b2_restore_resolution(old_home, old_path)
 }
 
