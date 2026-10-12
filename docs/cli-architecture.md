@@ -42,7 +42,10 @@ results use `CommandResult` so human and machine output share the same status.
 Snapshot archives contain only the Hornero configuration roots and are stored
 in the Hornero data catalogue. Backups archive only the explicit Hornero
 configuration directory. Neither operation traverses or packages the whole
-home directory.
+home directory. They are configuration recovery tools, not OS snapshots.
+`package upgrade` is a full `pacman -Syu` transaction and does not hold the
+kernel or provide rollback. See [update and recovery boundaries](UPDATE_RECOVERY.md)
+before describing either operation as a system update or rollback feature.
 
 ## Validation
 
