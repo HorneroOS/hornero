@@ -19,6 +19,7 @@ Commands:
   power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
   lock          Screen lock (now, status)
   hypr          Hyprland controls (animations, layout, monitors, workspace, plugins)
+  plugin        Community Shell plugin packages (install, remove, list, validate)
   hardware      Hardware controls (brightness, battery, mic, keyboard, network)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
@@ -81,6 +82,31 @@ Examples:
 		}
 		'system info' {
 			return 'Usage: horneroctl system info [--json|--quiet]\n\nReport the installed edition, its package-set composition, configured compositor and maturity, the source revision, and the compositor active in this session. If this installation has no profile record, the command says so explicitly.\n\nExamples:\n  horneroctl system info\n  horneroctl system info --json\n'
+		}
+		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate' {
+			return 'Usage: horneroctl plugin <install|remove|list|validate> [value] [options]
+
+  install <https-url> [--dry-run|--yes]
+                      Validate and install an inert community plugin package
+  remove <id> [--dry-run|--yes]
+                      Remove only a package owned by a Hornero receipt
+  list                List receipt-owned community packages
+  validate <directory>
+                      Run the Shell-owned static contract validator
+
+Install/remove need --yes to mutate; --dry-run never clones or writes.
+Packages are stored below XDG data, with ownership receipts under XDG
+state. Installation does not load QML. Quickshell extensions are not
+sandboxed; validation is not a security certification.
+
+Examples:
+  horneroctl plugin list --json
+  horneroctl plugin validate ./my-plugin
+  horneroctl plugin install https://github.com/example/my-plugin.git --dry-run
+  horneroctl plugin install https://github.com/example/my-plugin.git --yes
+  horneroctl plugin remove example-plugin --dry-run
+  horneroctl plugin remove example-plugin --yes
+'
 		}
 		'shell' {
 			return 'Usage: horneroctl shell <status|ipc|preset|start|stop|restart|logs> [options]

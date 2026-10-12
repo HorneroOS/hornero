@@ -12,6 +12,29 @@ fn test_dispatch_help_exit_zero() {
 	assert dispatch(['horneroctl', 'doctor', '--help']) == 0
 }
 
+fn test_plugin_help_and_validation_examples() {
+	assert command_help('plugin').contains('Examples:')
+	assert command_help('plugin install').contains('horneroctl plugin install')
+	assert dispatch(['horneroctl', 'plugin', '--help']) == 0
+	assert dispatch(['horneroctl', 'plugin', 'validate', '--help']) == 0
+}
+
+fn test_plugin_parser_and_dry_run_dispatch() {
+	opts := parse_plugin(['install', 'https://github.com/example/plugin.git', '--dry-run']) or {
+		assert false, err.msg()
+		return
+	}
+	assert opts.leaf == 'install'
+	assert opts.value == 'https://github.com/example/plugin.git'
+	assert opts.dry_run
+	assert dispatch(['horneroctl', 'plugin', 'install', 'https://github.com/example/plugin.git',
+		'--dry-run']) == 0
+	assert dispatch(['horneroctl', 'plugin', 'install', 'https://user:secret@example.com/plugin.git',
+		'--dry-run']) == 1
+	assert dispatch(['horneroctl', 'plugin', 'remove', '../outside', '--dry-run']) == 1
+	assert dispatch(['horneroctl', 'plugin', 'validate', '--bogus']) == 2
+}
+
 fn test_system_help_has_machine_readable_examples() {
 	assert command_help('system').contains('Examples:')
 	assert command_help('system info').contains('horneroctl system info --json')

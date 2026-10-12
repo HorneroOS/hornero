@@ -14,7 +14,11 @@ arch=('x86_64' 'aarch64')
 url='https://github.com/HorneroOS/hornero'
 license=('MIT')
 options=('!strip')
-optdepends=('xdg-terminal-exec: launch terminals using Hornero terminal preferences')
+optdepends=(
+  'xdg-terminal-exec: launch terminals using Hornero terminal preferences'
+  'git: install community Shell plugin packages from HTTPS repositories'
+  'hornero-shell: validate community plugin packages with the Shell-owned contract checker'
+)
 source_x86_64=("horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-x86_64")
 source_aarch64=("horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-arm64")
 sha256sums_x86_64=('0000000000000000000000000000000000000000000000000000000000000000')

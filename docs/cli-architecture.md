@@ -22,6 +22,10 @@ configuration owns defaults and read-only catalogue data.
   It distinguishes the selected compositor from the active session and reports
   installations without a record as unrecorded instead of inferring a product
   edition from package coincidence.
+- `horneroctl plugin` manages community extension packages as user-owned data
+  under XDG roots, with receipts under Hornero state. Validation delegates to
+  the Shell package's contract checker. The command never activates packages:
+  Quickshell QML runs with user privileges and is not sandboxed.
 
 ## State and package data
 

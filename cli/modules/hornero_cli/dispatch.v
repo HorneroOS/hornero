@@ -20,8 +20,8 @@ import hornero_core
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
-	'power', 'lock', 'hypr', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture', 'apps',
-	'system', 'help']
+	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
+	'apps', 'system', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -109,6 +109,9 @@ pub fn dispatch(args []string) int {
 		'hypr' {
 			run_hypr(rest[1..], mode)
 		}
+		'plugin' {
+			run_plugin(rest[1..], mode)
+		}
 		'hardware' {
 			run_hardware(rest[1..], mode)
 		}
@@ -139,6 +142,32 @@ pub fn dispatch(args []string) int {
 				mode)
 		}
 	}
+}
+
+fn run_plugin(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_plugin(args) or {
+		return render_error(hornero_core.err_usage('plugin.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'list' {
+		return render(hornero_core.community_plugin_list_report(), mode)
+	}
+	if opts.leaf == 'validate' {
+		return render(hornero_core.community_plugin_validate_report(hornero_core.CommunityPluginOptions{
+			value: opts.value
+		}), mode)
+	}
+	if opts.leaf == 'install' {
+		return render(hornero_core.community_plugin_install_report(hornero_core.CommunityPluginOptions{
+			value:   opts.value
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	return render(hornero_core.community_plugin_remove_report(hornero_core.CommunityPluginOptions{
+		value:   opts.value
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
 }
 
 fn run_system(args []string, mode hornero_core.RenderMode) int {
