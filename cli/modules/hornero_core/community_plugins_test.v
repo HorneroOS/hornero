@@ -138,3 +138,49 @@ fn test_community_plugin_mutations_require_yes_and_sources_are_restricted() {
 	}).ok
 	assert !community_plugin_remove_report(CommunityPluginOptions{ value: 'example-clock' }).ok
 }
+
+fn test_community_plugin_new_writes_complete_mit_scaffold_and_refuses_overwrite() {
+	base := community_plugins_test_new_root('new-scaffold')
+	defer {
+		os.rmdir_all(base) or {}
+	}
+	destination := os.join_path(base, 'example-clock')
+	preview := community_plugin_new_report(CommunityPluginOptions{
+		value:   'example-clock'
+		dry_run: true
+	}, 'Example Clock', 'Your Name', 'A clock widget', 'MIT', destination)
+	assert preview.ok
+	assert !os.exists(destination)
+	created := community_plugin_new_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	}, 'Example Clock', 'Your Name', 'A clock widget', 'MIT', destination)
+	assert created.ok
+	assert os.is_file(os.join_path(destination, 'manifest.json'))
+	assert os.is_file(os.join_path(destination, 'Main.qml'))
+	assert os.is_file(os.join_path(destination, 'README.md'))
+	assert os.is_file(os.join_path(destination, 'LICENSE'))
+	manifest := os.read_file(os.join_path(destination, 'manifest.json')) or {
+		assert false, err.msg()
+		return
+	}
+	assert manifest.contains('example-clock')
+	assert manifest.contains('MIT')
+	assert manifest.contains('Main.qml')
+	assert os.read_file(os.join_path(destination, 'LICENSE')) or { '' }.contains('MIT License')
+	assert !community_plugin_new_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	}, 'Example Clock', 'Your Name', 'A clock widget', 'MIT', destination).ok
+}
+
+fn test_community_plugin_new_validates_license_metadata_and_output_parent() {
+	assert !community_plugin_new_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	}, 'Example Clock', 'Your Name', 'A clock widget', 'GPL-3.0', '/tmp/plugin-new').ok
+	assert !community_plugin_new_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	}, 'Example Clock', 'Your Name', 'A clock widget', 'MIT', '/tmp/no-such-parent-hornero/plugin').ok
+}
