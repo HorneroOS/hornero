@@ -133,6 +133,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Verify release commit is on main
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          git fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor \
+            "${RELEASE_SHA}" refs/remotes/origin/main; then
+            echo "Refusing to publish an AUR package from a commit outside main." >&2
+            exit 1
+          fi
       - name: Stamp pkgver and checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
