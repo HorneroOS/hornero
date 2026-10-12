@@ -136,11 +136,12 @@ fn default_apps_friendly_name(id string, app_dirs []string) string {
 // --dry-run previews the handlr probe command.
 pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
 	mut handlr := resolve_handlr_bin()
+	mut handlr_missing := false
 	if handlr.len == 0 {
 		if opts.dry_run {
 			handlr = 'handlr'
 		} else {
-			return fail_result('config default-apps list', 'handlr not found (needed for MIME lookups). Set HORNERO_HANDLR_BIN.\nExample: horneroctl config default-apps list --dry-run')
+			handlr_missing = true
 		}
 	}
 	if opts.dry_run {
@@ -160,6 +161,8 @@ pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
 		label := cat[1]
 		name := if id == 'terminal' {
 			default_apps_terminal_default()
+		} else if handlr_missing {
+			'Unavailable (handlr not found)'
 		} else {
 			rep := run_exec(ExecSpec{
 				prog: handlr
@@ -202,6 +205,18 @@ pub fn default_apps_list_report(opts DefaultAppsListOptions) CommandResult {
 	} else {
 		shell_terminal
 	}
+	data['terminal_shell_id'] = if shell_terminal.len == 0 {
+		'kitty'
+	} else {
+		shell_terminal
+	}
+	mut installed_terminals := []string{}
+	for terminal in supported_terminal_defaults {
+		if find_on_path(terminal).len > 0 {
+			installed_terminals << terminal
+		}
+	}
+	data['terminals_available'] = installed_terminals.join(',')
 	return ok_result('config default-apps list', lines.join('\n'), data)
 }
 
