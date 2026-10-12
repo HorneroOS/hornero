@@ -29,6 +29,9 @@ Run `horneroctl --help` for the installed command list and
   compositor session;
 - `lock`, `capture`, `hypr`, `hardware`, `apps`, and `welcome` for their
   corresponding platform and desktop capabilities.
+- `plugin install|remove|list|validate` for receipt-owned community Shell
+  packages, validated with the Shell-owned contract checker. Packages remain
+  inert data; this CLI does not load or sandbox third-party QML.
 
 `horneroctl system info` reads the immutable profile record installed by a
 HorneroOS installer composition. It reports the installed edition, role,
