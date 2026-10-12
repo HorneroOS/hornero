@@ -42,7 +42,11 @@ that happen to be present.
 
 `horneroctl package check` and `package updates` report repository updates
 through `checkupdates` and AUR updates through `yay -Qua` or `paru -Qua` when an
-AUR helper is available. These are system-wide package results, not a
+AUR helper is available. When `pacman-conf` is available, they also report the
+configured `IgnorePkg` and `IgnoreGroup` patterns that suppress matching
+upgrades during pacman's system-upgrade operation. The command uses
+pacman-conf's resolved configuration, including included config files; it does
+not parse pacman.conf itself. These are system-wide package results, not a
 Hornero-only update status. The AUR lane is read-only and bounded to 30 seconds;
 without a helper the CLI reports that AUR updates were not checked instead of
 presenting repository results as a complete system status. `package upgrade`

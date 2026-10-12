@@ -9,7 +9,7 @@ operating-system rollback mechanism.
 
 | Command | Reads or changes | Does not guarantee |
 | --- | --- | --- |
-| `horneroctl package check` / `package updates` | Read-only repository update checks through `checkupdates`; optionally read-only AUR checks through `yay -Qua` or `paru -Qua` | These results are not limited to Hornero-owned packages. The AUR lane is omitted when no helper is installed. |
+| `horneroctl package check` / `package updates` | Read-only repository update checks through `checkupdates`; optionally AUR checks through `yay -Qua` or `paru -Qua`; configured `IgnorePkg` and `IgnoreGroup` patterns through `pacman-conf` | These results are not limited to Hornero-owned packages. Missing AUR helpers or `pacman-conf` are reported as unchecked/unavailable, not as an empty result. |
 | `horneroctl package upgrade --yes` | Runs `pkexec pacman -Syu`, a full Arch system upgrade | It is not a Hornero-only upgrade, does not hold or exclude the kernel, does not create a system snapshot, and does not promise rollback. |
 | `horneroctl config snapshot create --yes` | Saves Hornero-owned configuration roots and package/host metadata under the user's Hornero data directory | It does not snapshot `/`, installed package files, boot entries, databases, home directories beyond the selected config roots, or kernel state. |
 | `horneroctl config snapshot restore <id> --yes` | Creates a safety config snapshot, then restores the selected Hornero configuration archive | It is a configuration restore, not an OS rollback. |
@@ -17,6 +17,14 @@ operating-system rollback mechanism.
 
 The term “snapshot” in the CLI means a **Hornero configuration snapshot**. It
 must not be presented as a Btrfs, filesystem, bootable, or system snapshot.
+
+The package check's ignore-pattern section reports the effective pacman
+`IgnorePkg` and `IgnoreGroup` values through `pacman-conf`. Pacman uses those
+patterns to skip matching upgrades during `--sysupgrade`; this is visibility
+into the configured policy, not a package hold recommendation or rollback
+mechanism. `pacman-conf` resolves included configuration files using pacman's
+own parser ([Arch pacman-conf manual](https://man.archlinux.org/man/pacman-conf.8.en),
+[pacman.conf manual](https://man.archlinux.org/man/pacman.conf.5.en)).
 
 ## Ownership boundaries
 
@@ -34,11 +42,13 @@ must not be presented as a Btrfs, filesystem, bootable, or system snapshot.
 ## Safe expectations today
 
 1. Review `horneroctl package check` before choosing an update path.
-2. Treat `horneroctl package upgrade --yes` as a full system upgrade, including
+2. The ignore-pattern report shows configured exclusions, but does not turn
+   `package upgrade` into a Hornero-owned update lane.
+3. Treat `horneroctl package upgrade --yes` as a full system upgrade, including
    any kernel package selected by the configured Arch repositories.
-3. Use a separately configured filesystem/boot recovery strategy if the host
+4. Use a separately configured filesystem/boot recovery strategy if the host
    requires system rollback. Hornero does not currently verify that strategy.
-4. Use configuration snapshots for Hornero settings only. They can help undo
+5. Use configuration snapshots for Hornero settings only. They can help undo
    a settings change but cannot recover a failed package transaction or an
    unbootable system.
 

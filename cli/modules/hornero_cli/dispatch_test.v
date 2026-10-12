@@ -47,6 +47,8 @@ fn test_package_help_documents_repository_and_aur_update_sources() {
 	assert help.contains('checkupdates')
 	assert help.contains('yay -Qua')
 	assert help.contains('paru -Qua')
+	assert help.contains('pacman-conf')
+	assert help.contains('IgnorePkg and IgnoreGroup')
 	assert help.contains('AUR checks are read-only')
 	assert help.contains('Examples:')
 }
