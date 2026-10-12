@@ -18,9 +18,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 2df8b5e590f9644726c831f51e798b569c78f165
+    sha: e02a65be88a81fec61bd6520a3937e4bf7de3d0c
     status: pinned
-    subject: "feat: package community plugin validator (#163)"
+    subject: "fix(lock): require Quickshell 0.3.2 acquisition guard (#167)"
     notes: Desktop shell / Quickshell UX and the packaged static plugin contract validator.
   config:
     repo: https://github.com/HorneroOS/config

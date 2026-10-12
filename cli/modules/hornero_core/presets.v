@@ -2,6 +2,7 @@ module hornero_core
 
 import math
 import os
+import strings
 import x.json2
 
 // Shell-preset backend: installed preset files plus the current-preset
@@ -609,20 +610,61 @@ fn preset_write_tmp(path string, content string) !string {
 // preset_owned_defaults_json.
 const preset_default_name = 'hornero-left'
 
-// preset_not_found_msg reports an unresolvable preset name with the
-// installed catalogue (or the empty-catalogue hint) for fail paths.
+// preset_suggestions ranks installed names close to a mistyped one.
+fn preset_suggestions(name string, names []string) []string {
+	lower := name.to_lower()
+	mut out := []string{}
+	for n in names {
+		candidate := n.to_lower()
+		if lower.len > 0 && (candidate.starts_with(lower) || candidate.contains(lower)
+			|| lower.contains(candidate)) {
+			out << n
+		}
+	}
+	max_dist := if lower.len / 3 > 2 { lower.len / 3 } else { 2 }
+	for dist in 1 .. max_dist + 1 {
+		for n in names {
+			if n !in out && strings.levenshtein_distance(lower, n.to_lower()) == dist {
+				out << n
+			}
+		}
+	}
+	return out
+}
+
+// preset_not_found_msg reports an unresolvable preset name with a close
+// match and the installed catalogue (or an empty-catalogue hint).
 fn preset_not_found_msg(name string) string {
 	known := list_presets() or { []PresetEntry{} }
 	mut names := []string{}
 	for p in known {
 		names << p.name
 	}
-	hint := if names.len > 0 {
-		'Available presets: ${names.join(', ')}.\nList them: horneroctl shell preset list'
-	} else {
-		'No presets installed. Set HORNERO_PRESETS_DIR.\nExample: horneroctl shell preset list --json'
+	if names.len == 0 {
+		return 'preset not found: ${name}\nNo presets installed. Set HORNERO_PRESETS_DIR.\nExample: horneroctl shell preset list --json'
 	}
-	return 'preset not found: ${name}\n${hint}'
+	mut lines := ['preset not found: ${name}']
+	close := preset_suggestions(name, names)
+	if close.len > 0 {
+		lines << 'Did you mean: ${close.join(', ')}?'
+	}
+	lines << 'Available presets: ${names.join(', ')}.'
+	example := if close.len > 0 { close[0] } else { names[0] }
+	lines << 'Example: horneroctl shell preset apply ${example} --dry-run'
+	return lines.join('\n')
+}
+
+// preset_unknown_name_error classifies a well-formed, explicitly requested
+// but unavailable name as a usage error. Recovery callers may still opt into
+// the legacy default fallback in preset_apply_report.
+pub fn preset_unknown_name_error(name string) ?DomainError {
+	if name.len == 0 || name.contains('/') || name.contains('\\') || name.contains('..') {
+		return none
+	}
+	if preset_find_file(name).len > 0 {
+		return none
+	}
+	return err_usage('shell.preset.unknown', preset_not_found_msg(name))
 }
 
 // preset_commit_config atomically writes the merged config and the
@@ -652,6 +694,9 @@ pub:
 	name    string
 	dry_run bool
 	yes     bool
+	// fallback_to_default opts into shell#46 recovery for stale pointers or
+	// other non-interactive recovery paths. Explicit CLI input never sets it.
+	fallback_to_default bool
 }
 
 // preset_apply_report implements `shell preset apply <name>`: validate the
@@ -669,14 +714,13 @@ pub fn preset_apply_report(opts PresetApplyOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell preset apply', 'refusing to apply preset ${opts.name} without --yes (preview with --dry-run).\nExample: horneroctl shell preset apply ${opts.name} --dry-run')
 	}
-	// Fallback order (shell#46): requested -> default preset ->
-	// owned-defaults safe layout. An unknown name resolves to the
-	// default with a note; only a missing default itself still fails.
+	// Explicitly requested unknown names fail without writes. Recovery callers
+	// can opt into shell#46's requested -> default -> owned-defaults chain.
 	mut target := opts.name
 	mut note := ''
 	mut preset_file := preset_find_file(target)
 	if preset_file.len == 0 {
-		if target == preset_default_name {
+		if !opts.fallback_to_default || target == preset_default_name {
 			return fail_result('shell preset apply', preset_not_found_msg(opts.name))
 		}
 		note = "unknown preset '${opts.name}', applied default '${preset_default_name}'"

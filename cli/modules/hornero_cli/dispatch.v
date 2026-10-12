@@ -234,6 +234,11 @@ fn run_shell_preset(args []string, mode hornero_core.RenderMode) int {
 		return render(hornero_core.preset_current_report(), mode)
 	}
 	if opts.leaf == 'apply' {
+		// A typed unknown name is a usage error; recovery fallbacks are not
+		// appropriate for explicit user input and must never hide a typo.
+		if uerr := hornero_core.preset_unknown_name_error(opts.name) {
+			return render_error(uerr, mode)
+		}
 		return render(hornero_core.preset_apply_report(hornero_core.PresetApplyOptions{
 			name:    opts.name
 			dry_run: opts.dry_run

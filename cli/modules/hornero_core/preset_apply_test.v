@@ -75,15 +75,33 @@ fn test_preset_apply_rejects_traversal_name() {
 	preset_test_restore(old_presets, old_marker, old_xdg)
 }
 
-// shell#46: an unknown name resolves to the default preset instead of
-// failing, with the substitution stated in the message.
-fn test_preset_apply_unknown_name_resolves_to_default() {
+// Explicitly typed unknown names fail with suggestions and make no writes.
+fn test_preset_apply_unknown_name_fails_without_writing() {
 	old_presets, old_marker, old_xdg := preset_test_isolate()
 	conf := preset_root + '/config/hornero/shell.json'
 	marker := preset_root + '/state/current-shell-preset'
 	r := preset_apply_report(PresetApplyOptions{
-		name: 'nope'
+		name: 'hornero-lft'
 		yes:  true
+	})
+	assert !r.ok
+	assert r.message.contains('preset not found: hornero-lft')
+	assert r.message.contains('Did you mean: hornero-left?')
+	assert r.message.contains('Available presets:')
+	assert !os.is_file(conf)
+	assert !os.is_file(marker)
+	preset_test_restore(old_presets, old_marker, old_xdg)
+}
+
+// Recovery callers retain shell#46's explicit fallback behavior.
+fn test_preset_apply_recovery_falls_back_to_default() {
+	old_presets, old_marker, old_xdg := preset_test_isolate()
+	conf := preset_root + '/config/hornero/shell.json'
+	marker := preset_root + '/state/current-shell-preset'
+	r := preset_apply_report(PresetApplyOptions{
+		name:                'nope'
+		yes:                 true
+		fallback_to_default: true
 	})
 	assert r.ok
 	assert r.message.contains("unknown preset 'nope'")
@@ -101,12 +119,13 @@ fn test_preset_apply_unknown_name_resolves_to_default() {
 }
 
 // Only a missing default itself still fails, listing the catalogue.
-fn test_preset_apply_unknown_name_fails_without_default() {
+fn test_preset_apply_recovery_fails_without_default() {
 	old_presets, old_marker, old_xdg := preset_test_isolate()
 	os.rm(preset_root + '/presets/hornero-left.json') or { assert false, 'rm default' }
 	r := preset_apply_report(PresetApplyOptions{
-		name: 'nope'
-		yes:  true
+		name:                'nope'
+		yes:                 true
+		fallback_to_default: true
 	})
 	assert !r.ok
 	assert r.message.contains('preset not found: nope')
@@ -156,7 +175,7 @@ fn test_preset_apply_unparseable_falls_back_to_safe_layout() {
 	preset_test_restore(old_presets, old_marker, old_xdg)
 }
 
-fn test_preset_apply_dry_run_unknown_reports_default() {
+fn test_preset_apply_dry_run_unknown_fails_without_writing() {
 	old_presets, old_marker, old_xdg := preset_test_isolate()
 	conf := preset_root + '/config/hornero/shell.json'
 	marker := preset_root + '/state/current-shell-preset'
@@ -164,12 +183,36 @@ fn test_preset_apply_dry_run_unknown_reports_default() {
 		name:    'nope'
 		dry_run: true
 	})
+	assert !r.ok
+	assert r.message.contains('preset not found: nope')
+	assert !os.is_file(conf)
+	assert !os.is_file(marker)
+	preset_test_restore(old_presets, old_marker, old_xdg)
+}
+
+fn test_preset_apply_recovery_dry_run_reports_default() {
+	old_presets, old_marker, old_xdg := preset_test_isolate()
+	conf := preset_root + '/config/hornero/shell.json'
+	marker := preset_root + '/state/current-shell-preset'
+	r := preset_apply_report(PresetApplyOptions{
+		name:                'nope'
+		dry_run:             true
+		fallback_to_default: true
+	})
 	assert r.ok
 	assert r.message.contains('would run')
 	assert r.message.contains('hornero-left')
 	assert !os.is_file(conf)
 	assert !os.is_file(marker)
 	preset_test_restore(old_presets, old_marker, old_xdg)
+}
+
+fn test_preset_suggestions_rank_close_names() {
+	names := ['classic-top', 'hornero-left', 'hornero-right', 'minimal-top']
+	assert preset_suggestions('hornero-lft', names) == ['hornero-left']
+	assert preset_suggestions('hornero', names) == ['hornero-left', 'hornero-right']
+	assert preset_suggestions('MINIMAL-TOP', names) == ['minimal-top']
+	assert preset_suggestions('zzzzzzzz', names).len == 0
 }
 
 fn test_preset_apply_dry_run_broken_reports_safe_reset() {

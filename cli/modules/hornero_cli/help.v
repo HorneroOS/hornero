@@ -167,11 +167,12 @@ Examples:
   apply <name> [--dry-run|--yes]
                       Apply a shell preset: validate, reset owned
                       settings in shell.json, deep-merge, update the
-                      active-preset pointer (needs --yes)
+                      active-preset pointer (needs --yes). Unknown
+                      names fail with close matches and write nothing
 
-Preset sources: HORNERO_PRESETS_DIR, else the XDG data catalogue
-(hornero/shell-presets);
-the active pointer lives under XDG state. Writes go to the canonical
+Preset sources: HORNERO_PRESETS_DIR, else user XDG data, followed by
+packaged XDG config/data catalogues. User presets override packaged
+presets by name. The active pointer lives under XDG state. Writes go to the canonical
 hornero paths only (XDG_CONFIG_HOME/hornero/shell.json plus the state
 pointer). Quickshell reloads on shell.json change, so no IPC is needed.
 
