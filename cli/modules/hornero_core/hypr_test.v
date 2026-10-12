@@ -33,6 +33,7 @@ fn hypr_test_keys() []string {
 // default to nonexistent paths; tests opt into fixtures explicitly.
 fn hypr_test_setup() {
 	os.mkdir_all(hx_hypr_root + '/config/hypr/hyprland.conf.d') or { assert false }
+	os.rm(hx_hypr_root + '/config/hypr/hyprland.lua') or {}
 	os.write_file(hx_hypr_root + '/config/hypr/hyprland.conf.d/animations.conf', 'bezier = easeOut, 0.22, 1, 0.36, 1\nanimation = windows, 1, 3, easeOut\n') or {
 		assert false
 	}
@@ -54,7 +55,7 @@ fn hypr_test_setup() {
 	}
 	os.mkdir_all(hx_hypr_root + '/bin') or { assert false }
 	os.write_file(hx_hypr_root + '/bin/hyprctl',
-		'#!/bin/sh\nif [ "\$1" = "monitors" ]; then cat ' + hx_hypr_root +
+		'#!/bin/sh\nprintf "%s\\n" "\$*" >> ' + hx_hypr_root + '/hyprctl-calls\nif [ "\$1" = "monitors" ]; then cat ' + hx_hypr_root +
 			'/monitors.json\necho\nelif [ "\$1" = "getoption" ]; then echo "str: dwindle"\nfi\nexit 0\n') or {
 		assert false
 	}
@@ -160,6 +161,27 @@ fn test_animation_apply_dry_run_previews_keywords() {
 	hypr_test_restore_env(saved)
 }
 
+fn test_animation_profile_translates_to_hyprland_lua() {
+	calls := animation_lua_calls(['easeOut, 0.22, 1, 0.36, 1'], [
+		'windows, 1, 3, easeOut',
+		'fade, 0, 2, easeOut',
+	]) or {
+		assert false, err.msg()
+		return
+	}
+	assert calls.len == 3
+	assert calls[0] == 'hl.curve("easeOut", {type="bezier", points={{0.22, 1}, {0.36, 1}}})'
+	assert calls[1].contains('leaf="windows"')
+	assert calls[1].contains('enabled=true')
+	assert calls[1].contains('speed=3')
+	assert calls[2] == 'hl.animation({leaf="fade", enabled=false})'
+	animation_lua_calls(['bad, 0, os.execute, 1, 1'], []) or {
+		assert err.msg().contains('invalid bezier profile entry')
+		return
+	}
+	assert false, 'expected malformed curve to be rejected'
+}
+
 fn test_animation_apply_missing_conf_fails() {
 	saved := hypr_test_save_env(hypr_test_keys())
 	hypr_test_setup()
@@ -233,6 +255,50 @@ fn test_layout_apply_needs_yes() {
 	})
 	assert !r.ok
 	assert r.message.contains('--yes')
+}
+
+fn test_layout_apply_lua_dry_run_uses_native_config_api() {
+	saved := hypr_test_save_env(hypr_test_keys())
+	hypr_test_setup()
+	hypr_test_use_env()
+	os.write_file(hx_hypr_root + '/config/hypr/hyprland.lua', '-- test fixture\n') or { assert false }
+	os.setenv('HORNERO_HYPRCTL_BIN', hx_hypr_root + '/bin/hyprctl', true)
+	r := layout_apply_report(LayoutApplyOptions{ layout: 'scrolling', dry_run: true })
+	assert r.ok, r.message
+	assert r.message.contains('hyprctl eval')
+	assert r.message.contains('hl.config')
+	assert r.message.contains('explicit_column_widths="0.333, 0.5, 0.618, 0.75, 1.0"')
+	run := layout_apply_report(LayoutApplyOptions{ layout: 'dwindle', yes: true, ephemeral: true })
+	assert run.ok, run.message
+	assert (os.read_file(hx_hypr_root + '/hyprctl-calls') or { '' }).contains('eval hl.config({general={layout="dwindle"}})')
+	os.rm(hx_hypr_root + '/config/hypr/hyprland.lua') or {}
+	hypr_test_restore_env(saved)
+}
+
+fn test_monitor_lua_calls_keep_output_names_escaped_and_positions_typed() {
+	mons := [MonitorInfo{ name: 'eDP-1', width: 1920, height: 1080, is_inner: true },
+		MonitorInfo{ name: 'HDMI-A-1', width: 2560, height: 1440 }]
+	internal, external, by_name := split_monitors(mons)
+	calls := monitor_lua_calls('extend-right', internal, external, mons, by_name)
+	assert calls.len == 2
+	assert calls[0].contains('output="eDP-1"')
+	assert calls[1].contains('position="1920x0"')
+	assert monitor_lua_calls('disable-external', internal, external, mons, by_name)[0].contains('disabled=true')
+}
+
+fn test_monitors_set_lua_provider_executes_native_monitor_calls() {
+	saved := hypr_test_save_env(hypr_test_keys())
+	hypr_test_setup()
+	hypr_test_use_env()
+	os.write_file(hx_hypr_root + '/config/hypr/hyprland.lua', '-- test fixture\n') or { assert false }
+	os.setenv('HORNERO_HYPRCTL_BIN', hx_hypr_root + '/bin/hyprctl', true)
+	r := monitors_set_report(MonitorsSetOptions{ mode: 'extend-right', yes: true })
+	assert r.ok, r.message
+	calls := os.read_file(hx_hypr_root + '/hyprctl-calls') or { '' }
+	assert calls.contains('eval hl.monitor({output="eDP-1", mode="preferred", position="0x0", scale=1})')
+	assert calls.contains('eval hl.monitor({output="HDMI-A-1", mode="preferred", position="1920x0", scale=1})')
+	os.rm(hx_hypr_root + '/config/hypr/hyprland.lua') or {}
+	hypr_test_restore_env(saved)
 }
 
 fn test_layout_apply_rejects_unknown() {

@@ -152,7 +152,9 @@ fn current_layout(session string) !string {
 		}
 		rep := run_exec(ExecSpec{
 			prog: bin
-			args: ['getoption', 'input:kb_layout', '-j']
+			args: ['getoption',
+				if hypr_lua_config_enabled() { 'input.kb_layout' } else { 'input:kb_layout' },
+				'-j']
 		})
 		if !rep.ok {
 			return error('hyprctl backend failed (exit ${rep.exit_code}):\n${rep.output}')
@@ -191,7 +193,9 @@ fn current_variant(session string) !string {
 		}
 		rep := run_exec(ExecSpec{
 			prog: bin
-			args: ['getoption', 'input:kb_variant', '-j']
+			args: ['getoption',
+				if hypr_lua_config_enabled() { 'input.kb_variant' } else { 'input:kb_variant' },
+				'-j']
 		})
 		if !rep.ok {
 			return error('hyprctl backend failed (exit ${rep.exit_code}):\n${rep.output}')
@@ -217,11 +221,16 @@ fn layout_read_cmd(session string) string {
 	if session == 'hyprland' {
 		bin := resolve_hyprctl_bin()
 		prog := if bin.len > 0 { bin } else { 'hyprctl' }
-		return command_line(prog, ['getoption', 'input:kb_layout', '-j'])
+		return command_line(prog, ['getoption',
+			if hypr_lua_config_enabled() { 'input.kb_layout' } else { 'input:kb_layout' }, '-j'])
 	}
 	bin := resolve_setxkbmap_bin()
 	prog := if bin.len > 0 { bin } else { 'setxkbmap' }
 	return command_line(prog, ['-query'])
+}
+
+fn keyboard_layout_lua_expression(layout string, variant string) string {
+	return 'hl.config({input={kb_layout=' + hypr_lua_string(layout) + ', kb_variant=' + hypr_lua_string(variant) + '}})'
 }
 
 pub struct KeyboardLayoutOptions {
@@ -322,19 +331,29 @@ pub fn keyboard_layout_report(opts KeyboardLayoutOptions) CommandResult {
 		if bin.len == 0 {
 			return fail_result('hardware keyboard layout', 'hyprctl not found on PATH. Set HORNERO_HYPRCTL_BIN.\nExample: horneroctl hardware keyboard layout --dry-run')
 		}
-		rep := run_exec(ExecSpec{
-			prog: bin
-			args: ['keyword', 'input:kb_layout', nlayout]
-		})
-		if !rep.ok {
-			return fail_result('hardware keyboard layout', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
-		}
-		rep2 := run_exec(ExecSpec{
-			prog: bin
-			args: ['keyword', 'input:kb_variant', nvariant]
-		})
-		if !rep2.ok {
-			return fail_result('hardware keyboard layout', 'backend failed (exit ${rep2.exit_code}):\n${rep2.output}')
+		if hypr_lua_config_enabled() {
+			expr := keyboard_layout_lua_expression(nlayout, nvariant)
+			rep := hypr_lua_eval(bin, expr, false) or {
+				return fail_result('hardware keyboard layout', err.msg())
+			}
+			if !rep.ok {
+				return fail_result('hardware keyboard layout', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
+		} else {
+			rep := run_exec(ExecSpec{
+				prog: bin
+				args: ['keyword', 'input:kb_layout', nlayout]
+			})
+			if !rep.ok {
+				return fail_result('hardware keyboard layout', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+			}
+			rep2 := run_exec(ExecSpec{
+				prog: bin
+				args: ['keyword', 'input:kb_variant', nvariant]
+			})
+			if !rep2.ok {
+				return fail_result('hardware keyboard layout', 'backend failed (exit ${rep2.exit_code}):\n${rep2.output}')
+			}
 		}
 	} else {
 		bin := resolve_setxkbmap_bin()

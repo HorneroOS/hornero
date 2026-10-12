@@ -17,6 +17,12 @@ configuration owns defaults and read-only catalogue data.
   owns the capability, such as `gsettings`, `xdg-mime`, `hyprctl`, `pacman`,
   or `systemctl`. Paths are passed as individual arguments and mutations
   require explicit consent.
+- Hyprland commands detect the standard `$XDG_CONFIG_HOME/hypr/hyprland.lua`
+  provider. Layout, animation, monitor, and keyboard operations use the current
+  Lua runtime APIs (`hyprctl eval`, `hl.config`, `hl.curve`, `hl.animation`,
+  and `hl.monitor`) when that file is present; otherwise they retain the
+  hyprlang `keyword` path. This detection intentionally does not guess when a
+  session was started with a nonstandard `--config` path.
 - `horneroctl system info` reads `/usr/lib/hornero/system-profile.json`, an
   immutable install record generated from the edition catalogue and resolver.
   It distinguishes the selected compositor from the active session and reports

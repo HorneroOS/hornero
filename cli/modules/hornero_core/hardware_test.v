@@ -89,6 +89,30 @@ fn test_hw_hypr_opt_str() {
 	assert hypr_opt_str('nothing here') == ''
 }
 
+fn test_hw_keyboard_lua_provider_uses_dotted_getoption_path() {
+	root := os.join_path(os.temp_dir(), 'hw-lua-hypr-test')
+	saved := hw_test_save_env(hw_test_keys())
+	os.mkdir_all(root + '/config/hypr') or { assert false }
+	os.mkdir_all(root + '/bin') or { assert false }
+	os.write_file(root + '/config/hypr/hyprland.lua', '-- fixture') or { assert false }
+	os.write_file(root + '/bin/hyprctl', '#!/bin/sh\nprintf "%s\\n" "$*" >> ' + root + '/calls\ncase "$*" in *kb_variant*) echo \'{"str":""}\' ;; *) echo \'{"str":"us"}\' ;; esac\n') or { assert false }
+	os.chmod(root + '/bin/hyprctl', 0o755) or { assert false }
+	os.setenv('XDG_CONFIG_HOME', root + '/config', true)
+	os.setenv('HORNERO_HYPRCTL_BIN', root + '/bin/hyprctl', true)
+	os.setenv('HORNERO_NOTIFY_BIN', '/nonexistent-notify-hw-test', true)
+	os.setenv('HYPRLAND_INSTANCE_SIGNATURE', 'fixture', true)
+	assert current_layout('hyprland')! == 'us'
+	result := keyboard_layout_report(KeyboardLayoutOptions{ mode: 'toggle', yes: true })
+	assert result.ok, result.message
+	calls := os.read_file(root + '/calls') or { '' }
+	assert calls.contains('getoption input.kb_layout -j')
+	assert calls.contains('getoption input.kb_variant -j')
+	assert calls.contains('eval hl.config({input={kb_layout="latam", kb_variant=""}})')
+	assert keyboard_layout_lua_expression('latam', '') == 'hl.config({input={kb_layout="latam", kb_variant=""}})'
+	hw_test_restore_env(saved)
+	os.rmdir_all(root) or {}
+}
+
 fn test_hw_xkb_field() {
 	out := 'rules:      evdev\nmodel:      pc105\nlayout:     us\nvariant:    \n'
 	assert xkb_field(out, 'layout') == 'us'
