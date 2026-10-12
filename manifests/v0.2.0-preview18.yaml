@@ -1,0 +1,45 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview18
+#
+# Unpublished composition candidate. This manifest is not a release until
+# its pinned composition passes the exact-pins VM and Hornero QA gates.
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview18
+date: "2026-10-12"
+description: >-
+  Unpublished composition candidate tracking the current Hornero Shell and
+  Config components, including the latest packaged Settings and terminal
+  selection integration. It remains a candidate only: no VM or exact-pin QA
+  acceptance has been recorded for this composition. Installer and ISO are
+  future slots and no installable image is claimed.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 0bebb8575c200d6519c3dd31a0c66e2a5cd00324
+    status: pinned
+    subject: "chore(release): prepare hornero-shell 1.2.7 for AUR (#162)"
+    notes: Desktop shell / Quickshell UX.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 1dbb041fa31f84c20c67533aa719f60954087e0b
+    status: pinned
+    subject: "fix(config): pin AUR source to verified release commit (#72)"
+    notes: Reusable desktop and system defaults.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot; no installer integration is part of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot; no installable image is produced by this composition.

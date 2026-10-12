@@ -1,0 +1,20 @@
+# Hornero OS release: v0.2.0-preview18
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview18
+version: 0.2.0-preview18
+status: pre-release
+manifest: hornero-0.2.0-preview18
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview18-checklist.md
+summary: >-
+  Unpublished composition candidate following the latest Hornero Shell and
+  Config main branches. Exact-pin VM and Hornero QA acceptance are still
+  required before this can be tagged or presented as an installable release.
+  Installer and ISO remain future slots.
+tag: v0.2.0-preview18
+published: false

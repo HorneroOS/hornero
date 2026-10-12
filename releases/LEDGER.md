@@ -10,6 +10,8 @@ files, not this ledger; regenerate when a release is cut.
 - Codenames are Argentine birds and places, assigned when the release
   is tagged and recorded here. Past releases predate the convention
   and keep an empty codename rather than a retroactive one.
+- Entries without a codename may be unpublished candidates; codenames
+  are assigned only when a composition is tagged.
 - A new release adds one row: version, date, codename, manifest, the
   pinned component SHAs, and its checklist.
 
@@ -31,3 +33,4 @@ files, not this ledger; regenerate when a release is cut.
 | v0.2.0-preview12 | 2026-09-29 | — | `manifests/v0.2.0-preview12.yaml` | `07a3397` | `c4a25f0` | `releases/v0.2.0-preview12-checklist.md` |
 | v0.2.0-preview13 | 2026-10-01 | — | `manifests/v0.2.0-preview13.yaml` | `25d2206` | `dae2255` | `releases/v0.2.0-preview13-checklist.md` |
 | v0.2.0-preview14 | 2026-10-02 | — | `manifests/v0.2.0-preview14.yaml` | `3658e1b` | `96b6870` | `releases/v0.2.0-preview14-checklist.md` |
+| v0.2.0-preview18 | 2026-10-12 | — | `manifests/v0.2.0-preview18.yaml` | `0bebb85` | `1dbb041` | `releases/v0.2.0-preview18-checklist.md` |
