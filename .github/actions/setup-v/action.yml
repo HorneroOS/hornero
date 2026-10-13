@@ -1,23 +1,30 @@
 name: Set up pinned V compiler
-description: Build the V compiler from the repository's verified commit lock.
+description: Build V from locked V and bootstrap compiler sources.
 runs:
   using: composite
   steps:
-    - name: Read pinned V commit
+    - name: Read pinned V and VC commits
       id: v
       shell: bash
       run: |
-        commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/vlang.commit")"
-        if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
-          echo "invalid V commit in toolchain/vlang.commit: $commit" >&2
-          exit 1
-        fi
-        echo "commit=$commit" >> "$GITHUB_OUTPUT"
+        v_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/vlang.commit")"
+        vc_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/vc.commit")"
+        for entry in "v:$v_commit" "vc:$vc_commit"; do
+          name="${entry%%:*}"
+          commit="${entry#*:}"
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "invalid $name commit in toolchain lock: $commit" >&2
+            exit 1
+          fi
+        done
+        echo "v_commit=$v_commit" >> "$GITHUB_OUTPUT"
+        echo "vc_commit=$vc_commit" >> "$GITHUB_OUTPUT"
 
-    - name: Build pinned V compiler
+    - name: Fetch pinned V and VC sources
       shell: bash
       env:
-        V_COMMIT: ${{ steps.v.outputs.commit }}
+        V_COMMIT: ${{ steps.v.outputs.v_commit }}
+        VC_COMMIT: ${{ steps.v.outputs.vc_commit }}
       run: |
         vdir="$RUNNER_TEMP/hornero-v-${V_COMMIT:0:12}"
         git init -q "$vdir"
@@ -25,5 +32,12 @@ runs:
         git -C "$vdir" fetch -q --depth 1 origin "$V_COMMIT"
         git -C "$vdir" checkout -q --detach FETCH_HEAD
         [[ "$(git -C "$vdir" rev-parse HEAD)" == "$V_COMMIT" ]]
-        make -C "$vdir"
+        mkdir -p "$vdir/vc"
+        git -C "$vdir/vc" init -q
+        git -C "$vdir/vc" remote add origin https://github.com/vlang/vc
+        git -C "$vdir/vc" fetch -q --depth 1 origin "$VC_COMMIT"
+        git -C "$vdir/vc" checkout -q --detach FETCH_HEAD
+        [[ "$(git -C "$vdir/vc" rev-parse HEAD)" == "$VC_COMMIT" ]]
+        # `local` prevents GNUmakefile from pulling moving vc/tcc branches.
+        make -C "$vdir" local
         echo "$vdir" >> "$GITHUB_PATH"
