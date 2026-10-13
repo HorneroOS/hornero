@@ -18,19 +18,24 @@ fn terminal_doctor_checks(installed []string, selected string) []DoctorCheck {
 		}
 	}
 	choice := if selected.len == 0 { 'kitty' } else { selected }
+	if choice == 'Invalid shell.json' {
+		checks << DoctorCheck{
+			name:   'shell-terminal'
+			ok:     false
+			detail: 'Hornero Shell configuration is invalid: shell.json could not be parsed; repair the file before selecting a terminal'
+		}
+		return checks
+	}
+	available_label := if available.len > 0 { available.join(', ') } else { 'none installed' }
 	checks << DoctorCheck{
 		name:   'shell-terminal'
 		ok:     choice in available
 		detail: if choice in available {
 			'${choice} is installed and selected'
 		} else if choice !in supported_terminal_defaults {
-			'${choice} is selected but unsupported; choose an installed terminal (kitty, alacritty, ghostty)'
+			'${choice} is selected but unsupported; installed supported choices: ${available_label}'
 		} else {
-			'${choice} is selected but not installed; available: ${if available.len > 0 {
-				available.join(', ')
-			} else {
-				'none'
-			}}'
+			'${choice} is selected but not installed; available: ${available_label}'
 		}
 	}
 	return checks

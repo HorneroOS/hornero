@@ -128,6 +128,21 @@ fn test_doctor_terminal_checks_flag_invalid_selection() {
 	assert checks[0].ok
 	assert !checks[1].ok
 	assert checks[1].detail.contains('unsupported')
+	assert checks[1].detail.contains('installed supported choices: kitty')
+}
+
+fn test_doctor_terminal_checks_explain_when_unsupported_choice_has_no_alternative() {
+	checks := terminal_doctor_checks([], 'xterm')
+	assert !checks[1].ok
+	assert checks[1].detail.contains('installed supported choices: none installed')
+}
+
+fn test_doctor_terminal_checks_distinguish_invalid_shell_config() {
+	checks := terminal_doctor_checks(['kitty'], 'Invalid shell.json')
+	assert checks[0].ok
+	assert !checks[1].ok
+	assert checks[1].detail.contains('configuration is invalid')
+	assert checks[1].detail.contains('shell.json could not be parsed')
 }
 
 fn test_ipc_missing_binary_fails_cleanly() {
