@@ -60,7 +60,7 @@ def test_v_toolchain_is_locked_and_shared_by_build_workflows():
     assert '"$GITHUB_WORKSPACE/toolchain/vc.commit"' in action_text
     assert 'git -C "$vdir" fetch -q --depth 1 origin "$V_COMMIT"' in action_text
     assert 'git -C "$vdir/vc" fetch -q --depth 1 origin "$VC_COMMIT"' in action_text
-    assert 'make -C "$vdir" local' in action_text
+    assert 'make -C "$vdir" local=1' in action_text
 
     for name in ("horneroctl-ci.yml", "composition-ci.yml", "release.yml"):
         text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")

@@ -39,5 +39,5 @@ runs:
         git -C "$vdir/vc" checkout -q --detach FETCH_HEAD
         [[ "$(git -C "$vdir/vc" rev-parse HEAD)" == "$VC_COMMIT" ]]
         # `local` prevents GNUmakefile from pulling moving vc/tcc branches.
-        make -C "$vdir" local
+        make -C "$vdir" local=1
         echo "$vdir" >> "$GITHUB_PATH"
