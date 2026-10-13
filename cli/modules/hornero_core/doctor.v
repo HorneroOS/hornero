@@ -26,7 +26,11 @@ fn terminal_doctor_checks(installed []string, selected string) []DoctorCheck {
 		} else if choice !in supported_terminal_defaults {
 			'${choice} is selected but unsupported; choose an installed terminal (kitty, alacritty, ghostty)'
 		} else {
-			'${choice} is selected but not installed; available: ${if available.len > 0 { available.join(', ') } else { 'none' }}'
+			'${choice} is selected but not installed; available: ${if available.len > 0 {
+				available.join(', ')
+			} else {
+				'none'
+			}}'
 		}
 	}
 	return checks
