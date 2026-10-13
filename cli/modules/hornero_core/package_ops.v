@@ -11,8 +11,9 @@ import os
 //   (yay/trizen/...) with a `sudo pacman -Syyuu` fallback; here pacman
 //   is pinned and polkit is required: without pkexec the command fails
 //   with guidance instead of falling back to sudo.
-// - `deps` checks the pinned dependency table (core + Wayland stack,
-//   plus dev/media/AI groups with --optional) with pure PATH lookups
+// - `deps` checks the common CLI/shell requirements and one selected
+//   compositor runtime (plus dev/media/AI groups with --optional) using PATH
+//   and package-owned service executable checks.
 //   (no execution, CI-hermetic), and installs the missing ones via
 //   `pkexec pacman -S --needed` (repo packages) plus `paru -S --needed`
 //   (AUR-only packages, user-level through the selected AUR helper).
@@ -119,19 +120,32 @@ struct DepEntry {
 	group string
 }
 
-fn package_dep_table(optional bool) []DepEntry {
+fn package_dep_table_for_compositor(optional bool, compositor string) []DepEntry {
 	mut deps := [
 		DepEntry{'git', 'git', '', 'core'},
 		DepEntry{'curl', 'curl', '', 'core'},
 		DepEntry{'wget', 'wget', '', 'core'},
 		DepEntry{'chezmoi', 'chezmoi', '', 'core'},
 		DepEntry{'zsh', 'zsh', '', 'core'},
-		DepEntry{'hyprland', 'hyprland', '', 'wayland'},
 		DepEntry{'quickshell', 'quickshell', '', 'wayland'},
-		DepEntry{'hyprlock', 'hyprlock', '', 'wayland'},
-		DepEntry{'hypridle', 'hypridle', '', 'wayland'},
 		DepEntry{'cliphist', 'cliphist', '', 'wayland'},
+		DepEntry{'xdg-desktop-portal', 'xdg-desktop-portal', '', 'wayland'},
 	]
+	if compositor == 'niri' {
+		deps << [
+			DepEntry{'niri', 'niri', '', 'wayland'},
+			DepEntry{'xwayland-satellite', 'xwayland-satellite', '', 'wayland'},
+			DepEntry{'xdg-desktop-portal-gnome', 'xdg-desktop-portal-gnome', '', 'wayland'},
+			DepEntry{'xdg-desktop-portal-gtk', 'xdg-desktop-portal-gtk', '', 'wayland'},
+		]
+	} else {
+		deps << [
+			DepEntry{'hyprland', 'hyprland', '', 'wayland'},
+			DepEntry{'hyprlock', 'hyprlock', '', 'wayland'},
+			DepEntry{'hypridle', 'hypridle', '', 'wayland'},
+			DepEntry{'xdg-desktop-portal-hyprland', 'xdg-desktop-portal-hyprland', '', 'wayland'},
+		]
+	}
 	if optional {
 		deps << [
 			DepEntry{'kitty', 'kitty', '', 'dev'},
@@ -159,34 +173,64 @@ fn package_dep_table(optional bool) []DepEntry {
 }
 
 // missing_deps returns the table entries whose command is not on PATH.
-fn missing_deps(optional bool) []DepEntry {
+fn missing_deps(optional bool, compositor string) []DepEntry {
 	mut missing := []DepEntry{}
-	for d in package_dep_table(optional) {
-		if find_on_path(d.check).len == 0 {
+	for d in package_dep_table_for_compositor(optional, compositor) {
+		if !package_dep_available(d) {
 			missing << d
 		}
 	}
 	return missing
 }
 
+fn package_dep_available(dep DepEntry) bool {
+	if find_on_path(dep.check).len > 0 {
+		return true
+	}
+	// Portal backends are service executables under /usr/lib on Arch, not
+	// commands on PATH. Check the package-owned binary path for those entries.
+	root := os.getenv_opt('HORNERO_DEPENDENCY_ROOT') or { '/usr' }
+	return os.is_file(os.join_path(root, 'lib', dep.check))
+}
+
 pub struct PackageDepsOptions {
 pub:
-	optional bool
-	install  bool
-	dry_run  bool
-	yes      bool
+	optional   bool
+	install    bool
+	dry_run    bool
+	yes        bool
+	compositor string
+}
+
+fn resolve_package_deps_compositor(requested string) string {
+	if requested in ['hyprland', 'niri'] {
+		return requested
+	}
+	profile := system_profile_result()
+	configured := profile.data['compositor']
+	if configured in ['hyprland', 'niri'] {
+		return configured
+	}
+	active := active_compositor()
+	if active in ['hyprland', 'niri'] {
+		return active
+	}
+	// Preserve the established default for unprofiled Arch installations.
+	return 'hyprland'
 }
 
 // package_deps_check_report implements `package deps` (read-only):
-// the missing core/Wayland dependencies (plus optional groups with
-// --optional), via pure PATH lookups. It never fails: an empty
+// missing common and selected-compositor executables (plus optional groups
+// with --optional), via PATH and service executable checks. It never fails: an empty
 // missing set is success.
 pub fn package_deps_check_report(opts PackageDepsOptions) CommandResult {
-	missing := missing_deps(opts.optional)
+	compositor := resolve_package_deps_compositor(opts.compositor)
+	missing := missing_deps(opts.optional, compositor)
 	if missing.len == 0 {
-		return ok_result('package deps', 'All core dependencies are satisfied!', {
-			'missing': ''
-			'count':   '0'
+		return ok_result('package deps', 'All core dependencies are satisfied for ${compositor}!', {
+			'missing':    ''
+			'count':      '0'
+			'compositor': compositor
 		})
 	}
 	mut lines := []string{}
@@ -195,10 +239,12 @@ pub fn package_deps_check_report(opts PackageDepsOptions) CommandResult {
 		lines << '${d.check} (${d.group}, missing)'
 		names << d.check
 	}
-	lines << '${missing.len} missing dependencies (install with: horneroctl package deps --install --yes)'
+	lines << 'Compositor: ${compositor}${if compositor == 'niri' { ' (experimental)' } else { '' }}'
+	lines << '${missing.len} missing dependencies (install with: horneroctl package deps --compositor ${compositor} --install --yes)'
 	return ok_result('package deps', lines.join('\n'), {
-		'missing': names.join(',')
-		'count':   missing.len.str()
+		'missing':    names.join(',')
+		'count':      missing.len.str()
+		'compositor': compositor
 	})
 }
 
@@ -209,11 +255,13 @@ pub fn package_deps_install_report(opts PackageDepsOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('package deps', 'refusing to install dependencies without --yes (preview with --dry-run).\nExample: horneroctl package deps --install --dry-run')
 	}
-	missing := missing_deps(opts.optional)
+	compositor := resolve_package_deps_compositor(opts.compositor)
+	missing := missing_deps(opts.optional, compositor)
 	if missing.len == 0 {
-		return ok_result('package deps', 'All core dependencies are satisfied!', {
-			'missing': ''
-			'count':   '0'
+		return ok_result('package deps', 'All core dependencies are satisfied for ${compositor}!', {
+			'missing':    ''
+			'count':      '0'
+			'compositor': compositor
 		})
 	}
 	mut repo := []string{}
@@ -267,6 +315,7 @@ pub fn package_deps_install_report(opts PackageDepsOptions) CommandResult {
 			'command_line': previews.join('; ')
 			'missing':      missing.map(it.check).join(',')
 			'dry_run':      'true'
+			'compositor':   compositor
 		})
 	}
 	for s in steps {
@@ -282,5 +331,6 @@ pub fn package_deps_install_report(opts PackageDepsOptions) CommandResult {
 		{
 			'command_line': previews.join('; ')
 			'missing':      missing.map(it.check).join(',')
+			'compositor':   compositor
 		})
 }

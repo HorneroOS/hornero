@@ -534,8 +534,9 @@ Examples:
   updates [--dry-run] Count repository and AUR updates (read-only)
   upgrade [--dry-run|--yes]
                       Full system upgrade via polkit (needs --yes)
-  deps [--optional]   Check pinned dependencies (read-only)
-  deps --install [--optional] [--dry-run|--yes]
+  deps [--compositor <hyprland|niri>] [--optional]
+                      Check the selected compositor and common dependencies
+  deps --install [--compositor <hyprland|niri>] [--optional] [--dry-run|--yes]
                       Install missing dependencies (needs --yes)
 
 Update sources: checkupdates on PATH for repository packages and
@@ -549,10 +550,12 @@ reported as unavailable, never as an empty ignore list.
 Upgrade runs
 `pkexec pacman -Syu` (HORNERO_PKEXEC_BIN/HORNERO_PACMAN_BIN);
 without pkexec it fails with guidance: installs need polkit.
-Deps checks the core + Wayland table (git, curl, wget, chezmoi,
-zsh, hyprland, quickshell, hyprlock, hypridle, cliphist; dev,
-media, and AI groups with --optional) and installs repo
-packages via pacman plus AUR-only ones via paru.
+Deps checks common core and shell tools, one compositor backend, and its portal backends.
+It follows the installed Hornero profile, then the active session; on an
+unprofiled system with no active Wayland session it preserves Hyprland as the
+default. Select `--compositor hyprland` or `--compositor niri` explicitly.
+Niri is experimental. Development, media, and AI tools are included with
+--optional; repo packages install via pacman and AUR-only packages via paru.
 
 Examples:
   horneroctl package check
@@ -563,6 +566,8 @@ Examples:
   horneroctl package upgrade --yes
   horneroctl package deps
   horneroctl package deps --optional
+  horneroctl package deps --compositor niri
+  horneroctl package deps --compositor hyprland --install --dry-run
   horneroctl package deps --install --dry-run
   horneroctl package deps --install --yes
 '
