@@ -784,7 +784,8 @@ Examples:
 
   now [--effect NAME] [--dry-run]
                       Lock the screen now (needs --yes)
-  status              Show lock backend state (read-only)
+                      Skips a duplicate request while Hyprlock is running
+  status              Show lock backend and active Hyprlock process state
   update [path] [--dim N] [--blur N] [--pixel N] [--dry-run]
                       Rebuild cached effect images (needs --yes)
 

@@ -149,11 +149,71 @@ fn test_lock_now_dry_run_needs_no_backend() {
 	power_test_restore_env(saved)
 }
 
+fn test_lock_now_skips_duplicate_hyprlock_process() {
+	saved := power_test_save_env(['HORNERO_LOCKSCREEN_BIN', 'HORNERO_HYPRLOCK_BIN', 'HORNERO_PGREP_BIN',
+		'XDG_CACHE_HOME'])
+	os.unsetenv('HORNERO_LOCKSCREEN_BIN')
+	os.setenv('HORNERO_HYPRLOCK_BIN', '/fake/hyprlock', true)
+	os.setenv('HORNERO_PGREP_BIN', '/usr/bin/true', true)
+	os.setenv('XDG_CACHE_HOME', '/tmp/hx-lock-no-cache-hornero-test', true)
+	r := lock_now_report(LockNowOptions{
+		yes: true
+	})
+	assert r.ok
+	assert r.message.contains('already running')
+	assert r.data['already_running'] == 'true'
+	assert r.data['locker'] == 'hyprlock'
+	power_test_restore_env(saved)
+}
+
+fn test_power_lock_skips_duplicate_hyprlock_process() {
+	saved := power_test_save_env(['HORNERO_LOCKSCREEN_BIN', 'HORNERO_HYPRLOCK_BIN', 'HORNERO_PGREP_BIN'])
+	os.unsetenv('HORNERO_LOCKSCREEN_BIN')
+	os.setenv('HORNERO_HYPRLOCK_BIN', '/fake/hyprlock', true)
+	os.setenv('HORNERO_PGREP_BIN', '/usr/bin/true', true)
+	r := power_action_report(PowerActionOptions{
+		action: 'lock'
+		yes:    true
+	})
+	assert r.ok
+	assert r.message.contains('already running')
+	assert r.data['already_running'] == 'true'
+	power_test_restore_env(saved)
+}
+
+fn test_lock_request_with_other_backend_is_not_suppressed_by_hyprlock() {
+	saved := power_test_save_env(['HORNERO_LOCKSCREEN_BIN', 'HORNERO_PGREP_BIN'])
+	os.setenv('HORNERO_LOCKSCREEN_BIN', '/usr/bin/true', true)
+	os.setenv('HORNERO_PGREP_BIN', '/usr/bin/true', true)
+	r := power_action_report(PowerActionOptions{
+		action: 'lock'
+		yes:    true
+	})
+	assert r.ok
+	assert !('already_running' in r.data)
+	assert r.data['command_line'] == '/usr/bin/true --lock'
+	power_test_restore_env(saved)
+}
+
 fn test_lock_status_is_read_only() {
+	saved := power_test_save_env(['HORNERO_PGREP_BIN'])
+	os.setenv('HORNERO_PGREP_BIN', '/usr/bin/false', true)
 	r := lock_status_report()
 	assert r.ok
 	assert r.message.contains('would run:')
 	assert 'command_line' in r.data
 	assert 'lockscreen' in r.data
 	assert 'hyprlock' in r.data
+	assert r.data['hyprlock_process'] == 'not running'
+	power_test_restore_env(saved)
+}
+
+fn test_lock_status_reports_unknown_when_process_probe_is_unavailable() {
+	saved := power_test_save_env(['HORNERO_PGREP_BIN'])
+	os.setenv('HORNERO_PGREP_BIN', '/nonexistent-pgrep-hornero-test', true)
+	r := lock_status_report()
+	assert r.ok
+	assert r.message.contains('hyprlock process: unknown')
+	assert r.data['hyprlock_process'] == 'unknown'
+	power_test_restore_env(saved)
 }
