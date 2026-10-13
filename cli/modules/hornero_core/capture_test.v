@@ -29,6 +29,7 @@ const capture_test_keys = ['HORNERO_SSS_BIN', 'HORNERO_GPU_SCREEN_RECORDER_BIN',
 fn capture_test_break_backends() {
 	os.setenv('HORNERO_SSS_BIN', '/nonexistent-sss-hornero-test', true)
 	os.setenv('HORNERO_GPU_SCREEN_RECORDER_BIN', '/nonexistent-gsr-hornero-test', true)
+	os.setenv('HORNERO_PGREP_BIN', '/nonexistent-pgrep-hornero-test', true)
 	os.setenv('HORNERO_RECORDER_MATCH', 'hornero-test-no-such-recorder', true)
 	os.setenv('HORNERO_COPYQ_BIN', '/nonexistent-copyq-hornero-test', true)
 	os.setenv('HORNERO_CLIPHIST_BIN', '/nonexistent-cliphist-hornero-test', true)
