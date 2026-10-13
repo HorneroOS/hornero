@@ -48,9 +48,10 @@ pub fn command_line(prog string, args []string) string {
 	return parts.join(' ')
 }
 
-// run_exec executes prog with args, or previews when dry_run is set.
-// With timeout_sec > 0 the run is wrapped in `timeout -s KILL` so a hung
-// backend fails loudly (exit 124) instead of blocking the CLI forever.
+// run_exec executes prog with literal argv, or previews when dry_run is set.
+// No shell parses executable names or arguments. With timeout_sec > 0, GNU
+// timeout is invoked as another argv vector so a hung backend cannot block
+// the CLI indefinitely.
 pub fn run_exec(spec ExecSpec) ExecReport {
 	line := command_line(spec.prog, spec.args)
 	if spec.dry_run {
@@ -62,19 +63,19 @@ pub fn run_exec(spec ExecSpec) ExecReport {
 			was_dry_run:  true
 		}
 	}
-	exec_line := if spec.timeout_sec > 0 {
-		'timeout -s KILL ${spec.timeout_sec} ${line}'
+	mut exec_args := []string{}
+	if spec.timeout_sec > 0 {
+		exec_args = ['timeout', '-s', 'KILL', spec.timeout_sec.str(), spec.prog]
 	} else {
-		line
+		exec_args << spec.prog
 	}
+	exec_args << spec.args
 	t0 := time.now().unix()
-	r := os.execute('${exec_line}')
+	r := os.exec(exec_args)
 	elapsed := time.now().unix() - t0
-	// A wrapped run that never returns in time dies by our timeout's
-	// hand: GNU timeout reports 124 (TERM) or 128+signal (137 with
-	// `-s KILL`; raw signal numbers where os.execute passes them
-	// through, e.g. 9 — all verified live). Any other failure that
-	// still consumed the whole window also means the backend hung for
+	// A wrapped run that never returns in time dies by timeout's hand:
+	// GNU timeout reports 124 or 128+signal (137 with `-s KILL`). Any other
+	// failure that still consumed the whole window also means the backend hung for
 	// practical purposes, so it gets the timeout message too; fast
 	// genuine failures keep their real exit and output below. The +1s
 	// absorbs unix() truncation on short test windows.
