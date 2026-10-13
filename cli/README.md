@@ -84,6 +84,14 @@ whether the Hornero Shell's selected terminal can be launched. A missing or
 unsupported selection is reported as a health failure with the available
 choices; the check is read-only.
 
+`horneroctl lock now --yes` skips a duplicate launch when a `hyprlock`
+process owned by the current user is already running. `horneroctl lock status`
+reports that process observation separately from the selected lock backend.
+The process state can be `running`, `not running`, or `unknown` when `pgrep` is
+unavailable or fails; it is a best-effort observation, not proof that the
+current session is securely locked. The command never terminates an existing
+locker.
+
 ## Ownership
 
 The Shell owns live session state and visual interactions. `horneroctl` owns

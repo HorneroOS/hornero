@@ -822,6 +822,9 @@ pub fn lock_now_native_report(opts LockNowNativeOptions) CommandResult {
 	if !lock_effect_valid(effect) {
 		return fail_result('lock now', 'unknown effect: ${effect} (want dim, blur, dimblur, or pixel).\nExample: horneroctl lock now --effect blur --dry-run')
 	}
+	if !opts.dry_run && hyprlock_process_state() == 'running' {
+		return duplicate_hyprlock_result()
+	}
 	hl := lock_hyprlock_bin(opts.dry_run) or { return fail_result('lock now', err.msg()) }
 	imgs := lock_effect_images()
 	img := lock_image_for_effect(imgs, effect)

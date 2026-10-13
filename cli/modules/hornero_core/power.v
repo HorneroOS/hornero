@@ -53,6 +53,47 @@ pub fn resolve_lockscreen_bin() string {
 	return os.getenv('HORNERO_LOCKSCREEN_BIN')
 }
 
+// lock_backend_uses_hyprlock reports whether the configured lock command
+// ultimately selects Hyprlock. Other lock backends keep their own lifecycle.
+fn lock_backend_uses_hyprlock() bool {
+	ls := resolve_lockscreen_bin()
+	if ls.len > 0 {
+		return os.file_name(ls) == 'hyprlock'
+	}
+	return resolve_hyprlock_bin().len > 0
+}
+
+// hyprlock_process_state is a best-effort single-locker guard for this
+// user. Hypridle can issue another timeout command while a previous locker
+// is still alive; do not start another Hyprlock process in that case. This
+// is intentionally a process check, not a claim that the current session is
+// securely locked.
+fn hyprlock_process_state() string {
+	pgrep := resolve_pgrep_bin()
+	if pgrep.len == 0 {
+		return 'unknown'
+	}
+	rep := run_exec(ExecSpec{
+		prog:        pgrep
+		args:        ['-x', '-u', os.getuid().str(), 'hyprlock']
+		timeout_sec: 2
+	})
+	if rep.exit_code == 0 {
+		return 'running'
+	}
+	if rep.exit_code == 1 {
+		return 'not running'
+	}
+	return 'unknown'
+}
+
+fn duplicate_hyprlock_result() CommandResult {
+	return ok_result('lock now', 'hyprlock is already running; skipped duplicate lock request', {
+		'already_running': 'true'
+		'locker':          'hyprlock'
+	})
+}
+
 struct LockPlan {
 	prog string
 	args []string
@@ -191,6 +232,10 @@ pub fn power_action_report(opts PowerActionOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('power ${opts.action}', 'refusing to ${opts.action} without --yes (preview with --dry-run).\nExample: horneroctl power ${opts.action} --dry-run')
 	}
+	if opts.action == 'lock' && !opts.dry_run && lock_backend_uses_hyprlock()
+		&& hyprlock_process_state() == 'running' {
+		return duplicate_hyprlock_result()
+	}
 	mut prog := ''
 	mut args := []string{}
 	match opts.action {
@@ -267,6 +312,9 @@ pub fn lock_now_report(opts LockNowOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('lock now', 'refusing to lock without --yes (preview with --dry-run).\nExample: horneroctl lock now --dry-run')
 	}
+	if !opts.dry_run && lock_backend_uses_hyprlock() && hyprlock_process_state() == 'running' {
+		return duplicate_hyprlock_result()
+	}
 	if resolve_lockscreen_bin().len == 0 && (opts.effect.len > 0 || lock_has_images()) {
 		return lock_now_native_report(LockNowNativeOptions{
 			effect:  opts.effect
@@ -305,6 +353,8 @@ pub fn lock_status_report() CommandResult {
 	mut data := map[string]string{}
 	lines << 'lockscreen: ${describe_bin(ls)}'
 	lines << 'hyprlock: ${describe_bin(hl)}'
+	hyprlock_state := hyprlock_process_state()
+	lines << 'hyprlock process: ${hyprlock_state}'
 	lines << 'would run: ${command_line(plan.prog, plan.args)}'
 	if session.len > 0 {
 		lines << 'session: ${session}'
@@ -322,6 +372,7 @@ pub fn lock_status_report() CommandResult {
 	}
 	data['lockscreen'] = describe_bin(ls)
 	data['hyprlock'] = describe_bin(hl)
+	data['hyprlock_process'] = hyprlock_state
 	data['command_line'] = command_line(plan.prog, plan.args)
 	return ok_result('lock status', lines.join('\n'), data)
 }

@@ -20,13 +20,20 @@ fn lock_tsetup() {
 	os.write_file('${lock_troot}/bin/hyprlock', '#!/bin/sh\necho "hyprlock \$*"\nexit 0\n') or {
 		assert false
 	}
+	os.write_file('${lock_troot}/bin/pgrep', '#!/bin/sh\nprintf "%s\\n" "\$@" >> "\$HORNERO_TEST_PGREP_LOG"\n[ "\$HORNERO_TEST_HYPRLOCK_RUNNING" = "1" ]\n') or {
+		assert false
+	}
 	os.chmod('${lock_troot}/bin/magick', 0o755) or { assert false }
 	os.chmod('${lock_troot}/bin/hyprlock', 0o755) or { assert false }
+	os.chmod('${lock_troot}/bin/pgrep', 0o755) or { assert false }
 	os.setenv('XDG_CACHE_HOME', '${lock_troot}/cache', true)
 	os.setenv('XDG_STATE_HOME', '${lock_troot}/state', true)
 	os.setenv('XDG_DATA_HOME', '${lock_troot}/data', true)
 	os.setenv('HORNERO_MAGICK_BIN', '${lock_troot}/bin/magick', true)
 	os.setenv('HORNERO_HYPRLOCK_BIN', '${lock_troot}/bin/hyprlock', true)
+	os.setenv('HORNERO_PGREP_BIN', '${lock_troot}/bin/pgrep', true)
+	os.setenv('HORNERO_TEST_PGREP_LOG', '${lock_troot}/pgrep.log', true)
+	os.unsetenv('HORNERO_TEST_HYPRLOCK_RUNNING')
 	os.setenv('HORNERO_LOCKSCREEN_RESOLUTION', '800x600', true)
 	os.setenv('HORNERO_THEMES_DIR', '${lock_troot}/themes', true)
 	os.setenv('HORNERO_LOCK_FIXLOG', '${lock_troot}/magick.log', true)
@@ -40,6 +47,9 @@ fn lock_tteardown() {
 	os.unsetenv('XDG_DATA_HOME')
 	os.unsetenv('HORNERO_MAGICK_BIN')
 	os.unsetenv('HORNERO_HYPRLOCK_BIN')
+	os.unsetenv('HORNERO_PGREP_BIN')
+	os.unsetenv('HORNERO_TEST_PGREP_LOG')
+	os.unsetenv('HORNERO_TEST_HYPRLOCK_RUNNING')
 	os.unsetenv('HORNERO_LOCKSCREEN_RESOLUTION')
 	os.unsetenv('HORNERO_THEMES_DIR')
 	os.unsetenv('HORNERO_LOCK_FIXLOG')
@@ -264,6 +274,23 @@ fn test_lock_now_native_live_locks_and_cleans_up() {
 			assert false, 'temp config leaked: ${f}'
 		}
 	}
+	lock_tteardown()
+}
+
+fn test_lock_now_native_skips_duplicate_hyprlock_process() {
+	lock_tsetup()
+	lock_live_images()
+	os.setenv('HORNERO_TEST_HYPRLOCK_RUNNING', '1', true)
+	r := lock_now_native_report(LockNowNativeOptions{})
+	assert r.ok
+	assert r.message.contains('already running')
+	assert r.data['already_running'] == 'true'
+	assert !os.is_file(os.join_path(os.temp_dir(), 'hornero-lock-${os.getpid()}.conf'))
+	pgrep_args := os.read_file('${lock_troot}/pgrep.log') or { '' }
+	assert pgrep_args.contains('-x')
+	assert pgrep_args.contains('-u')
+	assert pgrep_args.contains(os.getuid().str())
+	assert pgrep_args.contains('hyprlock')
 	lock_tteardown()
 }
 
