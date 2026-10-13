@@ -64,12 +64,9 @@ jobs:
           python-version: '3.12'
       - name: Install compose dependencies
         run: pip install pyyaml
-      # Same master-HEAD toolchain as horneroctl-ci (see that workflow).
-      - name: Install V (master HEAD)
-        run: |
-          git clone -q --depth 1 https://github.com/vlang/v /tmp/vlang-src
-          make -C /tmp/vlang-src
-          echo "/tmp/vlang-src" >> "$GITHUB_PATH"
+      # Same locked compiler revision as horneroctl-ci and release builds.
+      - name: Install pinned V
+        uses: ./.github/actions/setup-v
       - name: Resolve current Shell and Config main commits
         id: pins
         run: |

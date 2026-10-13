@@ -1,0 +1,29 @@
+name: Set up pinned V compiler
+description: Build the V compiler from the repository's verified commit lock.
+runs:
+  using: composite
+  steps:
+    - name: Read pinned V commit
+      id: v
+      shell: bash
+      run: |
+        commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/vlang.commit")"
+        if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "invalid V commit in toolchain/vlang.commit: $commit" >&2
+          exit 1
+        fi
+        echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+    - name: Build pinned V compiler
+      shell: bash
+      env:
+        V_COMMIT: ${{ steps.v.outputs.commit }}
+      run: |
+        vdir="$RUNNER_TEMP/hornero-v-${V_COMMIT:0:12}"
+        git init -q "$vdir"
+        git -C "$vdir" remote add origin https://github.com/vlang/v
+        git -C "$vdir" fetch -q --depth 1 origin "$V_COMMIT"
+        git -C "$vdir" checkout -q --detach FETCH_HEAD
+        [[ "$(git -C "$vdir" rev-parse HEAD)" == "$V_COMMIT" ]]
+        make -C "$vdir"
+        echo "$vdir" >> "$GITHUB_PATH"

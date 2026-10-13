@@ -57,13 +57,10 @@ jobs:
             expect_arch: arm64
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      # Always latest V: build master HEAD from source (same as CI; also
-      # frees the arm64 runner from depending on a v_linux_arm64.zip asset).
-      - name: Install V (master HEAD)
-        run: |
-          git clone -q --depth 1 https://github.com/vlang/v /tmp/vlang-src
-          make -C /tmp/vlang-src
-          echo "/tmp/vlang-src" >> "$GITHUB_PATH"
+      # Build V from the shared lock; this also avoids architecture-specific
+      # prebuilt compiler assets on the arm64 runner.
+      - name: Install pinned V
+        uses: ./.github/actions/setup-v
       - name: Verify toolchain
         run: v version
       - name: Check architecture

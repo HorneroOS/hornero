@@ -13,20 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      # Always latest V: build master HEAD from source. Plain
-      # `git clone --depth 1 + make` bootstraps fine with the runner's cc
-      # (verified 2026-09-17); no version pin exists on purpose — pins rot.
-      - name: Install V (master HEAD)
-        run: |
-          git clone -q --depth 1 https://github.com/vlang/v /tmp/vlang-src
-          make -C /tmp/vlang-src
-          echo "/tmp/vlang-src" >> "$GITHUB_PATH"
+      # The shared lock avoids upstream master changes breaking unrelated PRs.
+      - name: Install pinned V
+        uses: ./.github/actions/setup-v
       - name: Verify toolchain
         run: v version
       - name: Format check
         working-directory: cli
         run: ./make.vsh fmt-check
-      # Non-blocking vet+test: the master-HEAD toolchain has upstream memory
+      # Non-blocking vet+test: the pinned toolchain has upstream memory
       # bugs (`v vet` corrupts its own diagnostics — vlang/v#28692; `v test`
       # reporter faults on large suites, confirmed 2026-09-18 — vlang/v#28693).
       # Re-enforce when those issues close; fmt/build still gate. Full test
