@@ -19,9 +19,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: a0e60061b7d5790f53e56ecd6fcc898f53805300
+    sha: e514eb859c5b6066870887a021aed9d2cb271615
     status: pinned
-    subject: "fix(shell): normalize Hyprland window addresses (#184)"
+    subject: "Merge pull request #185 from HorneroOS/release/hornero-shell-v1.2.13"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
