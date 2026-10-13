@@ -24,11 +24,12 @@ const capture_test_keys = ['HORNERO_SSS_BIN', 'HORNERO_GPU_SCREEN_RECORDER_BIN',
 	'HORNERO_RECORDER_MATCH', 'HORNERO_COPYQ_BIN', 'HORNERO_CLIPHIST_BIN', 'HORNERO_WL_PASTE_BIN',
 	'XDG_SESSION_TYPE', 'XDG_PICTURES_DIR', 'XDG_VIDEOS_DIR', 'CAELESTIA_RECORDINGS_DIR',
 	'XDG_STATE_HOME', 'HORNERO_CAPTURE_TIMEOUT_SEC', 'NIRI_SOCKET', 'HORNERO_NIRI_BIN',
-	'HORNERO_NIRI_TEST_ARGS']
+	'HORNERO_NIRI_TEST_ARGS', 'HORNERO_PGREP_BIN', 'HORNEROS_TEST_CAPTURE', 'PATH']
 
 fn capture_test_break_backends() {
 	os.setenv('HORNERO_SSS_BIN', '/nonexistent-sss-hornero-test', true)
 	os.setenv('HORNERO_GPU_SCREEN_RECORDER_BIN', '/nonexistent-gsr-hornero-test', true)
+	os.setenv('HORNERO_PGREP_BIN', '/nonexistent-pgrep-hornero-test', true)
 	os.setenv('HORNERO_RECORDER_MATCH', 'hornero-test-no-such-recorder', true)
 	os.setenv('HORNERO_COPYQ_BIN', '/nonexistent-copyq-hornero-test', true)
 	os.setenv('HORNERO_CLIPHIST_BIN', '/nonexistent-cliphist-hornero-test', true)
@@ -320,12 +321,36 @@ fn test_recorder_pgrep_pattern_is_self_match_free() {
 	os.setenv('HORNERO_RECORDER_MATCH', 'hornero-test-no-such-recorder', true)
 	pat := recorder_pgrep_pattern()
 	assert pat == '[h]ornero-test-no-such-recorder'
-	// The pgrep shell wrapper carries the pattern on its own command
-	// line; the bracket form must not match itself (regression: a bare
-	// pattern always matched and faked a live recording).
+	// The pgrep invocation carries the pattern on its own command line; the
+	// bracket form must not match itself (regression: a bare pattern always
+	// matched and faked a live recording).
 	r := os.execute("pgrep -f '${pat}'")
 	assert r.exit_code != 0
 	capture_test_restore_env(saved)
+}
+
+fn test_recorder_running_passes_pattern_as_a_literal_argv_item() {
+	root := os.join_path(os.temp_dir(), 'hornero-capture-pgrep-${os.getpid()}')
+	bin_dir := os.join_path(root, 'bin')
+	capture := os.join_path(root, 'argv.txt')
+	os.mkdir_all(bin_dir) or { assert false }
+	pgrep := os.join_path(bin_dir, 'pgrep')
+	os.write_file(pgrep, '#!/bin/sh\nprintf \'%s\\n\' "\$@" > "\$HORNEROS_TEST_CAPTURE"\nexit 1\n') or {
+		assert false
+	}
+	os.chmod(pgrep, 0o755) or { assert false }
+	saved := capture_test_save_env(['PATH', 'HORNERO_PGREP_BIN', 'HORNERO_RECORDER_MATCH',
+		'HORNEROS_TEST_CAPTURE'])
+	defer {
+		capture_test_restore_env(saved)
+		os.rmdir_all(root) or {}
+	}
+	os.setenv('PATH', bin_dir, true)
+	os.setenv('HORNERO_PGREP_BIN', pgrep, true)
+	os.setenv('HORNERO_RECORDER_MATCH', 'hornero-test-no-such-recorder', true)
+	os.setenv('HORNEROS_TEST_CAPTURE', capture, true)
+	assert !recorder_running()
+	assert (os.read_file(capture) or { '' }) == '-f\n[h]ornero-test-no-such-recorder\n'
 }
 
 fn test_recorder_pgrep_pattern_matches_live_target() {

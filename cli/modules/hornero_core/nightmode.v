@@ -357,7 +357,7 @@ fn night_enable_native(dry_run bool, mut lines []string) CommandResult {
 				'0.9',
 			])
 		} else if xr.len > 0 {
-			list := os.execute(strict_command_line(xr, [])).output
+			list := strict_exec(xr, [], false).output
 			for display in parse_xrandr_displays(list) {
 				strict_exec(xr, ['--output', display, '--gamma', '1:0.85:0.6', '--brightness',
 					'0.9'], false)
@@ -427,7 +427,7 @@ fn night_disable_native(dry_run bool, mut lines []string) CommandResult {
 				'1.0',
 			])
 		} else {
-			list := os.execute(strict_command_line(xr, [])).output
+			list := strict_exec(xr, [], false).output
 			for display in parse_xrandr_displays(list) {
 				strict_exec(xr, ['--output', display, '--gamma', '1:1:1', '--brightness', '1.0'],
 					false)
