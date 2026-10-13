@@ -9,7 +9,8 @@ runs:
       run: |
         v_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/vlang.commit")"
         vc_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/vc.commit")"
-        for entry in "v:$v_commit" "vc:$vc_commit"; do
+        tcc_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/tcc.commit")"
+        for entry in "v:$v_commit" "vc:$vc_commit" "tcc:$tcc_commit"; do
           name="${entry%%:*}"
           commit="${entry#*:}"
           if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
@@ -19,12 +20,14 @@ runs:
         done
         echo "v_commit=$v_commit" >> "$GITHUB_OUTPUT"
         echo "vc_commit=$vc_commit" >> "$GITHUB_OUTPUT"
+        echo "tcc_commit=$tcc_commit" >> "$GITHUB_OUTPUT"
 
     - name: Fetch pinned V and VC sources
       shell: bash
       env:
         V_COMMIT: ${{ steps.v.outputs.v_commit }}
         VC_COMMIT: ${{ steps.v.outputs.vc_commit }}
+        TCC_COMMIT: ${{ steps.v.outputs.tcc_commit }}
       run: |
         vdir="$RUNNER_TEMP/hornero-v-${V_COMMIT:0:12}"
         git init -q "$vdir"
@@ -38,6 +41,12 @@ runs:
         git -C "$vdir/vc" fetch -q --depth 1 origin "$VC_COMMIT"
         git -C "$vdir/vc" checkout -q --detach FETCH_HEAD
         [[ "$(git -C "$vdir/vc" rev-parse HEAD)" == "$VC_COMMIT" ]]
+        mkdir -p "$vdir/thirdparty/tcc"
+        git -C "$vdir/thirdparty/tcc" init -q
+        git -C "$vdir/thirdparty/tcc" remote add origin https://github.com/vlang/tccbin
+        git -C "$vdir/thirdparty/tcc" fetch -q --depth 1 origin "$TCC_COMMIT"
+        git -C "$vdir/thirdparty/tcc" checkout -q --detach FETCH_HEAD
+        [[ "$(git -C "$vdir/thirdparty/tcc" rev-parse HEAD)" == "$TCC_COMMIT" ]]
         # `local` prevents GNUmakefile from pulling moving vc/tcc branches.
         make -C "$vdir" local=1
         echo "$vdir" >> "$GITHUB_PATH"
