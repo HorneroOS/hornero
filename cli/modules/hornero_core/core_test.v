@@ -37,6 +37,32 @@ fn test_dry_run_never_executes() {
 	assert rep.command_line == '/nonexistent-prog-hornero-test --do-something-dangerous'
 }
 
+fn test_run_exec_passes_metacharacters_as_literal_arguments() {
+	dir := os.join_path(os.temp_dir(), 'hornero-exec-argv-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false, 'mkdir ${dir}' }
+	sentinel := os.join_path(dir, 'shell-injection-ran')
+	payload := '; touch ${sentinel}'
+	rep := run_exec(ExecSpec{
+		prog: '/usr/bin/printf'
+		args: ['%s', payload]
+	})
+	assert rep.ok
+	assert rep.output == payload
+	assert !os.exists(sentinel)
+	os.rmdir_all(dir) or {}
+}
+
+fn test_run_exec_timeout_uses_argv_and_returns_timeout_error() {
+	rep := run_exec(ExecSpec{
+		prog:        '/usr/bin/sleep'
+		args:        ['2']
+		timeout_sec: 1
+	})
+	assert !rep.ok
+	assert rep.output.contains('backend timed out after 1s')
+}
+
 fn test_version_result_shape() {
 	r := version_result()
 	assert r.ok

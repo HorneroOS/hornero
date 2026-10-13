@@ -18,8 +18,9 @@
   `2` unknown-flag/usage. Unknown flags must print a correct example.
 - `--json` / `--quiet` work on every command. `--dry-run` previews any
   external execution; mutating actions ALSO require `--yes`.
-- Never shell out with interpolated user input unsanitized; `execx.v`
-  `command_line()` quotes args.
+- Never shell out with interpolated user input. `execx.v` passes program names
+  and arguments to `os.exec` as literal argv; `command_line()` exists only for
+  dry-run display and quotes its output for readability.
 
 ## V specifics
 
