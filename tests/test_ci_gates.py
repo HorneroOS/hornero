@@ -47,6 +47,29 @@ def test_workflow_yaml_parses():
     assert set(doc["jobs"]) >= {"composition", "pin-freshness", "secrets-lint"}
 
 
+def test_v_toolchain_is_locked_and_shared_by_build_workflows():
+    for filename in ("vlang.commit", "vc.commit", "tcc.commit"):
+        lock = ROOT / "toolchain" / filename
+        commit = lock.read_text(encoding="utf-8").strip()
+        assert len(commit) == 40 and all(char in "0123456789abcdef" for char in commit)
+
+    action = ROOT / ".github" / "actions" / "setup-v" / "action.yml"
+    assert action.is_file()
+    action_text = action.read_text(encoding="utf-8")
+    assert '"$GITHUB_WORKSPACE/toolchain/vlang.commit"' in action_text
+    assert '"$GITHUB_WORKSPACE/toolchain/vc.commit"' in action_text
+    assert '"$GITHUB_WORKSPACE/toolchain/tcc.commit"' in action_text
+    assert 'git -C "$vdir" fetch -q --depth 1 origin "$V_COMMIT"' in action_text
+    assert 'git -C "$vdir/vc" fetch -q --depth 1 origin "$VC_COMMIT"' in action_text
+    assert 'git -C "$vdir/thirdparty/tcc" fetch -q --depth 1 origin "$TCC_COMMIT"' in action_text
+    assert 'make -C "$vdir" local=1' in action_text
+
+    for name in ("horneroctl-ci.yml", "composition-ci.yml", "release.yml"):
+        text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+        assert "uses: ./.github/actions/setup-v" in text, name
+        assert "git clone -q --depth 1 https://github.com/vlang/v" not in text, name
+
+
 def _triggers(doc):
     # Bare `on:` parses as boolean True under YAML 1.1 (PyYAML); quoted
     # "on:" stays a string. Accept both spellings, same assertions.
