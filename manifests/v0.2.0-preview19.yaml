@@ -19,17 +19,17 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: e514eb859c5b6066870887a021aed9d2cb271615
+    sha: 1a09e0f5bca0429b86f8caa7c7d44614a6ad05b3
     status: pinned
-    subject: "Merge pull request #185 from HorneroOS/release/hornero-shell-v1.2.13"
+    subject: "docs(perf): add a later steady-state observation (#192)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 4ef767d13ca1474031c1ac7c034c4639ea9dadb8
+    sha: 5d315558f30a188a1c54796e886f97a28644ebbe
     status: pinned
-    subject: "fix(config): keep dynamic terminal cursors readable (#73)"
-    notes: Reusable desktop and system defaults.
+    subject: "feat(config): catalog terminal integrations (#74)"
+    notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
     path: cli/
