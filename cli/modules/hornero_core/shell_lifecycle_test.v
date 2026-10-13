@@ -197,6 +197,27 @@ fn test_shell_cover_up_tracks_pid_and_down_is_quiet() {
 	os.rmdir_all(dir) or {}
 }
 
+fn test_shell_cover_quotes_paths_and_rejects_non_pid_values() {
+	dir := os.join_path(os.temp_dir(), 'hornero cover quoting test')
+	os.mkdir_all(dir) or { assert false, 'mkdir ${dir}' }
+	old_cwd := os.getwd()
+	os.chdir(dir) or { assert false, 'chdir ${dir}' }
+	cover_sentinel := 'cover-injection-ran'
+	log_sentinel := 'log-injection-ran'
+	cover := 'shell.qml; touch ${cover_sentinel} #'
+	os.write_file(cover, '// fake cover') or { assert false, 'write ${cover}' }
+	// Unquoted --path and redirection values would execute these `touch`es.
+	logf := 'shell.log; touch ${log_sentinel} #'
+	_ := shell_cover_up('/bin/true', cover, logf)
+	assert !os.exists(cover_sentinel)
+	assert !os.exists(log_sentinel)
+	// A value supplied as the captured PID must never become shell syntax.
+	shell_cover_down('not-a-pid; touch ${cover_sentinel} #')
+	assert !os.exists(cover_sentinel)
+	os.chdir(old_cwd) or { assert false, 'restore cwd ${old_cwd}' }
+	os.rmdir_all(dir) or {}
+}
+
 fn test_shell_start_guard_and_force() {
 	// pgrep always matches, so the shell looks running: plain start
 	// refuses, forced start (what restart uses under its cover)
