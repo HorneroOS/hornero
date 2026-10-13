@@ -659,10 +659,11 @@ fn run_package(args []string, mode hornero_core.RenderMode) int {
 	}
 	if opts.leaf == 'deps' {
 		deps := hornero_core.PackageDepsOptions{
-			optional: opts.optional
-			install:  opts.install
-			dry_run:  opts.dry_run
-			yes:      opts.yes
+			optional:   opts.optional
+			install:    opts.install
+			dry_run:    opts.dry_run
+			yes:        opts.yes
+			compositor: opts.compositor
 		}
 		if opts.install {
 			return render(hornero_core.package_deps_install_report(deps), mode)

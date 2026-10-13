@@ -67,11 +67,12 @@ pub fn parse_config_snapshot(args []string) !ConfigSnapshotOptions {
 // `check`/`updates` are read-only; `upgrade`/`deps --install` mutate.
 pub struct PackageCmdOptions {
 pub:
-	leaf     string // check | updates | upgrade | deps
-	dry_run  bool
-	yes      bool
-	install  bool // deps --install
-	optional bool // deps --optional (include dev/media/AI groups)
+	leaf       string // check | updates | upgrade | deps
+	dry_run    bool
+	yes        bool
+	install    bool   // deps --install
+	optional   bool   // deps --optional (include dev/media/AI groups)
+	compositor string // deps compositor backend: hyprland | niri
 }
 
 pub fn parse_package_cmd(args []string) !PackageCmdOptions {
@@ -86,6 +87,7 @@ pub fn parse_package_cmd(args []string) !PackageCmdOptions {
 	mut yes := false
 	mut install := false
 	mut optional := false
+	mut compositor := ''
 	for i := 1; i < args.len; i++ {
 		a := args[i]
 		if a == '--dry-run' {
@@ -104,26 +106,38 @@ pub fn parse_package_cmd(args []string) !PackageCmdOptions {
 			optional = true
 			continue
 		}
+		if a == '--compositor' {
+			if i + 1 >= args.len || args[i + 1].starts_with('-') {
+				return error('missing compositor after --compositor.\nExample: horneroctl package deps --compositor niri')
+			}
+			i++
+			compositor = args[i]
+			if compositor !in ['hyprland', 'niri'] {
+				return error('unsupported compositor: ${compositor}. Choose hyprland or niri.\nExample: horneroctl package deps --compositor niri')
+			}
+			continue
+		}
 		if a.starts_with('-') {
 			return error('unknown flag: ${a}.\nExample: horneroctl package ${leaf} --dry-run')
 		}
 		return error('unexpected argument: ${a}.\nRun: horneroctl package --help')
 	}
-	if leaf in ['check', 'updates'] && (yes || install || optional) {
-		return error('package ${leaf} takes no --yes/--install/--optional.\nExample: horneroctl package ${leaf} --dry-run')
+	if leaf in ['check', 'updates'] && (yes || install || optional || compositor.len > 0) {
+		return error('package ${leaf} takes no --yes/--install/--optional/--compositor.\nExample: horneroctl package ${leaf} --dry-run')
 	}
-	if leaf == 'upgrade' && (install || optional) {
-		return error('package upgrade takes no --install/--optional.\nExample: horneroctl package upgrade --dry-run')
+	if leaf == 'upgrade' && (install || optional || compositor.len > 0) {
+		return error('package upgrade takes no --install/--optional/--compositor.\nExample: horneroctl package upgrade --dry-run')
 	}
 	if leaf == 'deps' && !install && yes {
 		return error('package deps check takes no --yes.\nExample: horneroctl package deps --optional')
 	}
 	return PackageCmdOptions{
-		leaf:     leaf
-		dry_run:  dry_run
-		yes:      yes
-		install:  install
-		optional: optional
+		leaf:       leaf
+		dry_run:    dry_run
+		yes:        yes
+		install:    install
+		optional:   optional
+		compositor: compositor
 	}
 }
 

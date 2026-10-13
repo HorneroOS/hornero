@@ -58,6 +58,14 @@ create a system snapshot or provide OS rollback. `config snapshot` and
 `backup` cover Hornero configuration only; see
 [`../docs/UPDATE_RECOVERY.md`](../docs/UPDATE_RECOVERY.md) for exact boundaries.
 
+`horneroctl package deps` checks common CLI and shell prerequisites, the
+selected compositor runtime, and its portal backends. It selects the compositor from the
+installed Hornero profile, then the active Wayland session; an unprofiled
+system without an active session retains Hyprland as the compatibility default.
+Use `--compositor hyprland` or `--compositor niri` to choose explicitly. Niri's
+dependency check is marked experimental. Portal service binaries are checked
+in Arch's `/usr/lib` service path as well as checking normal commands on `PATH`.
+
 `horneroctl config gui --pane <id>` asks the running Hornero Shell to open a
 registered Control Center destination over Shell IPC. The Shell registry is
 the source of truth for pane IDs; when the Shell is not running, the command
