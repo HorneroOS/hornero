@@ -118,10 +118,9 @@ fn capture_backend_or_placeholder(resolved string, prog string, env_key string, 
 	return resolved
 }
 
-// recorder_pgrep_pattern brackets the first character of the match so the
-// pgrep/pkill shell wrapper can never match its own command line: the
-// literal '[g]pu-screen-recorder' text does not satisfy the bracket
-// regex, while real recorder command lines still do.
+// recorder_pgrep_pattern brackets the first character of the match so pgrep
+// cannot match its own literal argument. The pattern '[g]pu-screen-recorder'
+// does not match that bracketed text, while real recorder command lines do.
 fn recorder_pgrep_pattern() string {
 	m := recorder_match()
 	if m.len == 0 || m[0] >= 128 {
@@ -131,12 +130,12 @@ fn recorder_pgrep_pattern() string {
 }
 
 // recorder_running reports whether the recorder process is alive.
-// pgrep -f also lists the shell wrapper that runs it, whose command line
-// contains the pattern: any match on our own pid chain is discarded so a
-// host shell quirk can never fake a running recorder (CI hermeticity).
+// pgrep -f may list the horneroctl process chain; discard our own PIDs so a
+// matching command invocation cannot fake a live recording.
 fn recorder_running() bool {
-	r := os.execute(command_line('pgrep', ['-f', recorder_pgrep_pattern()]))
-	if r.exit_code != 0 {
+	pgrep := resolve_pgrep_bin()
+	r := strict_exec(pgrep, ['-f', recorder_pgrep_pattern()], false)
+	if !r.ok {
 		return false
 	}
 	own := [os.getpid(), os.getppid()]

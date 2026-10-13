@@ -414,7 +414,7 @@ fn shell_cover_down(cover_pid string) {
 	if cover_pid.len == 0 || !cover_pid.bytes().all(it >= `0` && it <= `9`) {
 		return
 	}
-	os.execute(strict_command_line('kill', [cover_pid]))
+	_ = strict_exec('kill', [cover_pid], false)
 }
 
 pub struct ShellLogsOptions {
