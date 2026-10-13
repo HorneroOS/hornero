@@ -10,6 +10,22 @@ const audit_test_keys = ['HOME', 'XDG_CONFIG_HOME', 'HORNERO_UFW_BIN', 'HORNERO_
 	'HORNERO_APPARMOR_BIN', 'HORNERO_SS_BIN', 'HORNERO_PACMAN_BIN', 'HORNERO_SSHD_CONFIG',
 	'HORNERO_STAT_BIN', 'HORNERO_FIND_BIN']
 
+fn test_audit_exec_wrapper_passes_literal_arguments() {
+	dir := os.join_path(os.temp_dir(), 'hornero-audit-exec-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false }
+	sentinel := os.join_path(dir, 'shell-injection-ran')
+	payload := '; touch ${sentinel}'
+	rep := strict_exec_wrap(ExecSpec{
+		prog: '/usr/bin/printf'
+		args: ['%s', payload]
+	})
+	assert rep.ok
+	assert rep.output == payload
+	assert !os.exists(sentinel)
+	os.rmdir_all(dir) or {}
+}
+
 fn audit_test_save_env() map[string]string {
 	mut saved := map[string]string{}
 	for k in audit_test_keys {

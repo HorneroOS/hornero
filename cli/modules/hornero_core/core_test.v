@@ -53,6 +53,20 @@ fn test_run_exec_passes_metacharacters_as_literal_arguments() {
 	os.rmdir_all(dir) or {}
 }
 
+fn test_strict_exec_passes_metacharacters_as_literal_arguments() {
+	dir := os.join_path(os.temp_dir(), 'hornero-strict-exec-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false, 'mkdir ${dir}' }
+	sentinel := os.join_path(dir, 'shell-injection-ran')
+	payload := '; touch ${sentinel}'
+	rep := strict_exec('/usr/bin/printf', ['%s', payload], false)
+	assert rep.ok
+	assert rep.output == payload
+	assert !os.exists(sentinel)
+	assert rep.command_line.contains("'${payload}'")
+	os.rmdir_all(dir) or {}
+}
+
 fn test_run_exec_timeout_uses_argv_and_returns_timeout_error() {
 	rep := run_exec(ExecSpec{
 		prog:        '/usr/bin/sleep'

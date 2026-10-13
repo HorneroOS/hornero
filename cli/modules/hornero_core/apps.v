@@ -156,11 +156,14 @@ fn apps_run_helper(bin string, args []string, dry_run bool) ExecReport {
 			was_dry_run:  true
 		}
 	}
-	r := os.execute(line)
+	r := run_exec(ExecSpec{
+		prog: bin
+		args: args
+	})
 	return ExecReport{
 		command_line: line
-		ok:           r.exit_code == 0
-		output:       r.output.trim_space()
+		ok:           r.ok
+		output:       r.output
 		exit_code:    r.exit_code
 		was_dry_run:  false
 	}
@@ -183,11 +186,14 @@ fn apps_run_leaf(prog string, args []string, dry_run bool) ExecReport {
 			was_dry_run:  true
 		}
 	}
-	r := os.execute(line)
+	r := run_exec(ExecSpec{
+		prog: prog
+		args: args
+	})
 	return ExecReport{
 		command_line: line
-		ok:           r.exit_code == 0
-		output:       r.output.trim_space()
+		ok:           r.ok
+		output:       r.output
 		exit_code:    r.exit_code
 		was_dry_run:  false
 	}

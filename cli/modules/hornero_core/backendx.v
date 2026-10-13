@@ -37,11 +37,14 @@ pub fn strict_exec(prog string, args []string, dry_run bool) ExecReport {
 			was_dry_run:  true
 		}
 	}
-	r := os.execute(line)
+	r := run_exec(ExecSpec{
+		prog: prog
+		args: args
+	})
 	return ExecReport{
 		command_line: line
-		ok:           r.exit_code == 0
-		output:       r.output.trim_space()
+		ok:           r.ok
+		output:       r.output
 		exit_code:    r.exit_code
 		was_dry_run:  false
 	}
@@ -225,15 +228,14 @@ pub fn run_m3_synthesis(image string, output string, flavour string, mode string
 fn reload_ghostty_theme() {
 	systemctl := find_on_path('systemctl')
 	if systemctl.len > 0 {
-		active := os.execute(strict_command_line(systemctl, ['--user', 'is-active', '--quiet',
-			'app-com.mitchellh.ghostty.service']))
-		if active.exit_code == 0 {
-			reloaded := os.execute(strict_command_line(systemctl, ['--user', 'reload',
-				'app-com.mitchellh.ghostty.service']))
-			if reloaded.exit_code == 0 {
+		active := strict_exec(systemctl, ['--user', 'is-active', '--quiet',
+			'app-com.mitchellh.ghostty.service'], false)
+		if active.ok {
+			reloaded := strict_exec(systemctl, ['--user', 'reload', 'app-com.mitchellh.ghostty.service'], false)
+			if reloaded.ok {
 				return
 			}
 		}
 	}
-	_ = os.execute(strict_command_line(resolve_pkill_bin(), ['-USR2', '-x', 'ghostty']))
+	_ = strict_exec(resolve_pkill_bin(), ['-USR2', '-x', 'ghostty'], false)
 }
