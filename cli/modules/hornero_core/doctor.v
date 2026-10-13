@@ -10,7 +10,7 @@ fn terminal_doctor_checks(installed []string, selected string) []DoctorCheck {
 	mut checks := []DoctorCheck{}
 	checks << DoctorCheck{
 		name:   'terminal-options'
-		ok:    available.len > 0
+		ok:     available.len > 0
 		detail: if available.len > 0 {
 			'available: ${available.join(', ')}'
 		} else {
