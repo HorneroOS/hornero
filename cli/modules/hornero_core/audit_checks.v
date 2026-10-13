@@ -28,27 +28,10 @@ fn audit_find_bin() string {
 }
 
 // strict_exec_wrap runs prog/args with every word single-quoted (find
-// predicates carry parens, globs, and bangs the shared quote_arg
-// leaves bare for the shell).
+// predicates carry parens, globs, and bangs; the argv executor passes them
+// directly without asking a shell to interpret them.
 fn strict_exec_wrap(spec ExecSpec) ExecReport {
-	line := strict_command_line(spec.prog, spec.args)
-	if spec.dry_run {
-		return ExecReport{
-			command_line: line
-			ok:           true
-			output:       '(dry-run: not executed)'
-			exit_code:    0
-			was_dry_run:  true
-		}
-	}
-	r := os.execute(line)
-	return ExecReport{
-		command_line: line
-		ok:           r.exit_code == 0
-		output:       r.output.trim_space()
-		exit_code:    r.exit_code
-		was_dry_run:  false
-	}
+	return strict_exec(spec.prog, spec.args, spec.dry_run)
 }
 
 // audit_stat_mode returns `stat -c %a` for one path, '' on failure.

@@ -28,6 +28,22 @@ const apps_test_keys = ['HORNERO_FILE_MANAGER_BIN', 'HORNERO_EXO_OPEN_BIN', 'HOR
 	'HORNERO_CAFFEINE_BIN', 'XDG_CONFIG_HOME', 'HORNERO_BYPASS_QUICKSHELL', 'PATH',
 	'HORNERO_POWERPROFILESCTL_BIN', 'HORNERO_TEST_CAPTURE']
 
+fn test_apps_leaf_and_helper_execute_literal_arguments() {
+	dir := os.join_path(os.temp_dir(), 'hornero-apps-exec-${os.getpid()}')
+	os.rmdir_all(dir) or {}
+	os.mkdir_all(dir) or { assert false }
+	sentinel := os.join_path(dir, 'shell-injection-ran')
+	payload := '; touch ${sentinel}'
+	for rep in [apps_run_leaf('/usr/bin/printf', ['%s', payload], false),
+		apps_run_helper('/usr/bin/printf', ['%s', payload], false)] {
+		assert rep.ok
+		assert rep.output == payload
+		assert rep.command_line.contains("'${payload}'")
+	}
+	assert !os.exists(sentinel)
+	os.rmdir_all(dir) or {}
+}
+
 fn apps_test_break_backends() {
 	os.setenv('HORNERO_FILE_MANAGER_BIN', '/nonexistent-fm-hornero-test', true)
 	os.setenv('HORNERO_EXO_OPEN_BIN', '/nonexistent-exo-hornero-test', true)
