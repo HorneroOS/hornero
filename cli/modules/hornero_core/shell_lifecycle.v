@@ -220,9 +220,8 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 	}
 	conf := resolve_quickshell_config_dir()
 	logf := resolve_shell_log_file()
-	// Uses the established `nohup "$QUICKSHELL_BIN" >/dev/null 2>&1 &`,
-	// keeping stdout in the shell log so `shell logs` can tail it.
-	line := 'nohup ${bin} >>${logf} 2>&1 &'
+	// Quote executable and log paths because they may come from user environment.
+	line := 'nohup ${strict_command_line(bin, [])} >>${wallpaper_shell_quote(logf)} 2>&1 &'
 	if opts.dry_run {
 		return ok_result('shell start', 'would run: ${line}\nconfig dir: ${conf}\nlog file: ${logf}',
 			{
@@ -346,9 +345,9 @@ pub fn shell_restart_report(opts ShellRestartOptions) CommandResult {
 	}
 	kill_line := command_line(bin, ['kill'])
 	logf := resolve_shell_log_file()
-	start_line := 'nohup ${bin} >>${logf} 2>&1 &'
+	start_line := 'nohup ${strict_command_line(bin, [])} >>${wallpaper_shell_quote(logf)} 2>&1 &'
 	cover := os.join_path(resolve_quickshell_config_dir(), 'reloadcover', 'shell.qml')
-	cover_line := 'nohup ${bin} --path ${cover} >>${logf} 2>&1 & echo \$!'
+	cover_line := 'nohup ${strict_command_line(bin, ['--path', cover])} >>${wallpaper_shell_quote(logf)} 2>&1 & echo \$!'
 	if opts.dry_run {
 		return ok_result('shell restart', 'would run: ${kill_line}\nwould run: sleep 1\nwould run: ${cover_line}\nwould run: ${start_line}\nwould run: kill <cover-pid>',
 			{
@@ -400,7 +399,8 @@ fn shell_cover_up(bin string, cover string, logf string) string {
 	if !os.is_file(cover) {
 		return ''
 	}
-	rep := os.execute('nohup ${bin} --path ${cover} >>${logf} 2>&1 & echo \$!')
+	line := 'nohup ${strict_command_line(bin, ['--path', cover])} >>${wallpaper_shell_quote(logf)} 2>&1 & echo \$!'
+	rep := os.execute(line)
 	pid := rep.output.trim_space()
 	if rep.exit_code != 0 || pid.len == 0 {
 		return ''
@@ -411,10 +411,10 @@ fn shell_cover_up(bin string, cover string, logf string) string {
 // shell_cover_down kills a cover started by shell_cover_up. '' is a
 // no-op; kill failures are ignored (the cover has a 60 s watchdog).
 fn shell_cover_down(cover_pid string) {
-	if cover_pid.len == 0 {
+	if cover_pid.len == 0 || !cover_pid.bytes().all(it >= `0` && it <= `9`) {
 		return
 	}
-	os.execute('kill ${cover_pid}')
+	os.execute(strict_command_line('kill', [cover_pid]))
 }
 
 pub struct ShellLogsOptions {
