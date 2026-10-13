@@ -2,6 +2,45 @@ module hornero_core
 
 import os
 
+// terminal_doctor_checks keeps terminal health deterministic and separately
+// reports whether a supported choice exists and whether the Shell default can
+// actually be launched.
+fn terminal_doctor_checks(installed []string, selected string) []DoctorCheck {
+	available := installed.filter(it in supported_terminal_defaults)
+	mut checks := []DoctorCheck{}
+	checks << DoctorCheck{
+		name:   'terminal-options'
+		ok:     available.len > 0
+		detail: if available.len > 0 {
+			'available: ${available.join(', ')}'
+		} else {
+			'none of the supported terminals are installed (kitty, alacritty, ghostty)'
+		}
+	}
+	choice := if selected.len == 0 { 'kitty' } else { selected }
+	if choice == 'Invalid shell.json' {
+		checks << DoctorCheck{
+			name:   'shell-terminal'
+			ok:     false
+			detail: 'Hornero Shell configuration is invalid: shell.json could not be parsed; repair the file before selecting a terminal'
+		}
+		return checks
+	}
+	available_label := if available.len > 0 { available.join(', ') } else { 'none installed' }
+	checks << DoctorCheck{
+		name:   'shell-terminal'
+		ok:     choice in available
+		detail: if choice in available {
+			'${choice} is installed and selected'
+		} else if choice !in supported_terminal_defaults {
+			'${choice} is selected but unsupported; installed supported choices: ${available_label}'
+		} else {
+			'${choice} is selected but not installed; available: ${available_label}'
+		}
+	}
+	return checks
+}
+
 // DoctorCheck is one read-only health probe. doctor never changes anything.
 pub struct DoctorCheck {
 pub:
@@ -71,6 +110,13 @@ pub fn run_doctor() []DoctorCheck {
 			detail: 'No recognized Hornero compositor session is active'
 		}
 	}
+	mut installed_terminals := []string{}
+	for terminal in supported_terminal_defaults {
+		if find_on_path(terminal).len > 0 {
+			installed_terminals << terminal
+		}
+	}
+	checks << terminal_doctor_checks(installed_terminals, shell_terminal_id())
 	checks << bin_check('quickshell-cli', 'qs')
 	cfg := shell_config_file(p)
 	if os.is_file(cfg) {

@@ -91,6 +91,8 @@ fn test_doctor_help_names_each_wayland_backend_without_defining_the_desktop_by_o
 	help := command_help('doctor')
 	assert help.contains('recognized Wayland compositor session')
 	assert help.contains('Hyprland or Niri')
+	assert help.contains('installed terminal')
+	assert help.contains('selected Hornero Shell terminal')
 	assert !help.contains('Wayland/Hyprland session')
 }
 
