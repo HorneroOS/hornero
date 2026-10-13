@@ -87,15 +87,47 @@ fn test_version_result_shape() {
 
 fn test_doctor_returns_checks() {
 	checks := run_doctor()
-	assert checks.len >= 5
 	names := checks.map(it.name)
 	assert 'wayland-session' in names
 	assert 'shell-config' in names
+	assert 'terminal-options' in names
+	assert 'shell-terminal' in names
 	r := doctor_result(checks)
 	assert r.command == 'doctor'
 	// exit-worthiness follows the worst check, deterministically
 	failed := checks.filter(!it.ok).len
 	assert r.ok == (failed == 0)
+}
+
+fn test_doctor_terminal_checks_report_available_choices_and_selection() {
+	checks := terminal_doctor_checks(['kitty', 'ghostty'], 'ghostty')
+	assert checks.len == 2
+	assert checks[0].ok
+	assert checks[0].detail == 'available: kitty, ghostty'
+	assert checks[1].ok
+	assert checks[1].detail == 'ghostty is installed and selected'
+}
+
+fn test_doctor_terminal_checks_flag_missing_selected_terminal() {
+	checks := terminal_doctor_checks(['ghostty'], 'kitty')
+	assert checks[0].ok
+	assert !checks[1].ok
+	assert checks[1].detail.contains('kitty is selected but not installed')
+	assert checks[1].detail.contains('ghostty')
+}
+
+fn test_doctor_terminal_checks_handle_no_supported_terminals() {
+	checks := terminal_doctor_checks([], '')
+	assert !checks[0].ok
+	assert !checks[1].ok
+	assert checks[1].detail.contains('available: none')
+}
+
+fn test_doctor_terminal_checks_flag_invalid_selection() {
+	checks := terminal_doctor_checks(['kitty'], 'xterm')
+	assert checks[0].ok
+	assert !checks[1].ok
+	assert checks[1].detail.contains('unsupported')
 }
 
 fn test_ipc_missing_binary_fails_cleanly() {

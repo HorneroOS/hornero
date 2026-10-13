@@ -79,6 +79,11 @@ desktop-specific XDG terminal lists can still override the generic preference.
 `config default-apps list` reports the Exo terminal and generic XDG preference
 separately.
 
+`horneroctl doctor` also checks which supported terminals are installed and
+whether the Hornero Shell's selected terminal can be launched. A missing or
+unsupported selection is reported as a health failure with the available
+choices; the check is read-only.
+
 ## Ownership
 
 The Shell owns live session state and visual interactions. `horneroctl` owns

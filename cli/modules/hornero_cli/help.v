@@ -65,8 +65,9 @@ Examples:
 			return 'Usage: horneroctl doctor [--json]
 
 Read-only health checks: a recognized Wayland compositor session
-(Hyprland or Niri), required binaries, and shell configuration presence.
-Never changes anything.
+(Hyprland or Niri), required binaries, shell configuration, installed terminal
+choices, and whether the selected Hornero Shell terminal is available. Never
+changes anything.
 
 Exit codes:
   0  all checks passed
