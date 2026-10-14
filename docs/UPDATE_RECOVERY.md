@@ -9,7 +9,7 @@ operating-system rollback mechanism.
 
 | Command | Reads or changes | Does not guarantee |
 | --- | --- | --- |
-| `horneroctl package check` / `package updates` | Read-only repository update checks through `checkupdates`; optionally AUR checks through `yay -Qua` or `paru -Qua`; configured `IgnorePkg` and `IgnoreGroup` patterns through `pacman-conf` | These results are not limited to Hornero-owned packages. Missing AUR helpers or `pacman-conf` are reported as unchecked/unavailable, not as an empty result. |
+| `horneroctl package check` / `package updates` | Read-only repository update checks through `checkupdates`; optionally AUR checks through `yay -Qua` or `paru -Qua`; configured `IgnorePkg`, `IgnoreGroup`, and `HoldPkg` values through `pacman-conf` | These results are not limited to Hornero-owned packages. Missing AUR helpers or `pacman-conf` are reported as unchecked/unavailable, not as an empty result. |
 | `horneroctl package upgrade --yes` | Runs `pkexec pacman -Syu`, a full Arch system upgrade | It is not a Hornero-only upgrade, does not hold or exclude the kernel, does not create a system snapshot, and does not promise rollback. |
 | `horneroctl config snapshot create --yes` | Saves Hornero-owned configuration roots and package/host metadata under the user's Hornero data directory | It does not snapshot `/`, installed package files, boot entries, databases, home directories beyond the selected config roots, or kernel state. |
 | `horneroctl config snapshot restore <id> --yes` | Creates a safety config snapshot, then restores the selected Hornero configuration archive | It is a configuration restore, not an OS rollback. |
@@ -18,12 +18,13 @@ operating-system rollback mechanism.
 The term “snapshot” in the CLI means a **Hornero configuration snapshot**. It
 must not be presented as a Btrfs, filesystem, bootable, or system snapshot.
 
-The package check's ignore-pattern section reports the effective pacman
-`IgnorePkg` and `IgnoreGroup` values through `pacman-conf`. Pacman uses those
-patterns to skip matching upgrades during `--sysupgrade`; this is visibility
-into the configured policy, not a package hold recommendation or rollback
-mechanism. `pacman-conf` resolves included configuration files using pacman's
-own parser ([Arch pacman-conf manual](https://man.archlinux.org/man/pacman-conf.8.en),
+The package check reports the effective pacman `IgnorePkg`, `IgnoreGroup`, and
+`HoldPkg` values through `pacman-conf`. Pacman uses the ignore patterns to skip
+matching upgrades during `--sysupgrade`. `HoldPkg` has a different meaning: it
+prompts before removing matching packages and does not prevent upgrades. These
+values provide visibility into configured policy, not a package hold
+recommendation or rollback mechanism. `pacman-conf` resolves included
+configuration files using pacman's own parser ([Arch pacman-conf manual](https://man.archlinux.org/man/pacman-conf.8.en),
 [pacman.conf manual](https://man.archlinux.org/man/pacman.conf.5.en)).
 
 ## Ownership boundaries

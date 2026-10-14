@@ -543,7 +543,9 @@ Examples:
 Update sources: checkupdates on PATH for repository packages and
 yay -Qua (or paru -Qua) for AUR packages when an AUR helper is installed.
 Set HORNERO_CHECKUPDATES_BIN or HORNERO_AUR_HELPER_BIN to override either
-backend. `pacman-conf` reports configured IgnorePkg and IgnoreGroup patterns;
+backend. `pacman-conf` reports configured IgnorePkg, IgnoreGroup, and HoldPkg
+values. HoldPkg only adds a confirmation before removal; it does not block
+upgrades.
 set HORNERO_PACMAN_CONF_BIN to override that read-only source. AUR checks are read-only
 and time out after 30 seconds; without a helper, repository results remain
 available and AUR status is marked unchecked. Missing pacman-conf is
