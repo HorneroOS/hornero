@@ -19,16 +19,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 1a09e0f5bca0429b86f8caa7c7d44614a6ad05b3
+    sha: 0fc4d17819e0dca7a6f938b9b2070b7abbf56189
     status: pinned
-    subject: "docs(perf): add a later steady-state observation (#192)"
+    subject: "fix(shell): align Control Center actions and refresh audio controls"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 5d315558f30a188a1c54796e886f97a28644ebbe
+    sha: c2e33e81de74bef98205dde85f321961c6ebfe6d
     status: pinned
-    subject: "feat(config): catalog terminal integrations (#74)"
+    subject: "feat(config): catalogue native palette integrations"
     notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
