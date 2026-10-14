@@ -46,7 +46,9 @@ that happen to be present.
 through `checkupdates` and AUR updates through `yay -Qua` or `paru -Qua` when an
 AUR helper is available. When `pacman-conf` is available, they also report the
 configured `IgnorePkg` and `IgnoreGroup` patterns that suppress matching
-upgrades during pacman's system-upgrade operation. The command uses
+upgrades during pacman's system-upgrade operation, plus `HoldPkg` entries.
+`HoldPkg` asks for confirmation before removal; it does not hold a package back
+from upgrades. The command uses
 pacman-conf's resolved configuration, including included config files; it does
 not parse pacman.conf itself. These are system-wide package results, not a
 Hornero-only update status. The AUR lane is read-only and bounded to 30 seconds;

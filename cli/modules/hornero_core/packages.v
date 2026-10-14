@@ -2,8 +2,8 @@ module hornero_core
 
 import os
 
-// Package backend: pending repository and AUR updates, plus pacman's ignored
-// upgrade patterns, all read-only and unprivileged. Repository updates use
+// Package backend: pending repository and AUR updates, plus pacman's read-only
+// upgrade-ignore and removal-confirmation policies. Repository updates use
 // pacman-contrib's `checkupdates`; AUR updates use yay or paru when available.
 // Privileged/mutating work lives in package_ops.v.
 
@@ -65,16 +65,18 @@ struct PackageUpdateSnapshot {
 	repository ExecReport
 	aur        ExecReport
 	aur_helper string
-	ignored    PackageIgnoreSnapshot
+	policy     PackagePolicySnapshot
 }
 
-struct PackageIgnoreSnapshot {
+struct PackagePolicySnapshot {
 	packages  []string
 	groups    []string
+	hold_pkgs []string
 	status    string
 	error     string
 	pkg_cmd   string
 	group_cmd string
+	hold_cmd  string
 }
 
 fn pacman_conf_values(helper string, directive string, dry_run bool) ExecReport {
@@ -94,37 +96,48 @@ fn parse_pacman_conf_values(output string) []string {
 	return values
 }
 
-fn read_pacman_ignore_snapshot(dry_run bool) PackageIgnoreSnapshot {
+fn read_pacman_policy_snapshot(dry_run bool) PackagePolicySnapshot {
 	helper := resolve_pacman_conf_bin()
 	if helper.len == 0 {
-		return PackageIgnoreSnapshot{
+		return PackagePolicySnapshot{
 			status: 'unavailable'
 		}
 	}
 	pkg := pacman_conf_values(helper, 'IgnorePkg', dry_run)
 	group := pacman_conf_values(helper, 'IgnoreGroup', dry_run)
+	hold := pacman_conf_values(helper, 'HoldPkg', dry_run)
 	if dry_run {
-		return PackageIgnoreSnapshot{
+		return PackagePolicySnapshot{
 			status:    'planned'
 			pkg_cmd:   pkg.command_line
 			group_cmd: group.command_line
+			hold_cmd:  hold.command_line
 		}
 	}
-	if !pkg.ok || !group.ok {
-		failed := if !pkg.ok { pkg } else { group }
-		return PackageIgnoreSnapshot{
+	if !pkg.ok || !group.ok || !hold.ok {
+		failed := if !pkg.ok {
+			pkg
+		} else if !group.ok {
+			group
+		} else {
+			hold
+		}
+		return PackagePolicySnapshot{
 			status:    'error'
 			error:     'pacman-conf failed (exit ${failed.exit_code}): ${failed.output}'
 			pkg_cmd:   pkg.command_line
 			group_cmd: group.command_line
+			hold_cmd:  hold.command_line
 		}
 	}
-	return PackageIgnoreSnapshot{
+	return PackagePolicySnapshot{
 		packages:  parse_pacman_conf_values(pkg.output)
 		groups:    parse_pacman_conf_values(group.output)
+		hold_pkgs: parse_pacman_conf_values(hold.output)
 		status:    'checked'
 		pkg_cmd:   pkg.command_line
 		group_cmd: group.command_line
+		hold_cmd:  hold.command_line
 	}
 }
 
@@ -152,7 +165,7 @@ fn run_package_update_snapshot(opts PackageCheckOptions) !PackageUpdateSnapshot 
 	if aur_helper.len == 0 {
 		return PackageUpdateSnapshot{
 			repository: repository
-			ignored:    read_pacman_ignore_snapshot(opts.dry_run)
+			policy:     read_pacman_policy_snapshot(opts.dry_run)
 		}
 	}
 	if opts.dry_run {
@@ -164,7 +177,7 @@ fn run_package_update_snapshot(opts PackageCheckOptions) !PackageUpdateSnapshot 
 				was_dry_run:  true
 			}
 			aur_helper: aur_helper
-			ignored:    read_pacman_ignore_snapshot(opts.dry_run)
+			policy:     read_pacman_policy_snapshot(opts.dry_run)
 		}
 	}
 	aur := run_exec(ExecSpec{
@@ -179,7 +192,7 @@ fn run_package_update_snapshot(opts PackageCheckOptions) !PackageUpdateSnapshot 
 		repository: repository
 		aur:        aur
 		aur_helper: aur_helper
-		ignored:    read_pacman_ignore_snapshot(opts.dry_run)
+		policy:     read_pacman_policy_snapshot(opts.dry_run)
 	}
 }
 
@@ -221,37 +234,42 @@ fn package_update_data(snapshot PackageUpdateSnapshot) map[string]string {
 		}
 		'repository_command':       snapshot.repository.command_line
 		'aur_command':              snapshot.aur.command_line
-		'ignored_package_patterns': snapshot.ignored.packages.join(', ')
-		'ignored_group_patterns':   snapshot.ignored.groups.join(', ')
-		'ignored_package_count':    if snapshot.ignored.status == 'checked' {
-			snapshot.ignored.packages.len.str()
+		'ignored_package_patterns': snapshot.policy.packages.join(', ')
+		'ignored_group_patterns':   snapshot.policy.groups.join(', ')
+		'hold_package_patterns':    snapshot.policy.hold_pkgs.join(', ')
+		'hold_package_count':       if snapshot.policy.status == 'checked' {
+			snapshot.policy.hold_pkgs.len.str()
 		} else {
 			''
 		}
-		'ignored_group_count':      if snapshot.ignored.status == 'checked' {
-			snapshot.ignored.groups.len.str()
+		'ignored_package_count':    if snapshot.policy.status == 'checked' {
+			snapshot.policy.packages.len.str()
 		} else {
 			''
 		}
-		'ignored_status':           snapshot.ignored.status
-		'ignored_error':            snapshot.ignored.error
-		'ignorepkg_command':        snapshot.ignored.pkg_cmd
-		'ignoregroup_command':      snapshot.ignored.group_cmd
+		'ignored_group_count':      if snapshot.policy.status == 'checked' {
+			snapshot.policy.groups.len.str()
+		} else {
+			''
+		}
+		'ignored_status':           snapshot.policy.status // retained for existing consumers
+		'package_policy_status':    snapshot.policy.status
+		'ignored_error':            snapshot.policy.error
+		'ignorepkg_command':        snapshot.policy.pkg_cmd
+		'ignoregroup_command':      snapshot.policy.group_cmd
+		'holdpkg_command':          snapshot.policy.hold_cmd
 	}
 }
 
-fn package_ignore_message(snapshot PackageIgnoreSnapshot) string {
+fn package_policy_message(snapshot PackagePolicySnapshot) string {
 	if snapshot.status == 'unavailable' {
-		return 'Pacman ignored updates: not checked (pacman-conf unavailable)'
+		return 'Pacman package policies: not checked (pacman-conf unavailable)'
 	}
 	if snapshot.status == 'planned' {
-		return 'would run: ${snapshot.pkg_cmd}\nwould run: ${snapshot.group_cmd}'
+		return 'would run: ${snapshot.pkg_cmd}\nwould run: ${snapshot.group_cmd}\nwould run: ${snapshot.hold_cmd}'
 	}
 	if snapshot.status == 'error' {
-		return 'Pacman ignored updates: could not be read (${snapshot.error})'
-	}
-	if snapshot.packages.len == 0 && snapshot.groups.len == 0 {
-		return 'Pacman ignored update patterns: none configured'
+		return 'Pacman package policies: could not be read (${snapshot.error})'
 	}
 	packages := if snapshot.packages.len > 0 {
 		'IgnorePkg: ${snapshot.packages.join(', ')}'
@@ -263,7 +281,12 @@ fn package_ignore_message(snapshot PackageIgnoreSnapshot) string {
 	} else {
 		'IgnoreGroup: none'
 	}
-	return 'Pacman ignored upgrade patterns:\n${packages}\n${groups}'
+	hold_pkgs := if snapshot.hold_pkgs.len > 0 {
+		'HoldPkg (removal confirmation): ${snapshot.hold_pkgs.join(', ')}'
+	} else {
+		'HoldPkg (removal confirmation): none'
+	}
+	return 'Pacman ignored upgrade patterns:\n${packages}\n${groups}\n${hold_pkgs}\nHoldPkg only prompts before removal; it does not block upgrades.'
 }
 
 fn package_update_check_message(snapshot PackageUpdateSnapshot) string {
@@ -282,7 +305,7 @@ fn package_update_check_message(snapshot PackageUpdateSnapshot) string {
 	} else {
 		sections << 'AUR packages: not checked (install yay or paru)'
 	}
-	sections << package_ignore_message(snapshot.ignored)
+	sections << package_policy_message(snapshot.policy)
 	return sections.join('\n\n')
 }
 
@@ -296,9 +319,9 @@ pub fn package_check_report(opts PackageCheckOptions) CommandResult {
 		mut data := package_update_data(snapshot)
 		data['dry_run'] = 'true'
 		message := if snapshot.aur_helper.len > 0 {
-			'would run: ${snapshot.repository.command_line}\nwould run: ${snapshot.aur.command_line}\n${package_ignore_message(snapshot.ignored)}'
+			'would run: ${snapshot.repository.command_line}\nwould run: ${snapshot.aur.command_line}\n${package_policy_message(snapshot.policy)}'
 		} else {
-			'would run: ${snapshot.repository.command_line}\nAUR updates: not checked (install yay or paru)\n${package_ignore_message(snapshot.ignored)}'
+			'would run: ${snapshot.repository.command_line}\nAUR updates: not checked (install yay or paru)\n${package_policy_message(snapshot.policy)}'
 		}
 		return ok_result('package check', message, data)
 	}
@@ -315,9 +338,9 @@ pub fn package_updates_report(opts PackageCheckOptions) CommandResult {
 		mut data := package_update_data(snapshot)
 		data['dry_run'] = 'true'
 		message := if snapshot.aur_helper.len > 0 {
-			'would run: ${snapshot.repository.command_line}\nwould run: ${snapshot.aur.command_line}\n${package_ignore_message(snapshot.ignored)}'
+			'would run: ${snapshot.repository.command_line}\nwould run: ${snapshot.aur.command_line}\n${package_policy_message(snapshot.policy)}'
 		} else {
-			'would run: ${snapshot.repository.command_line}\nAUR updates: not checked (install yay or paru)\n${package_ignore_message(snapshot.ignored)}'
+			'would run: ${snapshot.repository.command_line}\nAUR updates: not checked (install yay or paru)\n${package_policy_message(snapshot.policy)}'
 		}
 		return ok_result('package updates', message, data)
 	}
@@ -329,6 +352,6 @@ pub fn package_updates_report(opts PackageCheckOptions) CommandResult {
 	} else {
 		'${repository_count} repository update(s) pending; AUR updates were not checked (install yay or paru)'
 	}
-	message := '${updates_message}; ${package_ignore_message(snapshot.ignored)}'
+	message := '${updates_message}; ${package_policy_message(snapshot.policy)}'
 	return ok_result('package updates', message, data)
 }
