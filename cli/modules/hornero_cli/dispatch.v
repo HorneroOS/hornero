@@ -21,7 +21,7 @@ import hornero_core
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'apps', 'system', 'help']
+	'apps', 'system', 'assistant', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -133,6 +133,9 @@ pub fn dispatch(args []string) int {
 		'system' {
 			run_system(rest[1..], mode)
 		}
+		'assistant' {
+			run_assistant(rest[1..], mode)
+		}
 		'help' {
 			print(root_help())
 			0
@@ -175,6 +178,20 @@ fn run_plugin(args []string, mode hornero_core.RenderMode) int {
 		dry_run: opts.dry_run
 		yes:     opts.yes
 	}), mode)
+}
+
+fn run_assistant(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_assistant(args) or {
+		return render_error(hornero_core.err_usage('assistant.usage', err.msg()), mode)
+	}
+	return match opts.leaf {
+		'status' { render(hornero_core.assistant_status_report(), mode) }
+		'enable' { render(hornero_core.assistant_enable_report(opts.dry_run, opts.yes), mode) }
+		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
+		'tools' { render(hornero_core.assistant_tools_report(), mode) }
+		'ask' { render(hornero_core.assistant_ask_report(opts.value), mode) }
+		else { render(hornero_core.assistant_stop_report(opts.value), mode) }
+	}
 }
 
 fn run_system(args []string, mode hornero_core.RenderMode) int {
