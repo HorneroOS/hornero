@@ -60,6 +60,18 @@ fn test_assistant_events_parser_rules() {
 	assert dispatch(['horneroctl', 'assistant', 'events', '--help']) == 0
 }
 
+fn test_assistant_stream_flag_rules() {
+	ask := parse_assistant(['ask', 'hola', '--stream']) or { panic(err) }
+	assert ask.stream && ask.value == 'hola'
+	ev := parse_assistant(['events', 'run_1', '--stream']) or { panic(err) }
+	assert ev.stream && ev.value == 'run_1'
+	if _ := parse_assistant(['status', '--stream']) {
+		panic('--stream outside ask/events must be rejected')
+	}
+	help := command_help('assistant ask')
+	assert help.contains('--stream')
+}
+
 fn test_assistant_enable_dry_run_dispatch_ok() {
 	assert dispatch(['horneroctl', 'assistant', 'enable', '--dry-run']) == 0
 }

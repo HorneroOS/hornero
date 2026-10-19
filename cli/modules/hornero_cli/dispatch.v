@@ -203,11 +203,29 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'enable' { render(hornero_core.assistant_enable_report(opts.dry_run, opts.yes), mode) }
 		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
 		'tools' { render(hornero_core.assistant_tools_report(), mode) }
-		'ask' { render(hornero_core.assistant_ask_report(opts.value), mode) }
+		'ask' {
+			if opts.stream && mode == .human {
+				render(hornero_core.assistant_ask_stream_report(opts.value, fn (txt string) {
+					print(txt)
+					flush_stdout()
+				}), mode)
+			} else {
+				render(hornero_core.assistant_ask_report(opts.value), mode)
+			}
+		}
 		'approve' {
 			render(hornero_core.assistant_approve_report(opts.arg1, opts.arg2), mode)
 		}
-		'events' { render(hornero_core.assistant_events_report(opts.value), mode) }
+		'events' {
+			if opts.stream && mode == .human {
+				render(hornero_core.assistant_events_stream_report(opts.value, fn (txt string) {
+					print(txt)
+					flush_stdout()
+				}), mode)
+			} else {
+				render(hornero_core.assistant_events_report(opts.value), mode)
+			}
+		}
 		'clarify' {
 			render(hornero_core.assistant_clarify_report(opts.arg1, opts.arg2), mode)
 		}

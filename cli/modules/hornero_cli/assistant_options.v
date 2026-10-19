@@ -8,6 +8,7 @@ pub:
 	arg2    string
 	dry_run bool
 	yes     bool
+	stream  bool
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -21,6 +22,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut parts := []string{}
 	mut dry_run := false
 	mut yes := false
+	mut stream := false
 	for arg in args[1..] {
 		if arg == '--dry-run' {
 			dry_run = true
@@ -28,6 +30,10 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		}
 		if arg == '--yes' {
 			yes = true
+			continue
+		}
+		if arg == '--stream' {
+			stream = true
 			continue
 		}
 		if arg.starts_with('-') {
@@ -57,6 +63,9 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf in ['status', 'tools'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')
 	}
+	if stream && leaf !in ['ask', 'events'] {
+		return error('--stream only applies to ask and events.\nExample: horneroctl assistant ask "hi" --stream')
+	}
 	if dry_run && yes {
 		return error('--dry-run and --yes are mutually exclusive.\nExample: horneroctl assistant enable --dry-run')
 	}
@@ -67,5 +76,6 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		arg2:    if parts.len > 1 { parts[1..].join(' ') } else { '' }
 		dry_run: dry_run
 		yes:     yes
+		stream:  stream
 	}
 }

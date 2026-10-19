@@ -166,36 +166,112 @@ pub fn assistant_tools_report() CommandResult {
 	})
 }
 
-// parse_sse_events parses a Hermes SSE body into typed events.
-// Pure and fixture-tested; unknown fields are preserved as raw data.
-pub fn parse_sse_events(body string) []AssistantEvent {
+// SseStreamParser incrementally parses a Hermes SSE stream.
+// feed() accepts arbitrary chunk boundaries (a line may be split
+// across chunks) and returns the events completed by that chunk;
+// finish() flushes a trailing event without a blank separator.
+pub struct SseStreamParser {
+mut:
+	buffer     string
+	kind       string = 'message'
+	data_lines []string
+}
+
+pub fn (mut p SseStreamParser) feed(chunk string) []AssistantEvent {
+	p.buffer += chunk
 	mut events := []AssistantEvent{}
-	mut kind := 'message'
-	mut data_lines := []string{}
-	for line in body.split('\n') {
-		trimmed := line.trim_space()
-		if trimmed.len == 0 {
-			if data_lines.len > 0 {
-				events << AssistantEvent{
-					kind: kind
-					data: data_lines.join('\n')
-				}
-				data_lines = []string{}
-				kind = 'message'
-			}
-		} else if trimmed.starts_with('event:') {
-			kind = trimmed[6..].trim_space()
-		} else if trimmed.starts_with('data:') {
-			data_lines << trimmed[5..].trim_space()
-		}
-	}
-	if data_lines.len > 0 {
-		events << AssistantEvent{
-			kind: kind
-			data: data_lines.join('\n')
+	for {
+		idx := p.buffer.index('\n') or { break }
+		line := p.buffer[..idx]
+		p.buffer = p.buffer[idx + 1..]
+		if ev := p.feed_line(line) {
+			events << ev
 		}
 	}
 	return events
+}
+
+pub fn (mut p SseStreamParser) finish() []AssistantEvent {
+	mut events := []AssistantEvent{}
+	if p.buffer.len > 0 {
+		line := p.buffer
+		p.buffer = ''
+		if ev := p.feed_line(line) {
+			events << ev
+		}
+	}
+	if p.data_lines.len > 0 {
+		events << AssistantEvent{
+			kind: p.kind
+			data: p.data_lines.join('\n')
+		}
+		p.data_lines = []string{}
+		p.kind = 'message'
+	}
+	return events
+}
+
+fn (mut p SseStreamParser) feed_line(line string) ?AssistantEvent {
+	trimmed := line.trim_space()
+	if trimmed.len == 0 {
+		if p.data_lines.len > 0 {
+			ev := AssistantEvent{
+				kind: p.kind
+				data: p.data_lines.join('\n')
+			}
+			p.data_lines = []string{}
+			p.kind = 'message'
+			return ev
+		}
+		return none
+	}
+	if trimmed.starts_with('event:') {
+		p.kind = trimmed[6..].trim_space()
+	} else if trimmed.starts_with('data:') {
+		p.data_lines << trimmed[5..].trim_space()
+	}
+	return none
+}
+
+// parse_sse_events parses a whole Hermes SSE body into typed events.
+// Pure and fixture-tested; unknown fields are preserved as raw data.
+pub fn parse_sse_events(body string) []AssistantEvent {
+	mut parser := SseStreamParser{}
+	mut events := parser.feed(body)
+	events << parser.finish()
+	return events
+}
+
+// assistant_event_text extracts the streamed text delta of a single
+// event (delta/text/content fields); final-output fields are handled
+// by assistant_collect_text / assistant_event_final.
+pub fn assistant_event_text(event AssistantEvent) string {
+	decoded := json2.decode[json2.Any](event.data) or { return '' }
+	if decoded !is map[string]json2.Any {
+		return ''
+	}
+	root := decoded.as_map()
+	mut text := ''
+	for key in ['delta', 'text', 'content'] {
+		if key in root && root[key] is string {
+			text += root[key].str()
+		}
+	}
+	return text
+}
+
+pub fn assistant_event_final(event AssistantEvent) string {
+	decoded := json2.decode[json2.Any](event.data) or { return '' }
+	if decoded !is map[string]json2.Any {
+		return ''
+	}
+	root := decoded.as_map()
+	for key in ['output', 'result', 'final'] {
+		if key in root && root[key] is string {
+			return root[key].str()
+		}
+	}
+	return ''
 }
 
 pub struct AssistantPending {
@@ -275,26 +351,7 @@ pub fn assistant_events_report(run_id string) CommandResult {
 		return fail_result('assistant events', 'Hermes returned no events for run ${run_id} (HTTP ${resp.status_code}). The run id may be wrong or expired.')
 	}
 	events := parse_sse_events(resp.body)
-	pending := assistant_pending_request(events)
-	text := assistant_collect_text(events)
-	mut data := {
-		'runId':   run_id
-		'events':  events.len.str()
-		'pending': pending.kind
-	}
-	if pending.kind == 'approval' {
-		data['detail'] = pending.detail
-		return fail_result('assistant events', 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
-	}
-	if pending.kind == 'clarify' {
-		data['detail'] = pending.detail
-		return fail_result('assistant events', 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
-	}
-	if text.len == 0 {
-		return ok_result('assistant events', 'Run ${run_id}: ${events.len} events, no text output yet.', data)
-	}
-	data['text'] = text
-	return ok_result('assistant events', text, data)
+	return assistant_events_outcome('assistant events', run_id, events)
 }
 
 // assistant_collect_text extracts user-visible text from run events:
@@ -303,20 +360,10 @@ pub fn assistant_collect_text(events []AssistantEvent) string {
 	mut streamed := ''
 	mut final := ''
 	for event in events {
-		decoded := json2.decode[json2.Any](event.data) or { continue }
-		if decoded !is map[string]json2.Any {
-			continue
-		}
-		root := decoded.as_map()
-		for key in ['delta', 'text', 'content'] {
-			if key in root && root[key] is string {
-				streamed += root[key].str()
-			}
-		}
-		for key in ['output', 'result', 'final'] {
-			if key in root && root[key] is string {
-				final = root[key].str()
-			}
+		streamed += assistant_event_text(event)
+		f := assistant_event_final(event)
+		if f.len > 0 {
+			final = f
 		}
 	}
 	return if streamed.len > 0 { streamed } else { final }
@@ -337,6 +384,103 @@ fn assistant_http(settings AssistantSettings, method http.Method, path string, b
 	}
 	req.header = http.new_custom_header_from_map(headers)!
 	return req.do()
+}
+
+// assistant_stream_events GETs a run's SSE events and invokes
+// on_event for each event as it arrives (true streaming via the
+// HTTP progress callback), instead of waiting for the whole body.
+// The full response is still returned for status handling.
+fn assistant_stream_events(settings AssistantSettings, run_id string, on_event fn (AssistantEvent)) !http.Response {
+	mut req := http.Request{
+		method: .get
+		url:    settings.endpoint.trim_right('/') + '/v1/runs/${run_id}/events'
+	}
+	key := assistant_load_key()
+	mut headers := {
+		'Content-Type': 'application/json'
+	}
+	if key.len > 0 {
+		headers['Authorization'] = 'Bearer ${key}'
+	}
+	req.header = http.new_custom_header_from_map(headers)!
+	mut parser := SseStreamParser{}
+	req.on_progress_body = fn [mut parser, on_event] (_req &http.Request, chunk []u8, _so_far u64, _expected u64, _status int) ! {
+		for ev in parser.feed(chunk.bytestr()) {
+			on_event(ev)
+		}
+	}
+	resp := req.do()!
+	for ev in parser.finish() {
+		on_event(ev)
+	}
+	return resp
+}
+
+// assistant_events_outcome applies the shared pending/text outcome
+// rules for a collected event list (buffered or streamed).
+fn assistant_events_outcome(command string, run_id string, events []AssistantEvent) CommandResult {
+	pending := assistant_pending_request(events)
+	text := assistant_collect_text(events)
+	mut data := {
+		'runId':   run_id
+		'events':  events.len.str()
+		'pending': pending.kind
+	}
+	if pending.kind == 'approval' {
+		data['detail'] = pending.detail
+		return fail_result(command, 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
+	}
+	if pending.kind == 'clarify' {
+		data['detail'] = pending.detail
+		return fail_result(command, 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
+	}
+	if text.len == 0 {
+		return ok_result(command, 'Run ${run_id}: ${events.len} events, no text output yet.', data)
+	}
+	data['text'] = text
+	return ok_result(command, text, data)
+}
+
+// assistant_events_stream_report streams run events live: each text
+// delta is passed to emit() the moment it arrives. The returned
+// result summarizes instead of repeating the streamed text.
+pub fn assistant_events_stream_report(run_id string, emit fn (string)) CommandResult {
+	settings := assistant_load_settings()
+	if !settings.enabled {
+		return fail_result('assistant events', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
+	}
+	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+		return fail_result('assistant events', 'Missing or invalid run id. Example: horneroctl assistant events run_abc123')
+	}
+	// The closure only emits live deltas; event collection for the
+	// final outcome uses the assembled response body, so it does not
+	// depend on closure capture semantics.
+	on_event := fn [emit] (ev AssistantEvent) {
+		delta := assistant_event_text(ev)
+		if delta.len > 0 {
+			emit(delta)
+		}
+	}
+	resp := assistant_stream_events(settings, run_id, on_event) or {
+		return fail_result('assistant events', 'Cannot reach the Hermes gateway: ${err.msg()}')
+	}
+	if resp.status_code >= 400 {
+		return fail_result('assistant events', 'Hermes returned no events for run ${run_id} (HTTP ${resp.status_code}). The run id may be wrong or expired.')
+	}
+	events := parse_sse_events(resp.body)
+	outcome := assistant_events_outcome('assistant events', run_id, events)
+	if outcome.ok {
+		text := assistant_collect_text(events)
+		if text.len > 0 {
+			had_delta := events.any(assistant_event_text(it).len > 0)
+			if !had_delta {
+				emit(text)
+			}
+			// Text already reached the user live; do not print twice.
+			return ok_result('assistant events', '\nRun ${run_id}: ${events.len} events (streamed).', outcome.data)
+		}
+	}
+	return outcome
 }
 
 // assistant_gateway_compat checks a /v1/capabilities body against the
@@ -528,6 +672,51 @@ pub fn assistant_ask_report(prompt string) CommandResult {
 		'runId':  run_id
 		'events': events.len.str()
 	})
+}
+
+// assistant_ask_stream_report starts a run like assistant ask, then
+// streams its events live through emit() as deltas arrive.
+pub fn assistant_ask_stream_report(prompt string, emit fn (string)) CommandResult {
+	settings := assistant_load_settings()
+	if !settings.enabled {
+		return fail_result('assistant ask', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
+	}
+	if prompt.trim_space().len == 0 {
+		return fail_result('assistant ask', 'Missing prompt. Example: horneroctl assistant ask "what updates are available?"')
+	}
+	body := json2.encode({
+		'input': json2.Any(prompt)
+	}, escape_unicode: true)
+	resp := assistant_http(settings, .post, '/v1/runs', body) or {
+		return fail_result('assistant ask', 'Cannot reach the Hermes gateway at ${settings.endpoint}: ${err.msg()}. Start Hermes, then retry.')
+	}
+	if resp.status_code >= 400 {
+		return fail_result('assistant ask', 'Hermes rejected the run (HTTP ${resp.status_code}). Check: horneroctl assistant status')
+	}
+	decoded := json2.decode[json2.Any](resp.body) or {
+		return fail_result('assistant ask', 'Hermes returned an unreadable run response.')
+	}
+	if decoded !is map[string]json2.Any {
+		return fail_result('assistant ask', 'Hermes returned an unexpected run response.')
+	}
+	root := decoded.as_map()
+	run_id := if 'run_id' in root && root['run_id'] is string {
+		root['run_id'].str()
+	} else if 'id' in root && root['id'] is string {
+		root['id'].str()
+	} else {
+		''
+	}
+	if run_id.len == 0 {
+		return fail_result('assistant ask', 'Hermes did not return a run id.')
+	}
+	result := assistant_events_stream_report(run_id, emit)
+	if !result.ok {
+		return result
+	}
+	mut data := result.data.clone()
+	data['runId'] = run_id
+	return ok_result('assistant ask', result.message, data)
 }
 
 pub fn assistant_stop_report(run_id string) CommandResult {
