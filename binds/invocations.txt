@@ -34,7 +34,10 @@ apps switcher daemon
 apps switcher next
 apps switcher prev
 apps terminal-file
+assistant approve
 assistant ask
+assistant clarify
+assistant events
 backup create
 capture clipboard
 capture record pause
