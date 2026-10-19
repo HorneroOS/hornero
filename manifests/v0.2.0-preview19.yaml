@@ -19,9 +19,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: c423a88c447cf7570435d5c61f8a7162a7ce1c45
+    sha: b9e1732fe0ef1964692aea1f65bed98052ca0dcb
     status: pinned
-    subject: "feat(plugins): bar placement contract (M2 slice 2) (#213)"
+    subject: "feat(launcher): Ask Hornero action (>ai prompt via Companion IPC) (#216)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
