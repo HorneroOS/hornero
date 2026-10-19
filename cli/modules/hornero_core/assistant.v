@@ -14,6 +14,20 @@ import x.json2
 pub const assistant_default_endpoint = 'http://127.0.0.1:8642'
 pub const assistant_supported_hermes = 'gateway API /v1 (capabilities-negotiated)'
 
+// Protocol support is negotiated, not version-matched: Hermes exposes
+// no gateway semver, so `assistant status` requires the feature flags
+// this client actually uses. Studied upstream: NousResearch/hermes-agent
+// f14699a1379838862d3020b97785796aa555d36d
+// (gateway/platforms/api_server.py, _handle_capabilities).
+pub const assistant_studied_hermes_commit = 'f14699a1379838862d3020b97785796aa555d36d'
+pub const assistant_required_gateway_features = [
+	'run_submission',
+	'run_events_sse',
+	'run_stop',
+	'run_approval_response',
+	'approval_events',
+]
+
 pub struct AssistantSettings {
 pub mut:
 	enabled  bool
@@ -325,18 +339,49 @@ fn assistant_http(settings AssistantSettings, method http.Method, path string, b
 	return req.do()
 }
 
-fn assistant_gateway_state(settings AssistantSettings) (bool, string) {
+// assistant_gateway_compat checks a /v1/capabilities body against the
+// negotiated protocol contract: Hermes platform identity plus every
+// feature flag this client calls. Returns (compatible, missing) where
+// `missing` names each absent requirement (`platform:hermes-agent`
+// when the responder is not a Hermes gateway at all).
+pub fn assistant_gateway_compat(body string) (bool, []string) {
+	mut missing := []string{}
+	decoded := json2.decode[json2.Any](body) or { return false, ['valid JSON'] }
+	if decoded !is map[string]json2.Any {
+		return false, ['JSON object']
+	}
+	root := decoded as map[string]json2.Any
+	if !('platform' in root && root['platform'] is string
+		&& root['platform'].str() == 'hermes-agent') {
+		missing << 'platform:hermes-agent'
+	}
+	features := if 'features' in root && root['features'] is map[string]json2.Any {
+		root['features'] as map[string]json2.Any
+	} else {
+		map[string]json2.Any{}
+	}
+	for feature in assistant_required_gateway_features {
+		if !(feature in features && features[feature] is bool
+			&& features[feature].bool()) {
+			missing << feature
+		}
+	}
+	return missing.len == 0, missing
+}
+
+// Returns (reachable, compatible, detail).
+fn assistant_gateway_state(settings AssistantSettings) (bool, bool, string) {
 	resp := assistant_http(settings, .get, '/v1/capabilities', '') or {
-		return false, 'unreachable: ${err.msg()}'
+		return false, false, 'unreachable: ${err.msg()}'
 	}
 	if resp.status_code != 200 {
-		return false, 'HTTP ${resp.status_code}'
+		return false, false, 'HTTP ${resp.status_code}'
 	}
-	decoded := json2.decode[json2.Any](resp.body) or { return false, 'invalid JSON response' }
-	if decoded !is map[string]json2.Any {
-		return false, 'unexpected response shape'
+	compatible, missing := assistant_gateway_compat(resp.body)
+	if !compatible {
+		return true, false, 'protocol incompatible: missing ${missing.join(', ')}'
 	}
-	return true, 'capabilities OK'
+	return true, true, 'capabilities OK'
 }
 
 pub fn assistant_status_report() CommandResult {
@@ -351,16 +396,21 @@ pub fn assistant_status_report() CommandResult {
 	if !settings.enabled {
 		return ok_result('assistant status', 'Assistant is disabled (default). Enable it explicitly: horneroctl assistant enable --yes', data)
 	}
-	reachable, detail := assistant_gateway_state(settings)
+	reachable, compatible, detail := assistant_gateway_state(settings)
 	data['gateway'] = if reachable { 'reachable' } else { 'unreachable' }
 	data['gatewayDetail'] = detail
+	data['protocol'] = if compatible { 'compatible' } else { 'incompatible' }
+	data['studiedHermes'] = assistant_studied_hermes_commit
 	if hermes.len == 0 {
 		return fail_result('assistant status', 'Assistant is enabled but Hermes Agent is not installed. Install Hermes through a pinned, auditable package, then run: horneroctl assistant status')
 	}
 	if !reachable {
 		return fail_result('assistant status', 'Assistant is enabled but the Hermes gateway is not answering at ${settings.endpoint} (${detail}). Start Hermes, then retry.')
 	}
-	return ok_result('assistant status', 'Assistant enabled; Hermes gateway reachable (${assistant_supported_hermes}).', data)
+	if !compatible {
+		return fail_result('assistant status', 'Assistant is enabled and the gateway answers at ${settings.endpoint}, but its protocol is not compatible (${detail}). This client negotiates ${assistant_supported_hermes} and was studied against Hermes ${assistant_studied_hermes_commit}; update Hermes or HorneroOS so the required capabilities are advertised.')
+	}
+	return ok_result('assistant status', 'Assistant enabled; Hermes gateway reachable and protocol-compatible (${assistant_supported_hermes}).', data)
 }
 
 pub fn assistant_enable_report(dry_run bool, yes bool) CommandResult {
