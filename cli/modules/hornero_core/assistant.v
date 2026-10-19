@@ -389,3 +389,54 @@ pub fn assistant_stop_report(run_id string) CommandResult {
 		'runId': run_id
 	})
 }
+
+pub fn assistant_approve_report(run_id string, decision string) CommandResult {
+	settings := assistant_load_settings()
+	if !settings.enabled {
+		return fail_result('assistant approve', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
+	}
+	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+		return fail_result('assistant approve', 'Missing or invalid run id. Example: horneroctl assistant approve run_abc123 approve')
+	}
+	if decision !in ['approve', 'deny'] {
+		return fail_result('assistant approve', 'Decision must be approve or deny. Example: horneroctl assistant approve ${run_id} deny')
+	}
+	body := json2.encode({
+		'decision': json2.Any(decision)
+	}, escape_unicode: true)
+	resp := assistant_http(settings, .post, '/v1/runs/${run_id}/approval', body) or {
+		return fail_result('assistant approve', 'Cannot reach the Hermes gateway: ${err.msg()}')
+	}
+	if resp.status_code >= 400 {
+		return fail_result('assistant approve', 'Hermes did not accept the ${decision} for run ${run_id} (HTTP ${resp.status_code}). The run may already be finished.')
+	}
+	return ok_result('assistant approve', 'Decision recorded for run ${run_id}: ${decision}.', {
+		'runId':    run_id
+		'decision': decision
+	})
+}
+
+pub fn assistant_clarify_report(run_id string, answer string) CommandResult {
+	settings := assistant_load_settings()
+	if !settings.enabled {
+		return fail_result('assistant clarify', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
+	}
+	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+		return fail_result('assistant clarify', 'Missing or invalid run id. Example: horneroctl assistant clarify run_abc123 "use the dark theme"')
+	}
+	if answer.trim_space().len == 0 {
+		return fail_result('assistant clarify', 'Missing answer text. Example: horneroctl assistant clarify ${run_id} "use the dark theme"')
+	}
+	body := json2.encode({
+		'answer': json2.Any(answer)
+	}, escape_unicode: true)
+	resp := assistant_http(settings, .post, '/v1/runs/${run_id}/clarify', body) or {
+		return fail_result('assistant clarify', 'Cannot reach the Hermes gateway: ${err.msg()}')
+	}
+	if resp.status_code >= 400 {
+		return fail_result('assistant clarify', 'Hermes did not accept the clarification for run ${run_id} (HTTP ${resp.status_code}).')
+	}
+	return ok_result('assistant clarify', 'Clarification sent for run ${run_id}.', {
+		'runId': run_id
+	})
+}

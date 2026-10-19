@@ -2,7 +2,7 @@ module hornero_cli
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|enable|disable|tools|ask|stop>')
+	assert help.contains('horneroctl assistant <status|enable|disable|tools|ask|stop|approve|clarify>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -34,6 +34,21 @@ fn test_assistant_usage_errors_exit_two() {
 fn test_assistant_tools_dispatch_ok() {
 	assert dispatch(['horneroctl', 'assistant', 'tools']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'tools', '--json']) == 0
+}
+
+fn test_assistant_approve_clarify_parser_rules() {
+	ok := parse_assistant(['approve', 'run_1', 'deny']) or { panic(err) }
+	assert ok.arg1 == 'run_1' && ok.arg2 == 'deny'
+	cl := parse_assistant(['clarify', 'run_1', 'use', 'dark']) or { panic(err) }
+	assert cl.arg1 == 'run_1' && cl.arg2 == 'use dark'
+	if _ := parse_assistant(['approve', 'run_1', 'maybe']) {
+		panic('invalid decision must be rejected')
+	}
+	if _ := parse_assistant(['approve', 'run_1']) {
+		panic('approve without decision must be rejected')
+	}
+	assert dispatch(['horneroctl', 'assistant', 'approve', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'clarify', 'run_1']) == 2
 }
 
 fn test_assistant_enable_dry_run_dispatch_ok() {

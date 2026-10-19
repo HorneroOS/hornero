@@ -4,6 +4,8 @@ pub struct AssistantCmdOptions {
 pub:
 	leaf    string
 	value   string
+	arg1    string
+	arg2    string
 	dry_run bool
 	yes     bool
 }
@@ -13,7 +15,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl assistant status')
 	}
 	leaf := args[0]
-	if leaf !in ['status', 'enable', 'disable', 'tools', 'ask', 'stop'] {
+	if leaf !in ['status', 'enable', 'disable', 'tools', 'ask', 'stop', 'approve', 'clarify'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
@@ -40,6 +42,15 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf == 'stop' && value.len == 0 {
 		return error('missing run id.\nExample: horneroctl assistant stop run_abc123')
 	}
+	if leaf == 'approve' && parts.len != 2 {
+		return error('expected a run id and a decision.\nExample: horneroctl assistant approve run_abc123 approve')
+	}
+	if leaf == 'approve' && parts[1] !in ['approve', 'deny'] {
+		return error('decision must be approve or deny.\nExample: horneroctl assistant approve run_abc123 deny')
+	}
+	if leaf == 'clarify' && parts.len < 2 {
+		return error('expected a run id and answer text.\nExample: horneroctl assistant clarify run_abc123 "use the dark theme"')
+	}
 	if leaf in ['status', 'tools'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')
 	}
@@ -49,6 +60,8 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	return AssistantCmdOptions{
 		leaf:    leaf
 		value:   value
+		arg1:    if parts.len > 0 { parts[0] } else { '' }
+		arg2:    if parts.len > 1 { parts[1..].join(' ') } else { '' }
 		dry_run: dry_run
 		yes:     yes
 	}

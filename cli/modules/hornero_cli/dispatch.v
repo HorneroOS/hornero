@@ -204,6 +204,12 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
 		'tools' { render(hornero_core.assistant_tools_report(), mode) }
 		'ask' { render(hornero_core.assistant_ask_report(opts.value), mode) }
+		'approve' {
+			render(hornero_core.assistant_approve_report(opts.arg1, opts.arg2), mode)
+		}
+		'clarify' {
+			render(hornero_core.assistant_clarify_report(opts.arg1, opts.arg2), mode)
+		}
 		else { render(hornero_core.assistant_stop_report(opts.value), mode) }
 	}
 }
