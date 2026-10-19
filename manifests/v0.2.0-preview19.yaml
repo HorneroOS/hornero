@@ -19,7 +19,7 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 2cb90a16dd85dda0a4408bc36a0b79ee0b326938
+    sha: 0c4918b1011e57a7c8571b6777c69779bdee963d
     status: pinned
     subject: "feat(plugins): dashboard placement - Extensions tab cards (M2 slice 3) (#217)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
