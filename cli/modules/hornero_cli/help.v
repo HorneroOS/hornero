@@ -104,7 +104,7 @@ Examples:
 			return 'Usage: horneroctl assistant ask "<prompt>" [--json|--quiet]\n\nStart a Hermes run and print its streamed answer. Requires the\nassistant to be enabled and the Hermes gateway to be running.\n\nExamples:\n  horneroctl assistant ask "what updates are available?"\n  horneroctl assistant ask "why is memory usage high?" --json\n'
 		}
 		'assistant events' {
-			return 'Usage: horneroctl assistant events <run-id>\n\nShow a Hermes run\'s collected answer, or the approval /\nclarification it is waiting on. Approvals are never answered\nautomatically; use assistant approve / clarify to decide.\n\nExamples:\n  horneroctl assistant events run_abc123\n'
+			return "Usage: horneroctl assistant events <run-id>\n\nShow a Hermes run's collected answer, or the approval /\nclarification it is waiting on. Approvals are never answered\nautomatically; use assistant approve / clarify to decide.\n\nExamples:\n  horneroctl assistant events run_abc123\n"
 		}
 		'assistant approve' {
 			return 'Usage: horneroctl assistant approve <run-id> <approve|deny>\n\nAnswer a Hermes approval request for a running run. Nothing is\never auto-approved; this records exactly the decision you type.\n\nExamples:\n  horneroctl assistant approve run_abc123 approve\n  horneroctl assistant approve run_abc123 deny\n'

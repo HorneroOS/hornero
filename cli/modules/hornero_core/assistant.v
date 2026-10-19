@@ -184,7 +184,6 @@ pub fn parse_sse_events(body string) []AssistantEvent {
 	return events
 }
 
-
 pub struct AssistantPending {
 pub:
 	kind    string // approval | clarify | none
