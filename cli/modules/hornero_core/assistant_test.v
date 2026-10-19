@@ -62,3 +62,33 @@ fn test_assistant_pending_request_detects_clarify_and_none() {
 	plain := parse_sse_events('data: {"delta":"hi"}\n\n')
 	assert assistant_pending_request(plain).kind == 'none'
 }
+
+fn test_assistant_gateway_compat_accepts_studied_hermes_shape() {
+	// Shape from NousResearch/hermes-agent gateway _handle_capabilities.
+	body := '{"object":"hermes.api_server.capabilities","platform":"hermes-agent","model":"m","auth":{"type":"bearer","required":true},"features":{"run_submission":true,"run_events_sse":true,"run_stop":true,"run_approval_response":true,"approval_events":true,"skills_api":true},"endpoints":{}}'
+	compatible, missing := assistant_gateway_compat(body)
+	assert compatible
+	assert missing.len == 0
+}
+
+fn test_assistant_gateway_compat_reports_missing_features() {
+	body := '{"platform":"hermes-agent","features":{"run_submission":true,"run_events_sse":false}}'
+	compatible, missing := assistant_gateway_compat(body)
+	assert !compatible
+	assert 'run_events_sse' in missing
+	assert 'run_stop' in missing
+	assert 'run_approval_response' in missing
+	assert 'approval_events' in missing
+	assert !('platform:hermes-agent' in missing)
+}
+
+fn test_assistant_gateway_compat_rejects_foreign_or_broken_bodies() {
+	compatible, missing := assistant_gateway_compat('{"platform":"other","features":{}}')
+	assert !compatible
+	assert 'platform:hermes-agent' in missing
+	broken, broken_missing := assistant_gateway_compat('not json')
+	assert !broken
+	assert broken_missing.len == 1
+	array, _ := assistant_gateway_compat('[1,2]')
+	assert !array
+}
