@@ -19,16 +19,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 0fc4d17819e0dca7a6f938b9b2070b7abbf56189
+    sha: afef8f1d8a59f86a552694a8da8d5b0f7ab8a10d
     status: pinned
-    subject: "fix(shell): align Control Center actions and refresh audio controls"
+    subject: "feat(shell): show open Niri screen-capture sessions"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: c2e33e81de74bef98205dde85f321961c6ebfe6d
+    sha: 797db9411027cd4a8db50fb513c871db232f9724
     status: pinned
-    subject: "feat(config): catalogue native palette integrations"
+    subject: "feat(themes): rebuild Hornero Light on Orchis-style neutrals with a varied accent family"
     notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero

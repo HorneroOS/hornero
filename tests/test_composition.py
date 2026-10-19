@@ -40,8 +40,8 @@ SHELL_SHA = "b0a864cd57cfea01d7314c1de9823b873fb9269a"
 CONFIG_SHA = "c4ac00326cd5476c5efc05c11a403d1d6353a7d6"
 
 # Release-candidate composition (Development Preview 19).
-CANDIDATE_SHELL_SHA = "0fc4d17819e0dca7a6f938b9b2070b7abbf56189"
-CANDIDATE_CONFIG_SHA = "c2e33e81de74bef98205dde85f321961c6ebfe6d"
+CANDIDATE_SHELL_SHA = "afef8f1d8a59f86a552694a8da8d5b0f7ab8a10d"
+CANDIDATE_CONFIG_SHA = "797db9411027cd4a8db50fb513c871db232f9724"
 
 
 def read_text(path: Path) -> str:
