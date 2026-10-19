@@ -26,9 +26,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 797db9411027cd4a8db50fb513c871db232f9724
+    sha: 76a552f7ec56f00ed52e122150f27639a3a8d70a
     status: pinned
-    subject: "feat(themes): rebuild Hornero Light on Orchis-style neutrals with a varied accent family"
+    subject: "feat(themes): unique GTK theme for every Hornero Original region (#86)"
     notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
