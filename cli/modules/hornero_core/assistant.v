@@ -184,6 +184,106 @@ pub fn parse_sse_events(body string) []AssistantEvent {
 	return events
 }
 
+
+pub struct AssistantPending {
+pub:
+	kind    string // approval | clarify | none
+	detail  string
+	choices []string
+}
+
+// assistant_pending_request finds an approval.request or clarify event
+// in a run's events. Hermes emits approval.request payloads with a
+// redacted command and the choices the client may send back; nothing
+// here answers them — the user decides via assistant approve/clarify.
+pub fn assistant_pending_request(events []AssistantEvent) AssistantPending {
+	for event in events {
+		decoded := json2.decode[json2.Any](event.data) or { continue }
+		if decoded !is map[string]json2.Any {
+			continue
+		}
+		root := decoded.as_map()
+		kind := if 'type' in root && root['type'] is string {
+			root['type'].str()
+		} else {
+			event.kind
+		}
+		if kind == 'approval.request' || kind == 'approval' {
+			detail := if 'command' in root && root['command'] is string {
+				root['command'].str()
+			} else if 'description' in root && root['description'] is string {
+				root['description'].str()
+			} else {
+				'a tool action'
+			}
+			mut choices := []string{}
+			if 'choices' in root && root['choices'] is []json2.Any {
+				for c in root['choices'].as_array() {
+					if c is string {
+						choices << c.str()
+					}
+				}
+			}
+			return AssistantPending{
+				kind:    'approval'
+				detail:  detail
+				choices: choices
+			}
+		}
+		if kind == 'clarify.request' || kind == 'clarify' {
+			question := if 'question' in root && root['question'] is string {
+				root['question'].str()
+			} else {
+				'Hermes needs more information.'
+			}
+			return AssistantPending{
+				kind:   'clarify'
+				detail: question
+			}
+		}
+	}
+	return AssistantPending{
+		kind: 'none'
+	}
+}
+
+pub fn assistant_events_report(run_id string) CommandResult {
+	settings := assistant_load_settings()
+	if !settings.enabled {
+		return fail_result('assistant events', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
+	}
+	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+		return fail_result('assistant events', 'Missing or invalid run id. Example: horneroctl assistant events run_abc123')
+	}
+	resp := assistant_http(settings, .get, '/v1/runs/${run_id}/events', '') or {
+		return fail_result('assistant events', 'Cannot reach the Hermes gateway: ${err.msg()}')
+	}
+	if resp.status_code >= 400 {
+		return fail_result('assistant events', 'Hermes returned no events for run ${run_id} (HTTP ${resp.status_code}). The run id may be wrong or expired.')
+	}
+	events := parse_sse_events(resp.body)
+	pending := assistant_pending_request(events)
+	text := assistant_collect_text(events)
+	mut data := {
+		'runId':   run_id
+		'events':  events.len.str()
+		'pending': pending.kind
+	}
+	if pending.kind == 'approval' {
+		data['detail'] = pending.detail
+		return fail_result('assistant events', 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
+	}
+	if pending.kind == 'clarify' {
+		data['detail'] = pending.detail
+		return fail_result('assistant events', 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
+	}
+	if text.len == 0 {
+		return ok_result('assistant events', 'Run ${run_id}: ${events.len} events, no text output yet.', data)
+	}
+	data['text'] = text
+	return ok_result('assistant events', text, data)
+}
+
 // assistant_collect_text extracts user-visible text from run events:
 // token deltas first (delta/text fields), else the final output field.
 pub fn assistant_collect_text(events []AssistantEvent) string {
@@ -361,6 +461,13 @@ pub fn assistant_ask_report(prompt string) CommandResult {
 		return fail_result('assistant ask', 'Run ${run_id} started but its events could not be read: ${err.msg()}. Cancel with: horneroctl assistant stop ${run_id}')
 	}
 	events := parse_sse_events(events_resp.body)
+	pending := assistant_pending_request(events)
+	if pending.kind == 'approval' {
+		return fail_result('assistant ask', 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
+	}
+	if pending.kind == 'clarify' {
+		return fail_result('assistant ask', 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
+	}
 	text := assistant_collect_text(events)
 	if text.len == 0 {
 		return ok_result('assistant ask', 'Run ${run_id} finished without text output. Event count: ${events.len}.', {

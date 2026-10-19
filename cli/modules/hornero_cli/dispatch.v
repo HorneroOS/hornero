@@ -207,6 +207,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'approve' {
 			render(hornero_core.assistant_approve_report(opts.arg1, opts.arg2), mode)
 		}
+		'events' { render(hornero_core.assistant_events_report(opts.value), mode) }
 		'clarify' {
 			render(hornero_core.assistant_clarify_report(opts.arg1, opts.arg2), mode)
 		}

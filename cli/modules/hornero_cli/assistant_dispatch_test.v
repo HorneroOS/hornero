@@ -2,7 +2,7 @@ module hornero_cli
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|enable|disable|tools|ask|stop|approve|clarify>')
+	assert help.contains('horneroctl assistant <status|enable|disable|tools|ask|stop|approve|clarify|events>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -49,6 +49,15 @@ fn test_assistant_approve_clarify_parser_rules() {
 	}
 	assert dispatch(['horneroctl', 'assistant', 'approve', '--help']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'clarify', 'run_1']) == 2
+}
+
+fn test_assistant_events_parser_rules() {
+	ok := parse_assistant(['events', 'run_1']) or { panic(err) }
+	assert ok.value == 'run_1'
+	if _ := parse_assistant(['events']) {
+		panic('events without run id must be rejected')
+	}
+	assert dispatch(['horneroctl', 'assistant', 'events', '--help']) == 0
 }
 
 fn test_assistant_enable_dry_run_dispatch_ok() {
