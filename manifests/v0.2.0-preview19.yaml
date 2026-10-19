@@ -19,9 +19,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: afef8f1d8a59f86a552694a8da8d5b0f7ab8a10d
+    sha: c423a88c447cf7570435d5c61f8a7162a7ce1c45
     status: pinned
-    subject: "feat(shell): show open Niri screen-capture sessions"
+    subject: "feat(plugins): bar placement contract (M2 slice 2) (#213)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config

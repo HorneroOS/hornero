@@ -34,6 +34,7 @@ apps switcher daemon
 apps switcher next
 apps switcher prev
 apps terminal-file
+assistant ask
 backup create
 capture clipboard
 capture record pause
@@ -52,6 +53,7 @@ hypr layout toggle
 hypr plugins install
 lock now
 package upgrade
+plugin list
 power
 shell ipc
 shell preset apply
