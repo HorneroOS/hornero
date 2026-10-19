@@ -26,6 +26,11 @@ struct CommunityPluginReceipt {
 	source         string
 	revision       string
 	installed_at   string
+pub mut:
+	// Enabled is the runtime lifecycle flag (M2). Receipts written before
+	// this field existed decode as disabled: installed plugins never run
+	// until the user explicitly enables them.
+	enabled bool
 }
 
 struct CommunityPluginListEntry {
@@ -33,6 +38,7 @@ struct CommunityPluginListEntry {
 	name      string
 	version   string
 	installed bool
+	enabled   bool
 }
 
 pub fn resolve_community_plugin_validator() string {
@@ -209,7 +215,7 @@ pub fn community_plugin_install_report(opts CommunityPluginOptions) CommandResul
 		os.rmdir_all(stage) or {}
 		return fail_result('plugin install', 'cannot install validated package: ${err.msg()}')
 	}
-	receipt := CommunityPluginReceipt{1, id, name, version, opts.value, revision, time.now().unix_milli().str()}
+	receipt := CommunityPluginReceipt{1, id, name, version, opts.value, revision, time.now().unix_milli().str(), false}
 	_, receipts := community_plugin_roots()
 	os.mkdir_all(receipts) or {
 		os.rmdir_all(destination) or {}
@@ -358,6 +364,7 @@ pub fn community_plugin_list_report() CommandResult {
 			name:      record.name
 			version:   record.version
 			installed: os.is_dir(os.join_path(root, record.id))
+			enabled:   record.enabled && os.is_dir(os.join_path(root, record.id))
 		}
 	}
 	data := json2.encode(list_entries, escape_unicode: true)
@@ -405,4 +412,80 @@ pub fn community_plugin_remove_report(opts CommunityPluginOptions) CommandResult
 	return ok_result('plugin remove', 'removed Hornero-owned data for ${id}', {
 		'id': id
 	})
+}
+
+fn community_plugin_set_enabled_report(opts CommunityPluginOptions, enable bool) CommandResult {
+	verb := if enable { 'enable' } else { 'disable' }
+	id := opts.value
+	if !community_plugin_valid_id(id) {
+		return fail_result('plugin ${verb}', 'invalid plugin id.\nExample: horneroctl plugin ${verb} example-clock --dry-run')
+	}
+	if !opts.dry_run && !opts.yes {
+		return fail_result('plugin ${verb}', 'refusing to ${verb} a plugin without --yes (preview with --dry-run).\nExample: horneroctl plugin ${verb} ${id} --dry-run')
+	}
+	root, receipts := community_plugin_roots()
+	payload := os.join_path(root, id)
+	receipt_path := os.join_path(receipts, '${id}.json')
+	if os.is_link(payload) || os.is_link(receipt_path) {
+		return fail_result('plugin ${verb}', 'refusing to follow a symbolic link in the owned plugin paths')
+	}
+	if !os.is_file(receipt_path) {
+		return fail_result('plugin ${verb}', 'no Hornero receipt owns plugin ${id}. Install it first: horneroctl plugin install <https-url> --yes')
+	}
+	mut record := json2.decode[CommunityPluginReceipt](os.read_file(receipt_path) or { '' }) or {
+		return fail_result('plugin ${verb}', 'plugin receipt is malformed; refusing to change lifecycle state')
+	}
+	if record.schema_version != 1 || record.id != id {
+		return fail_result('plugin ${verb}', 'plugin receipt does not own the requested plugin id')
+	}
+	if !os.is_dir(payload) {
+		return fail_result('plugin ${verb}', 'plugin payload is missing at ${payload}; reinstall the package before changing its state')
+	}
+	if enable && !record.enabled {
+		// Fail closed: an installed payload must still pass the static
+		// contract before it may be marked runnable.
+		community_plugin_run_validator(payload) or {
+			return fail_result('plugin enable', 'installed payload no longer validates, so it stays disabled: ${err.msg()}')
+		}
+	}
+	if record.enabled == enable {
+		state := if enable { 'enabled' } else { 'disabled' }
+		return ok_result('plugin ${verb}', 'plugin ${id} is already ${state}; nothing changed', {
+			'id':      id
+			'enabled': enable.str()
+		})
+	}
+	if opts.dry_run {
+		return ok_result('plugin ${verb}', 'would mark plugin ${id} as ${verb}d in its receipt. The Shell loads enabled plugins at next start; running QML has full user privileges and is not sandboxed.', {
+			'dry_run': 'true'
+			'id':      id
+		})
+	}
+	record.enabled = enable
+	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
+	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
+		return fail_result('plugin ${verb}', 'cannot write plugin receipt: ${err.msg()}')
+	}
+	os.chmod(tmp, 0o600) or {}
+	os.rename(tmp, receipt_path) or {
+		os.rm(tmp) or {}
+		return fail_result('plugin ${verb}', 'cannot save plugin receipt: ${err.msg()}')
+	}
+	state := if enable { 'enabled' } else { 'disabled' }
+	return ok_result('plugin ${verb}', 'plugin ${id} ${state}. ${if enable {
+		'The Shell may load it at next start. Reminder: plugin QML runs with your user privileges; it is not sandboxed.'
+	} else {
+		'The Shell will not load it at next start.'
+	}}', {
+		'id':      id
+		'enabled': enable.str()
+	})
+}
+
+pub fn community_plugin_enable_report(opts CommunityPluginOptions) CommandResult {
+	return community_plugin_set_enabled_report(opts, true)
+}
+
+pub fn community_plugin_disable_report(opts CommunityPluginOptions) CommandResult {
+	return community_plugin_set_enabled_report(opts, false)
 }

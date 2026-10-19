@@ -222,3 +222,70 @@ fn test_community_plugin_new_validates_license_metadata_and_output_parent() {
 		yes:   true
 	}, 'Example Clock', 'Your Name', 'A clock widget', 'MIT', '/tmp/no-such-parent-hornero/plugin').ok
 }
+
+fn test_community_plugin_enable_disable_lifecycle() {
+	root := community_plugins_test_new_root('lifecycle')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	fixture := community_plugins_test_fixture(root)
+	validator := os.join_path(root, 'validator')
+	git := os.join_path(root, 'git')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	community_plugins_test_write_executable(git, '#!/usr/bin/env python3\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nif "clone" in args:\n dst=pathlib.Path(args[-1]); shutil.copytree(os.environ["HORNERO_TEST_PLUGIN_SOURCE"], dst); (dst/".git").mkdir()\nelif "rev-parse" in args:\n print(os.environ.get("HORNERO_TEST_REVISION", "0123456789abcdef0123456789abcdef01234567"))\nelse:\n raise SystemExit(2)\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	os.setenv('HORNERO_GIT_BIN', git, true)
+	os.setenv('HORNERO_TEST_PLUGIN_SOURCE', fixture, true)
+	installed := community_plugin_install_report(CommunityPluginOptions{
+		value: 'https://example.invalid/community/example-clock.git'
+		yes:   true
+	})
+	assert installed.ok, installed.message
+	// Fresh installs start disabled.
+	listed := community_plugin_list_report()
+	assert listed.data['plugins'].contains('"enabled":false'), listed.data['plugins']
+	// Mutations require consent.
+	refused := community_plugin_enable_report(CommunityPluginOptions{ value: 'example-clock' })
+	assert !refused.ok
+	preview := community_plugin_enable_report(CommunityPluginOptions{
+		value:   'example-clock'
+		dry_run: true
+	})
+	assert preview.ok
+	still := community_plugin_list_report()
+	assert still.data['plugins'].contains('"enabled":false')
+	enabled := community_plugin_enable_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert enabled.ok, enabled.message
+	after := community_plugin_list_report()
+	assert after.data['plugins'].contains('"enabled":true'), after.data['plugins']
+	again := community_plugin_enable_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert again.ok && again.message.contains('already enabled')
+	disabled := community_plugin_disable_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert disabled.ok, disabled.message
+	final := community_plugin_list_report()
+	assert final.data['plugins'].contains('"enabled":false')
+}
+
+fn test_community_plugin_enable_unknown_and_invalid_payload() {
+	root := community_plugins_test_new_root('lifecycle-bad')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	unknown := community_plugin_enable_report(CommunityPluginOptions{ value: 'nope', yes: true })
+	assert !unknown.ok && unknown.message.contains('no Hornero receipt')
+	bad_id := community_plugin_enable_report(CommunityPluginOptions{ value: '../evil', yes: true })
+	assert !bad_id.ok
+}

@@ -18,7 +18,7 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl plugin list')
 	}
 	leaf := args[0]
-	if leaf !in ['install', 'remove', 'list', 'validate', 'new'] {
+	if leaf !in ['install', 'remove', 'list', 'validate', 'new', 'enable', 'disable'] {
 		return error('unknown plugin subcommand: ${leaf}.\nRun: horneroctl plugin --help')
 	}
 	mut value := ''
