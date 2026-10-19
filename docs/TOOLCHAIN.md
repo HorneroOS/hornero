@@ -10,9 +10,12 @@ when the upstream repositories advance.
 
 1. Resolve full 40-character commits from the official V, VC, and TCC bundle
    repositories: `https://github.com/vlang/v`, `https://github.com/vlang/vc`,
-   and `https://github.com/vlang/tccbin`.
-2. Update `toolchain/vlang.commit`, `toolchain/vc.commit`, and
-   `toolchain/tcc.commit` in one pull request. V's normal build updates its VC
+   and `https://github.com/vlang/tccbin`. The TCC bundle ships one branch
+   per target triplet, so it has two pins: `tcc.commit`
+   (thirdparty-linux-amd64) and `tcc-arm64.commit`
+   (thirdparty-linux-arm64); `setup-v` selects by runner architecture.
+2. Update `toolchain/vlang.commit`, `toolchain/vc.commit`, and both TCC
+   pins in one pull request. V's normal build updates its VC
    and TinyCC branches, so the shared action supplies all three locked
    checkouts and uses GNUmakefile's `local` mode to prevent those implicit
    network updates.

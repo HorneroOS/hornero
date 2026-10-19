@@ -9,7 +9,16 @@ runs:
       run: |
         v_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/vlang.commit")"
         vc_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/vc.commit")"
-        tcc_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/tcc.commit")"
+        # tccbin ships one branch per target triplet; the amd64 pin cannot
+        # link on arm64 runners (x86-64 libgc), so select the pin by arch.
+        case "$(uname -m)" in
+          aarch64|arm64)
+            tcc_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/tcc-arm64.commit")"
+            ;;
+          *)
+            tcc_commit="$(tr -d '\r\n' < "$GITHUB_WORKSPACE/toolchain/tcc.commit")"
+            ;;
+        esac
         for entry in "v:$v_commit" "vc:$vc_commit" "tcc:$tcc_commit"; do
           name="${entry%%:*}"
           commit="${entry#*:}"
