@@ -26,6 +26,7 @@ Commands:
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   system        Installed edition and active compositor information
+  assistant     Optional Hermes AI assistant (status, enable, disable, tools, ask, stop)
   completion    Print shell completions
   help          Show help for a command
 
@@ -83,6 +84,10 @@ Examples:
 		}
 		'system info' {
 			return 'Usage: horneroctl system info [--json|--quiet]\n\nReport the installed edition, its package-set composition, configured compositor and maturity, the source revision, and the compositor active in this session. If this installation has no profile record, the command says so explicitly.\n\nExamples:\n  horneroctl system info\n  horneroctl system info --json\n'
+		}
+		'assistant', 'assistant status', 'assistant enable', 'assistant disable', 'assistant tools',
+		'assistant ask', 'assistant stop' {
+			return 'Usage: horneroctl assistant <status|enable|disable|tools|ask|stop> [value] [options]\n\n  status              Enabled state, Hermes presence, gateway reachability\n  enable [--dry-run|--yes]\n                      Explicitly enable the optional Hermes assistant\n  disable [--dry-run|--yes]\n                      Disable it again (desktop unchanged)\n  tools               List the read-only tools the assistant may call\n  ask "<prompt>"      Start a Hermes run and print its streamed answer\n  stop <run-id>       Cancel a running Hermes run\n\nThe assistant is disabled by default and never required. It talks to the\nHermes Agent gateway on http://127.0.0.1:8642 with a local Bearer key\n(0600, user config). Slice 1 exposes read-only tools only; nothing is\nauto-approved and nothing runs as root.\n\nExamples:\n  horneroctl assistant status\n  horneroctl assistant enable --dry-run\n  horneroctl assistant enable --yes\n  horneroctl assistant tools --json\n  horneroctl assistant ask "what updates are available?"\n  horneroctl assistant stop run_abc123\n  horneroctl assistant disable --yes\n'
 		}
 		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate' {
 			return 'Usage: horneroctl plugin <new|install|remove|list|validate> [value] [options]
@@ -1327,7 +1332,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps system help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware completion welcome wallpaper capture apps system assistant help)
   _describe "command" cmds
 }
 _horneroctl
