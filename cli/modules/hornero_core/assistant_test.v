@@ -47,3 +47,18 @@ fn test_assistant_settings_default_disabled_and_loopback_only() {
 			|| settings.endpoint.starts_with('http://localhost')
 	}
 }
+
+fn test_assistant_pending_request_detects_approval() {
+	events := parse_sse_events('event: approval.request\ndata: {"type":"approval.request","command":"pacman -S x","choices":["approve","deny"]}\n\n')
+	pending := assistant_pending_request(events)
+	assert pending.kind == 'approval'
+	assert pending.detail == 'pacman -S x'
+	assert pending.choices.len == 2
+}
+
+fn test_assistant_pending_request_detects_clarify_and_none() {
+	clarify := parse_sse_events('data: {"type":"clarify.request","question":"which theme?"}\n\n')
+	assert assistant_pending_request(clarify).detail == 'which theme?'
+	plain := parse_sse_events('data: {"delta":"hi"}\n\n')
+	assert assistant_pending_request(plain).kind == 'none'
+}
