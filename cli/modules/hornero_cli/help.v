@@ -19,7 +19,7 @@ Commands:
   power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
   lock          Screen lock (now, status)
   hypr          Hyprland controls (animations, layout, monitors, workspace, plugins)
-  plugin        Community Shell plugin packages (new, install, remove, list, validate)
+  plugin        Community Shell plugin packages (new, install, remove, list, validate, enable, disable)
   hardware      Hardware controls (brightness, battery, mic, keyboard, network)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
@@ -107,7 +107,7 @@ Examples:
 			return 'Usage: horneroctl assistant stop <run-id> [--json|--quiet]\n\nCancel a running Hermes run by id (returned by assistant ask).\n\nExamples:\n  horneroctl assistant stop run_abc123\n'
 		}
 		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate' {
-			return 'Usage: horneroctl plugin <new|install|remove|list|validate> [value] [options]
+			return 'Usage: horneroctl plugin <new|install|remove|list|validate|enable|disable> [value] [options]
 
   new <id> --name NAME --author AUTHOR --description TEXT --license MIT --dir PATH [--dry-run|--yes]
                       Create a static community plugin scaffold (MIT template)
@@ -118,8 +118,12 @@ Examples:
   list                List receipt-owned community packages
   validate <directory>
                       Run the Shell-owned static contract validator
+  enable <id> [--dry-run|--yes]
+                      Mark an installed plugin runnable (re-validates first)
+  disable <id> [--dry-run|--yes]
+                      Mark a plugin not runnable (payload kept)
 
-New/install/remove need --yes to mutate; --dry-run never creates files or clones.
+New/install/remove/enable/disable need --yes to mutate; --dry-run never creates files or clones.
 Packages are stored below XDG data, with ownership receipts under XDG
 state. Installation does not load QML. Quickshell extensions are not
 sandboxed; validation is not a security certification.
@@ -134,6 +138,12 @@ Examples:
   horneroctl plugin remove example-plugin --dry-run
   horneroctl plugin remove example-plugin --yes
 '
+		}
+		'plugin enable' {
+			return 'Usage: horneroctl plugin enable <id> [--dry-run|--yes]\n\nMark a receipt-owned, installed plugin as runnable. The installed\npayload must still pass the static contract validator, or enabling\nfails and the plugin stays disabled. Plugins are disabled by\ndefault when installed. Enabled QML runs with your user privileges;\nit is not sandboxed.\n\nExamples:\n  horneroctl plugin enable example-clock --dry-run\n  horneroctl plugin enable example-clock --yes\n'
+		}
+		'plugin disable' {
+			return 'Usage: horneroctl plugin disable <id> [--dry-run|--yes]\n\nMark a plugin as not runnable. The payload and receipt stay in\nplace; enable it again at any time.\n\nExamples:\n  horneroctl plugin disable example-clock --dry-run\n  horneroctl plugin disable example-clock --yes\n'
 		}
 		'plugin new' {
 			return 'Usage: horneroctl plugin new <id> --name NAME --author AUTHOR --description TEXT --license MIT --dir PATH [--dry-run|--yes]
