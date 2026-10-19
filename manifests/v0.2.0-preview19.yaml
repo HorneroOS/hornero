@@ -19,9 +19,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: afef8f1d8a59f86a552694a8da8d5b0f7ab8a10d
+    sha: 3320b2bb4bbcc61afc7c6750eb042782798234cf
     status: pinned
-    subject: "feat(shell): show open Niri screen-capture sessions"
+    subject: "feat(plugins): runtime loader slice 1 — discovery, headless load, fault isolation (M2) (#212)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
