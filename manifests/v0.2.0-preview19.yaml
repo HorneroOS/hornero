@@ -19,9 +19,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 3320b2bb4bbcc61afc7c6750eb042782798234cf
+    sha: c423a88c447cf7570435d5c61f8a7162a7ce1c45
     status: pinned
-    subject: "feat(plugins): runtime loader slice 1 — discovery, headless load, fault isolation (M2) (#212)"
+    subject: "feat(plugins): bar placement contract (M2 slice 2) (#213)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
