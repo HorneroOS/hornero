@@ -92,3 +92,28 @@ fn test_assistant_gateway_compat_rejects_foreign_or_broken_bodies() {
 	array, _ := assistant_gateway_compat('[1,2]')
 	assert !array
 }
+
+fn test_sse_stream_parser_handles_split_lines_and_chunks() {
+	mut parser := SseStreamParser{}
+	mut events := parser.feed('event: message\ndata: {"del')
+	assert events.len == 0
+	events = parser.feed('ta":"Ho')
+	assert events.len == 0
+	events = parser.feed('la"}\n\ndata: {"delta":"!"}\n\n')
+	assert events.len == 2
+	assert events[0].data == '{"delta":"Hola"}'
+	assert assistant_event_text(events[0]) == 'Hola'
+	assert assistant_event_text(events[1]) == '!'
+	rest := parser.finish()
+	assert rest.len == 0
+}
+
+fn test_sse_stream_parser_finish_flushes_trailing_event() {
+	mut parser := SseStreamParser{}
+	mut events := parser.feed('data: {"output":"final answer"}')
+	assert events.len == 0
+	events = parser.finish()
+	assert events.len == 1
+	assert assistant_event_final(events[0]) == 'final answer'
+	assert assistant_collect_text(events) == 'final answer'
+}
