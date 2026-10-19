@@ -48,7 +48,7 @@ def test_workflow_yaml_parses():
 
 
 def test_v_toolchain_is_locked_and_shared_by_build_workflows():
-    for filename in ("vlang.commit", "vc.commit", "tcc.commit"):
+    for filename in ("vlang.commit", "vc.commit", "tcc.commit", "tcc-arm64.commit"):
         lock = ROOT / "toolchain" / filename
         commit = lock.read_text(encoding="utf-8").strip()
         assert len(commit) == 40 and all(char in "0123456789abcdef" for char in commit)
@@ -59,6 +59,7 @@ def test_v_toolchain_is_locked_and_shared_by_build_workflows():
     assert '"$GITHUB_WORKSPACE/toolchain/vlang.commit"' in action_text
     assert '"$GITHUB_WORKSPACE/toolchain/vc.commit"' in action_text
     assert '"$GITHUB_WORKSPACE/toolchain/tcc.commit"' in action_text
+    assert '"$GITHUB_WORKSPACE/toolchain/tcc-arm64.commit"' in action_text
     assert 'git -C "$vdir" fetch -q --depth 1 origin "$V_COMMIT"' in action_text
     assert 'git -C "$vdir/vc" fetch -q --depth 1 origin "$VC_COMMIT"' in action_text
     assert 'git -C "$vdir/thirdparty/tcc" fetch -q --depth 1 origin "$TCC_COMMIT"' in action_text
