@@ -86,7 +86,7 @@ Examples:
 			return 'Usage: horneroctl system info [--json|--quiet]\n\nReport the installed edition, its package-set composition, configured compositor and maturity, the source revision, and the compositor active in this session. If this installation has no profile record, the command says so explicitly.\n\nExamples:\n  horneroctl system info\n  horneroctl system info --json\n'
 		}
 		'assistant' {
-			return 'Usage: horneroctl assistant <status|enable|disable|tools|ask|stop> [value] [options]\n\n  status              Enabled state, Hermes presence, gateway reachability\n  enable [--dry-run|--yes]\n                      Explicitly enable the optional Hermes assistant\n  disable [--dry-run|--yes]\n                      Disable it again (desktop unchanged)\n  tools               List the read-only tools the assistant may call\n  ask "<prompt>"      Start a Hermes run and print its streamed answer\n  stop <run-id>       Cancel a running Hermes run\n\nThe assistant is disabled by default and never required. It talks to the\nHermes Agent gateway on http://127.0.0.1:8642 with a local Bearer key\n(0600, user config). Slice 1 exposes read-only tools only; nothing is\nauto-approved and nothing runs as root.\n\nExamples:\n  horneroctl assistant status\n  horneroctl assistant enable --dry-run\n  horneroctl assistant enable --yes\n  horneroctl assistant tools --json\n  horneroctl assistant ask "what updates are available?"\n  horneroctl assistant stop run_abc123\n  horneroctl assistant disable --yes\n'
+			return 'Usage: horneroctl assistant <status|enable|disable|tools|ask|stop|approve|clarify> [value] [options]\n\n  status              Enabled state, Hermes presence, gateway reachability\n  enable [--dry-run|--yes]\n                      Explicitly enable the optional Hermes assistant\n  disable [--dry-run|--yes]\n                      Disable it again (desktop unchanged)\n  tools               List the read-only tools the assistant may call\n  ask "<prompt>"      Start a Hermes run and print its streamed answer\n  stop <run-id>       Cancel a running Hermes run\n\nThe assistant is disabled by default and never required. It talks to the\nHermes Agent gateway on http://127.0.0.1:8642 with a local Bearer key\n(0600, user config). Slice 1 exposes read-only tools only; nothing is\nauto-approved and nothing runs as root.\n\nExamples:\n  horneroctl assistant status\n  horneroctl assistant enable --dry-run\n  horneroctl assistant enable --yes\n  horneroctl assistant tools --json\n  horneroctl assistant ask "what updates are available?"\n  horneroctl assistant stop run_abc123\n  horneroctl assistant disable --yes\n'
 		}
 		'assistant status' {
 			return 'Usage: horneroctl assistant status [--json|--quiet]\n\nReport the enabled state, Hermes presence on PATH, and whether the\nHermes gateway answers at the configured loopback endpoint.\n\nExamples:\n  horneroctl assistant status\n  horneroctl assistant status --json\n'
@@ -102,6 +102,12 @@ Examples:
 		}
 		'assistant ask' {
 			return 'Usage: horneroctl assistant ask "<prompt>" [--json|--quiet]\n\nStart a Hermes run and print its streamed answer. Requires the\nassistant to be enabled and the Hermes gateway to be running.\n\nExamples:\n  horneroctl assistant ask "what updates are available?"\n  horneroctl assistant ask "why is memory usage high?" --json\n'
+		}
+		'assistant approve' {
+			return 'Usage: horneroctl assistant approve <run-id> <approve|deny>\n\nAnswer a Hermes approval request for a running run. Nothing is\never auto-approved; this records exactly the decision you type.\n\nExamples:\n  horneroctl assistant approve run_abc123 approve\n  horneroctl assistant approve run_abc123 deny\n'
+		}
+		'assistant clarify' {
+			return 'Usage: horneroctl assistant clarify <run-id> "<answer>"\n\nAnswer a Hermes clarification question for a running run.\n\nExamples:\n  horneroctl assistant clarify run_abc123 "use the dark theme"\n'
 		}
 		'assistant stop' {
 			return 'Usage: horneroctl assistant stop <run-id> [--json|--quiet]\n\nCancel a running Hermes run by id (returned by assistant ask).\n\nExamples:\n  horneroctl assistant stop run_abc123\n'
