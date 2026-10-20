@@ -174,9 +174,9 @@ def test_candidate_pointer_is_explicit_and_deterministic():
     import yaml
 
     filename = read_candidate_name(ROOT)
-    assert filename == "v0.2.0-preview19.yaml"
+    assert filename == "v0.2.0-preview20.yaml"
     doc = yaml.safe_load(read_text(ROOT / "manifests" / filename))
-    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview19"
+    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview20"
 
 
 def test_published_candidate_is_treated_as_immutable_history():
@@ -196,7 +196,7 @@ def test_candidate_manifest_pins_release_candidate():
 def test_profiles_track_candidate_manifest():
     import yaml
 
-    candidate = "hornero-0.2.0-preview19"
+    candidate = "hornero-0.2.0-preview20"
     assert candidate_manifest_name(ROOT) == candidate
     for edition in ("base", "desktop", "developer"):
         profile = yaml.safe_load(read_text(ROOT / "profiles" / f"{edition}.yaml"))
@@ -207,7 +207,7 @@ def test_historical_manifest_is_exempt_from_freshness():
     # Preview 0 pins are stale by design (b0a864c/c4ac003 predate current
     # mains). The freshness gate must NOT select them: only the candidate
     # manifest yields pin entries, and the structural check passes.
-    assert validate_historical_manifests(ROOT, "v0.2.0-preview19.yaml") == []
+    assert validate_historical_manifests(ROOT, "v0.2.0-preview20.yaml") == []
     entries = manifest_pin_entries(ROOT / "manifests" / "v0.2.0-preview14.yaml")
     assert {name for _, name, _, _, _ in entries} == {"shell", "config"}
     stale = manifest_pin_entries(ROOT / "manifests" / "v0.1.0-draft.yaml")
