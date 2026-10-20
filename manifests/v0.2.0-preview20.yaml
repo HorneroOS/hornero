@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 3dff1708061a4f31208d8ad6535b2629922b41ab
+    sha: 10b45e2f573d55c386e6aed23edb3b09b418e729
     status: pinned
-    subject: "feat(notifs): flood policy (shell#224 slice 1)"
+    subject: "feat(controlcenter): Keybinds read-only pane (shell#236 slice 1)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
