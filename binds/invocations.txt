@@ -40,7 +40,6 @@ assistant clarify
 assistant disable
 assistant enable
 assistant events
-assistant knowledge
 assistant status
 assistant stop
 backup create
@@ -54,10 +53,14 @@ hardware battery monitor
 hardware brightness down
 hardware brightness up
 hardware keyboard keys
+hardware keyboard layout
+hardware keyboard settings
 hypr layout restore
 hypr layout set dwindle
 hypr layout set scrolling
 hypr layout toggle
+hypr monitors list
+hypr monitors set
 hypr plugins install
 lock now
 package upgrade
