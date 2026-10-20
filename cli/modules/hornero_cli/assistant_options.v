@@ -10,6 +10,7 @@ pub:
 	yes     bool
 	stream  bool
 	attach  []string
+	session string
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -17,8 +18,8 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl assistant status')
 	}
 	leaf := args[0]
-	if leaf !in ['status', 'enable', 'disable', 'tools', 'knowledge', 'ask', 'stop', 'approve',
-		'clarify', 'events'] {
+	if leaf !in ['status', 'enable', 'disable', 'tools', 'knowledge', 'sessions', 'model', 'ask',
+		'stop', 'approve', 'clarify', 'events'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
@@ -26,10 +27,19 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut yes := false
 	mut stream := false
 	mut attach := []string{}
+	mut session := ''
 	mut i := 1
 	for i < args.len {
 		arg := args[i]
 		i++
+		if arg == '--session' {
+			if i >= args.len {
+				return error('--session needs a chat id.\nExample: horneroctl assistant ask "hi" --session s123')
+			}
+			session = args[i]
+			i++
+			continue
+		}
 		if arg == '--attach' {
 			if i >= args.len {
 				return error('--attach needs a file path.\nExample: horneroctl assistant ask "look" --attach ~/shot.png')
@@ -77,6 +87,9 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf in ['status', 'tools', 'knowledge'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')
 	}
+	if session.len > 0 && leaf != 'ask' {
+		return error('--session only applies to ask.\nExample: horneroctl assistant ask "hi" --session s123')
+	}
 	if attach.len > 0 && leaf != 'ask' {
 		return error('--attach only applies to ask.\nExample: horneroctl assistant ask "look at this" --attach ~/shot.png')
 	}
@@ -95,5 +108,6 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		yes:     yes
 		stream:  stream
 		attach:  attach
+		session: session
 	}
 }
