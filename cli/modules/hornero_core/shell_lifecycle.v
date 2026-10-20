@@ -278,6 +278,13 @@ pub fn session_is_locked() bool {
 			return true
 		}
 	}
+	// The authoritative probe for the in-shell lock: logind's
+	// LockedHint stays "no" while the shell WlSessionLock holds the
+	// session (live-verified on Hyprland, shell#255), so ask the
+	// shell itself over its IPC. Fail open when no shell answers.
+	if shell_lock_engaged() {
+		return true
+	}
 	sid := os.getenv('XDG_SESSION_ID')
 	bin := resolve_loginctl_bin()
 	if sid.len > 0 && bin.len > 0 {
@@ -287,6 +294,40 @@ pub fn session_is_locked() bool {
 			timeout_sec: 2
 		})
 		if rep.ok && rep.output.trim_space() == 'yes' {
+			return true
+		}
+	}
+	return false
+}
+
+// shell_lock_engaged asks the running shell over Quickshell IPC
+// whether its session lock is engaged (`qs ipc call lock isLocked`).
+// The QS_CONFIG_PATH of the running instance is unknown, so try the
+// caller's environment first, then the resolved config dir. Any
+// failure (no shell, old shell without the target) reads as false.
+pub fn shell_lock_engaged() bool {
+	bin := resolve_quickshell_bin()
+	if bin.len == 0 {
+		return false
+	}
+	mut paths := []string{}
+	env_path := os.getenv('QS_CONFIG_PATH')
+	if env_path.len > 0 {
+		paths << env_path
+	}
+	paths << os.join_path(resolve_quickshell_config_dir(), 'shell.qml')
+	paths << ''
+	for candidate in paths {
+		mut argv := [bin, 'ipc', 'call', 'lock', 'isLocked']
+		if candidate.len > 0 {
+			argv = ['QS_CONFIG_PATH=${candidate}', bin, 'ipc', 'call', 'lock', 'isLocked']
+		}
+		rep := run_exec(ExecSpec{
+			prog:        'env'
+			args:        argv
+			timeout_sec: 2
+		})
+		if rep.ok && rep.output.trim_space() == 'true' {
 			return true
 		}
 	}

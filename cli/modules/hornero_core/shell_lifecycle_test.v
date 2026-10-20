@@ -328,7 +328,7 @@ fn test_shell_stop_restart_refuse_while_locked() {
 	// A fake hyprlock on the pgrep probe path makes the session read
 	// as locked; stop/restart must refuse before touching quickshell.
 	saved := shell_lifecycle_test_save_env(['HORNERO_PGREP_BIN', 'HORNERO_QUICKSHELL_BIN',
-		'XDG_SESSION_ID', 'HORNERO_LOGINCTL_BIN'])
+		'XDG_SESSION_ID', 'HORNERO_LOGINCTL_BIN', 'QS_CONFIG_PATH', 'HORNERO_QUICKSHELL_CONFIG_DIR'])
 	os.mkdir_all('/tmp/hx-shell-lock-test') or { assert false }
 	os.write_file('/tmp/hx-shell-lock-test/fake-pgrep.sh', '#!/bin/sh\nexit 0\n') or {
 		assert false
@@ -346,5 +346,15 @@ fn test_shell_stop_restart_refuse_while_locked() {
 	// Dry-run previews stay available while locked.
 	assert shell_stop_report(ShellStopOptions{ dry_run: true }).ok
 	assert shell_restart_report(ShellRestartOptions{ dry_run: true }).ok
+	shell_lifecycle_test_restore_env(saved)
+}
+
+fn test_shell_lock_engaged_fails_open_without_shell() {
+	saved := shell_lifecycle_test_save_env(['HORNERO_QUICKSHELL_BIN', 'QS_CONFIG_PATH',
+		'HORNERO_QUICKSHELL_CONFIG_DIR'])
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/nonexistent-quickshell-hornero-test', true)
+	assert !shell_lock_engaged()
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/bin/true', true)
+	assert !shell_lock_engaged()
 	shell_lifecycle_test_restore_env(saved)
 }
