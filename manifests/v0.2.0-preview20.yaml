@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 6fae3663fe5008a8a08a5ea9a84e3fe8ef3f1f3a
+    sha: a55597483da0325c72d26466c44c0e09fb8a2088
     status: pinned
-    subject: "feat(controlcenter): Accessibility pane + Welcome completeness cards"
+    subject: "feat(controlcenter): Displays and Input panes over horneroctl backends"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config

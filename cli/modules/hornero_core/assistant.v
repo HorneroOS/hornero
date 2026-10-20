@@ -167,6 +167,25 @@ pub fn assistant_tools_report() CommandResult {
 	})
 }
 
+// assistant_knowledge_report renders the live read-only catalogue as a
+// dated, provenance-stamped snapshot for agents that cannot execute
+// commands. It is generated from the same allowlist as `tools`, so it
+// cannot drift from what the assistant may actually call; it never
+// embeds the gateway key or any local secret.
+pub fn assistant_knowledge_report() CommandResult {
+	report := assistant_tools_report()
+	tools := report.data['tools'] or { '' }
+	return ok_result('assistant knowledge', 'Live HorneroOS knowledge snapshot for the assistant. Regenerate instead of copying by hand; truth is `horneroctl assistant tools --json`.', {
+		'generated_by': cli_version()
+		'generated_at': time.now().format()
+		'tools':        tools
+		'class':        'safe-read-only'
+		'transport':    'loopback http://127.0.0.1:8642, local Bearer [REDACTED] (0600), never printed'
+		'approvals':    'never auto-answered; approve/deny are explicit user actions'
+		'default':      'assistant disabled by default, never required, never root'
+	})
+}
+
 // SseStreamParser incrementally parses a Hermes SSE stream.
 // feed() accepts arbitrary chunk boundaries (a line may be split
 // across chunks) and returns the events completed by that chunk;

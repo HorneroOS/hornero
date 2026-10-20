@@ -203,6 +203,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'enable' { render(hornero_core.assistant_enable_report(opts.dry_run, opts.yes), mode) }
 		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
 		'tools' { render(hornero_core.assistant_tools_report(), mode) }
+		'knowledge' { render(hornero_core.assistant_knowledge_report(), mode) }
 		'ask' {
 			if opts.stream {
 				render(hornero_core.assistant_ask_stream_report_attached(opts.value, opts.attach, fn [mode] (txt string) {
