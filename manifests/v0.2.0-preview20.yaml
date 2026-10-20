@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 0c688c253d28087c92fe455ae4b823d785c5a93a
+    sha: 5b25b6e598699f7f99b34211f5f863f17e364db6
     status: pinned
-    subject: "feat(companion): Javi session switcher + model indicator (hornero#189 shell slice)"
+    subject: "fix(launcher): Enter on >ai asks inline, not chat"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
