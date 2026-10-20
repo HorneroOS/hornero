@@ -117,3 +117,21 @@ fn test_sse_stream_parser_finish_flushes_trailing_event() {
 	assert assistant_event_final(events[0]) == 'final answer'
 	assert assistant_collect_text(events) == 'final answer'
 }
+
+fn test_assistant_approval_choice_maps_to_gateway_vocabulary() {
+	assert assistant_approval_choice('approve') == 'once'
+	assert assistant_approval_choice('deny') == 'deny'
+	// Never widen a single approve to session/always.
+	assert assistant_approval_choice('approve') !in ['session', 'always']
+}
+
+fn test_assistant_pending_control_parses_authority_fields() {
+	body := '{"status":"waiting_for_approval","pending_controls":[{"kind":"approval","prompt_id":"abc123","execution_generation":2,"command":"rm -rf x"}]}'
+	prompt_id, gen := assistant_pending_control(body)
+	assert prompt_id == 'abc123'
+	assert gen == 2
+	none_id, none_gen := assistant_pending_control('{"status":"running","pending_controls":[]}')
+	assert none_id == '' && none_gen == 0
+	bad_id, _ := assistant_pending_control('not json')
+	assert bad_id == ''
+}
