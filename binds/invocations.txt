@@ -19,8 +19,8 @@ appearance gtk set-icons
 appearance gtk sync-color-scheme
 appearance gtk theme
 appearance hyprlock
-appearance night-mode backends
 appearance night-mode
+appearance night-mode backends
 appearance night-mode status
 appearance night-mode toggle
 appearance scheme current
@@ -43,6 +43,10 @@ assistant clarify
 assistant disable
 assistant enable
 assistant events
+assistant model list
+assistant sessions
+assistant sessions new
+assistant sessions use
 assistant status
 assistant stop
 backup create
