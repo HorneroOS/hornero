@@ -455,3 +455,15 @@ fn test_hw_brightness_temp_live() {
 	assert u.message.contains('3500K')
 	hw_test_restore_env(saved)
 }
+
+fn test_hw_keybindings_lua_parse() {
+	text := '-- ============\n-- Window\n-- ============\nhl.bind("SUPER + Return", hl.dsp.exec_cmd("kitty"))\nhl.bind("SUPER SHIFT + Q", hl.dsp.window.close())\nlocal x = 1\n-- ============\n-- Workspace\n-- ============\nhl.bind("SUPER + 1", hl.dsp.focus({ workspace = 1 }))\n'
+	lines := parse_keybindings_lua(text)
+	assert lines.len == 3
+	assert lines[0] == '[Window] SUPER + Return -> hl.dsp.exec_cmd("kitty")'
+	assert lines[1] == '[Window] SUPER SHIFT + Q -> hl.dsp.window.close()'
+	assert lines[2] == '[Workspace] SUPER + 1 -> hl.dsp.focus({ workspace = 1 })'
+	// Suffix dispatch: .lua parses as Lua, anything else as hyprlang.
+	assert parse_keybindings_auto('/tmp/k.lua', text).len == 3
+	assert parse_keybindings_auto('/tmp/k.conf', text).len == 0
+}
