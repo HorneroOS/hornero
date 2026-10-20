@@ -185,3 +185,35 @@ fn test_assistant_sessions_registry_roundtrip() {
 		os.setenv('HORNERO_ASSISTANT_SESSIONS_FILE', saved, true)
 	}
 }
+
+fn test_assistant_endpoint_structural_loopback_validation() {
+	accepted := [
+		'http://127.0.0.1:8642',
+		'http://127.0.0.1',
+		'http://localhost:8642',
+		'http://localhost',
+		'http://[::1]:8642',
+		'http://127.0.0.1:8642/',
+	]
+	for raw in accepted {
+		assert assistant_endpoint_is_loopback(raw), 'should accept ${raw}'
+	}
+	rejected := [
+		'http://127.0.0.1.evil.example:8642',
+		'http://127.0.0.1@evil.example:8642',
+		'http://user:pass@127.0.0.1:8642',
+		'https://127.0.0.1:8642',
+		'http://192.168.1.10:8642',
+		'http://localhost.evil.example',
+		'http://[::2]:8642',
+		'http://127.0.0.1:0',
+		'http://127.0.0.1:99999',
+		'http://127.0.0.1:8642/v1',
+		'http://127.0.0.1:8642.evil.example',
+		'127.0.0.1:8642',
+		'',
+	]
+	for raw in rejected {
+		assert !assistant_endpoint_is_loopback(raw), 'should reject ${raw}'
+	}
+}
