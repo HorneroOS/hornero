@@ -258,3 +258,45 @@ fn test_assistant_run_headers_carry_idempotency_key() {
 	bare := assistant_run_headers('', '')
 	assert 'Idempotency-Key' !in bare
 }
+
+fn test_assistant_event_trace_classifies_activity() {
+	thinking := AssistantEvent{
+		kind: 'tool.progress'
+		data: '{"type":"tool.progress","tool_name":"_thinking","delta":"checking themes"}'
+	}
+	k1, t1 := assistant_event_trace(thinking)
+	assert k1 == 'thinking' && t1 == 'checking themes'
+	// Real gateway shape (captured live): event/tool/preview keys.
+	started := AssistantEvent{
+		kind: ''
+		data: '{"event":"tool.started","tool":"terminal","preview":"ls /usr/share/themes"}'
+	}
+	k2, t2 := assistant_event_trace(started)
+	assert k2 == 'tool' && t2 == '▸ terminal: ls /usr/share/themes'
+	done := AssistantEvent{
+		kind: ''
+		data: '{"event":"tool.completed","tool":"terminal","error":false}'
+	}
+	k3, t3 := assistant_event_trace(done)
+	assert k3 == 'tool' && t3 == '✓ terminal'
+	failed := AssistantEvent{
+		kind: ''
+		data: '{"event":"tool.completed","tool":"terminal","error":true}'
+	}
+	k6, t6 := assistant_event_trace(failed)
+	assert k6 == 'tool' && t6 == '✗ terminal'
+	commentary := AssistantEvent{
+		kind: 'assistant.commentary'
+		data: '{"type":"assistant.commentary","text":"looking into it"}'
+	}
+	k4, t4 := assistant_event_trace(commentary)
+	assert k4 == 'commentary' && t4 == 'looking into it'
+	answer := AssistantEvent{
+		kind: 'assistant.delta'
+		data: '{"type":"assistant.delta","delta":"Canberra"}'
+	}
+	k5, _ := assistant_event_trace(answer)
+	assert k5 == ''
+	trace := assistant_trace_text([thinking, started, done])
+	assert trace == 'checking themes\n▸ terminal: ls /usr/share/themes\n✓ terminal'
+}

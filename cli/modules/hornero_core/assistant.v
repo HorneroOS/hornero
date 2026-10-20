@@ -441,6 +441,108 @@ pub fn assistant_events_report(run_id string) CommandResult {
 	return assistant_events_outcome('assistant events', run_id, events)
 }
 
+// assistant_event_trace classifies the non-answer activity of a run:
+// the gateway maps provider reasoning previews to tool.progress events
+// with tool_name "_thinking" (capability reasoning_streaming), tool
+// lifecycle to tool.started/completed/failed, and mid-turn notes to
+// assistant.commentary. This is the provider's emitted activity trace,
+// never the model's raw chain-of-thought (providers do not expose it).
+// Returns (kind, text) with kind thinking|tool|commentary, or ('','').
+pub fn assistant_event_trace(event AssistantEvent) (string, string) {
+	decoded := json2.decode[json2.Any](event.data) or { return '', '' }
+	if decoded !is map[string]json2.Any {
+		return '', ''
+	}
+	root := decoded.as_map()
+	kind := if 'event' in root && root['event'] is string {
+		root['event'].str()
+	} else if 'type' in root && root['type'] is string {
+		root['type'].str()
+	} else {
+		event.kind
+	}
+	field := fn (m map[string]json2.Any, k string) string {
+		if k in m && m[k] is string {
+			return m[k].str()
+		}
+		return ''
+	}
+	tool_name := if field(root, 'tool').len > 0 {
+		field(root, 'tool')
+	} else {
+		field(root, 'tool_name')
+	}
+	match kind {
+		'tool.progress' {
+			delta := field(root, 'delta')
+			if tool_name == '_thinking' {
+				if delta.len > 0 {
+					return 'thinking', delta
+				}
+				return '', ''
+			}
+			if tool_name.len > 0 && delta.len > 0 {
+				return 'tool', '${tool_name}: ${delta}'
+			}
+			return '', ''
+		}
+		'tool.started' {
+			if tool_name.len == 0 {
+				return '', ''
+			}
+			preview := field(root, 'preview')
+			if preview.len > 0 {
+				short := if preview.len > 120 { preview[..120] + '…' } else { preview }
+				return 'tool', '▸ ${tool_name}: ${short}'
+			}
+			return 'tool', '▸ ${tool_name}'
+		}
+		'tool.completed' {
+			if tool_name.len == 0 {
+				return '', ''
+			}
+			failed := 'error' in root && root['error'] is bool && root['error'].bool()
+			if failed {
+				return 'tool', '✗ ${tool_name}'
+			}
+			return 'tool', '✓ ${tool_name}'
+		}
+		'tool.failed' {
+			if tool_name.len > 0 {
+				return 'tool', '✗ ${tool_name}'
+			}
+			return '', ''
+		}
+		'assistant.commentary' {
+			text := field(root, 'text')
+			if text.len > 0 {
+				return 'commentary', text
+			}
+			return '', ''
+		}
+		else {
+			return '', ''
+		}
+	}
+}
+
+// assistant_trace_text joins the trace lines of a run (capped), for
+// buffered results that have no live channel.
+pub fn assistant_trace_text(events []AssistantEvent) string {
+	mut lines := []string{}
+	for event in events {
+		kind, text := assistant_event_trace(event)
+		if kind.len > 0 && text.len > 0 {
+			lines << text
+		}
+	}
+	joined := lines.join('\n')
+	if joined.len > 8192 {
+		return joined[..8192]
+	}
+	return joined
+}
+
 // assistant_collect_text extracts user-visible text from run events:
 // token deltas first (delta/text fields), else the final output field.
 pub fn assistant_collect_text(events []AssistantEvent) string {
@@ -722,6 +824,10 @@ fn assistant_events_outcome(command string, run_id string, events []AssistantEve
 		'events':  events.len.str()
 		'pending': pending.kind
 	}
+	trace := assistant_trace_text(events)
+	if trace.len > 0 {
+		data['trace'] = trace
+	}
 	if pending.kind == 'approval' {
 		data['detail'] = pending.detail
 		return fail_result(command, 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
@@ -741,6 +847,10 @@ fn assistant_events_outcome(command string, run_id string, events []AssistantEve
 // delta is passed to emit() the moment it arrives. The returned
 // result summarizes instead of repeating the streamed text.
 pub fn assistant_events_stream_report(run_id string, emit fn (string)) CommandResult {
+	return assistant_events_stream_report_traced(run_id, emit, fn (_ string, _ string) {})
+}
+
+pub fn assistant_events_stream_report_traced(run_id string, emit fn (string), on_trace fn (string, string)) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant events', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -751,10 +861,14 @@ pub fn assistant_events_stream_report(run_id string, emit fn (string)) CommandRe
 	// The closure only emits live deltas; event collection for the
 	// final outcome uses the assembled response body, so it does not
 	// depend on closure capture semantics.
-	on_event := fn [emit] (ev AssistantEvent) {
+	on_event := fn [emit, on_trace] (ev AssistantEvent) {
 		delta := assistant_event_text(ev)
 		if delta.len > 0 {
 			emit(delta)
+		}
+		kind, text := assistant_event_trace(ev)
+		if kind.len > 0 && text.len > 0 {
+			on_trace(kind, text)
 		}
 	}
 	resp := assistant_stream_events(settings, run_id, on_event) or {
@@ -1148,6 +1262,10 @@ pub fn assistant_ask_stream_report_attached(prompt string, attach []string, emit
 }
 
 pub fn assistant_ask_stream_report_attached_session(prompt string, attach []string, session_id string, emit fn (string)) CommandResult {
+	return assistant_ask_stream_report_traced(prompt, attach, session_id, emit, fn (_ string, _ string) {})
+}
+
+pub fn assistant_ask_stream_report_traced(prompt string, attach []string, session_id string, emit fn (string), on_trace fn (string, string)) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant ask', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -1184,7 +1302,7 @@ pub fn assistant_ask_stream_report_attached_session(prompt string, attach []stri
 	if run_id.len == 0 {
 		return fail_result('assistant ask', 'Hermes did not return a run id.')
 	}
-	result := assistant_events_stream_report(run_id, emit)
+	result := assistant_events_stream_report_traced(run_id, emit, on_trace)
 	if !result.ok {
 		return result
 	}
