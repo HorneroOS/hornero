@@ -20,8 +20,7 @@ appearance gtk sync-color-scheme
 appearance gtk theme
 appearance hyprlock
 appearance night-mode backends
-appearance night-mode off
-appearance night-mode on
+appearance night-mode
 appearance night-mode status
 appearance night-mode toggle
 appearance scheme current
