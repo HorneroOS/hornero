@@ -617,7 +617,6 @@ pub fn assistant_disable_report(dry_run bool, yes bool) CommandResult {
 	})
 }
 
-
 // -- Attachments (shell#241) -------------------------------------------
 // Attachments are validated here, in the credential-holding CLI, never
 // in QML: an allowlist of kinds, hard size caps, and an explicit
@@ -648,7 +647,10 @@ pub fn assistant_attachment_kind(path string) string {
 	return match ext {
 		'png', 'jpg', 'jpeg', 'webp', 'gif' { 'image' }
 		'wav', 'mp3', 'ogg', 'm4a', 'flac', 'opus' { 'audio' }
-		'txt', 'md', 'log', 'json', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'v', 'py', 'js', 'ts', 'sh', 'csv', 'xml', 'html', 'css', 'diff', 'patch', '' { 'text' }
+		'txt', 'md', 'log', 'json', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'v', 'py', 'js',
+		'ts', 'sh', 'csv', 'xml', 'html', 'css', 'diff', 'patch', '' {
+			'text'
+		}
 		else { 'unsupported' }
 	}
 }
@@ -705,7 +707,7 @@ fn assistant_build_input(prompt string, attach []string) !(json2.Any, []string) 
 				abs := os.abs_path(path)
 				parts << json2.Any({
 					'type': json2.Any('text')
-					'text': json2.Any('[Audio attachment stored locally at ${abs}. Transcribe it with your transcription tooling and treat the transcription as the user\'s message.]')
+					'text': json2.Any("[Audio attachment stored locally at ${abs}. Transcribe it with your transcription tooling and treat the transcription as the user's message.]")
 				})
 			}
 			'text' {
