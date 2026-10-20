@@ -731,10 +731,12 @@ fn assistant_build_input(prompt string, attach []string) !(json2.Any, []string) 
 		}
 		names << base
 	}
-	return json2.Any([{
+	mut messages := []json2.Any{}
+	messages << json2.Any({
 		'role':    json2.Any('user')
 		'content': json2.Any(parts)
-	}]), names
+	})
+	return json2.Any(messages), names
 }
 
 pub fn assistant_ask_report(prompt string) CommandResult {
