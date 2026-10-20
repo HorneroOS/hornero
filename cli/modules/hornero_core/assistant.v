@@ -1,6 +1,7 @@
 module hornero_core
 
 import crypto.sha256
+import encoding.base64
 import net.http
 import os
 import time
@@ -616,7 +617,129 @@ pub fn assistant_disable_report(dry_run bool, yes bool) CommandResult {
 	})
 }
 
+
+// -- Attachments (shell#241) -------------------------------------------
+// Attachments are validated here, in the credential-holding CLI, never
+// in QML: an allowlist of kinds, hard size caps, and an explicit
+// secret-path refusal list. Images travel as input_image data URLs,
+// text is inlined with delimiters and a cap, audio is referenced by
+// local path so Hermes' own transcription tools can read it (the
+// gateway's /v1/runs input has no audio part).
+pub const assistant_attach_max_image_bytes = 10_000_000
+pub const assistant_attach_max_audio_bytes = 25_000_000
+pub const assistant_attach_max_text_bytes = 262_144
+pub const assistant_attach_text_inline_cap = 32_768
+pub const assistant_attach_max_count = 8
+
+pub fn assistant_attachment_blocked(base string) bool {
+	lower := base.to_lower()
+	if lower == '.env' || lower.starts_with('.env.') || lower == 'assistant.key'
+		|| lower == 'hermes-provider.env' || lower.contains('credential')
+		|| lower.starts_with('id_rsa') || lower.starts_with('id_ed25519')
+		|| lower.ends_with('.key') || lower.ends_with('.pem') || lower.ends_with('.kdbx')
+		|| lower.ends_with('.p12') {
+		return true
+	}
+	return false
+}
+
+pub fn assistant_attachment_kind(path string) string {
+	ext := os.file_ext(path).trim_left('.').to_lower()
+	return match ext {
+		'png', 'jpg', 'jpeg', 'webp', 'gif' { 'image' }
+		'wav', 'mp3', 'ogg', 'm4a', 'flac', 'opus' { 'audio' }
+		'txt', 'md', 'log', 'json', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'v', 'py', 'js', 'ts', 'sh', 'csv', 'xml', 'html', 'css', 'diff', 'patch', '' { 'text' }
+		else { 'unsupported' }
+	}
+}
+
+fn assistant_image_mime(ext string) string {
+	return match ext.trim_left('.').to_lower() {
+		'png' { 'image/png' }
+		'webp' { 'image/webp' }
+		'gif' { 'image/gif' }
+		else { 'image/jpeg' }
+	}
+}
+
+// assistant_build_input assembles the /v1/runs `input` value: a plain
+// string without attachments, or OpenAI-style content parts with them.
+fn assistant_build_input(prompt string, attach []string) !(json2.Any, []string) {
+	if attach.len == 0 {
+		return json2.Any(prompt), []string{}
+	}
+	if attach.len > assistant_attach_max_count {
+		return error('too many attachments: ${attach.len} (max ${assistant_attach_max_count})')
+	}
+	mut parts := []json2.Any{}
+	parts << json2.Any({
+		'type': json2.Any('text')
+		'text': json2.Any(prompt)
+	})
+	mut names := []string{}
+	for path in attach {
+		base := os.base(path)
+		if assistant_attachment_blocked(base) {
+			return error('refusing to attach ${base}: it looks like a secret or credential file. Rename a redacted copy if you really need to share it.')
+		}
+		if !os.is_file(path) {
+			return error('attachment not found or not a regular file: ${path}')
+		}
+		kind := assistant_attachment_kind(path)
+		size := os.file_size(path)
+		match kind {
+			'image' {
+				if size > assistant_attach_max_image_bytes {
+					return error('image too large: ${base} (${size} bytes, max ${assistant_attach_max_image_bytes})')
+				}
+				raw := os.read_bytes(path) or { return error('cannot read attachment ${path}: ${err.msg()}') }
+				parts << json2.Any({
+					'type':      json2.Any('input_image')
+					'image_url': json2.Any('data:${assistant_image_mime(os.file_ext(path))};base64,${base64.encode(raw)}')
+				})
+			}
+			'audio' {
+				if size > assistant_attach_max_audio_bytes {
+					return error('audio too large: ${base} (${size} bytes, max ${assistant_attach_max_audio_bytes})')
+				}
+				abs := os.abs_path(path)
+				parts << json2.Any({
+					'type': json2.Any('text')
+					'text': json2.Any('[Audio attachment stored locally at ${abs}. Transcribe it with your transcription tooling and treat the transcription as the user\'s message.]')
+				})
+			}
+			'text' {
+				if size > assistant_attach_max_text_bytes {
+					return error('text attachment too large: ${base} (${size} bytes, max ${assistant_attach_max_text_bytes})')
+				}
+				content := os.read_file(path) or { return error('cannot read attachment ${path}: ${err.msg()}') }
+				truncated := if content.len > assistant_attach_text_inline_cap {
+					content[..assistant_attach_text_inline_cap] + '\n[... truncated by horneroctl at ${assistant_attach_text_inline_cap} bytes ...]'
+				} else {
+					content
+				}
+				parts << json2.Any({
+					'type': json2.Any('text')
+					'text': json2.Any('\n\n--- Attached file: ${base} ---\n${truncated}\n--- End of ${base} ---')
+				})
+			}
+			else {
+				return error('unsupported attachment type: ${base}. Supported: images (png/jpg/webp/gif), audio (wav/mp3/ogg/m4a/flac/opus), and text-like files.')
+			}
+		}
+		names << base
+	}
+	return json2.Any([{
+		'role':    json2.Any('user')
+		'content': json2.Any(parts)
+	}]), names
+}
+
 pub fn assistant_ask_report(prompt string) CommandResult {
+	return assistant_ask_report_attached(prompt, [])
+}
+
+pub fn assistant_ask_report_attached(prompt string, attach []string) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant ask', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -624,8 +747,11 @@ pub fn assistant_ask_report(prompt string) CommandResult {
 	if prompt.trim_space().len == 0 {
 		return fail_result('assistant ask', 'Missing prompt. Example: horneroctl assistant ask "what updates are available?"')
 	}
+	input, _ := assistant_build_input(prompt, attach) or {
+		return fail_result('assistant ask', err.msg())
+	}
 	body := json2.encode({
-		'input': json2.Any(prompt)
+		'input': input
 	}, escape_unicode: true)
 	resp := assistant_http(settings, .post, '/v1/runs', body) or {
 		return fail_result('assistant ask', 'Cannot reach the Hermes gateway at ${settings.endpoint}: ${err.msg()}. Start Hermes, then retry.')
@@ -677,6 +803,10 @@ pub fn assistant_ask_report(prompt string) CommandResult {
 // assistant_ask_stream_report starts a run like assistant ask, then
 // streams its events live through emit() as deltas arrive.
 pub fn assistant_ask_stream_report(prompt string, emit fn (string)) CommandResult {
+	return assistant_ask_stream_report_attached(prompt, [], emit)
+}
+
+pub fn assistant_ask_stream_report_attached(prompt string, attach []string, emit fn (string)) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant ask', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -684,8 +814,11 @@ pub fn assistant_ask_stream_report(prompt string, emit fn (string)) CommandResul
 	if prompt.trim_space().len == 0 {
 		return fail_result('assistant ask', 'Missing prompt. Example: horneroctl assistant ask "what updates are available?"')
 	}
+	input, _ := assistant_build_input(prompt, attach) or {
+		return fail_result('assistant ask', err.msg())
+	}
 	body := json2.encode({
-		'input': json2.Any(prompt)
+		'input': input
 	}, escape_unicode: true)
 	resp := assistant_http(settings, .post, '/v1/runs', body) or {
 		return fail_result('assistant ask', 'Cannot reach the Hermes gateway at ${settings.endpoint}: ${err.msg()}. Start Hermes, then retry.')

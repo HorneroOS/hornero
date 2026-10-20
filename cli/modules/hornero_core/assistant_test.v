@@ -135,3 +135,16 @@ fn test_assistant_pending_control_parses_authority_fields() {
 	bad_id, _ := assistant_pending_control('not json')
 	assert bad_id == ''
 }
+
+fn test_attachment_classification() {
+	assert assistant_attachment_kind('/tmp/shot.png') == 'image'
+	assert assistant_attachment_kind('/tmp/voice.WAV') == 'audio'
+	assert assistant_attachment_kind('/tmp/session.log') == 'text'
+	assert assistant_attachment_kind('/tmp/blob.bin') == 'unsupported'
+	assert assistant_attachment_blocked('.env')
+	assert assistant_attachment_blocked('hermes-provider.env')
+	assert assistant_attachment_blocked('id_rsa')
+	assert assistant_attachment_blocked('deploy.pem')
+	assert !assistant_attachment_blocked('screenshot.png')
+	assert !assistant_attachment_blocked('notes.md')
+}
