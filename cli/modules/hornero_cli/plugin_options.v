@@ -18,7 +18,7 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl plugin list')
 	}
 	leaf := args[0]
-	if leaf !in ['install', 'remove', 'list', 'validate', 'new', 'enable', 'disable'] {
+	if leaf !in ['install', 'remove', 'list', 'validate', 'new', 'enable', 'disable', 'catalog'] {
 		return error('unknown plugin subcommand: ${leaf}.\nRun: horneroctl plugin --help')
 	}
 	mut value := ''
@@ -62,6 +62,12 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 			return error('unknown flag: ${arg}.\nExample: horneroctl plugin install https://github.com/example/plugin.git --dry-run')
 		}
 		if value.len > 0 {
+			if leaf == 'catalog' && name.len == 0 {
+				// plugin catalog install <id>: second positional is the id.
+				name = arg
+				i++
+				continue
+			}
 			return error('unexpected argument: ${arg}.\nRun: horneroctl plugin --help')
 		}
 		value = arg
@@ -80,7 +86,7 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		if dry_run == yes {
 			return error('plugin new requires exactly one of --dry-run or --yes.')
 		}
-	} else if name.len > 0 || author.len > 0 || desc.len > 0 || license.len > 0 || dir.len > 0 {
+	} else if leaf != 'catalog' && (name.len > 0 || author.len > 0 || desc.len > 0 || license.len > 0 || dir.len > 0) {
 		return error('plugin metadata flags are only valid with plugin new.\nRun: horneroctl plugin new --help')
 	}
 	if leaf == 'list' && (value.len > 0 || dry_run || yes) {

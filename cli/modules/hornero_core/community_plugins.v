@@ -1,5 +1,6 @@
 module hornero_core
 
+import crypto.sha256
 import os
 import time
 import x.json2
@@ -488,4 +489,250 @@ pub fn community_plugin_enable_report(opts CommunityPluginOptions) CommandResult
 
 pub fn community_plugin_disable_report(opts CommunityPluginOptions) CommandResult {
 	return community_plugin_set_enabled_report(opts, false)
+}
+
+// --- Official catalogue (HorneroOS/plugins marketplace) ---------------
+// The catalogue repo carries one directory per official plugin plus a
+// generated catalog.json (payload SHA-256 + pinned revision). Catalog
+// installs verify the hash before the shell validator runs, then
+// publish through the same receipt path as direct installs.
+
+pub const plugin_catalog_source = 'https://github.com/HorneroOS/plugins.git'
+
+pub struct PluginCatalogEntry {
+pub:
+	id          string
+	name        string
+	version     string
+	description string
+	author      string
+	license     string
+	placement   string
+	category    string
+	trust       string
+	path        string
+	sha256      string
+}
+
+pub fn plugin_catalog_entries(catalog_json string) []PluginCatalogEntry {
+	decoded := json2.decode[json2.Any](catalog_json) or { return [] }
+	if decoded !is map[string]json2.Any {
+		return []
+	}
+	root := decoded.as_map()
+	if !('plugins' in root) || root['plugins'] !is []json2.Any {
+		return []
+	}
+	mut entries := []PluginCatalogEntry{}
+	for item in root['plugins'].as_array() {
+		if item !is map[string]json2.Any {
+			continue
+		}
+		m := item as map[string]json2.Any
+		get := fn [m] (k string) string {
+			if k in m && m[k] is string {
+				return m[k].str()
+			}
+			return ''
+		}
+		entries << PluginCatalogEntry{
+			id:          get('id')
+			name:        get('name')
+			version:     get('version')
+			description: get('description')
+			author:      get('author')
+			license:     get('license')
+			placement:   get('placement')
+			category:    get('category')
+			trust:       get('trust')
+			path:        get('path')
+			sha256:      get('sha256')
+		}
+	}
+	return entries
+}
+
+// Same framing as HorneroOS/plugins scripts/gen_catalog.py:
+// for each name in sorted(manifest.json + files): name NUL bytes NUL.
+pub fn plugin_payload_sha256(plugin_dir string, manifest map[string]json2.Any) string {
+	mut names := ['manifest.json']
+	if 'files' in manifest && manifest['files'] is []json2.Any {
+		for f in manifest['files'].as_array() {
+			if f is string && f.str() !in names {
+				names << f.str()
+			}
+		}
+	}
+	names.sort()
+	mut acc := ''
+	for name in names {
+		acc += name + '\0' + (os.read_file(os.join_path(plugin_dir, name)) or { '' }) + '\0'
+	}
+	return sha256.hexhash(acc)
+}
+
+fn community_plugin_clone_catalog() !(string, string) {
+	git := if os.getenv('HORNERO_GIT_BIN').len > 0 {
+		os.getenv('HORNERO_GIT_BIN')
+	} else {
+		find_on_path('git')
+	}
+	env := find_on_path('env')
+	if git.len == 0 || env.len == 0 {
+		return error('git and env are required to read the plugin catalogue')
+	}
+	source := os.getenv('HORNERO_PLUGINS_CATALOG_URL')
+	stage := os.join_path(os.temp_dir(), 'hornero-catalog-${os.getpid()}-${time.now().unix_milli()}')
+	if source.len > 0 && os.is_dir(source) {
+		copy_dir(source, stage)!
+		return stage, 'local'
+	}
+	url := if source.len > 0 { source } else { plugin_catalog_source }
+	if !community_plugin_safe_source(url) {
+		return error('catalogue source must be an HTTPS Git URL')
+	}
+	clone := run_exec(ExecSpec{
+		prog:        env
+		args:        ['GIT_TERMINAL_PROMPT=0', 'GIT_CONFIG_NOSYSTEM=1', 'GIT_CONFIG_GLOBAL=/dev/null',
+			git, '-c', 'core.hooksPath=/dev/null', '-c', 'credential.helper=', '-c',
+			'protocol.allow=never', '-c', 'protocol.https.allow=always', 'clone', '--depth', '1',
+			'--no-tags', '--', url, stage]
+		timeout_sec: 120
+	})
+	if !clone.ok {
+		return error('git clone of the catalogue failed: ${clone.output}')
+	}
+	rev := run_exec(ExecSpec{
+		prog:        git
+		args:        ['-C', stage, 'rev-parse', '--verify', 'HEAD^{commit}']
+		timeout_sec: 10
+	})
+	revision := rev.output.trim_space()
+	if !rev.ok || !community_plugin_valid_revision(revision) {
+		os.rmdir_all(stage) or {}
+		return error('cannot pin a catalogue revision; refusing unpinned data')
+	}
+	return stage, revision
+}
+
+fn copy_dir(src string, dst string) ! {
+	os.mkdir_all(dst)!
+	for entry in os.ls(src)! {
+		if entry == '.git' {
+			continue
+		}
+		s := os.join_path(src, entry)
+		d := os.join_path(dst, entry)
+		if os.is_dir(s) {
+			copy_dir(s, d)!
+		} else if os.is_file(s) {
+			os.cp(s, d)!
+		}
+	}
+}
+
+pub fn community_plugin_catalog_report() CommandResult {
+	stage, _ := community_plugin_clone_catalog() or {
+		return fail_result('plugin catalog', err.msg())
+	}
+	defer {
+		os.rmdir_all(stage) or {}
+	}
+	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
+		return fail_result('plugin catalog', 'catalogue has no catalog.json')
+	}
+	entries := plugin_catalog_entries(raw)
+	_, receipts := community_plugin_roots()
+	mut lines := []string{}
+	mut rows := []string{}
+	for e in entries {
+		receipt := os.join_path(receipts, '${e.id}.json')
+		state := if os.is_file(receipt) { 'installed' } else { 'available' }
+		lines << '${e.id} ${e.version} [${e.trust}/${e.placement}] ${e.name} — ${state}'
+		rows << '{"id":"${e.id}","name":"${e.name}","version":"${e.version}","trust":"${e.trust}","placement":"${e.placement}","category":"${e.category}","state":"${state}"}'
+	}
+	return ok_result('plugin catalog', 'Official HorneroOS catalogue (${entries.len} plugins):\n${lines.join('\n')}', {
+		'plugins': '[${rows.join(',')}]'
+		'source':  plugin_catalog_source
+	})
+}
+
+pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOptions) CommandResult {
+	if !community_plugin_valid_id(id) {
+		return fail_result('plugin catalog install', 'invalid plugin id.\nExample: horneroctl plugin catalog install hornero-pomodoro --dry-run')
+	}
+	if !opts.dry_run && !opts.yes {
+		return fail_result('plugin catalog install', 'refusing to install without --yes (preview with --dry-run)')
+	}
+	stage, revision := community_plugin_clone_catalog() or {
+		return fail_result('plugin catalog install', err.msg())
+	}
+	defer {
+		os.rmdir_all(stage) or {}
+	}
+	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
+		return fail_result('plugin catalog install', 'catalogue has no catalog.json')
+	}
+	mut found := PluginCatalogEntry{}
+	for e in plugin_catalog_entries(raw) {
+		if e.id == id {
+			found = e
+		}
+	}
+	if found.id.len == 0 {
+		return fail_result('plugin catalog install', 'plugin ${id} is not in the official catalogue')
+	}
+	pkg := os.join_path(stage, found.path)
+	if !os.is_dir(pkg) {
+		return fail_result('plugin catalog install', 'catalogue entry path missing: ${found.path}')
+	}
+	manifest := community_plugin_manifest(pkg) or {
+		return fail_result('plugin catalog install', err.msg())
+	}
+	digest := plugin_payload_sha256(pkg, manifest)
+	if found.sha256.len == 0 || digest != found.sha256 {
+		return fail_result('plugin catalog install', 'payload hash mismatch for ${id} (catalog ${found.sha256}, computed ${digest}); refusing to install')
+	}
+	if opts.dry_run {
+		return ok_result('plugin catalog install', 'would install ${found.name} ${found.version} [${found.trust}] from the official catalogue at ${revision}; hash verified. This copies inert data only — enabling is a separate consent step.', {
+			'dry_run':  'true'
+			'id':       id
+			'sha256':   digest
+			'revision': revision
+		})
+	}
+	community_plugin_run_validator(pkg) or {
+		return fail_result('plugin catalog install', err.msg())
+	}
+	root, receipts := community_plugin_roots()
+	destination := os.join_path(root, id)
+	if os.exists(destination) || os.is_link(destination) {
+		return fail_result('plugin catalog install', 'plugin ${id} is already installed; remove it explicitly before reinstalling')
+	}
+	os.mkdir_all(root) or { return fail_result('plugin catalog install', 'cannot create plugin data directory') }
+	copy_dir(pkg, destination) or {
+		return fail_result('plugin catalog install', 'cannot copy validated package: ${err.msg()}')
+	}
+	receipt := CommunityPluginReceipt{1, found.id, found.name, found.version, plugin_catalog_source, revision, time.now().unix_milli().str(), false}
+	os.mkdir_all(receipts) or {
+		os.rmdir_all(destination) or {}
+		return fail_result('plugin catalog install', 'cannot create plugin receipt directory')
+	}
+	receipt_path := os.join_path(receipts, '${id}.json')
+	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
+	os.write_file(tmp, json2.encode(receipt, escape_unicode: true) + '\n') or {
+		os.rmdir_all(destination) or {}
+		return fail_result('plugin catalog install', 'cannot write plugin receipt')
+	}
+	os.chmod(tmp, 0o600) or {}
+	os.rename(tmp, receipt_path) or {
+		os.rmdir_all(destination) or {}
+		return fail_result('plugin catalog install', 'cannot save plugin receipt')
+	}
+	return ok_result('plugin catalog install', 'installed ${found.name} ${found.version} [${found.trust}] as inert package data. QML is not loaded or sandboxed; enable explicitly when you have reviewed it.', {
+		'id':       id
+		'path':     destination
+		'revision': revision
+		'sha256':   digest
+	})
 }

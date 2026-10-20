@@ -180,6 +180,15 @@ fn run_plugin(args []string, mode hornero_core.RenderMode) int {
 			yes:     opts.yes
 		}, opts.name, opts.author, opts.desc, opts.license, opts.dir), mode)
 	}
+	if opts.leaf == 'catalog' {
+		if opts.value == 'install' {
+			return render(hornero_core.community_plugin_catalog_install_report(opts.name, hornero_core.CommunityPluginOptions{
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}), mode)
+		}
+		return render(hornero_core.community_plugin_catalog_report(), mode)
+	}
 	if opts.leaf == 'install' {
 		return render(hornero_core.community_plugin_install_report(hornero_core.CommunityPluginOptions{
 			value:   opts.value

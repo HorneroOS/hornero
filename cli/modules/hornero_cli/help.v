@@ -124,11 +124,15 @@ Examples:
 		'assistant stop' {
 			return 'Usage: horneroctl assistant stop <run-id> [--json|--quiet]\n\nCancel a running Hermes run by id (returned by assistant ask).\n\nExamples:\n  horneroctl assistant stop run_abc123\n'
 		}
-		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate' {
-			return 'Usage: horneroctl plugin <new|install|remove|list|validate|enable|disable> [value] [options]
+		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate',
+		'plugin catalog' {
+			return 'Usage: horneroctl plugin <new|install|remove|list|validate|enable|disable|catalog> [value] [options]
 
   new <id> --name NAME --author AUTHOR --description TEXT --license MIT --dir PATH [--dry-run|--yes]
                       Create a static community plugin scaffold (MIT template)
+  catalog [--json]    Browse the official HorneroOS/plugins catalogue
+  catalog install <id> [--dry-run|--yes]
+                      Install from the official catalogue (SHA-256 verified, pinned revision)
   install <https-url> [--dry-run|--yes]
                       Validate and install an inert community plugin package
   remove <id> [--dry-run|--yes]
