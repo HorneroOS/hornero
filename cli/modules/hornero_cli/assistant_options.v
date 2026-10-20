@@ -17,7 +17,8 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl assistant status')
 	}
 	leaf := args[0]
-	if leaf !in ['status', 'enable', 'disable', 'tools', 'knowledge', 'ask', 'stop', 'approve', 'clarify', 'events'] {
+	if leaf !in ['status', 'enable', 'disable', 'tools', 'knowledge', 'ask', 'stop', 'approve',
+		'clarify', 'events'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
