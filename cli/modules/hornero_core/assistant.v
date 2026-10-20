@@ -1,5 +1,6 @@
 module hornero_core
 
+import crypto.rand
 import crypto.sha256
 import encoding.base64
 import net.http
@@ -167,13 +168,19 @@ fn assistant_load_key() string {
 	return os.read_file(assistant_key_file()) or { '' }.trim_space()
 }
 
+// New keys come from the OS CSPRNG (hornero#170): 32 random bytes,
+// hex-encoded. Never derive a credential from time/pid/path again.
+fn assistant_generate_key() !string {
+	raw := rand.bytes(32)!
+	return raw.hex()
+}
+
 fn assistant_ensure_key() !string {
 	existing := os.read_file(assistant_key_file()) or { '' }.trim_space()
 	if existing.len >= 16 {
 		return existing
 	}
-	seed := '${time.now().unix_nano()}-${os.getpid()}-${assistant_settings_file()}'
-	key := sha256.hexhash(seed)
+	key := assistant_generate_key()!
 	os.mkdir_all(assistant_dir())!
 	os.write_file(assistant_key_file(), key + '\n')!
 	os.chmod(assistant_key_file(), 0o600)!
