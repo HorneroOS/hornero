@@ -289,3 +289,23 @@ fn test_community_plugin_enable_unknown_and_invalid_payload() {
 	bad_id := community_plugin_enable_report(CommunityPluginOptions{ value: '../evil', yes: true })
 	assert !bad_id.ok
 }
+
+fn test_plugin_catalog_entries_and_payload_hash() {
+	catalog := '{"schemaVersion":1,"plugins":[{"id":"hornero-pomodoro","name":"Hornero Pomodoro","version":"1.0.0","trust":"official","placement":"bar","path":"plugins/hornero-pomodoro","sha256":"abc"}]}'
+	entries := plugin_catalog_entries(catalog)
+	assert entries.len == 1
+	assert entries[0].id == 'hornero-pomodoro'
+	assert entries[0].trust == 'official'
+	assert plugin_catalog_entries('not json').len == 0
+	assert plugin_catalog_entries('{}').len == 0
+	// Hash framing must match scripts/gen_catalog.py in HorneroOS/plugins.
+	dir := '/tmp/hx-catalog-hash-fixture'
+	os.mkdir_all(dir) or { panic('mkdir') }
+	os.write_file('${dir}/manifest.json', '{"files":["Main.qml"]}') or { panic('write') }
+	os.write_file('${dir}/Main.qml', 'import QtQuick\n') or { panic('write') }
+	manifest := community_plugin_manifest(dir) or { panic('manifest') }
+	digest := plugin_payload_sha256(dir, manifest)
+	assert digest.len == 64
+	assert digest == plugin_payload_sha256(dir, manifest)
+	os.rmdir_all(dir) or {}
+}
