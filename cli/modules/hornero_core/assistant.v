@@ -735,6 +735,56 @@ pub fn assistant_stop_report(run_id string) CommandResult {
 	})
 }
 
+// assistant_approval_choice maps the CLI words approve|deny to the
+// Hermes gateway wire vocabulary. Upstream (pinned commit
+// f14699a1379838862d3020b97785796aa555d36d, api_server_runs.py
+// _handle_run_approval) reads only `choice`, allowing
+// once|session|always|deny. `approve` deliberately maps to `once`
+// (single action) — never to session/always widening.
+pub fn assistant_approval_choice(decision string) string {
+	return if decision == 'approve' { 'once' } else { 'deny' }
+}
+
+// assistant_pending_control extracts the pending approval control
+// (prompt_id + execution_generation) from a run-status body. The
+// gateway's authority path requires exactly these fields alongside
+// the choice (api_server_authority_runs.respond_run).
+pub fn assistant_pending_control(status_body string) (string, i64) {
+	decoded := json2.decode[json2.Any](status_body) or { return '', 0 }
+	if decoded !is map[string]json2.Any {
+		return '', 0
+	}
+	root := decoded.as_map()
+	if 'pending_controls' !in root || root['pending_controls'] !is []json2.Any {
+		return '', 0
+	}
+	for control in root['pending_controls'].as_array() {
+		if control !is map[string]json2.Any {
+			continue
+		}
+		c := control.as_map()
+		if 'kind' in c && c['kind'] is string && c['kind'].str() == 'approval' {
+			prompt_id := if 'prompt_id' in c && c['prompt_id'] is string {
+				c['prompt_id'].str()
+			} else {
+				''
+			}
+			mut gen := i64(0)
+			if 'execution_generation' in c {
+				gv := c['execution_generation']
+				gen = match gv {
+					i64 { gv }
+					int { i64(gv) }
+					f64 { i64(gv) }
+					else { i64(0) }
+				}
+			}
+			return prompt_id, gen
+		}
+	}
+	return '', 0
+}
+
 pub fn assistant_approve_report(run_id string, decision string) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
@@ -746,9 +796,29 @@ pub fn assistant_approve_report(run_id string, decision string) CommandResult {
 	if decision !in ['approve', 'deny'] {
 		return fail_result('assistant approve', 'Decision must be approve or deny. Example: horneroctl assistant approve ${run_id} deny')
 	}
-	body := json2.encode({
-		'decision': json2.Any(decision)
-	}, escape_unicode: true)
+	choice := assistant_approval_choice(decision)
+	// Authority-path gateways require the exact pending-control
+	// fields; read them from run status first. Fall back to the
+	// plain choice body when no pending control is advertised.
+	mut body := ''
+	status_resp := assistant_http(settings, .get, '/v1/runs/${run_id}', '') or {
+		return fail_result('assistant approve', 'Cannot reach the Hermes gateway: ${err.msg()}')
+	}
+	if status_resp.status_code < 400 {
+		prompt_id, gen := assistant_pending_control(status_resp.body)
+		if prompt_id.len > 0 {
+			body = json2.encode({
+				'request_id':           json2.Any(prompt_id)
+				'execution_generation': json2.Any(gen)
+				'choice':               json2.Any(choice)
+			}, escape_unicode: true)
+		}
+	}
+	if body.len == 0 {
+		body = json2.encode({
+			'choice': json2.Any(choice)
+		}, escape_unicode: true)
+	}
 	resp := assistant_http(settings, .post, '/v1/runs/${run_id}/approval', body) or {
 		return fail_result('assistant approve', 'Cannot reach the Hermes gateway: ${err.msg()}')
 	}
