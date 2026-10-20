@@ -76,3 +76,22 @@ pub fn stream_delta_frame(txt string) string {
 		'text': json2.Any(txt)
 	}, escape_unicode: true)
 }
+
+// emit_stream_trace frames one activity-trace event (thinking preview,
+// tool lifecycle, commentary): NDJSON {type:kind,text} for JSON
+// consumers, a dim "· " line for humans.
+pub fn emit_stream_trace(kind string, txt string, mode hornero_core.RenderMode) {
+	if mode == .json {
+		println(stream_trace_frame(kind, txt))
+	} else {
+		println('· ${txt}')
+	}
+	flush_stdout()
+}
+
+pub fn stream_trace_frame(kind string, txt string) string {
+	return json2.encode({
+		'type': json2.Any(kind)
+		'text': json2.Any(txt)
+	}, escape_unicode: true)
+}

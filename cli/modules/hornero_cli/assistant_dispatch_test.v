@@ -95,3 +95,11 @@ fn test_stream_delta_frame_is_ndjson() {
 	assert frame.contains('hola')
 	assert !frame.contains('\n')
 }
+
+fn test_stream_trace_frame_shapes() {
+	frame := stream_trace_frame('thinking', 'checking themes')
+	assert frame.contains('\"type\":\"thinking\"')
+	assert frame.contains('checking themes')
+	tool := stream_trace_frame('tool', '▸ terminal')
+	assert tool.contains('\"type\":\"tool\"')
+}
