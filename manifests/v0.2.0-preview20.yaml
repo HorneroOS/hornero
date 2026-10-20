@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 4d13f227bc13b0e8531921cb1e3c0c3c86b50a43
+    sha: 057275a62432373e1237343d686effb4147c8d1a
     status: pinned
-    subject: "feat(companion): live activity trace in Javi chat"
+    subject: "feat(controlcenter): Extensions marketplace (official catalogue)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
