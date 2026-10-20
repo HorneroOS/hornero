@@ -204,10 +204,9 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
 		'tools' { render(hornero_core.assistant_tools_report(), mode) }
 		'ask' {
-			if opts.stream && mode == .human {
-				render(hornero_core.assistant_ask_stream_report(opts.value, fn (txt string) {
-					print(txt)
-					flush_stdout()
+			if opts.stream {
+				render(hornero_core.assistant_ask_stream_report(opts.value, fn [mode] (txt string) {
+					emit_stream_delta(txt, mode)
 				}), mode)
 			} else {
 				render(hornero_core.assistant_ask_report(opts.value), mode)
@@ -217,10 +216,9 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			render(hornero_core.assistant_approve_report(opts.arg1, opts.arg2), mode)
 		}
 		'events' {
-			if opts.stream && mode == .human {
-				render(hornero_core.assistant_events_stream_report(opts.value, fn (txt string) {
-					print(txt)
-					flush_stdout()
+			if opts.stream {
+				render(hornero_core.assistant_events_stream_report(opts.value, fn [mode] (txt string) {
+					emit_stream_delta(txt, mode)
 				}), mode)
 			} else {
 				render(hornero_core.assistant_events_report(opts.value), mode)

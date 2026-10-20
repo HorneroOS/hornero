@@ -54,3 +54,25 @@ pub fn error_json(err hornero_core.DomainError) string {
 		escape_unicode: true
 	)
 }
+
+// emit_stream_delta frames one streamed text delta for the active
+// render mode: raw text for humans, one NDJSON object per line for
+// JSON consumers (shell Companion), so a machine reader can tell
+// live deltas from the final rendered CommandResult line.
+pub fn emit_stream_delta(txt string, mode hornero_core.RenderMode) {
+	if mode == .json {
+		println(stream_delta_frame(txt))
+	} else {
+		print(txt)
+	}
+	flush_stdout()
+}
+
+// stream_delta_frame builds the NDJSON delta line (no trailing
+// newline) so the framing is unit-testable without capturing stdout.
+pub fn stream_delta_frame(txt string) string {
+	return json2.encode({
+		'type': json2.Any('delta')
+		'text': json2.Any(txt)
+	}, escape_unicode: true)
+}

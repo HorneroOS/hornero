@@ -75,3 +75,11 @@ fn test_assistant_stream_flag_rules() {
 fn test_assistant_enable_dry_run_dispatch_ok() {
 	assert dispatch(['horneroctl', 'assistant', 'enable', '--dry-run']) == 0
 }
+
+fn test_stream_delta_frame_is_ndjson() {
+	frame := stream_delta_frame('hola \"che\"')
+	assert frame.starts_with('{')
+	assert frame.contains('\"type\":\"delta\"')
+	assert frame.contains('hola')
+	assert !frame.contains('\n')
+}
