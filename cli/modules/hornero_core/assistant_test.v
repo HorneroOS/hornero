@@ -215,6 +215,9 @@ fn test_assistant_endpoint_structural_loopback_validation() {
 	]
 	for raw in rejected {
 		assert !assistant_endpoint_is_loopback(raw), 'should reject ${raw}'
+	}
+}
+
 fn test_assistant_generate_key_uses_csprng_shape() {
 	a := assistant_generate_key() or { panic('csprng failed') }
 	b := assistant_generate_key() or { panic('csprng failed') }
