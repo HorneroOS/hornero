@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 5febee697d800ec5cd979271545f90ac5d172207
+    sha: d86b30d58dfe493afd41ed8aa5796f05f0c8c5dd
     status: pinned
-    subject: "feat(launcher): >win window provider (shell#250 slice 1)"
+    subject: "feat(launcher): >file bounded file provider (shell#250 slice 2)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
