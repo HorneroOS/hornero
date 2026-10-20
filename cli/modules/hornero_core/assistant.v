@@ -453,11 +453,24 @@ fn assistant_http(settings AssistantSettings, method http.Method, path string, b
 	return assistant_http_ex(settings, method, path, body, {})
 }
 
+// Bounds for gateway work (hornero#172): a stuck or hostile local
+// gateway must not hang the CLI or grow memory without limit.
+pub const assistant_max_response_bytes = 8 * 1024 * 1024
+pub const assistant_max_stream_bytes = 32 * 1024 * 1024
+pub const assistant_max_stream_events = 8192
+
+fn assistant_check_size(seen int, cap int, what string) ! {
+	if seen > cap {
+		return error('Hermes gateway ${what} exceeded the ${cap}-byte/event safety cap; refusing to keep buffering. Check the gateway, then retry.')
+	}
+}
+
 fn assistant_http_ex(settings AssistantSettings, method http.Method, path string, body string, extra map[string]string) !http.Response {
 	mut req := http.Request{
-		method: method
-		url:    settings.endpoint.trim_right('/') + path
-		data:   body
+		method:       method
+		url:          settings.endpoint.trim_right('/') + path
+		data:         body
+		read_timeout: 30 * time.second
 	}
 	key := assistant_load_key()
 	mut headers := {
@@ -470,7 +483,14 @@ fn assistant_http_ex(settings AssistantSettings, method http.Method, path string
 		headers[k] = v
 	}
 	req.header = http.new_custom_header_from_map(headers)!
-	return req.do()
+	mut seen := 0
+	req.on_progress_body = fn [mut seen] (_req &http.Request, chunk []u8, _so_far u64, _expected u64, _status int) ! {
+		seen += chunk.len
+		assistant_check_size(seen, assistant_max_response_bytes, 'response')!
+	}
+	resp := req.do()!
+	assistant_check_size(resp.body.len, assistant_max_response_bytes, 'response')!
+	return resp
 }
 
 // --- Sessions (hornero#189) -------------------------------------------
@@ -652,8 +672,9 @@ pub fn assistant_models_report() CommandResult {
 // The full response is still returned for status handling.
 fn assistant_stream_events(settings AssistantSettings, run_id string, on_event fn (AssistantEvent)) !http.Response {
 	mut req := http.Request{
-		method: .get
-		url:    settings.endpoint.trim_right('/') + '/v1/runs/${run_id}/events'
+		method:       .get
+		url:          settings.endpoint.trim_right('/') + '/v1/runs/${run_id}/events'
+		read_timeout: 600 * time.second
 	}
 	key := assistant_load_key()
 	mut headers := {
@@ -664,13 +685,21 @@ fn assistant_stream_events(settings AssistantSettings, run_id string, on_event f
 	}
 	req.header = http.new_custom_header_from_map(headers)!
 	mut parser := SseStreamParser{}
-	req.on_progress_body = fn [mut parser, on_event] (_req &http.Request, chunk []u8, _so_far u64, _expected u64, _status int) ! {
+	mut seen := 0
+	mut count := 0
+	req.on_progress_body = fn [mut parser, mut seen, mut count, on_event] (_req &http.Request, chunk []u8, _so_far u64, _expected u64, _status int) ! {
+		seen += chunk.len
+		assistant_check_size(seen, assistant_max_stream_bytes, 'event stream')!
 		for ev in parser.feed(chunk.bytestr()) {
+			count += 1
+			assistant_check_size(count, assistant_max_stream_events, 'event stream')!
 			on_event(ev)
 		}
 	}
 	resp := req.do()!
 	for ev in parser.finish() {
+		count += 1
+		assistant_check_size(count, assistant_max_stream_events, 'event stream')!
 		on_event(ev)
 	}
 	return resp

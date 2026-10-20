@@ -217,3 +217,21 @@ fn test_assistant_endpoint_structural_loopback_validation() {
 		assert !assistant_endpoint_is_loopback(raw), 'should reject ${raw}'
 	}
 }
+
+fn test_assistant_size_caps() {
+	assistant_check_size(0, assistant_max_response_bytes, 'response') or { assert false }
+	assistant_check_size(assistant_max_response_bytes, assistant_max_response_bytes, 'response') or {
+		assert false
+	}
+	if _ := assistant_check_size(assistant_max_response_bytes + 1, assistant_max_response_bytes,
+		'response')
+	{
+		assert false, 'over-cap must error'
+	}
+	if _ := assistant_check_size(assistant_max_stream_events + 1, assistant_max_stream_events,
+		'event stream')
+	{
+		assert false, 'event flood must error'
+	}
+	assert assistant_max_stream_bytes > assistant_max_response_bytes
+}
