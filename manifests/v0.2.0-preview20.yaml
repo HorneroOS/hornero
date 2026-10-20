@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 5b25b6e598699f7f99b34211f5f863f17e364db6
+    sha: a56d3f1d705e40eef029b8508eeb1a818e922736
     status: pinned
-    subject: "fix(launcher): Enter on >ai asks inline, not chat"
+    subject: "fix(launcher): ai row grows with streamed answer"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
