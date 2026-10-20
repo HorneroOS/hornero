@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: e4bb9477a69fce4f225a252ad8bb529f3373b650
+    sha: aca586e4a99e4d2e18524fac8489d3a4f614bdb1
     status: pinned
-    subject: "feat(plugins): dashboard placement - Extensions tab cards (M2 slice 3) (#217)"
+    subject: "feat(companion): Javi chat overhaul — streaming, history, voice, attachments"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
