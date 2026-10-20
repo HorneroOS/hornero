@@ -37,7 +37,11 @@ apps terminal-file
 assistant approve
 assistant ask
 assistant clarify
+assistant disable
+assistant enable
 assistant events
+assistant status
+assistant stop
 backup create
 capture clipboard
 capture record pause
