@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: aca586e4a99e4d2e18524fac8489d3a4f614bdb1
+    sha: 49ccd3fd8c96835c36d376d9cce2c4f6416ed825
     status: pinned
-    subject: "feat(companion): Javi chat overhaul — streaming, history, voice, attachments"
+    subject: "fix(companion): right-click menu focus regression + copy-answer action"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
