@@ -121,12 +121,13 @@ fn test_dispatch_hypr_help() {
 	assert dispatch(['horneroctl', 'hypr', 'monitors', '--help']) == 0
 	assert dispatch(['horneroctl', 'hypr', 'workspace', '--help']) == 0
 	assert dispatch(['horneroctl', 'hypr', 'plugins', '--help']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'windows', '--help']) == 0
 	assert dispatch(['horneroctl', 'help', 'hypr']) == 0
 }
 
 fn test_hypr_help_has_examples() {
 	for cmd in ['hypr', 'hypr animations', 'hypr layout', 'hypr monitors', 'hypr workspace',
-		'hypr plugins'] {
+		'hypr plugins', 'hypr windows'] {
 		h := command_help(cmd)
 		assert h.contains('Examples:')
 	}
@@ -142,5 +143,17 @@ fn test_hypr_json_and_quiet_modes() {
 	assert dispatch(['horneroctl', '--quiet', 'hypr', 'monitors', 'set', 'mirror', '--dry-run']) == 0
 	assert dispatch(['horneroctl', '--json', 'hypr', 'workspace', 'next', '--dry-run']) == 0
 	assert dispatch(['horneroctl', '--quiet', 'hypr', 'plugins', 'status']) == 0
+	hypr_dispatch_teardown()
+}
+
+fn test_dispatch_hypr_windows() {
+	hypr_dispatch_setup()
+	assert dispatch(['horneroctl', '--json', 'hypr', 'windows', 'status']) == 0
+	assert dispatch(['horneroctl', '--quiet', 'hypr', 'windows', 'set', '--gaps-in', '8', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'set', '--gaps-in', '8']) == 1
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'set']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'set', '--gaps-in', 'abc', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'status', '--yes']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'restore', '--gaps-in', '3', '--yes']) == 2
 	hypr_dispatch_teardown()
 }

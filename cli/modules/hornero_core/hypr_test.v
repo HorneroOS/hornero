@@ -589,3 +589,20 @@ fn test_plugins_list_fails_without_backend() {
 	assert r.message.contains('Hyprland')
 	hypr_test_restore_env(saved)
 }
+
+fn test_windows_settings_bounds_and_persistence() {
+	assert windows_settings_valid(WindowsSettings{})
+	assert !windows_settings_valid(WindowsSettings{ gaps_in: 101 })
+	assert !windows_settings_valid(WindowsSettings{ rounding: 61 })
+	assert !windows_settings_valid(WindowsSettings{ border_size: -1 })
+	saved := hypr_test_save_env(['HORNERO_HYPR_WINDOWS_STATE_FILE', 'XDG_STATE_HOME'])
+	os.setenv('HORNERO_HYPR_WINDOWS_STATE_FILE', hx_hypr_root + '/windows-current', true)
+	os.mkdir_all(hx_hypr_root) or {}
+	os.write_file(hx_hypr_root + '/windows-current', 'gaps_in=7 gaps_out=30 border_size=3 rounding=14\n') or {}
+	got := windows_restore_value()
+	assert got.gaps_in == 7 && got.gaps_out == 30 && got.border_size == 3 && got.rounding == 14
+	os.write_file(hx_hypr_root + '/windows-current', 'gaps_in=999\n') or {}
+	assert windows_restore_value().gaps_in == 5 // invalid file falls back to defaults
+	os.rm(hx_hypr_root + '/windows-current') or {}
+	hypr_test_restore_env(saved)
+}

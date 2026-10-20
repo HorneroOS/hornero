@@ -675,13 +675,14 @@ Examples:
 '
 		}
 		'hypr' {
-			return 'Usage: horneroctl hypr <animations|layout|monitors|workspace|plugins> [options]
+			return 'Usage: horneroctl hypr <animations|layout|monitors|workspace|plugins|windows> [options]
 
   animations        Animation profiles (list, current, set, next, restore)
   layout            Layout profiles (current, status, set, toggle, restore)
   monitors          Monitor arrangements (list, status, set)
   workspace         Next/prev workspace cycling (next, prev)
   plugins           Hyprland plugins (list, status, install)
+  windows           Window geometry: gaps, border, rounding (status, set, restore)
 
 Reads (list/current/status) never touch the compositor state;
 mutations need --yes and --dry-run only previews. Plugin install
@@ -696,6 +697,8 @@ Examples:
   horneroctl hypr monitors set extend-right --dry-run
   horneroctl hypr workspace next --dry-run
   horneroctl hypr plugins status
+  horneroctl hypr windows status
+  horneroctl hypr windows set --gaps-in 5 --dry-run
 '
 		}
 		'hypr animations' {
@@ -754,6 +757,9 @@ Examples:
   horneroctl hypr layout toggle --yes
   horneroctl hypr layout restore --yes
 '
+		}
+		'hypr windows' {
+			return 'Usage: horneroctl hypr windows <status|set|restore> [options]\n\n  status              Live gaps/border/rounding, else persisted (read-only)\n  set [flags] [--dry-run]\n                      Apply any subset of the geometry (needs --yes);\n                      omitted flags keep their current values\n  restore [--dry-run] Re-apply the persisted geometry (needs --yes)\n\nOptions:\n  --gaps-in <n>       Inner gap 0-100 (default 5)\n  --gaps-out <n>      Outer gap 0-200 (default 20)\n  --border-size <n>   Border width 0-20 (default 2)\n  --rounding <n>      Corner rounding 0-60 (default 10)\n  --ephemeral         Do not persist the geometry to disk\n  --dry-run           Preview the hyprctl invocations without running them\n  --yes               Confirm a mutating action\n\nApplied through hyprctl keyword and persisted under\n\\$XDG_STATE_HOME (hornero/hypr/windows/current) for restore.\nHyprland only; Niri window geometry stays experimental and is\nnever faked through this command.\n\nExamples:\n  horneroctl hypr windows status\n  horneroctl hypr windows set --gaps-in 8 --rounding 12 --yes\n  horneroctl hypr windows restore --yes\n'
 		}
 		'hypr monitors' {
 			return 'Usage: horneroctl hypr monitors <list|status|set> [options]
@@ -818,6 +824,8 @@ autostart path (reload still runs).
 
 Examples:
   horneroctl hypr plugins status
+  horneroctl hypr windows status
+  horneroctl hypr windows set --gaps-in 5 --dry-run
   horneroctl hypr plugins list
   horneroctl hypr plugins status --json
   horneroctl hypr plugins install --dry-run

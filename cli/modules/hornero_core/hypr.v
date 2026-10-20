@@ -544,6 +544,193 @@ pub fn layout_status_report() CommandResult {
 	return ok_result('hypr layout status', lines.join('\n'), data)
 }
 
+// --- Window geometry (shell#235 backend) -------------------------------
+// `hypr windows` owns gaps/border/rounding: read live via getoption,
+// applied via hyprctl keyword, persisted as a key=value state token so
+// `restore` can re-apply after a compositor restart (same pattern as
+// layout/animations). Bounds keep a typo from making windows unusable.
+
+pub struct WindowsSettings {
+pub mut:
+	gaps_in     int = 5
+	gaps_out    int = 20
+	border_size int = 2
+	rounding    int = 10
+}
+
+pub struct WindowsApplyOptions {
+pub:
+	settings  WindowsSettings
+	dry_run   bool
+	yes       bool
+	ephemeral bool
+}
+
+// resolve_hypr_windows_state_file locates the persisted window
+// geometry. Override with HORNERO_HYPR_WINDOWS_STATE_FILE.
+pub fn resolve_hypr_windows_state_file() string {
+	env := os.getenv('HORNERO_HYPR_WINDOWS_STATE_FILE')
+	if env.len > 0 {
+		return env
+	}
+	return os.join_path(hypr_state_base(), 'hornero', 'hypr', 'windows', 'current')
+}
+
+pub fn windows_settings_valid(s WindowsSettings) bool {
+	return s.gaps_in >= 0 && s.gaps_in <= 100 && s.gaps_out >= 0 && s.gaps_out <= 200
+		&& s.border_size >= 0 && s.border_size <= 20 && s.rounding >= 0 && s.rounding <= 60
+}
+
+fn windows_persisted() WindowsSettings {
+	mut s := WindowsSettings{}
+	raw := os.read_file(resolve_hypr_windows_state_file()) or { return s }
+	for tok in raw.split(' ') {
+		kv := tok.trim_space().split('=')
+		if kv.len != 2 {
+			continue
+		}
+		v := kv[1].int()
+		match kv[0] {
+			'gaps_in' { s.gaps_in = v }
+			'gaps_out' { s.gaps_out = v }
+			'border_size' { s.border_size = v }
+			'rounding' { s.rounding = v }
+			else {}
+		}
+	}
+	if !windows_settings_valid(s) {
+		return WindowsSettings{}
+	}
+	return s
+}
+
+fn windows_live_value(bin string, key string) int {
+	rep := run_exec(ExecSpec{
+		prog: bin
+		args: ['getoption', 'general:${key}', '-j']
+	})
+	if rep.ok {
+		parsed := json2_decode_map(rep.output)
+		if parsed.len > 0 {
+			return int(json2_f64(parsed, 'int'))
+		}
+	}
+	return -1
+}
+
+fn windows_live(bin string) WindowsSettings {
+	mut s := windows_persisted()
+	if bin.len == 0 {
+		return s
+	}
+	gi := windows_live_value(bin, 'gaps_in')
+	if gi >= 0 {
+		s.gaps_in = gi
+	}
+	go_ := windows_live_value(bin, 'gaps_out')
+	if go_ >= 0 {
+		s.gaps_out = go_
+	}
+	bs := windows_live_value(bin, 'border_size')
+	if bs >= 0 {
+		s.border_size = bs
+	}
+	rd := windows_live_value(bin, 'rounding')
+	if rd >= 0 {
+		s.rounding = rd
+	}
+	return s
+}
+
+fn windows_data(s WindowsSettings) map[string]string {
+	return {
+		'gaps_in':     s.gaps_in.str()
+		'gaps_out':    s.gaps_out.str()
+		'border_size': s.border_size.str()
+		'rounding':    s.rounding.str()
+	}
+}
+
+// windows_status_report implements `hypr windows status` (read-only):
+// live geometry when Hyprland answers, else the persisted pointer.
+pub fn windows_status_report() CommandResult {
+	bin := resolve_hyprctl_bin()
+	live := windows_live(bin)
+	saved := windows_persisted()
+	mut lines := []string{}
+	lines << 'gaps_in: ${live.gaps_in}'
+	lines << 'gaps_out: ${live.gaps_out}'
+	lines << 'border_size: ${live.border_size}'
+	lines << 'rounding: ${live.rounding}'
+	lines << 'persisted: gaps_in=${saved.gaps_in} gaps_out=${saved.gaps_out} border_size=${saved.border_size} rounding=${saved.rounding}'
+	lines << 'hyprctl: ${describe_bin(bin)}'
+	mut data := windows_data(live)
+	data['hyprctl'] = describe_bin(bin)
+	return ok_result('hypr windows status', lines.join('\n'), data)
+}
+
+// windows_apply_report implements `hypr windows set|restore`: applies
+// the four keywords (needs --yes; --dry-run previews), then persists
+// unless ephemeral. Lua-config sessions get the dotted keyword form
+// through the same keyword path Hyprland accepts for general:*.
+pub fn windows_apply_report(opts WindowsApplyOptions) CommandResult {
+	if !windows_settings_valid(opts.settings) {
+		return fail_result('hypr windows set', 'window geometry out of bounds (gaps_in 0-100, gaps_out 0-200, border_size 0-20, rounding 0-60).\nExample: horneroctl hypr windows set --gaps-in 5 --gaps-out 20 --border-size 2 --rounding 10 --dry-run')
+	}
+	if !opts.yes && !opts.dry_run {
+		return fail_result('hypr windows set', 'refusing to change window geometry without --yes (preview with --dry-run).\nExample: horneroctl hypr windows set --gaps-in 5 --dry-run')
+	}
+	bin := hyprctl_or_fail('windows set', opts.dry_run) or {
+		return fail_result('hypr windows set', err.msg())
+	}
+	s := opts.settings
+	pairs := [['general:gaps_in', s.gaps_in.str()], ['general:gaps_out', s.gaps_out.str()],
+		['general:border_size', s.border_size.str()], ['decoration:rounding', s.rounding.str()]]
+	mut previews := []string{}
+	for pr in pairs {
+		previews << command_line(bin, ['keyword', pr[0], pr[1]])
+	}
+	if opts.dry_run {
+		mut lines := ['would apply window geometry:']
+		for pv in previews {
+			lines << 'would run: ${pv}'
+		}
+		mut data := windows_data(s)
+		data['command_line'] = previews.join('; ')
+		data['dry_run'] = 'true'
+		return ok_result('hypr windows set', lines.join('\n'), data)
+	}
+	for pr in pairs {
+		rep := run_exec(ExecSpec{
+			prog: bin
+			args: ['keyword', pr[0], pr[1]]
+		})
+		if !rep.ok {
+			return fail_result('hypr windows set', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
+		}
+	}
+	if !opts.ephemeral {
+		write_state_token(resolve_hypr_windows_state_file(), 'gaps_in=${s.gaps_in} gaps_out=${s.gaps_out} border_size=${s.border_size} rounding=${s.rounding}') or {
+			return fail_result('hypr windows set', err.msg())
+		}
+	}
+	mut data := windows_data(s)
+	data['command_line'] = previews.join('; ')
+	return ok_result('hypr windows set', 'applied window geometry gaps_in=${s.gaps_in} gaps_out=${s.gaps_out} border_size=${s.border_size} rounding=${s.rounding}', data)
+}
+
+// windows_current_value is the live geometry when Hyprland answers,
+// else the persisted pointer. Read-only, never fails.
+pub fn windows_current_value() WindowsSettings {
+	return windows_live(resolve_hyprctl_bin())
+}
+
+// windows_restore_value is the persisted geometry `hypr windows
+// restore` re-applies.
+pub fn windows_restore_value() WindowsSettings {
+	return windows_persisted()
+}
+
 // hypr_monitor_modes lists the valid monitor arrangement modes.
 pub fn hypr_monitor_modes() []string {
 	return ['internal-only', 'external-only', 'extend-right', 'extend-left', 'extend-above',
