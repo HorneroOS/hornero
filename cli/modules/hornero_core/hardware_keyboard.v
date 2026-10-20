@@ -438,7 +438,88 @@ fn keybindings_path() string {
 	if base.len == 0 {
 		base = os.join_path(os.home_dir(), '.config')
 	}
+	// Lua-active sessions (hornero#176) source binds from the Lua
+	// fragment; legacy hyprlang sessions keep the .conf path.
+	if hypr_lua_config_enabled() {
+		return os.join_path(base, 'hypr', 'hyprland.lua.d', 'keybindings.lua')
+	}
 	return os.join_path(base, 'hypr', 'hyprland.conf.d', 'keybindings.conf')
+}
+
+// parse_keybindings_lua renders `hl.bind("MODS + key", dispatcher)`
+// lines in the same `[cat] mods + key -> action` shape as the legacy
+// parser, with `-- ===` / `-- Title` comment headers as categories.
+// Dispatcher expressions are shown verbatim (trimmed of the call's
+// trailing parenthesis) — help must read what the session runs.
+fn parse_keybindings_lua(text string) []string {
+	mut out := []string{}
+	mut stage := 0
+	mut candidate := ''
+	mut cat := ''
+	for raw in text.split_into_lines() {
+		line := raw.trim_space()
+		if line.starts_with('--') {
+			rest := line[2..].trim_space()
+			mut is_sep := rest.len > 0
+			for c in rest {
+				if c != `=` {
+					is_sep = false
+				}
+			}
+			if is_sep {
+				if stage == 2 {
+					cat = candidate
+				}
+				stage = 1
+				continue
+			}
+			if stage == 1 && rest.len > 0 {
+				candidate = rest
+				stage = 2
+			} else {
+				stage = 0
+			}
+			continue
+		}
+		if !line.starts_with('hl.bind(') {
+			stage = 0
+			continue
+		}
+		stage = 0
+		q1 := line.index('"') or { continue }
+		rest1 := line[q1 + 1..]
+		q2 := rest1.index('"') or { continue }
+		combo := rest1[..q2].trim_space()
+		mut action := rest1[q2 + 1..].trim_space()
+		if action.starts_with(',') {
+			action = action[1..].trim_space()
+		}
+		if action.ends_with(')') {
+			action = action[..action.len - 1].trim_space()
+		}
+		parts := combo.split('+').map(it.trim_space()).filter(it.len > 0)
+		if parts.len == 0 {
+			continue
+		}
+		key := parts[parts.len - 1]
+		mods := parts[..parts.len - 1].join(' + ')
+		shown := if mods.len > 0 { '${mods} + ${key}' } else { key }
+		if cat.len > 0 {
+			out << '[${cat}] ${shown} -> ${action}'
+		} else {
+			out << '${shown} -> ${action}'
+		}
+	}
+	return out
+}
+
+// parse_keybindings_auto selects the parser by file suffix so the
+// HORNERO_KEYBINDINGS_FILE override works for both formats.
+fn parse_keybindings_auto(path string, text string) []string {
+	if path.ends_with('.lua') {
+		return parse_keybindings_lua(text)
+	}
+	return parse_keybindings_text(text)
 }
 
 // is_keybindings_sep matches the `# ===` section separator lines.
@@ -586,7 +667,7 @@ pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 	text := os.read_file(path) or {
 		return fail_result('hardware keyboard keys', '[ERROR] Keybindings configuration not found (${path}).')
 	}
-	mut lines := parse_keybindings_text(text)
+	mut lines := parse_keybindings_auto(path, text)
 	if opts.category.len > 0 {
 		c := opts.category.to_lower()
 		mut kept := []string{}
