@@ -1040,12 +1040,30 @@ fn assistant_build_input(prompt string, attach []string) !(json2.Any, []string) 
 
 // assistant_run_create POSTs /v1/runs with the selected session's
 // continuity header when one is active (hornero#189).
+// One logical submission = one Idempotency-Key (hornero#173), drawn
+// from the OS CSPRNG. Retries of the same submission reuse the key the
+// caller generated once; a new ask generates a fresh key.
+fn assistant_new_idempotency_key() string {
+	raw := rand.bytes(16) or { return '' }
+	return 'hornero-' + raw.hex()
+}
+
+fn assistant_run_headers(session_key string, idempotency_key string) map[string]string {
+	mut headers := map[string]string{}
+	if session_key.len > 0 {
+		headers['X-Hermes-Session-Key'] = session_key
+	}
+	if idempotency_key.len > 0 {
+		headers['Idempotency-Key'] = idempotency_key
+	}
+	return headers
+}
+
 fn assistant_run_create(settings AssistantSettings, body string, session_id string) !http.Response {
 	key := assistant_current_session_key(session_id)
-	if key.len > 0 {
-		return assistant_http_ex(settings, .post, '/v1/runs', body, {
-			'X-Hermes-Session-Key': key
-		})
+	headers := assistant_run_headers(key, assistant_new_idempotency_key())
+	if headers.len > 0 {
+		return assistant_http_ex(settings, .post, '/v1/runs', body, headers)
 	}
 	return assistant_http(settings, .post, '/v1/runs', body)
 }

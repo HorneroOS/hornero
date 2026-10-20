@@ -246,3 +246,15 @@ fn test_assistant_size_caps() {
 	}
 	assert assistant_max_stream_bytes > assistant_max_response_bytes
 }
+
+fn test_assistant_run_headers_carry_idempotency_key() {
+	a := assistant_new_idempotency_key()
+	b := assistant_new_idempotency_key()
+	assert a.starts_with('hornero-') && a.len == 40
+	assert a != b // a new logical submission gets a new key
+	headers := assistant_run_headers('hornero:default', a)
+	assert headers['Idempotency-Key'] == a // retries of this submission reuse it
+	assert headers['X-Hermes-Session-Key'] == 'hornero:default'
+	bare := assistant_run_headers('', '')
+	assert 'Idempotency-Key' !in bare
+}
