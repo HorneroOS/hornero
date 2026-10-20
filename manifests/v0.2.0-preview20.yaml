@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 37e88cc89cde6bf48b67c49f2c23afc671fe0e5a
+    sha: 6fae3663fe5008a8a08a5ea9a84e3fe8ef3f1f3a
     status: pinned
-    subject: "feat(companion,welcome,controlcenter): Javi chat keyboard focus, edge margins, Welcome Javi/Settings pages, Lock screen + Session panes"
+    subject: "feat(controlcenter): Accessibility pane + Welcome completeness cards"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
