@@ -289,3 +289,94 @@ pub fn parse_hypr_plugins(args []string) !HyprPluginsOptions {
 		yes:       yes
 	}
 }
+
+// HyprWindowsOptions covers `hypr windows <status|set|restore>`.
+// `status` is read-only; `set` mutates (needs --yes, --dry-run
+// previews) and takes any subset of the four geometry flags — omitted
+// flags keep -1 here and the dispatcher fills them from live state.
+pub struct HyprWindowsOptions {
+pub:
+	leaf      string // status | set | restore
+	gaps_in   int = -1
+	gaps_out  int = -1
+	border    int = -1
+	rounding  int = -1
+	dry_run   bool
+	yes       bool
+	ephemeral bool
+}
+
+pub fn parse_hypr_windows(args []string) !HyprWindowsOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl hypr windows status')
+	}
+	leaf := args[0]
+	if leaf !in ['status', 'set', 'restore'] {
+		return error('unknown windows subcommand: ${leaf}.\nRun: horneroctl hypr windows --help')
+	}
+	mut gaps_in := -1
+	mut gaps_out := -1
+	mut border := -1
+	mut rounding := -1
+	mut dry_run := false
+	mut yes := false
+	mut ephemeral := false
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		i++
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a == '--ephemeral' {
+			ephemeral = true
+			continue
+		}
+		if a in ['--gaps-in', '--gaps-out', '--border-size', '--rounding'] {
+			if i >= args.len {
+				return error('${a} needs a value.\nExample: horneroctl hypr windows set ${a} 5 --dry-run')
+			}
+			v := args[i]
+			i++
+			if v.starts_with('-') || v.int().str() != v {
+				return error('${a} needs an integer, got: ${v}.\nExample: horneroctl hypr windows set ${a} 5 --dry-run')
+			}
+			match a {
+				'--gaps-in' { gaps_in = v.int() }
+				'--gaps-out' { gaps_out = v.int() }
+				'--border-size' { border = v.int() }
+				else { rounding = v.int() }
+			}
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl hypr windows set --gaps-in 5 --dry-run')
+		}
+		return error('unexpected argument: ${a}.\nRun: horneroctl hypr windows --help')
+	}
+	if leaf == 'status' && (dry_run || yes || ephemeral || gaps_in >= 0 || gaps_out >= 0
+		|| border >= 0 || rounding >= 0) {
+		return error('hypr windows status takes no flags.\nExample: horneroctl hypr windows status')
+	}
+	if leaf == 'restore' && (gaps_in >= 0 || gaps_out >= 0 || border >= 0 || rounding >= 0) {
+		return error('hypr windows restore takes no geometry flags.\nExample: horneroctl hypr windows restore --yes')
+	}
+	if leaf == 'set' && gaps_in < 0 && gaps_out < 0 && border < 0 && rounding < 0 {
+		return error('hypr windows set needs at least one geometry flag.\nExample: horneroctl hypr windows set --gaps-in 5 --dry-run')
+	}
+	return HyprWindowsOptions{
+		leaf:      leaf
+		gaps_in:   gaps_in
+		gaps_out:  gaps_out
+		border:    border
+		rounding:  rounding
+		dry_run:   dry_run
+		yes:       yes
+		ephemeral: ephemeral
+	}
+}
