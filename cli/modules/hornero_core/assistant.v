@@ -33,6 +33,68 @@ pub struct AssistantSettings {
 pub mut:
 	enabled  bool
 	endpoint string
+	// Stored endpoint that failed validation (never persisted, never used).
+	rejected_endpoint string
+}
+
+// Structural loopback validation for the gateway endpoint (hornero#169).
+// String-prefix checks accept spellings whose parsed host is not loopback,
+// so parse scheme/host/port explicitly: http only, host exactly 127.0.0.1,
+// localhost or [::1], no userinfo, port 1-65535 when present, no path
+// beyond an optional trailing slash.
+pub fn assistant_endpoint_is_loopback(raw string) bool {
+	trimmed := raw.trim_space()
+	if !trimmed.starts_with('http://') {
+		return false
+	}
+	rest := trimmed['http://'.len..]
+	if rest.len == 0 || rest.contains_any(' \t\r\n') {
+		return false
+	}
+	authority := rest.split('/')[0]
+	if rest.len > authority.len && rest[authority.len..] != '/' {
+		return false
+	}
+	if authority.contains('@') {
+		return false
+	}
+	mut host := authority
+	if authority.starts_with('[') {
+		close := authority.index(']') or { return false }
+		host = authority[1..close]
+		tail := authority[close + 1..]
+		if tail.len > 0 {
+			if !tail.starts_with(':') {
+				return false
+			}
+			return host == '::1' && assistant_valid_port(tail[1..])
+		}
+		return host == '::1'
+	}
+	if authority.contains(':') {
+		parts := authority.split(':')
+		if parts.len != 2 {
+			return false
+		}
+		host = parts[0]
+		if !assistant_valid_port(parts[1]) {
+			return false
+		}
+	}
+	return host == '127.0.0.1' || host == 'localhost'
+}
+
+fn assistant_valid_port(port string) bool {
+	if port.len == 0 || port.len > 5 {
+		return false
+	}
+	for ch in port {
+		if ch < `0` || ch > `9` {
+			return false
+		}
+	}
+	n := port.int()
+	return n >= 1 && n <= 65535
 }
 
 pub struct AssistantEvent {
@@ -79,13 +141,11 @@ pub fn assistant_load_settings() AssistantSettings {
 	} else {
 		assistant_default_endpoint
 	}
+	valid := assistant_endpoint_is_loopback(endpoint)
 	return AssistantSettings{
-		enabled:  'enabled' in root && root['enabled'] is bool && root['enabled'].bool()
-		endpoint: if endpoint.starts_with('http://127.0.0.1') || endpoint.starts_with('http://localhost') {
-			endpoint
-		} else {
-			assistant_default_endpoint
-		}
+		enabled:           'enabled' in root && root['enabled'] is bool && root['enabled'].bool()
+		endpoint:          if valid { endpoint.trim_right('/') } else { assistant_default_endpoint }
+		rejected_endpoint: if valid { '' } else { endpoint }
 	}
 }
 
@@ -736,6 +796,10 @@ pub fn assistant_status_report() CommandResult {
 		'endpoint': settings.endpoint
 		'hermes':   if hermes.len > 0 { hermes } else { 'not-found' }
 		'keyFile':  assistant_key_file()
+	}
+	if settings.rejected_endpoint.len > 0 {
+		data['endpointRejected'] = settings.rejected_endpoint
+		data['endpointWarning'] = 'stored endpoint is not a loopback http URL; using ${assistant_default_endpoint} instead'
 	}
 	if !settings.enabled {
 		return ok_result('assistant status', 'Assistant is disabled (default). Enable it explicitly: horneroctl assistant enable --yes', data)
