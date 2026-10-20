@@ -390,6 +390,10 @@ pub fn assistant_collect_text(events []AssistantEvent) string {
 }
 
 fn assistant_http(settings AssistantSettings, method http.Method, path string, body string) !http.Response {
+	return assistant_http_ex(settings, method, path, body, {})
+}
+
+fn assistant_http_ex(settings AssistantSettings, method http.Method, path string, body string, extra map[string]string) !http.Response {
 	mut req := http.Request{
 		method: method
 		url:    settings.endpoint.trim_right('/') + path
@@ -402,8 +406,184 @@ fn assistant_http(settings AssistantSettings, method http.Method, path string, b
 	if key.len > 0 {
 		headers['Authorization'] = 'Bearer ${key}'
 	}
+	for k, v in extra {
+		headers[k] = v
+	}
 	req.header = http.new_custom_header_from_map(headers)!
 	return req.do()
+}
+
+// --- Sessions (hornero#189) -------------------------------------------
+// Hermes owns the real conversations; the gateway scopes continuity
+// and per-channel memory with the X-Hermes-Session-Key header
+// (advertised in /v1/capabilities as session_key_header). Hornero
+// keeps only a small local registry of named keys so the panel and
+// CLI can offer "New chat / switch chat" without inventing fake
+// server-side sessions: the registry maps names to keys, Hermes
+// owns everything behind them.
+
+pub fn assistant_sessions_file() string {
+	env := os.getenv('HORNERO_ASSISTANT_SESSIONS_FILE')
+	if env.len > 0 {
+		return env
+	}
+	return os.join_path(assistant_dir(), 'assistant-sessions.json')
+}
+
+pub struct AssistantSession {
+pub:
+	id      string
+	title   string
+	created string
+}
+
+pub struct AssistantSessions {
+pub mut:
+	current  string
+	sessions []AssistantSession
+}
+
+pub fn assistant_sessions_load() AssistantSessions {
+	mut out := AssistantSessions{}
+	raw := os.read_file(assistant_sessions_file()) or { return out }
+	for line in raw.split_into_lines() {
+		parts := line.split('\t')
+		if parts.len == 2 && parts[0] == 'current' {
+			out.current = parts[1]
+		} else if parts.len == 4 && parts[0] == 'session' {
+			out.sessions << AssistantSession{
+				id:      parts[1]
+				title:   parts[2]
+				created: parts[3]
+			}
+		}
+	}
+	return out
+}
+
+fn assistant_sessions_save(s AssistantSessions) ! {
+	mut lines := []string{}
+	if s.current.len > 0 {
+		lines << 'current\t${s.current}'
+	}
+	for sess in s.sessions {
+		lines << 'session\t${sess.id}\t${sess.title}\t${sess.created}'
+	}
+	os.mkdir_all(assistant_dir())!
+	os.write_file(assistant_sessions_file(), lines.join('\n') + '\n')!
+	os.chmod(assistant_sessions_file(), 0o600) or {}
+}
+
+// assistant_session_key is the gateway continuity key for a session
+// id ('' when no session is selected — the gateway default applies).
+pub fn assistant_session_key(id string) string {
+	if id.len == 0 {
+		return ''
+	}
+	return 'hornero:${id}'
+}
+
+// assistant_current_session_key resolves the key for ask: explicit
+// id wins, else the registry's current session, else ''.
+pub fn assistant_current_session_key(explicit string) string {
+	if explicit.len > 0 {
+		return assistant_session_key(explicit)
+	}
+	return assistant_session_key(assistant_sessions_load().current)
+}
+
+pub fn assistant_sessions_list_report() CommandResult {
+	s := assistant_sessions_load()
+	if s.sessions.len == 0 {
+		return ok_result('assistant sessions', 'No Hornero chat sessions yet. Create one: horneroctl assistant sessions new "My chat". Hermes still owns the conversations; this registry only names the continuity keys.', {
+			'count':   '0'
+			'current': ''
+		})
+	}
+	mut lines := []string{}
+	for sess in s.sessions {
+		mark := if sess.id == s.current { '*' } else { ' ' }
+		lines << '${mark} ${sess.id} — ${sess.title} (since ${sess.created})'
+	}
+	return ok_result('assistant sessions', lines.join('\n'), {
+		'count':   '${s.sessions.len}'
+		'current': s.current
+		'ids':     s.sessions.map(it.id).join(',')
+	})
+}
+
+pub fn assistant_sessions_new_report(title string) CommandResult {
+	clean := title.replace('\t', ' ').replace('\n', ' ').trim_space()
+	if clean.len == 0 {
+		return fail_result('assistant sessions', 'Missing chat title. Example: horneroctl assistant sessions new "Trip planning"')
+	}
+	mut s := assistant_sessions_load()
+	id := 's${time.now().unix()}${s.sessions.len + 1}'
+	s.sessions << AssistantSession{
+		id:      id
+		title:   clean
+		created: time.now().format_ss()
+	}
+	s.current = id
+	assistant_sessions_save(s) or { return fail_result('assistant sessions', err.msg()) }
+	return ok_result('assistant sessions', 'Created and selected chat "${clean}" (${id}). Hermes keeps the conversation under its continuity key; only the name lives here.', {
+		'id':      id
+		'title':   clean
+		'current': id
+	})
+}
+
+pub fn assistant_sessions_use_report(id string) CommandResult {
+	mut s := assistant_sessions_load()
+	for sess in s.sessions {
+		if sess.id == id {
+			s.current = id
+			assistant_sessions_save(s) or { return fail_result('assistant sessions', err.msg()) }
+			return ok_result('assistant sessions', 'Selected chat "${sess.title}" (${id}).', {
+				'id':      id
+				'current': id
+			})
+		}
+	}
+	return fail_result('assistant sessions', 'Unknown chat id: ${id}. List them: horneroctl assistant sessions list')
+}
+
+// assistant_models_report implements `assistant model list`:
+// capability-negotiated against GET /v1/models; fails honestly when
+// the gateway does not answer.
+pub fn assistant_models_report() CommandResult {
+	settings := assistant_load_settings()
+	resp := assistant_http(settings, .get, '/v1/models', '') or {
+		return fail_result('assistant model', 'Cannot reach the Hermes gateway at ${settings.endpoint}: ${err.msg()}')
+	}
+	if resp.status_code >= 400 {
+		return fail_result('assistant model', 'Hermes did not list models (HTTP ${resp.status_code}). Check: horneroctl assistant status')
+	}
+	decoded := json2.decode[json2.Any](resp.body) or {
+		return fail_result('assistant model', 'Hermes returned an unreadable model list.')
+	}
+	if decoded !is map[string]json2.Any {
+		return fail_result('assistant model', 'Hermes returned an unexpected model list.')
+	}
+	root := decoded.as_map()
+	mut ids := []string{}
+	if 'data' in root && root['data'] is []json2.Any {
+		for item in root['data'] as []json2.Any {
+			if item is map[string]json2.Any {
+				m := item as map[string]json2.Any
+				if 'id' in m && m['id'] is string {
+					ids << m['id'].str()
+				}
+			}
+		}
+	}
+	if ids.len == 0 {
+		return fail_result('assistant model', 'Hermes reported no models.')
+	}
+	return ok_result('assistant model', 'Available models: ${ids.join(', ')}', {
+		'models': ids.join(',')
+		'model':  ids[0]
+	})
 }
 
 // assistant_stream_events GETs a run's SSE events and invokes
@@ -758,11 +938,27 @@ fn assistant_build_input(prompt string, attach []string) !(json2.Any, []string) 
 	return json2.Any(messages), names
 }
 
+// assistant_run_create POSTs /v1/runs with the selected session's
+// continuity header when one is active (hornero#189).
+fn assistant_run_create(settings AssistantSettings, body string, session_id string) !http.Response {
+	key := assistant_current_session_key(session_id)
+	if key.len > 0 {
+		return assistant_http_ex(settings, .post, '/v1/runs', body, {
+			'X-Hermes-Session-Key': key
+		})
+	}
+	return assistant_http(settings, .post, '/v1/runs', body)
+}
+
 pub fn assistant_ask_report(prompt string) CommandResult {
 	return assistant_ask_report_attached(prompt, [])
 }
 
 pub fn assistant_ask_report_attached(prompt string, attach []string) CommandResult {
+	return assistant_ask_report_attached_session(prompt, attach, '')
+}
+
+pub fn assistant_ask_report_attached_session(prompt string, attach []string, session_id string) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant ask', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -776,7 +972,7 @@ pub fn assistant_ask_report_attached(prompt string, attach []string) CommandResu
 	body := json2.encode({
 		'input': input
 	}, escape_unicode: true)
-	resp := assistant_http(settings, .post, '/v1/runs', body) or {
+	resp := assistant_run_create(settings, body, session_id) or {
 		return fail_result('assistant ask', 'Cannot reach the Hermes gateway at ${settings.endpoint}: ${err.msg()}. Start Hermes, then retry.')
 	}
 	if resp.status_code >= 400 {
@@ -830,6 +1026,10 @@ pub fn assistant_ask_stream_report(prompt string, emit fn (string)) CommandResul
 }
 
 pub fn assistant_ask_stream_report_attached(prompt string, attach []string, emit fn (string)) CommandResult {
+	return assistant_ask_stream_report_attached_session(prompt, attach, '', emit)
+}
+
+pub fn assistant_ask_stream_report_attached_session(prompt string, attach []string, session_id string, emit fn (string)) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant ask', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -843,7 +1043,7 @@ pub fn assistant_ask_stream_report_attached(prompt string, attach []string, emit
 	body := json2.encode({
 		'input': input
 	}, escape_unicode: true)
-	resp := assistant_http(settings, .post, '/v1/runs', body) or {
+	resp := assistant_run_create(settings, body, session_id) or {
 		return fail_result('assistant ask', 'Cannot reach the Hermes gateway at ${settings.endpoint}: ${err.msg()}. Start Hermes, then retry.')
 	}
 	if resp.status_code >= 400 {

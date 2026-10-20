@@ -1,5 +1,7 @@
 module hornero_core
 
+import os
+
 fn test_assistant_tool_allowlist_read_only() {
 	for tool in ['system_info', 'appearance_status', 'theme_list', 'gtk_list', 'gtk_current',
 		'package_updates'] {
@@ -159,5 +161,27 @@ fn test_assistant_knowledge_snapshot() {
 	assert report.data['approvals'].contains('never auto-answered')
 	for key, value in report.data {
 		assert !value.contains('assistant.key'), 'knowledge snapshot must not leak key material: ${key}'
+	}
+}
+
+fn test_assistant_sessions_registry_roundtrip() {
+	saved := os.getenv('HORNERO_ASSISTANT_SESSIONS_FILE')
+	os.setenv('HORNERO_ASSISTANT_SESSIONS_FILE', '/tmp/hx-assistant-sessions-test.txt', true)
+	os.rm('/tmp/hx-assistant-sessions-test.txt') or {}
+	created := assistant_sessions_new_report('Trip planning')
+	assert created.ok
+	id := created.data['id']
+	assert id.len > 0
+	assert assistant_current_session_key('') == 'hornero:${id}'
+	assert assistant_current_session_key('other') == 'hornero:other'
+	list := assistant_sessions_list_report()
+	assert list.ok
+	assert list.message.contains('Trip planning')
+	assert assistant_sessions_use_report('nope').ok == false
+	os.rm('/tmp/hx-assistant-sessions-test.txt') or {}
+	if saved.len == 0 {
+		os.unsetenv('HORNERO_ASSISTANT_SESSIONS_FILE')
+	} else {
+		os.setenv('HORNERO_ASSISTANT_SESSIONS_FILE', saved, true)
 	}
 }

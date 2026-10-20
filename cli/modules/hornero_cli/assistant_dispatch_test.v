@@ -2,7 +2,7 @@ module hornero_cli
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|enable|disable|tools|knowledge|ask|stop|approve|clarify|events>')
+	assert help.contains('horneroctl assistant <status|enable|disable|tools|knowledge|sessions|model|ask|stop|approve|clarify|events>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -16,6 +16,13 @@ fn test_assistant_parser_rules() {
 	assert knowledge.leaf == 'knowledge'
 	if _ := parse_assistant(['knowledge', 'extra']) {
 		assert false, 'knowledge takes no value'
+	}
+	sess := parse_assistant(['sessions', 'new', 'Trip']) or { panic(err) }
+	assert sess.leaf == 'sessions' && sess.arg1 == 'new'
+	ask_sess := parse_assistant(['ask', 'hi', '--session', 's1']) or { panic(err) }
+	assert ask_sess.session == 's1'
+	if _ := parse_assistant(['tools', '--session', 's1']) {
+		assert false, '--session only applies to ask'
 	}
 	ask := parse_assistant(['ask', 'what', 'updates', 'exist?']) or { panic(err) }
 	assert ask.value == 'what updates exist?'
