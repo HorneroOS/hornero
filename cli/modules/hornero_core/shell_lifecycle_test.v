@@ -282,7 +282,7 @@ fn test_shell_stop_waits_for_process_table_after_sigkill() {
 	// Simulate the short interval where SIGKILL has been sent but pgrep can
 	// still observe the process. The first post-escalation poll remains true;
 	// a later poll sees the process-table entry disappear.
-	os.write_file(fake_pgrep, '#!/bin/sh\nif [ "$2" = "qs" ]; then exit 1; fi\ncount=$(cat ' +
+	os.write_file(fake_pgrep, '#!/bin/sh\nif [ "$2" = "qs" ]; then exit 1; fi\nif [ "$2" = "hyprlock" ]; then exit 1; fi\ncount=$(cat ' +
 		count_file + ' 2>/dev/null || echo 0)\ncount=$((count + 1))\nprintf "%s" "$count" > ' +
 		count_file + '\nif [ "$count" -le 3 ]; then echo 99999; exit 0; fi\nexit 1\n') or {
 		assert false, 'write fake pgrep'
@@ -321,5 +321,30 @@ fn test_shell_logs_missing_file() {
 	r := shell_logs_report(ShellLogsOptions{})
 	assert !r.ok
 	assert r.message.contains('no shell log')
+	shell_lifecycle_test_restore_env(saved)
+}
+
+fn test_shell_stop_restart_refuse_while_locked() {
+	// A fake hyprlock on the pgrep probe path makes the session read
+	// as locked; stop/restart must refuse before touching quickshell.
+	saved := shell_lifecycle_test_save_env(['HORNERO_PGREP_BIN', 'HORNERO_QUICKSHELL_BIN',
+		'XDG_SESSION_ID', 'HORNERO_LOGINCTL_BIN'])
+	os.mkdir_all('/tmp/hx-shell-lock-test') or { assert false }
+	os.write_file('/tmp/hx-shell-lock-test/fake-pgrep.sh', '#!/bin/sh\nexit 0\n') or {
+		assert false
+	}
+	os.chmod('/tmp/hx-shell-lock-test/fake-pgrep.sh', 0o755) or { assert false }
+	os.setenv('HORNERO_PGREP_BIN', '/tmp/hx-shell-lock-test/fake-pgrep.sh', true)
+	os.setenv('HORNERO_QUICKSHELL_BIN', '/nonexistent-quickshell-hornero-test', true)
+	assert session_is_locked()
+	r1 := shell_stop_report(ShellStopOptions{ yes: true })
+	assert !r1.ok
+	assert r1.message.contains('session is locked')
+	r2 := shell_restart_report(ShellRestartOptions{ yes: true })
+	assert !r2.ok
+	assert r2.message.contains('session is locked')
+	// Dry-run previews stay available while locked.
+	assert shell_stop_report(ShellStopOptions{ dry_run: true }).ok
+	assert shell_restart_report(ShellRestartOptions{ dry_run: true }).ok
 	shell_lifecycle_test_restore_env(saved)
 }
