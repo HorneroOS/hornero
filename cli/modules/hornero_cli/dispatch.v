@@ -205,11 +205,11 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'tools' { render(hornero_core.assistant_tools_report(), mode) }
 		'ask' {
 			if opts.stream {
-				render(hornero_core.assistant_ask_stream_report(opts.value, fn [mode] (txt string) {
+				render(hornero_core.assistant_ask_stream_report_attached(opts.value, opts.attach, fn [mode] (txt string) {
 					emit_stream_delta(txt, mode)
 				}), mode)
 			} else {
-				render(hornero_core.assistant_ask_report(opts.value), mode)
+				render(hornero_core.assistant_ask_report_attached(opts.value, opts.attach), mode)
 			}
 		}
 		'approve' {

@@ -9,6 +9,7 @@ pub:
 	dry_run bool
 	yes     bool
 	stream  bool
+	attach  []string
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -23,7 +24,19 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut dry_run := false
 	mut yes := false
 	mut stream := false
-	for arg in args[1..] {
+	mut attach := []string{}
+	mut i := 1
+	for i < args.len {
+		arg := args[i]
+		i++
+		if arg == '--attach' {
+			if i >= args.len {
+				return error('--attach needs a file path.\nExample: horneroctl assistant ask "look" --attach ~/shot.png')
+			}
+			attach << args[i]
+			i++
+			continue
+		}
 		if arg == '--dry-run' {
 			dry_run = true
 			continue
@@ -63,6 +76,9 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf in ['status', 'tools'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')
 	}
+	if attach.len > 0 && leaf != 'ask' {
+		return error('--attach only applies to ask.\nExample: horneroctl assistant ask "look at this" --attach ~/shot.png')
+	}
 	if stream && leaf !in ['ask', 'events'] {
 		return error('--stream only applies to ask and events.\nExample: horneroctl assistant ask "hi" --stream')
 	}
@@ -77,5 +93,6 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		dry_run: dry_run
 		yes:     yes
 		stream:  stream
+		attach:  attach
 	}
 }
