@@ -259,6 +259,44 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 	return fail_result('shell start', 'Quickshell did not become ready: Hornero Shell IPC target `drawers` was unavailable. Check the shell log: ${logf}')
 }
 
+// session_is_locked reports whether a session lock is currently
+// engaged (shell#255): a running hyprlock, or logind's LockedHint for
+// this session. The in-shell WlSessionLock lives inside the
+// quickshell process, so killing that process while locked orphans
+// the compositor lock state and Hyprland falls back to its
+// crashed-lockscreen screen (docs/LOCKING.md in HorneroOS/shell).
+// Probes fail open: a broken probe must never wedge shell lifecycle
+// operations on an unlocked session.
+pub fn session_is_locked() bool {
+	pg := resolve_pgrep_bin()
+	if pg.len > 0 {
+		rep := run_exec(ExecSpec{
+			prog: pg
+			args: ['-x', 'hyprlock']
+		})
+		if rep.ok {
+			return true
+		}
+	}
+	sid := os.getenv('XDG_SESSION_ID')
+	bin := resolve_loginctl_bin()
+	if sid.len > 0 && bin.len > 0 {
+		rep := run_exec(ExecSpec{
+			prog:        bin
+			args:        ['show-session', sid, '-p', 'LockedHint', '--value']
+			timeout_sec: 2
+		})
+		if rep.ok && rep.output.trim_space() == 'yes' {
+			return true
+		}
+	}
+	return false
+}
+
+fn locked_refusal() string {
+	return 'the session is locked: unlock it before restarting the shell. Killing Quickshell while the in-shell lock is engaged orphans the compositor lock and forces a TTY/reboot recovery (shell#255).'
+}
+
 pub struct ShellStopOptions {
 pub:
 	dry_run bool
@@ -272,6 +310,9 @@ pub:
 pub fn shell_stop_report(opts ShellStopOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell stop', 'refusing to stop the shell without --yes (preview with --dry-run).\nExample: horneroctl shell stop --dry-run')
+	}
+	if !opts.dry_run && session_is_locked() {
+		return fail_result('shell stop', 'refusing to stop the shell while ' + locked_refusal())
 	}
 	bin := if opts.bin.len > 0 {
 		opts.bin
@@ -335,6 +376,9 @@ pub:
 pub fn shell_restart_report(opts ShellRestartOptions) CommandResult {
 	if !opts.yes && !opts.dry_run {
 		return fail_result('shell restart', 'refusing to restart the shell without --yes (preview with --dry-run).\nExample: horneroctl shell restart --dry-run')
+	}
+	if !opts.dry_run && session_is_locked() {
+		return fail_result('shell restart', 'refusing to restart the shell while ' + locked_refusal())
 	}
 	bin := if opts.bin.len > 0 {
 		opts.bin

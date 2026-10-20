@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: d86b30d58dfe493afd41ed8aa5796f05f0c8c5dd
+    sha: f0ba8fd31d76a498aaa5bf1568779b33d1590b7c
     status: pinned
-    subject: "feat(launcher): >file bounded file provider (shell#250 slice 2)"
+    subject: "feat(controlcenter): Windows geometry pane (shell#235 slice 1)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config

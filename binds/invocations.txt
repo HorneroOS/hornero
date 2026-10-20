@@ -62,6 +62,9 @@ hypr layout toggle
 hypr monitors list
 hypr monitors set
 hypr plugins install
+hypr windows restore
+hypr windows set
+hypr windows status
 lock now
 package upgrade
 plugin list
