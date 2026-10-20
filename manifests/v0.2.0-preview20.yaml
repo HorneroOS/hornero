@@ -1,0 +1,47 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview20
+#
+# Unpublished composition candidate. This manifest is not a release until
+# its pinned composition passes the exact-pins VM and Hornero QA gates.
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview20
+date: "2026-10-19"
+description: >-
+  Unpublished composition candidate adding the Hermes Companion
+  backend: horneroctl assistant with the verified approval protocol,
+  the Hornero Hermes skill, and the native Companion chat panel.
+  Community packages remain
+  inert data; validation does not activate or sandbox QML. No VM or exact-pin QA
+  acceptance has been recorded for this composition. Installer and ISO are
+  future slots and no installable image is claimed.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 843aee9440ceea57f24da5121473e13fe78ce61a
+    status: pinned
+    subject: "feat(plugins): dashboard placement - Extensions tab cards (M2 slice 3) (#217)"
+    notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 76a552f7ec56f00ed52e122150f27639a3a8d70a
+    status: pinned
+    subject: "feat(themes): unique GTK theme for every Hornero Original region (#86)"
+    notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot; no installer integration is part of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot; no installable image is produced by this composition.
