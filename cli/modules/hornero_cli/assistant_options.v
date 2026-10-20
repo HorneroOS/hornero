@@ -17,7 +17,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl assistant status')
 	}
 	leaf := args[0]
-	if leaf !in ['status', 'enable', 'disable', 'tools', 'ask', 'stop', 'approve', 'clarify', 'events'] {
+	if leaf !in ['status', 'enable', 'disable', 'tools', 'knowledge', 'ask', 'stop', 'approve', 'clarify', 'events'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
@@ -73,7 +73,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf == 'clarify' && parts.len < 2 {
 		return error('expected a run id and answer text.\nExample: horneroctl assistant clarify run_abc123 "use the dark theme"')
 	}
-	if leaf in ['status', 'tools'] && value.len > 0 {
+	if leaf in ['status', 'tools', 'knowledge'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')
 	}
 	if attach.len > 0 && leaf != 'ask' {

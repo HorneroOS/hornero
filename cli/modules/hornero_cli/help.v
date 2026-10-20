@@ -26,7 +26,7 @@ Commands:
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   system        Installed edition and active compositor information
-  assistant     Optional Hermes AI assistant (status, enable, disable, tools, ask, stop)
+  assistant     Optional Hermes AI assistant (status, enable, disable, tools, knowledge, ask, stop)
   completion    Print shell completions
   help          Show help for a command
 
@@ -86,7 +86,7 @@ Examples:
 			return 'Usage: horneroctl system info [--json|--quiet]\n\nReport the installed edition, its package-set composition, configured compositor and maturity, the source revision, and the compositor active in this session. If this installation has no profile record, the command says so explicitly.\n\nExamples:\n  horneroctl system info\n  horneroctl system info --json\n'
 		}
 		'assistant' {
-			return 'Usage: horneroctl assistant <status|enable|disable|tools|ask|stop|approve|clarify|events> [value] [options]\n\n  status              Enabled state, Hermes presence, gateway reachability\n  enable [--dry-run|--yes]\n                      Explicitly enable the optional Hermes assistant\n  disable [--dry-run|--yes]\n                      Disable it again (desktop unchanged)\n  tools               List the read-only tools the assistant may call\n  ask "<prompt>"      Start a Hermes run and print its streamed answer\n  stop <run-id>       Cancel a running Hermes run\n\nThe assistant is disabled by default and never required. It talks to the\nHermes Agent gateway on http://127.0.0.1:8642 with a local Bearer key\n(0600, user config). Slice 1 exposes read-only tools only; nothing is\nauto-approved and nothing runs as root.\n\nExamples:\n  horneroctl assistant status\n  horneroctl assistant enable --dry-run\n  horneroctl assistant enable --yes\n  horneroctl assistant tools --json\n  horneroctl assistant ask "what updates are available?"\n  horneroctl assistant stop run_abc123\n  horneroctl assistant disable --yes\n'
+			return 'Usage: horneroctl assistant <status|enable|disable|tools|knowledge|ask|stop|approve|clarify|events> [value] [options]\n\n  status              Enabled state, Hermes presence, gateway reachability\n  enable [--dry-run|--yes]\n                      Explicitly enable the optional Hermes assistant\n  disable [--dry-run|--yes]\n                      Disable it again (desktop unchanged)\n  tools               List the read-only tools the assistant may call\n  knowledge           Dated live knowledge snapshot for agents without shell access\n  ask "<prompt>"      Start a Hermes run and print its streamed answer\n  stop <run-id>       Cancel a running Hermes run\n\nThe assistant is disabled by default and never required. It talks to the\nHermes Agent gateway on http://127.0.0.1:8642 with a local Bearer key\n(0600, user config). Slice 1 exposes read-only tools only; nothing is\nauto-approved and nothing runs as root.\n\nExamples:\n  horneroctl assistant status\n  horneroctl assistant enable --dry-run\n  horneroctl assistant enable --yes\n  horneroctl assistant tools --json\n  horneroctl assistant ask "what updates are available?"\n  horneroctl assistant stop run_abc123\n  horneroctl assistant disable --yes\n'
 		}
 		'assistant status' {
 			return 'Usage: horneroctl assistant status [--json|--quiet]\n\nReport the enabled state, Hermes presence on PATH, and whether the\nHermes gateway answers at the configured loopback endpoint.\n\nExamples:\n  horneroctl assistant status\n  horneroctl assistant status --json\n'
@@ -99,6 +99,9 @@ Examples:
 		}
 		'assistant tools' {
 			return 'Usage: horneroctl assistant tools [--json|--quiet]\n\nList the read-only tools the assistant may call in slice 1. Mutations\nare not listed and cannot be invoked through the assistant yet.\n\nExamples:\n  horneroctl assistant tools\n  horneroctl assistant tools --json\n'
+		}
+		'assistant knowledge' {
+			return 'Usage: horneroctl assistant knowledge [--json|--quiet]\n\nRender the live read-only catalogue as a dated, provenance-stamped\nsnapshot for agents that cannot execute commands. Generated from\nthe same allowlist as `assistant tools`; regenerate it instead of\ncopying stale knowledge by hand. Contains no secrets.\n\nExamples:\n  horneroctl assistant knowledge\n  horneroctl assistant knowledge --json\n'
 		}
 		'assistant ask' {
 			return 'Usage: horneroctl assistant ask "<prompt>" [--stream] [--json|--quiet]\n\nStart a Hermes run and print its answer. With --stream (human\noutput only), answer deltas print live as Hermes emits them.\nRequires the assistant to be enabled and the Hermes gateway\nto be running.\n\nExamples:\n  horneroctl assistant ask "what updates are available?"\n  horneroctl assistant ask "why is memory usage high?" --stream\n'

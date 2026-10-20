@@ -148,3 +148,16 @@ fn test_attachment_classification() {
 	assert !assistant_attachment_blocked('screenshot.png')
 	assert !assistant_attachment_blocked('notes.md')
 }
+
+fn test_assistant_knowledge_snapshot() {
+	report := assistant_knowledge_report()
+	assert report.ok
+	assert report.command == 'assistant knowledge'
+	assert report.data['class'] == 'safe-read-only'
+	assert report.data['tools'].contains('system_info')
+	assert report.data['generated_by'].len > 0
+	assert report.data['approvals'].contains('never auto-answered')
+	for key, value in report.data {
+		assert !value.contains('assistant.key'), 'knowledge snapshot must not leak key material: ${key}'
+	}
+}
