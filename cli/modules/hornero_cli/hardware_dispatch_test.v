@@ -211,6 +211,28 @@ fn test_dispatch_hardware_keyboard() {
 	hw_dispatch_teardown()
 }
 
+fn test_dispatch_hardware_keyboard_rebind() {
+	hw_dispatch_setup()
+	os.setenv('HORNERO_KEYBINDINGS_USER_FILE', '/tmp/hx-hw-dtest/conf/keybindings-user.conf',
+		true)
+	os.setenv('XDG_CONFIG_HOME', '/tmp/hx-hw-dtest/xdg', true)
+	os.rm('/tmp/hx-hw-dtest/conf/keybindings-user.conf') or {}
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'rebind', 'status']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'rebind', 'set', '--old', 'SUPER + Return',
+		'--new', 'SUPER + X', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'rebind', 'set', '--old', 'SUPER + Return',
+		'--new', 'SUPER + X']) == 1
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'rebind', 'set', '--old', 'SUPER + Return',
+		'--new', 'SUPER + X', '--yes']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'rebind', 'reset', '--yes']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'rebind']) == 2
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'rebind', 'bogus']) == 2
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'rebind', 'set', '--old', 'SUPER + Return']) == 2
+	os.unsetenv('HORNERO_KEYBINDINGS_USER_FILE')
+	os.unsetenv('XDG_CONFIG_HOME')
+	hw_dispatch_teardown()
+}
+
 fn test_dispatch_hardware_network() {
 	hw_dispatch_setup()
 	assert dispatch(['horneroctl', 'hardware', 'network', 'status']) == 0

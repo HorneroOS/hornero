@@ -319,17 +319,20 @@ pub fn parse_hardware_mic(args []string) !HardwareMicOptions {
 }
 
 // HardwareKeyboardOptions covers
-// `hardware keyboard <layout|settings|keys>`.
+// `hardware keyboard <layout|settings|keys|rebind>`.
 pub struct HardwareKeyboardOptions {
 pub:
-	leaf     string // layout | settings | keys
-	current  bool
-	get      bool
-	toggle   bool
-	category string
-	search   string
-	dry_run  bool
-	yes      bool
+	leaf          string // layout | settings | keys | rebind
+	current       bool
+	get           bool
+	toggle        bool
+	category      string
+	search        string
+	dry_run       bool
+	yes           bool
+	rebind_action string // status | set | reset
+	old_combo     string
+	new_combo     string
 }
 
 pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
@@ -337,8 +340,11 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 		return error('missing subcommand.\nExample: horneroctl hardware keyboard layout --current')
 	}
 	leaf := args[0]
-	if leaf !in ['layout', 'settings', 'keys'] {
+	if leaf !in ['layout', 'settings', 'keys', 'rebind'] {
 		return error('unknown keyboard subcommand: ${leaf}.\nRun: horneroctl hardware keyboard --help')
+	}
+	if leaf == 'rebind' {
+		return parse_hardware_keyboard_rebind(args)
 	}
 	mut current := false
 	mut get := false
@@ -423,6 +429,64 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 		search:   search
 		dry_run:  dry_run
 		yes:      false
+	}
+}
+
+fn parse_hardware_keyboard_rebind(args []string) !HardwareKeyboardOptions {
+	if args.len < 2 {
+		return error('missing rebind action.\nExample: horneroctl hardware keyboard rebind status')
+	}
+	action := args[1]
+	if action !in ['status', 'set', 'reset'] {
+		return error('unknown rebind action: ${action}.\nRun: horneroctl hardware keyboard rebind --help')
+	}
+	mut old_combo := ''
+	mut new_combo := ''
+	mut dry_run := false
+	mut yes := false
+	mut i := 2
+	for i < args.len {
+		a := args[i]
+		if a == '--dry-run' {
+			dry_run = true
+			i++
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			i++
+			continue
+		}
+		if a == '--old' || a.starts_with('--old=') {
+			v, ni := hw_take_value(args, i, 'old', 'horneroctl hardware keyboard rebind set --old "SUPER + Return" --new "SUPER + X"')!
+			old_combo = v
+			i = ni
+			continue
+		}
+		if a == '--new' || a.starts_with('--new=') {
+			v, ni := hw_take_value(args, i, 'new', 'horneroctl hardware keyboard rebind set --old "SUPER + Return" --new "SUPER + X"')!
+			new_combo = v
+			i = ni
+			continue
+		}
+		return error('unknown flag: ${a}.\nRun: horneroctl hardware keyboard rebind --help')
+	}
+	if action == 'set' && (old_combo.len == 0 || new_combo.len == 0) {
+		return error('rebind set needs --old and --new.\nExample: horneroctl hardware keyboard rebind set --old "SUPER + Return" --new "SUPER + X" --yes')
+	}
+	if action != 'set' && (old_combo.len > 0 || new_combo.len > 0) {
+		return error('rebind ${action} takes no --old/--new.')
+	}
+	if action == 'status' && yes {
+		return error('rebind status takes no --yes.')
+	}
+	return HardwareKeyboardOptions{
+		leaf:          'rebind'
+		dry_run:       dry_run
+		yes:           yes
+		rebind_action: action
+		old_combo:     old_combo
+		new_combo:     new_combo
 	}
 }
 

@@ -1014,7 +1014,7 @@ Examples:
 '
 		}
 		'hardware keyboard' {
-			return 'Usage: horneroctl hardware keyboard <layout|settings|keys> [options]
+			return 'Usage: horneroctl hardware keyboard <layout|settings|keys|rebind> [options]
 
   layout [--current|--get|--toggle] [--dry-run]
                       Toggle the us/latam cycle (needs --yes);
@@ -1023,6 +1023,13 @@ Examples:
                       Open the LXQt keyboard settings GUI
   keys [--category CAT] [--search TERM] [--dry-run]
                       List Hyprland keybindings, optionally filtered
+  rebind status
+                      Count user keybinding overrides
+  rebind set --old COMBO --new COMBO [--dry-run] [--yes]
+                      Move a binding to a new combo (user overrides
+                      only; factory binds are never edited)
+  rebind reset [--dry-run] [--yes]
+                      Remove all user overrides, restoring defaults
 
 Layout backend: hyprctl on Hyprland, else setxkbmap
 (HORNERO_HYPRCTL_BIN / HORNERO_SETXKBMAP_BIN). settings opens
@@ -1040,6 +1047,9 @@ Examples:
   horneroctl hardware keyboard settings --dry-run
   horneroctl hardware keyboard keys --search workspace
   horneroctl hardware keyboard keys --category=Window
+  horneroctl hardware keyboard rebind status
+  horneroctl hardware keyboard rebind set --old "SUPER + Return" --new "SUPER + X" --dry-run
+  horneroctl hardware keyboard rebind reset --yes
 '
 		}
 		'hardware network' {
