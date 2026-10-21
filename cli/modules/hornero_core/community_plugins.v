@@ -32,6 +32,12 @@ pub mut:
 	// this field existed decode as disabled: installed plugins never run
 	// until the user explicitly enables them.
 	enabled bool
+	// TrustedHash records the payload SHA-256 the user explicitly
+	// trusted via `plugin trust` (shell#251 local trust model).
+	// Receipts written before this field decode as untrusted.
+	// Official-catalogue receipts do not need it: their provenance is
+	// the reviewed HorneroOS/plugins repo plus the catalogue hash.
+	trusted_hash string
 }
 
 struct CommunityPluginListEntry {
@@ -40,6 +46,7 @@ struct CommunityPluginListEntry {
 	version   string
 	installed bool
 	enabled   bool
+	trust     string
 }
 
 pub fn resolve_community_plugin_validator() string {
@@ -216,7 +223,7 @@ pub fn community_plugin_install_report(opts CommunityPluginOptions) CommandResul
 		os.rmdir_all(stage) or {}
 		return fail_result('plugin install', 'cannot install validated package: ${err.msg()}')
 	}
-	receipt := CommunityPluginReceipt{1, id, name, version, opts.value, revision, time.now().unix_milli().str(), false}
+	receipt := CommunityPluginReceipt{1, id, name, version, opts.value, revision, time.now().unix_milli().str(), false, ''}
 	_, receipts := community_plugin_roots()
 	os.mkdir_all(receipts) or {
 		os.rmdir_all(destination) or {}
@@ -366,6 +373,7 @@ pub fn community_plugin_list_report() CommandResult {
 			version:   record.version
 			installed: os.is_dir(os.join_path(root, record.id))
 			enabled:   record.enabled && os.is_dir(os.join_path(root, record.id))
+			trust:     community_plugin_trust_state(record, os.join_path(root, record.id))
 		}
 	}
 	data := json2.encode(list_entries, escape_unicode: true)
@@ -448,6 +456,13 @@ fn community_plugin_set_enabled_report(opts CommunityPluginOptions, enable bool)
 		community_plugin_run_validator(payload) or {
 			return fail_result('plugin enable', 'installed payload no longer validates, so it stays disabled: ${err.msg()}')
 		}
+		// Local trust model (shell#251): non-official plugins need an
+		// explicit, hash-pinned trust step before they may run.
+		// Official-catalogue installs carry reviewed provenance.
+		trust := community_plugin_trust_state(record, payload)
+		if !opts.dry_run && trust != 'official' && trust != 'trusted' {
+			return fail_result('plugin enable', 'plugin ${id} is ${trust}: it did not come from the official catalogue, and no trust is recorded for the current payload. Review the code, then run: horneroctl plugin trust ${id} --yes')
+		}
 	}
 	if record.enabled == enable {
 		state := if enable { 'enabled' } else { 'disabled' }
@@ -480,6 +495,89 @@ fn community_plugin_set_enabled_report(opts CommunityPluginOptions, enable bool)
 	}}', {
 		'id':      id
 		'enabled': enable.str()
+	})
+}
+
+// Payload hash of an installed plugin directory ('' when unreadable).
+fn community_plugin_payload_hash(payload string) string {
+	raw := os.read_file(os.join_path(payload, 'manifest.json')) or { return '' }
+	manifest := json2.decode[map[string]json2.Any](raw) or { return '' }
+	return plugin_payload_sha256(payload, manifest)
+}
+
+// Trust state of a receipt relative to the current payload on disk.
+fn community_plugin_trust_state(record CommunityPluginReceipt, payload string) string {
+	if record.source == plugin_catalog_source {
+		return 'official'
+	}
+	if record.trusted_hash.len == 0 {
+		return 'untrusted'
+	}
+	current := community_plugin_payload_hash(payload)
+	if current.len > 0 && current == record.trusted_hash {
+		return 'trusted'
+	}
+	return 'stale-trust'
+}
+
+// `plugin trust <id>`: the explicit "I trust this code" step
+// (shell#251). Records the current payload hash in the receipt;
+// never enables. Any later payload change invalidates the trust.
+pub fn community_plugin_trust_report(opts CommunityPluginOptions) CommandResult {
+	id := opts.value
+	if !community_plugin_valid_id(id) {
+		return fail_result('plugin trust', 'invalid plugin id.\nExample: horneroctl plugin trust example-clock --dry-run')
+	}
+	root, receipts := community_plugin_roots()
+	payload := os.join_path(root, id)
+	receipt_path := os.join_path(receipts, '${id}.json')
+	if os.is_link(payload) || os.is_link(receipt_path) {
+		return fail_result('plugin trust', 'refusing to follow a symbolic link in the owned plugin paths')
+	}
+	if !os.is_file(receipt_path) {
+		return fail_result('plugin trust', 'no Hornero receipt owns plugin ${id}. Install it first: horneroctl plugin install <https-url> --yes')
+	}
+	mut record := json2.decode[CommunityPluginReceipt](os.read_file(receipt_path) or { '' }) or {
+		return fail_result('plugin trust', 'plugin receipt is malformed; refusing to record trust')
+	}
+	if record.schema_version != 1 || record.id != id {
+		return fail_result('plugin trust', 'plugin receipt does not own the requested plugin id')
+	}
+	if !os.is_dir(payload) {
+		return fail_result('plugin trust', 'plugin payload is missing at ${payload}; reinstall before trusting it')
+	}
+	community_plugin_run_validator(payload) or {
+		return fail_result('plugin trust', 'payload does not validate, so it cannot be trusted: ${err.msg()}')
+	}
+	hash := community_plugin_payload_hash(payload)
+	if hash.len == 0 {
+		return fail_result('plugin trust', 'cannot compute the payload hash for ${id}; refusing to record trust')
+	}
+	if opts.dry_run {
+		return ok_result('plugin trust', 'would record trust for plugin ${id} from ${record.source} (revision ${record.revision}) at payload hash ${hash}. Trusting is not enabling: this code would still need `plugin enable`. Plugin QML runs with your user privileges and is not sandboxed.', {
+			'dry_run': 'true'
+			'id':      id
+			'hash':    hash
+			'source':  record.source
+		})
+	}
+	if !opts.yes {
+		return fail_result('plugin trust', 'refusing to record trust without --yes (preview with --dry-run).\nExample: horneroctl plugin trust ${id} --dry-run')
+	}
+	record.trusted_hash = hash
+	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
+	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
+		return fail_result('plugin trust', 'cannot write plugin receipt: ${err.msg()}')
+	}
+	os.chmod(tmp, 0o600) or {}
+	os.rename(tmp, receipt_path) or {
+		os.rm(tmp) or {}
+		return fail_result('plugin trust', 'cannot save plugin receipt: ${err.msg()}')
+	}
+	return ok_result('plugin trust', 'trust recorded for plugin ${id} at payload hash ${hash}. It is still disabled; enable it explicitly. If the payload changes, trust must be recorded again.', {
+		'id':    id
+		'hash':  hash
+		'trust': 'trusted'
 	})
 }
 
@@ -713,7 +811,7 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 	copy_dir(pkg, destination) or {
 		return fail_result('plugin catalog install', 'cannot copy validated package: ${err.msg()}')
 	}
-	receipt := CommunityPluginReceipt{1, found.id, found.name, found.version, plugin_catalog_source, revision, time.now().unix_milli().str(), false}
+	receipt := CommunityPluginReceipt{1, found.id, found.name, found.version, plugin_catalog_source, revision, time.now().unix_milli().str(), false, ''}
 	os.mkdir_all(receipts) or {
 		os.rmdir_all(destination) or {}
 		return fail_result('plugin catalog install', 'cannot create plugin receipt directory')
@@ -839,7 +937,7 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		return fail_result('plugin catalog update', 'cannot copy validated package: ${err.msg()}')
 	}
 	enabled_before := record.enabled
-	record = CommunityPluginReceipt{1, found.id, found.name, found.version, plugin_catalog_source, revision, time.now().unix_milli().str(), enabled_before}
+	record = CommunityPluginReceipt{1, found.id, found.name, found.version, plugin_catalog_source, revision, time.now().unix_milli().str(), enabled_before, record.trusted_hash}
 	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
 		return fail_result('plugin catalog update', 'cannot write plugin receipt')
@@ -917,7 +1015,7 @@ pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginO
 		return fail_result('plugin catalog rollback', 'cannot restore the kept payload')
 	}
 	enabled_before := record.enabled
-	record = CommunityPluginReceipt{1, record.id, record.name, prev_version, record.source, record.revision, time.now().unix_milli().str(), enabled_before}
+	record = CommunityPluginReceipt{1, record.id, record.name, prev_version, record.source, record.revision, time.now().unix_milli().str(), enabled_before, record.trusted_hash}
 	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
 		return fail_result('plugin catalog rollback', 'cannot write plugin receipt')
