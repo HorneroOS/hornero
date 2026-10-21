@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 1253144689996230b01dccc0348c85bfa223a9a9
+    sha: 3032e3757b90b6cfca80309b6c806dbd9c7598cc
     status: pinned
-    subject: "feat(controlcenter): cursor size in Accessibility pane (shell#221)"
+    subject: "feat(a11y): Accessible names for MouseArea-driven controls (shell#221)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
