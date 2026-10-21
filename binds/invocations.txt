@@ -21,6 +21,8 @@ appearance gtk theme
 appearance hyprlock
 appearance night-mode
 appearance night-mode backends
+appearance night-mode schedule clear
+appearance night-mode schedule set
 appearance night-mode set
 appearance night-mode status
 appearance night-mode toggle
