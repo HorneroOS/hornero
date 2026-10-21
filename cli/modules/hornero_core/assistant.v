@@ -438,7 +438,9 @@ pub fn assistant_events_report(run_id string) CommandResult {
 		return fail_result('assistant events', 'Hermes returned no events for run ${run_id} (HTTP ${resp.status_code}). The run id may be wrong or expired.')
 	}
 	events := parse_sse_events(resp.body)
-	return assistant_events_outcome('assistant events', run_id, events)
+	result := assistant_events_outcome('assistant events', run_id, events)
+	assistant_log_append('events', run_id, '', if result.ok { 'ok' } else { 'not-completed' })
+	return result
 }
 
 // assistant_event_trace classifies the non-answer activity of a run:
@@ -1233,18 +1235,22 @@ pub fn assistant_ask_report_attached_session(prompt string, attach []string, ses
 	events := parse_sse_events(events_resp.body)
 	pending := assistant_pending_request(events)
 	if pending.kind == 'approval' {
+		assistant_log_append('ask', run_id, 'pending approval: ${pending.detail}', 'pending')
 		return fail_result('assistant ask', 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
 	}
 	if pending.kind == 'clarify' {
+		assistant_log_append('ask', run_id, 'pending clarify: ${pending.detail}', 'pending')
 		return fail_result('assistant ask', 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
 	}
 	text := assistant_collect_text(events)
 	if text.len == 0 {
+		assistant_log_append('ask', run_id, 'finished without text', 'ok')
 		return ok_result('assistant ask', 'Run ${run_id} finished without text output. Event count: ${events.len}.', {
 			'runId':  run_id
 			'events': events.len.str()
 		})
 	}
+	assistant_log_append('ask', run_id, 'finished', 'ok')
 	return ok_result('assistant ask', text, {
 		'runId':  run_id
 		'events': events.len.str()
@@ -1320,8 +1326,10 @@ pub fn assistant_stop_report(run_id string) CommandResult {
 		return fail_result('assistant stop', 'Cannot reach the Hermes gateway: ${err.msg()}')
 	}
 	if resp.status_code >= 400 {
+		assistant_log_append('stop', run_id, '', 'rejected')
 		return fail_result('assistant stop', 'Hermes could not stop run ${run_id} (HTTP ${resp.status_code}). It may already be finished.')
 	}
+	assistant_log_append('stop', run_id, '', 'requested')
 	return ok_result('assistant stop', 'Stop requested for run ${run_id}.', {
 		'runId': run_id
 	})
@@ -1415,8 +1423,10 @@ pub fn assistant_approve_report(run_id string, decision string) CommandResult {
 		return fail_result('assistant approve', 'Cannot reach the Hermes gateway: ${err.msg()}')
 	}
 	if resp.status_code >= 400 {
+		assistant_log_append('approve', run_id, 'choice ${choice}', 'rejected')
 		return fail_result('assistant approve', 'Hermes did not accept the ${decision} for run ${run_id} (HTTP ${resp.status_code}). The run may already be finished.')
 	}
+	assistant_log_append('approve', run_id, 'choice ${choice}', 'recorded')
 	return ok_result('assistant approve', 'Decision recorded for run ${run_id}: ${decision}.', {
 		'runId':    run_id
 		'decision': decision
@@ -1441,8 +1451,10 @@ pub fn assistant_clarify_report(run_id string, answer string) CommandResult {
 		return fail_result('assistant clarify', 'Cannot reach the Hermes gateway: ${err.msg()}')
 	}
 	if resp.status_code >= 400 {
+		assistant_log_append('clarify', run_id, '', 'rejected')
 		return fail_result('assistant clarify', 'Hermes did not accept the clarification for run ${run_id} (HTTP ${resp.status_code}).')
 	}
+	assistant_log_append('clarify', run_id, '', 'sent')
 	return ok_result('assistant clarify', 'Clarification sent for run ${run_id}.', {
 		'runId': run_id
 	})
