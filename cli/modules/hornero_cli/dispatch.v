@@ -752,6 +752,9 @@ fn run_package(args []string, mode hornero_core.RenderMode) int {
 	if opts.leaf == 'updates' {
 		return render(hornero_core.package_updates_report(check), mode)
 	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.package_status_report(check), mode)
+	}
 	return render(hornero_core.package_check_report(check), mode)
 }
 
