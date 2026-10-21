@@ -68,6 +68,9 @@ hardware keyboard rebind reset
 hardware keyboard rebind set
 hardware keyboard rebind status
 hardware keyboard settings
+hypr cursor restore
+hypr cursor set
+hypr cursor status
 hypr input restore
 hypr input set
 hypr input status

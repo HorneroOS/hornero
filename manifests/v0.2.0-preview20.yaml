@@ -20,16 +20,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 36cc158be609bfa81b221e2d695d80c37ca2ff60
+    sha: 1253144689996230b01dccc0348c85bfa223a9a9
     status: pinned
-    subject: "feat(controlcenter): Windows focus + window rules (shell#235)"
+    subject: "feat(controlcenter): cursor size in Accessibility pane (shell#221)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 1952d60d43226d117332ac4ffca8c58e81f4fecc
+    sha: f95b1f51aefc4e42f642a3fc84759822c6c0f74d
     status: pinned
-    subject: "feat(hypr): restore persisted window geometry at login"
+    subject: "feat(hypr): restore persisted cursor size at login"
     notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
