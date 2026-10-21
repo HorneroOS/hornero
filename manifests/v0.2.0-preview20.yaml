@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 24440fbcece455f55323e5b56b002366cb4fa870
+    sha: cc6c681a26d95501ac84b8aff2bc83d1e7b153c1
     status: pinned
-    subject: "feat(a11y): name the shared controls used by every pane"
+    subject: "feat(a11y): name every icon-only IconButton call site"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
