@@ -864,7 +864,7 @@ fn run_lock(args []string, mode hornero_core.RenderMode) int {
 
 fn run_hypr(args []string, mode hornero_core.RenderMode) int {
 	if args.len > 0 && args[0] in ['animations', 'layout', 'monitors', 'workspace', 'plugins',
-		'windows', 'input'] {
+		'windows', 'input', 'cursor'] {
 		if wants_help(args) {
 			print(command_help('hypr ' + args[0]))
 			return 0
@@ -878,6 +878,9 @@ fn run_hypr(args []string, mode hornero_core.RenderMode) int {
 			}
 			'windows' {
 				return run_hypr_windows(args[1..], mode)
+			}
+			'cursor' {
+				return run_hypr_cursor(args[1..], mode)
 			}
 			'input' {
 				return run_hypr_input(args[1..], mode)
@@ -974,6 +977,20 @@ fn run_hypr_monitors(args []string, mode hornero_core.RenderMode) int {
 		dry_run: opts.dry_run
 		yes:     opts.yes
 	}), mode)
+}
+
+fn run_hypr_cursor(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hypr_cursor(args) or {
+		return render_error(hornero_core.err_usage('hypr.cursor.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.cursor_status_report(), mode)
+	}
+	if opts.leaf == 'restore' {
+		return render(hornero_core.cursor_restore_report(opts.dry_run, opts.yes), mode)
+	}
+	return render(hornero_core.cursor_set_report(opts.size, opts.dry_run, opts.yes),
+		mode)
 }
 
 fn run_hypr_windows(args []string, mode hornero_core.RenderMode) int {
