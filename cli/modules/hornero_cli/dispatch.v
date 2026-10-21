@@ -864,7 +864,7 @@ fn run_lock(args []string, mode hornero_core.RenderMode) int {
 
 fn run_hypr(args []string, mode hornero_core.RenderMode) int {
 	if args.len > 0 && args[0] in ['animations', 'layout', 'monitors', 'workspace', 'plugins',
-		'windows'] {
+		'windows', 'input'] {
 		if wants_help(args) {
 			print(command_help('hypr ' + args[0]))
 			return 0
@@ -878,6 +878,9 @@ fn run_hypr(args []string, mode hornero_core.RenderMode) int {
 			}
 			'windows' {
 				return run_hypr_windows(args[1..], mode)
+			}
+			'input' {
+				return run_hypr_input(args[1..], mode)
 			}
 			'monitors' {
 				return run_hypr_monitors(args[1..], mode)
@@ -999,6 +1002,43 @@ fn run_hypr_windows(args []string, mode hornero_core.RenderMode) int {
 		}
 	}
 	return render(hornero_core.windows_apply_report(hornero_core.WindowsApplyOptions{
+		settings:  settings
+		dry_run:   opts.dry_run
+		yes:       opts.yes
+		ephemeral: opts.ephemeral
+	}), mode)
+}
+
+fn run_hypr_input(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hypr_input(args) or {
+		return render_error(hornero_core.err_usage('hypr.input.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.input_status_report(), mode)
+	}
+	mut settings := hornero_core.input_restore_value()
+	if opts.leaf == 'set' {
+		settings = hornero_core.input_current_value()
+		if opts.sensitivity != 999 {
+			settings.sensitivity = opts.sensitivity
+		}
+		if opts.accel_profile.len > 0 {
+			settings.accel_profile = opts.accel_profile
+		}
+		if opts.repeat_rate >= 0 {
+			settings.repeat_rate = opts.repeat_rate
+		}
+		if opts.repeat_delay >= 0 {
+			settings.repeat_delay = opts.repeat_delay
+		}
+		if opts.natural_scroll >= 0 {
+			settings.natural_scroll = opts.natural_scroll == 1
+		}
+		if opts.tap_to_click >= 0 {
+			settings.tap_to_click = opts.tap_to_click == 1
+		}
+	}
+	return render(hornero_core.input_apply_report(hornero_core.InputApplyOptions{
 		settings:  settings
 		dry_run:   opts.dry_run
 		yes:       opts.yes
