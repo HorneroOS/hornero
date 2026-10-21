@@ -322,17 +322,20 @@ pub fn parse_hardware_mic(args []string) !HardwareMicOptions {
 // `hardware keyboard <layout|settings|keys|rebind>`.
 pub struct HardwareKeyboardOptions {
 pub:
-	leaf          string // layout | settings | keys | rebind
-	current       bool
-	get           bool
-	toggle        bool
-	category      string
-	search        string
-	dry_run       bool
-	yes           bool
-	rebind_action string // status | set | reset
-	old_combo     string
-	new_combo     string
+	leaf           string // layout | settings | keys | rebind
+	current        bool
+	get            bool
+	toggle         bool
+	category       string
+	search         string
+	dry_run        bool
+	yes            bool
+	rebind_action  string // status | set | reset
+	old_combo      string
+	new_combo      string
+	layout_list    bool
+	layout_set     string
+	layout_variant string
 }
 
 pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
@@ -353,6 +356,9 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 	mut search := ''
 	mut dry_run := false
 	mut yes := false
+	mut layout_list := false
+	mut layout_set := ''
+	mut layout_variant := ''
 	mut i := 1
 	for i < args.len {
 		a := args[i]
@@ -393,6 +399,23 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 			i = ni
 			continue
 		}
+		if a == '--list' {
+			layout_list = true
+			i++
+			continue
+		}
+		if a == '--set' || a.starts_with('--set=') {
+			v, ni := hw_take_value(args, i, 'set', 'horneroctl hardware keyboard layout --set us,latam')!
+			layout_set = v
+			i = ni
+			continue
+		}
+		if a == '--variant' || a.starts_with('--variant=') {
+			v, ni := hw_take_value(args, i, 'variant', 'horneroctl hardware keyboard layout --set us --variant intl')!
+			layout_variant = v
+			i = ni
+			continue
+		}
 		if a.starts_with('-') {
 			return error('unknown flag: ${a}.\nExample: horneroctl hardware keyboard ${leaf} --dry-run')
 		}
@@ -405,16 +428,26 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 		if current && get {
 			return error('pick one of --current or --get.\nExample: horneroctl hardware keyboard layout --current')
 		}
+		modes := [current, get, toggle, layout_list, layout_set.len > 0].filter(it).len
+		if modes > 1 {
+			return error('pick one layout mode (--current, --get, --toggle, --list or --set).\nExample: horneroctl hardware keyboard layout --list')
+		}
+		if layout_variant.len > 0 && layout_set.len == 0 {
+			return error('--variant needs --set.\nExample: horneroctl hardware keyboard layout --set us --variant intl')
+		}
 		return HardwareKeyboardOptions{
-			leaf:    leaf
-			current: current
-			get:     get
-			toggle:  toggle
-			dry_run: dry_run
-			yes:     yes
+			leaf:           leaf
+			current:        current
+			get:            get
+			toggle:         toggle
+			dry_run:        dry_run
+			yes:            yes
+			layout_list:    layout_list
+			layout_set:     layout_set
+			layout_variant: layout_variant
 		}
 	}
-	if current || get || toggle {
+	if current || get || toggle || layout_list || layout_set.len > 0 || layout_variant.len > 0 {
 		return error('keyboard ${leaf} takes no layout flags.\nExample: horneroctl hardware keyboard ${leaf} --dry-run')
 	}
 	if yes {

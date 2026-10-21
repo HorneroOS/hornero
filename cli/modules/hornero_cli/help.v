@@ -1019,6 +1019,11 @@ Examples:
   layout [--current|--get|--toggle] [--dry-run]
                       Toggle the us/latam cycle (needs --yes);
                       --current shows info, --get prints the name
+  layout --list [--dry-run]
+                      List XKB layouts/variants from evdev.xml
+  layout --set LIST [--variant V] [--dry-run] [--yes]
+                      Set the layout list (e.g. us,latam) live and
+                      persist it for restore
   settings [--dry-run]
                       Open the LXQt keyboard settings GUI
   keys [--category CAT] [--search TERM] [--dry-run]
@@ -1044,6 +1049,8 @@ Examples:
   horneroctl hardware keyboard layout --get
   horneroctl hardware keyboard layout --dry-run
   horneroctl hardware keyboard layout --yes
+  horneroctl hardware keyboard layout --list
+  horneroctl hardware keyboard layout --set us,latam --variant intl, --dry-run
   horneroctl hardware keyboard settings --dry-run
   horneroctl hardware keyboard keys --search workspace
   horneroctl hardware keyboard keys --category=Window
