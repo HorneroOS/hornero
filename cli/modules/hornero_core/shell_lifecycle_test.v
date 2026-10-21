@@ -358,3 +358,19 @@ fn test_shell_lock_engaged_fails_open_without_shell() {
 	assert !shell_lock_engaged()
 	shell_lifecycle_test_restore_env(saved)
 }
+
+fn test_shell_status_config_path_prefers_explicit_override() {
+	saved := shell_lifecycle_test_save_env(['QS_CONFIG_PATH'])
+	os.setenv('QS_CONFIG_PATH', '/explicit/dev-shell.qml', true)
+	assert shell_status_config_path() == '/explicit/dev-shell.qml'
+	shell_lifecycle_test_restore_env(saved)
+}
+
+fn test_shell_status_reports_target_config() {
+	saved := shell_lifecycle_test_save_env(['QS_CONFIG_PATH'])
+	os.setenv('QS_CONFIG_PATH', '/explicit/dev-shell.qml', true)
+	res := shell_status()
+	assert res.ok
+	assert res.data['config'] == '/explicit/dev-shell.qml'
+	shell_lifecycle_test_restore_env(saved)
+}

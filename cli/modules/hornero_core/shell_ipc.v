@@ -38,6 +38,17 @@ pub fn shell_ipc_bypassed() bool {
 	return os.getenv('HORNERO_BYPASS_QUICKSHELL') == '1'
 }
 
+// shell_status_config_path reports the config this CLI targets for
+// IPC (the packaged /etc/xdg config, a user named config, or an
+// explicit override). Naming it in `shell status` closes a silent
+// drift trap: a dev checkout in ~/.config/quickshell is NOT what the
+// running session answers on unless it is the resolved config
+// (HorneroOS/shell#272).
+pub fn shell_status_config_path() string {
+	ensure_quickshell_ipc_config()
+	return os.getenv('QS_CONFIG_PATH')
+}
+
 // shell_status reports whether a live shell session is reachable.
 pub fn shell_status() CommandResult {
 	compositor := active_compositor()
@@ -52,6 +63,11 @@ pub fn shell_status() CommandResult {
 	} else {
 		lines << 'quickshell-cli: qs not found (set HORNERO_QS_BIN)'
 		data['qs'] = 'missing'
+	}
+	config_path := shell_status_config_path()
+	if config_path.len > 0 {
+		lines << 'config: ${config_path}'
+		data['config'] = config_path
 	}
 	return ok_result('shell status', lines.join('\n'), data)
 }
