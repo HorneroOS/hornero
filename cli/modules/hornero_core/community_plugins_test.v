@@ -256,6 +256,25 @@ fn test_community_plugin_enable_disable_lifecycle() {
 	assert preview.ok
 	still := community_plugin_list_report()
 	assert still.data['plugins'].contains('"enabled":false')
+	assert still.data['plugins'].contains('"trust":"untrusted"'), still.data['plugins']
+	// Local trust model (shell#251): a non-official plugin cannot be
+	// enabled until trust is recorded for the exact current payload.
+	untrusted := community_plugin_enable_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert !untrusted.ok && untrusted.message.contains('untrusted'), untrusted.message
+	trust_refused := community_plugin_trust_report(CommunityPluginOptions{ value: 'example-clock' })
+	assert !trust_refused.ok
+	trusted := community_plugin_trust_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert trusted.ok, trusted.message
+	// Trust records provenance but never enables by itself.
+	trust_listed := community_plugin_list_report()
+	assert trust_listed.data['plugins'].contains('"trust":"trusted"'), trust_listed.data['plugins']
+	assert trust_listed.data['plugins'].contains('"enabled":false'), trust_listed.data['plugins']
 	enabled := community_plugin_enable_report(CommunityPluginOptions{
 		value: 'example-clock'
 		yes:   true
@@ -275,6 +294,21 @@ fn test_community_plugin_enable_disable_lifecycle() {
 	assert disabled.ok, disabled.message
 	final := community_plugin_list_report()
 	assert final.data['plugins'].contains('"enabled":false')
+	// A payload change after trust invalidates it (stale-trust) and
+	// blocks enabling until trust is recorded again.
+	payload_root, _ := community_plugin_roots()
+	manifest_path := os.join_path(payload_root, 'example-clock', 'manifest.json')
+	orig_manifest := os.read_file(manifest_path) or { '' }
+	os.write_file(manifest_path, orig_manifest.replace('1.0.0', '6.6.6')) or {
+		assert false, 'cannot tamper payload'
+	}
+	stale := community_plugin_enable_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert !stale.ok && stale.message.contains('stale-trust'), stale.message
+	stale_listed := community_plugin_list_report()
+	assert stale_listed.data['plugins'].contains('"trust":"stale-trust"'), stale_listed.data['plugins']
 }
 
 fn test_community_plugin_enable_unknown_and_invalid_payload() {

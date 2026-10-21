@@ -126,7 +126,7 @@ Examples:
 		}
 		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate',
 		'plugin catalog' {
-			return 'Usage: horneroctl plugin <new|install|remove|list|validate|enable|disable|catalog> [value] [options]
+			return 'Usage: horneroctl plugin <new|install|remove|list|validate|enable|disable|trust|catalog> [value] [options]
 
   new <id> --name NAME --author AUTHOR --description TEXT --license MIT --dir PATH [--dry-run|--yes]
                       Create a static community plugin scaffold (MIT template)
@@ -145,9 +145,14 @@ Examples:
   validate <directory>
                       Run the Shell-owned static contract validator
   enable <id> [--dry-run|--yes]
-                      Mark an installed plugin runnable (re-validates first)
+                      Mark an installed plugin runnable (re-validates first;
+                      non-official plugins need recorded trust, see trust)
   disable <id> [--dry-run|--yes]
                       Mark a plugin not runnable (payload kept)
+  trust <id> [--dry-run|--yes]
+                      Record explicit trust for the current payload hash of a
+                      non-official plugin (never enables; payload changes
+                      invalidate it)
 
 New/install/remove/enable/disable need --yes to mutate; --dry-run never creates files or clones.
 Packages are stored below XDG data, with ownership receipts under XDG
