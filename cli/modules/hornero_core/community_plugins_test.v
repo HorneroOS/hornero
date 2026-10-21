@@ -353,7 +353,10 @@ fn test_catalog_rollback_restores_kept_payload() {
 	receipts := os.join_path(root, 'state', 'hornero', 'plugins', 'receipts')
 	current := os.join_path(data, 'hornero-pomodoro')
 	previous := '${current}.previous'
-	for dir, ver in {current: '9.9.9', previous: '1.0.0'} {
+	for dir, ver in {
+		current:  '9.9.9'
+		previous: '1.0.0'
+	} {
 		os.mkdir_all(dir) or { panic(err) }
 		manifest := '{"schemaVersion":1,"id":"hornero-pomodoro","name":"Hornero Pomodoro","version":"${ver}","description":"d","author":"a","license":"MIT","entrypoint":"Main.qml","files":["Main.qml"],"capabilities":{"processCommands":[],"networkHosts":[],"settings":{}}}'
 		os.write_file(os.join_path(dir, 'manifest.json'), manifest) or { panic(err) }

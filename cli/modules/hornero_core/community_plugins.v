@@ -849,7 +849,11 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		os.rm(tmp) or {}
 		return fail_result('plugin catalog update', 'cannot save plugin receipt')
 	}
-	return ok_result('plugin catalog update', 'updated ${found.name} to ${found.version} [${found.trust}] from the official catalogue. Previous payload kept for `plugin catalog rollback ${id}`. Enabled state unchanged (${if enabled_before { 'enabled' } else { 'disabled' }}).', {
+	return ok_result('plugin catalog update', 'updated ${found.name} to ${found.version} [${found.trust}] from the official catalogue. Previous payload kept for `plugin catalog rollback ${id}`. Enabled state unchanged (${if enabled_before {
+		'enabled'
+	} else {
+		'disabled'
+	}}).', {
 		'id':       id
 		'from':     record.version
 		'version':  found.version
@@ -923,7 +927,11 @@ pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginO
 		os.rm(tmp) or {}
 		return fail_result('plugin catalog rollback', 'cannot save plugin receipt')
 	}
-	return ok_result('plugin catalog rollback', 'rolled back ${id} to the kept previous payload (version ${prev_version}). Enabled state unchanged (${if enabled_before { 'enabled' } else { 'disabled' }}).', {
+	return ok_result('plugin catalog rollback', 'rolled back ${id} to the kept previous payload (version ${prev_version}). Enabled state unchanged (${if enabled_before {
+		'enabled'
+	} else {
+		'disabled'
+	}}).', {
 		'id':      id
 		'version': prev_version
 	})
