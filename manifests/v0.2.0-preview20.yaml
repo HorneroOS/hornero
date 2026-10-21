@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: dab0b3a1ec70130e6d186e3ac89d98ded550a7d4
+    sha: bf24f6ac5e856bff7a92f4d31bcd13560c3c5d63
     status: pinned
-    subject: "docs(perf): lock content frame-cost bound (171/180 slots)"
+    subject: "feat(controlcenter): Night Light temperature slider (shell#225 slice 2)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
