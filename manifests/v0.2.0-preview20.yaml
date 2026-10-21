@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 34fb832b163ff2b745aa1e127e42269bd8d643a9
+    sha: 3ed17f79a510b12c4c20f3913886e8189265c6bd
     status: pinned
-    subject: "feat(plugins): allow optional author signing block in manifests"
+    subject: "docs(a11y): full-shell bar AT-SPI probe evidence"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
