@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: fbfaceb0d56b7d6c300bd74cfdd8f7e56a6cf8ad
+    sha: dab0b3a1ec70130e6d186e3ac89d98ded550a7d4
     status: pinned
-    subject: "docs(perf): Control Center frame-cost bound (169/180 slots)"
+    subject: "docs(perf): lock content frame-cost bound (171/180 slots)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
