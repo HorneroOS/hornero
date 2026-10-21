@@ -109,6 +109,59 @@ fn test_night_toggle_dry_run_proves_no_execution() {
 	os.rmdir_all(tmp) or {}
 }
 
+fn test_night_temperature_clamp_and_defaults() {
+	assert night_clamp_temperature(0) == night_default_temperature
+	assert night_clamp_temperature(4000) == 4000
+	assert night_clamp_temperature(500) == night_min_temperature
+	assert night_clamp_temperature(9000) == night_max_temperature
+}
+
+fn test_night_temperature_backend_args() {
+	assert night_backend_temp_args('redshift', 3500) == ['-O', '3500K']
+	assert night_backend_temp_args('gammastep', 3500) == ['-O', '3500K']
+	assert night_backend_temp_args('wlsunset', 3500) == ['-T', '3500']
+	assert night_backend_temp_args('xrandr', 3500).len == 0
+}
+
+fn test_night_xrandr_gamma_vectors() {
+	assert night_xrandr_gamma(6500) == '1:1:1'
+	assert night_xrandr_gamma(4000) == '1:0.85:0.6'
+	assert night_xrandr_gamma(1000) == '1:0.65:0.35'
+	warm := night_xrandr_gamma(2500)
+	assert warm.starts_with('1:0.')
+}
+
+fn test_night_temperature_persists_next_to_state() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-night-temp')
+	os.rmdir_all(tmp) or {}
+	with_night_xdg(tmp, fn [tmp] () {
+		assert read_night_temperature() == night_default_temperature
+		write_night_temperature(3200) or { panic(err) }
+		assert read_night_temperature() == 3200
+		assert resolve_night_temperature_file().ends_with('night_mode_temperature')
+	})
+	os.rmdir_all(tmp) or {}
+}
+
+fn test_night_set_stores_temperature_when_inactive() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-night-set')
+	os.rmdir_all(tmp) or {}
+	old_path := os.getenv('PATH')
+	os.setenv('PATH', tmp, true)
+	with_night_xdg(tmp, fn [tmp] () {
+		rep := night_mode_run(NightModeCmd{
+			verb:        'set'
+			temperature: 3000
+			yes:         true
+		})
+		assert rep.ok, rep.message
+		assert read_night_temperature() == 3000
+		assert rep.data['temperature'] == '3000'
+	})
+	os.setenv('PATH', old_path, true)
+	os.rmdir_all(tmp) or {}
+}
+
 fn test_night_no_backends_fails() {
 	tmp := os.join_path(os.temp_dir(), 'hornero-night-noback')
 	os.rmdir_all(tmp) or {}
@@ -116,7 +169,7 @@ fn test_night_no_backends_fails() {
 	os.setenv('PATH', tmp, true)
 	with_night_xdg(tmp, fn [tmp] () {
 		mut lines := []string{}
-		rep := night_enable_native(false, mut lines)
+		rep := night_enable_native(false, mut lines, 4000)
 		assert !rep.ok
 		assert rep.message.contains('No supported night mode backends')
 	})

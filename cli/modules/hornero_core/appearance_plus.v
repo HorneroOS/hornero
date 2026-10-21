@@ -138,16 +138,18 @@ pub fn accent_report(opts AccentOptions) CommandResult {
 
 pub struct NightModeOptions {
 pub:
-	action  string // status | toggle | on | off | status-icon | status-text | backends
-	dry_run bool
-	yes     bool
+	action      string // status | toggle | on | off | set | status-icon | status-text | backends
+	dry_run     bool
+	yes         bool
+	temperature int
 }
 
 // night_mode_report implements `appearance night-mode ...` natively.
 pub fn night_mode_report(opts NightModeOptions) CommandResult {
 	return night_mode_run(NightModeCmd{
-		verb:    opts.action
-		dry_run: opts.dry_run
-		yes:     opts.yes
+		verb:        opts.action
+		dry_run:     opts.dry_run
+		yes:         opts.yes
+		temperature: opts.temperature
 	})
 }

@@ -434,12 +434,16 @@ Examples:
 '
 		}
 		'appearance night-mode' {
-			return 'Usage: horneroctl appearance night-mode <status|toggle|on|off|status-icon|status-text|backends> [options]
+			return 'Usage: horneroctl appearance night-mode <status|toggle|on|off|set|status-icon|status-text|backends> [options]
 
   status [--dry-run]  Show whether the temperature backend is active (read-only)
   toggle [--dry-run]  Toggle night mode (needs --yes)
-  on [--dry-run]      Force enable night mode (needs --yes)
+  on [--dry-run] [--temperature <K>]
+                      Force enable night mode (needs --yes)
   off [--dry-run]     Force disable night mode (needs --yes)
+  set --temperature <K> [--dry-run]
+                      Store the Kelvin temperature (1000-6500);
+                      reapplies immediately while active (needs --yes)
   status-icon         Bar icon for the current state (read-only)
   status-text         Bar tooltip for the current state (read-only)
   backends            List available backends (read-only)

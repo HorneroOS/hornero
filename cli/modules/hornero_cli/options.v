@@ -515,9 +515,10 @@ pub fn parse_appearance_accent(args []string) !AccentCmdOptions {
 // the bar helpers are read-only; toggle/on/off mutate (need --yes).
 pub struct NightModeCmdOptions {
 pub:
-	leaf    string // status | toggle | auto | on | enable | off | disable | status-icon | status-text | backends
-	dry_run bool
-	yes     bool
+	leaf        string // status | toggle | auto | on | enable | off | disable | set | status-icon | status-text | backends
+	dry_run     bool
+	yes         bool
+	temperature int
 }
 
 // parse_appearance_night_mode parses `appearance night-mode <verb>` arguments.
@@ -526,20 +527,34 @@ pub fn parse_appearance_night_mode(args []string) !NightModeCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl appearance night-mode status')
 	}
 	leaf := args[0]
-	if leaf !in ['status', 'toggle', 'auto', 'on', 'enable', 'off', 'disable', 'status-icon',
+	if leaf !in ['status', 'toggle', 'auto', 'on', 'enable', 'off', 'disable', 'set', 'status-icon',
 		'status-text', 'backends'] {
 		return error('unknown night-mode subcommand: ${leaf}.\nRun: horneroctl appearance night-mode --help')
 	}
 	mut dry_run := false
 	mut yes := false
-	for i in 1 .. args.len {
+	mut temperature := 0
+	mut i := 1
+	for i < args.len {
 		a := args[i]
+		i++
 		if a == '--dry-run' {
 			dry_run = true
 			continue
 		}
 		if a == '--yes' {
 			yes = true
+			continue
+		}
+		if a == '--temperature' {
+			if i >= args.len {
+				return error('--temperature needs a Kelvin value.\nExample: horneroctl appearance night-mode set --temperature 3500 --yes')
+			}
+			temperature = args[i].int()
+			i++
+			if temperature < 1000 || temperature > 6500 {
+				return error('temperature must be between 1000 and 6500 K.\nExample: horneroctl appearance night-mode set --temperature 3500 --yes')
+			}
 			continue
 		}
 		if a.starts_with('-') {
@@ -550,10 +565,14 @@ pub fn parse_appearance_night_mode(args []string) !NightModeCmdOptions {
 	if leaf in ['status', 'status-icon', 'status-text', 'backends'] && yes {
 		return error('night-mode ${leaf} takes no --yes.\nExample: horneroctl appearance night-mode ${leaf}')
 	}
+	if temperature > 0 && leaf !in ['on', 'enable', 'set', 'toggle', 'auto'] {
+		return error('--temperature applies to on/set/toggle.\nExample: horneroctl appearance night-mode set --temperature 3500 --yes')
+	}
 	return NightModeCmdOptions{
-		leaf:    leaf
-		dry_run: dry_run
-		yes:     yes
+		leaf:        leaf
+		dry_run:     dry_run
+		yes:         yes
+		temperature: temperature
 	}
 }
 
