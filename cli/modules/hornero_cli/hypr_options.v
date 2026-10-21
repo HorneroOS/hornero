@@ -290,6 +290,69 @@ pub fn parse_hypr_plugins(args []string) !HyprPluginsOptions {
 	}
 }
 
+// HyprCursorOptions covers `hypr cursor <status|set|restore>`.
+pub struct HyprCursorOptions {
+pub:
+	leaf    string // status | set | restore
+	size    int = -1
+	dry_run bool
+	yes     bool
+}
+
+pub fn parse_hypr_cursor(args []string) !HyprCursorOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl hypr cursor status')
+	}
+	leaf := args[0]
+	if leaf !in ['status', 'set', 'restore'] {
+		return error('unknown cursor subcommand: ${leaf}.\nRun: horneroctl hypr cursor --help')
+	}
+	mut size := -1
+	mut dry_run := false
+	mut yes := false
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		i++
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a == '--size' {
+			if i >= args.len {
+				return error('--size needs a value.\nExample: horneroctl hypr cursor set --size 32 --yes')
+			}
+			v := args[i]
+			i++
+			if v.starts_with('-') || v.int().str() != v {
+				return error('--size needs an integer, got: ${v}.')
+			}
+			size = v.int()
+			continue
+		}
+		return error('unknown flag: ${a}.\nRun: horneroctl hypr cursor --help')
+	}
+	if leaf == 'status' && (size >= 0 || dry_run || yes) {
+		return error('hypr cursor status takes no flags.')
+	}
+	if leaf == 'restore' && size >= 0 {
+		return error('hypr cursor restore takes no --size.')
+	}
+	if leaf == 'set' && size < 0 {
+		return error('hypr cursor set needs --size.\\nExample: horneroctl hypr cursor set --size 32 --yes')
+	}
+	return HyprCursorOptions{
+		leaf:    leaf
+		size:    size
+		dry_run: dry_run
+		yes:     yes
+	}
+}
+
 // HyprWindowsOptions covers `hypr windows <status|set|restore>`.
 // `status` is read-only; `set` mutates (needs --yes, --dry-run
 // previews) and takes any subset of the four geometry flags — omitted

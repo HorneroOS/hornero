@@ -178,6 +178,25 @@ fn test_dispatch_hypr_windows() {
 	hypr_dispatch_teardown()
 }
 
+fn test_dispatch_hypr_cursor() {
+	hypr_dispatch_setup()
+	os.mkdir_all('/tmp/hx-hypr-test/bin') or { assert false }
+	os.write_file('/tmp/hx-hypr-test/bin/hyprctl', '#!/bin/sh\nexit 0\n') or { assert false }
+	os.chmod('/tmp/hx-hypr-test/bin/hyprctl', 0o755) or { assert false }
+	os.setenv('HORNERO_HYPRCTL_BIN', '/tmp/hx-hypr-test/bin/hyprctl', true)
+	os.setenv('HORNERO_CURSOR_STATE_FILE', '/tmp/hx-hypr-test/cursor-state', true)
+	os.rm('/tmp/hx-hypr-test/cursor-state') or {}
+	assert dispatch(['horneroctl', 'hypr', 'cursor', 'status']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'cursor', 'set', '--size', '32', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'cursor', 'set', '--size', '32']) == 1
+	assert dispatch(['horneroctl', 'hypr', 'cursor', 'set', '--size', '32', '--yes']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'cursor', 'restore', '--yes']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'cursor', 'set']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'cursor', 'bogus']) == 2
+	os.unsetenv('HORNERO_CURSOR_STATE_FILE')
+	hypr_dispatch_teardown()
+}
+
 fn test_dispatch_hypr_windows_rules() {
 	hypr_dispatch_setup()
 	os.setenv('HORNERO_WINDOW_RULES_USER_FILE', '/tmp/hx-hypr-test/rules-user.conf', true)
