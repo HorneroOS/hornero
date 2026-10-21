@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 2da786c8002b9a0bb562edaa970c4251d5df6a40
+    sha: a8605f84f2b3e44cb7ba541e5e797d20bbcdfcde
     status: pinned
-    subject: "fix(plugins): materialise host delegates under an Item root"
+    subject: "feat(controlcenter): Hornero update lane + snapshot honesty in Updates pane"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
