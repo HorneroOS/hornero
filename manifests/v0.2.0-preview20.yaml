@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 5f3212d4d1313290ca0a6d5dd1830f2f0222813c
+    sha: ae1ce74f50f9609bc10ec42fc5426cb95dd44c03
     status: pinned
-    subject: "feat(a11y): name the lock screen password field and Unlock button"
+    subject: "feat(a11y): name every launcher result row"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
