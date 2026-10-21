@@ -28,6 +28,16 @@ SHELL_FILES = {
 CONFIG_FILES = {
     "desktop/hypr/hyprland.conf.d/keybindings.conf":
         "bind = CTRL, Space, exec, horneroctl apps launch\n",
+    # Lua-era entrypoint (hornero#177): exec_cmd strings, dispatcher
+    # strings and table-form argv must all reach the audit, while
+    # prose mentioning horneroctl must not.
+    "desktop/hypr/hyprland.lua.d/autostart.lua":
+        'hl.exec_cmd("horneroctl shell ipc -- call lock")\n'
+        'local msg = "horneroctl did not respond"\n',
+    "desktop/hypr/hyprland.lua.d/binds.lua":
+        'hl.bind("SUPER + W", hl.dsp.exec_cmd("horneroctl welcome open"))\n'
+        'hl.bind("SUPER + T", {"horneroctl", "terminal", "open"})\n'
+        '-- hl.exec_cmd("horneroctl nope commented")\n',
 }
 
 
@@ -57,10 +67,31 @@ def _run(tmp_path: Path, *extra: str) -> subprocess.CompletedProcess:
 def test_binds_pass_when_handled_and_in_sync(tmp_path):
     first = _run(tmp_path, "--refresh")
     assert first.returncode == 0, first.stderr
-    assert "REFRESH: 2 chains" in first.stdout
+    assert "REFRESH: 5 chains" in first.stdout
+    manifest = (tmp_path / "invocations.txt").read_text()
+    # Lua forms extracted: exec_cmd bare chain (flags cut), dsp
+    # string, and table argv. Prose and commented horneroctl stay out.
+    for chain in ("shell start", "apps launch", "shell ipc",
+                  "welcome open", "terminal open"):
+        assert f"\n{chain}\n" in f"\n{manifest}"
+    assert "did not respond" not in manifest
+    assert "nope commented" not in manifest
     second = _run(tmp_path)
     assert second.returncode == 0, second.stdout
-    assert "BIND-AUDIT-PASS: 2 chains" in second.stdout
+    assert "BIND-AUDIT-PASS: 5 chains" in second.stdout
+
+
+def test_binds_fail_on_unhandled_lua_chain(tmp_path):
+    _run(tmp_path, "--refresh")
+    config = tmp_path / "config"
+    _tree(config, {
+        "desktop/hypr/hyprland.lua.d/broken.lua":
+            'hl.bind("SUPER + X", hl.dsp.exec_cmd("horneroctl nope bad"))\n',
+    })
+    proc = _run(tmp_path)
+    assert proc.returncode == 1
+    assert "BIND-AUDIT-FAIL: unhandled" in proc.stdout
+    assert "horneroctl nope bad" in proc.stdout
 
 
 def test_binds_fail_on_unhandled_chain(tmp_path):

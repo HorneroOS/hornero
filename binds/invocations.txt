@@ -1,6 +1,6 @@
 # HorneroOS bind audit: every `horneroctl` invocation reachable
 # from keybinds, autostart, .desktop launchers, first-boot
-# scripts, and shell QML. One verb chain per line, sorted.
+# scripts, shell QML, and Lua config. One verb chain per line, sorted.
 # Refresh: python3 scripts/check-binds.py --refresh \
 #   --binary cli/build/horneroctl --shell-dir <shell> --config-dir <config>
 # The gate fails on unhandled chains and on drift vs this file.
