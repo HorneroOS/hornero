@@ -114,6 +114,17 @@ fn test_rebind_reset_restores_defaults() {
 	rebind_test_teardown()
 }
 
+fn test_rebind_keys_lines_reflect_overrides() {
+	lines := ['[Window] SUPER + Return -> exec, kitty', '[Window] SUPER + T -> exec, kitty',
+		'XF86AudioMute -> exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle']
+	user := 'unbind = SUPER, Return\nbind = SUPER, X, exec, kitty\n'
+	out := apply_overrides_to_lines(lines, user)
+	assert out.len == 3
+	assert !out.any(it.contains('SUPER + Return'))
+	assert out.any(it.contains('SUPER + X -> exec, kitty'))
+	assert out.any(it.contains('XF86AudioMute'))
+}
+
 fn test_rebind_dry_run_writes_nothing() {
 	rebind_test_setup()
 	rep := keyboard_rebind_set_report(RebindSetOptions{

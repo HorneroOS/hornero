@@ -339,6 +339,42 @@ fn rebuild_user_content(user_text string, drop_a string, drop_b string) string {
 	return s
 }
 
+// keys_line_combo extracts the canonical combo from a rendered
+// `[cat] MODS + key -> action` line ('' when unparsable).
+fn keys_line_combo(line string) string {
+	mut s := line
+	if s.starts_with('[') {
+		idx := s.index('] ') or { return '' }
+		s = s[idx + 2..]
+	}
+	arrow := s.index(' -> ') or { return '' }
+	combo := s[..arrow].trim_space()
+	mods, key, ok := parse_combo(combo)
+	if !ok {
+		return ''
+	}
+	return if mods.len > 0 { mods + ' + ' + key } else { key }
+}
+
+// apply_overrides_to_lines renders the effective binding list: the
+// `hardware keyboard keys` output must show what the session runs,
+// not just the factory file.
+pub fn apply_overrides_to_lines(lines []string, user_text string) []string {
+	mut out := lines.clone()
+	for u in parse_bind_entries(user_text) {
+		combo := bind_combo(u)
+		out = out.filter(keys_line_combo(it) != combo)
+		if u.verb != 'unbind' {
+			mut action := u.dispatcher
+			if u.arg.len > 0 {
+				action += ', ' + u.arg
+			}
+			out << '[Custom] ${combo} -> ${action}'
+		}
+	}
+	return out
+}
+
 // keyboard_rebind_reset_report clears all user overrides and
 // restores factory binds live.
 pub fn keyboard_rebind_reset_report(dry_run bool, yes bool) CommandResult {

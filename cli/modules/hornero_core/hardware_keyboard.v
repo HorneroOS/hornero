@@ -668,6 +668,12 @@ pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 		return fail_result('hardware keyboard keys', '[ERROR] Keybindings configuration not found (${path}).')
 	}
 	mut lines := parse_keybindings_auto(path, text)
+	if !path.ends_with('.lua') {
+		user_text := os.read_file(keybindings_user_path()) or { '' }
+		if user_text.trim_space().len > 0 {
+			lines = apply_overrides_to_lines(lines, user_text)
+		}
+	}
 	if opts.category.len > 0 {
 		c := opts.category.to_lower()
 		mut kept := []string{}
