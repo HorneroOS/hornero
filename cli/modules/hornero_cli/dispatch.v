@@ -269,6 +269,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'clarify' {
 			render(hornero_core.assistant_clarify_report(opts.arg1, opts.arg2), mode)
 		}
+		'log' { render(hornero_core.assistant_log_report(), mode) }
 		else { render(hornero_core.assistant_stop_report(opts.value), mode) }
 	}
 }

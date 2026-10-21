@@ -272,3 +272,33 @@ fn test_contract_run_submission_shape() {
 	assert reqs[0].body == '{"input":"hola"}'
 	assert reqs[0].auth == 'Bearer contract-test-key'
 }
+
+fn test_contract_ask_approve_stop_write_redacted_audit_log() {
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':                '{"run_id":"run_9","status":"queued"}'
+		'GET /v1/runs/run_9/events':    'data: {"delta":"done"}\n\n'
+		'GET /v1/runs/run_9':           '{"pending_controls":[{"kind":"approval","prompt_id":"p1","execution_generation":1}]}'
+		'POST /v1/runs/run_9/approval': '{}'
+		'POST /v1/runs/run_9/stop':     '{}'
+	})
+	defer { mock_restore_env(saved) }
+	log_path := os.join_path(os.temp_dir(), 'hornero-contract-log-${mock.requests.len}.log')
+	os.setenv('HORNERO_ASSISTANT_LOG_FILE', log_path, true)
+	defer { os.setenv('HORNERO_ASSISTANT_LOG_FILE', '', true) }
+
+	prompt := 'a very secret prompt about my diary'
+	assert assistant_ask_report_attached_session(prompt, [], '').ok
+	assert assistant_approve_report('run_9', 'approve').ok
+	assert assistant_stop_report('run_9').ok
+	_ = mock
+
+	content := os.read_file(log_path) or { panic(err) }
+	assert content.contains('\task\t')
+	assert content.contains('\tapprove\t')
+	assert content.contains('\tstop\t')
+	assert content.contains('choice once')
+	// Neither the gateway key nor the prompt may ever reach the log.
+	assert !content.contains('contract-test-key')
+	assert !content.contains('secret prompt')
+	assert !content.contains('diary')
+}
