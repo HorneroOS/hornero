@@ -8,6 +8,7 @@ pub:
 	arg2    string
 	dry_run bool
 	yes     bool
+	remove  bool
 	stream  bool
 	attach  []string
 	session string
@@ -19,12 +20,13 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	}
 	leaf := args[0]
 	if leaf !in ['status', 'health', 'enable', 'disable', 'tools', 'knowledge', 'sessions', 'model',
-		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway'] {
+		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
 	mut dry_run := false
 	mut yes := false
+	mut remove := false
 	mut stream := false
 	mut attach := []string{}
 	mut session := ''
@@ -54,6 +56,10 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		}
 		if arg == '--yes' {
 			yes = true
+			continue
+		}
+		if arg == '--remove' {
+			remove = true
 			continue
 		}
 		if arg == '--stream' {
@@ -105,6 +111,12 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if dry_run && yes {
 		return error('--dry-run and --yes are mutually exclusive.\nExample: horneroctl assistant enable --dry-run')
 	}
+	if remove && leaf != 'setup' {
+		return error('--remove only applies to setup.\nExample: horneroctl assistant setup --remove --yes')
+	}
+	if leaf == 'setup' && value.len > 0 {
+		return error('setup takes no argument.\nExample: horneroctl assistant setup --dry-run')
+	}
 	return AssistantCmdOptions{
 		leaf:    leaf
 		value:   value
@@ -112,6 +124,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		arg2:    if parts.len > 1 { parts[1..].join(' ') } else { '' }
 		dry_run: dry_run
 		yes:     yes
+		remove:  remove
 		stream:  stream
 		attach:  attach
 		session: session
