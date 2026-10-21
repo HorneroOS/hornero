@@ -19,7 +19,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	}
 	leaf := args[0]
 	if leaf !in ['status', 'health', 'enable', 'disable', 'tools', 'knowledge', 'sessions', 'model',
-		'ask', 'stop', 'approve', 'clarify', 'events', 'log'] {
+		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
@@ -83,6 +83,12 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	}
 	if leaf == 'clarify' && parts.len < 2 {
 		return error('expected a run id and answer text.\nExample: horneroctl assistant clarify run_abc123 "use the dark theme"')
+	}
+	if leaf == 'gateway' && parts.len > 0 && parts[0] !in ['start', 'stop', 'status'] {
+		return error('unknown gateway action: ${parts[0]}.\nExample: horneroctl assistant gateway start --yes')
+	}
+	if leaf == 'gateway' && parts.len > 1 {
+		return error('gateway ${parts[0]} takes no extra argument.\nExample: horneroctl assistant gateway ${parts[0]}')
 	}
 	if leaf in ['status', 'tools', 'knowledge'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')

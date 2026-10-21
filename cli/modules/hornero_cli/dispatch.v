@@ -270,6 +270,19 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			render(hornero_core.assistant_clarify_report(opts.arg1, opts.arg2), mode)
 		}
 		'log' { render(hornero_core.assistant_log_report(), mode) }
+		'gateway' {
+			match opts.arg1 {
+				'start' {
+					render(hornero_core.assistant_gateway_start_report(opts.dry_run,
+						opts.yes), mode)
+				}
+				'stop' {
+					render(hornero_core.assistant_gateway_stop_report(opts.dry_run,
+						opts.yes), mode)
+				}
+				else { render(hornero_core.assistant_gateway_status_report(), mode) }
+			}
+		}
 		else { render(hornero_core.assistant_stop_report(opts.value), mode) }
 	}
 }

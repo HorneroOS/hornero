@@ -1526,6 +1526,9 @@ pub fn assistant_health_report() CommandResult {
 	data['gateway'] = if reachable { 'reachable' } else { 'unreachable' }
 	data['gatewayDetail'] = detail
 	data['protocol'] = if compatible { 'compatible' } else { 'incompatible' }
+	data['state'] = assistant_gateway_classify(settings.enabled, hermes.len > 0, reachable,
+		compatible)
+	lines << 'state: ${data['state']}'
 	lines << 'gateway: ${data['gateway']} — ${detail}'
 	lines << 'protocol: ${data['protocol']} (negotiates ${assistant_supported_hermes})'
 	healthy := settings.enabled && hermes.len > 0 && loopback && reachable && compatible
