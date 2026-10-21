@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: ce1cc670cf774d41c051e10e247ebbe44b0bd9be
+    sha: 9038cd7e68e67dbb2a8aac01d21f50cfb362c1b5
     status: pinned
-    subject: "docs(perf): full-shell cold-start baseline (≈1.7 s to bar in AT-SPI)"
+    subject: "docs(perf): launcher frame-cost bound (vsync at 60 Hz)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
