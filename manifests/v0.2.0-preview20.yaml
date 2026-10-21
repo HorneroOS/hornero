@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 944294c48886fef611932551487e01576b214ddb
+    sha: 451c4b5a697e93db2bb9c44804d7f5fe67a31d89
     status: pinned
-    subject: "docs(a11y): drawer and Control Center AT-SPI probe; launcher gap recorded"
+    subject: "docs(a11y): launcher AT-SPI gap was a stale deployed checkout"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
