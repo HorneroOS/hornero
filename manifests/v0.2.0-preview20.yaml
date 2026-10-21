@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: ae1ce74f50f9609bc10ec42fc5426cb95dd44c03
+    sha: 30d927346d35afa20f20422db01f8158c8cdf993
     status: pinned
-    subject: "feat(a11y): name every launcher result row"
+    subject: "feat(a11y): name dashboard workspace and window cards"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
