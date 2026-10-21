@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 30d927346d35afa20f20422db01f8158c8cdf993
+    sha: 24440fbcece455f55323e5b56b002366cb4fa870
     status: pinned
-    subject: "feat(a11y): name dashboard workspace and window cards"
+    subject: "feat(a11y): name the shared controls used by every pane"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
