@@ -20,7 +20,7 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 58d1a30a97f746065d77145896fb20ca8bd95a4e
+    sha: e71e262bf8e7b771d41d260628b1e26324dcf2a3
     status: pinned
     subject: "docs(perf): plugin-surface cold-start probe baseline"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
