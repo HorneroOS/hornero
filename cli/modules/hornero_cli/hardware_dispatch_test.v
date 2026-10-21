@@ -233,6 +233,25 @@ fn test_dispatch_hardware_keyboard_rebind() {
 	hw_dispatch_teardown()
 }
 
+fn test_dispatch_hardware_keyboard_layout_set() {
+	hw_dispatch_setup()
+	os.setenv('HORNERO_XKB_RULES_FILE', '/tmp/hx-hw-dtest/conf/evdev.xml', true)
+	os.setenv('HORNERO_KEYBOARD_LAYOUT_STATE_FILE', '/tmp/hx-hw-dtest/conf/layout-state',
+		true)
+	os.write_file('/tmp/hx-hw-dtest/conf/evdev.xml', '<layoutList><layout><configItem><name>us</name><description>English (US)</description></configItem></layout></layoutList>') or {
+		assert false
+	}
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--list']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--set', 'us,latam', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--set', 'us,latam']) == 1
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--variant', 'intl']) == 2
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--list', '--current']) == 2
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'keys', '--set', 'us']) == 2
+	os.unsetenv('HORNERO_XKB_RULES_FILE')
+	os.unsetenv('HORNERO_KEYBOARD_LAYOUT_STATE_FILE')
+	hw_dispatch_teardown()
+}
+
 fn test_dispatch_hardware_network() {
 	hw_dispatch_setup()
 	assert dispatch(['horneroctl', 'hardware', 'network', 'status']) == 0
