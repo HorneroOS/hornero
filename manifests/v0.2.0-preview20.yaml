@@ -20,16 +20,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 514860b51bc606e78059f71447e2fa504d1c1ddd
+    sha: 36cc158be609bfa81b221e2d695d80c37ca2ff60
     status: pinned
-    subject: "feat(controlcenter): Input layout list/set editor (shell#226)"
+    subject: "feat(controlcenter): Windows focus + window rules (shell#235)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 0394738ab821ebff2760951cc78c31751bb92455
+    sha: 1952d60d43226d117332ac4ffca8c58e81f4fecc
     status: pinned
-    subject: "feat(hypr): source user window-rules overlay after factory rules"
+    subject: "feat(hypr): restore persisted window geometry at login"
     notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero

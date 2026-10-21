@@ -79,6 +79,9 @@ hypr monitors list
 hypr monitors set
 hypr plugins install
 hypr windows restore
+hypr windows rules add
+hypr windows rules list
+hypr windows rules remove
 hypr windows set
 hypr windows status
 lock now
