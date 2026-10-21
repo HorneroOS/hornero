@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 54c9e8bc5163fe11c5c749c8d03105e9e28e5682
+    sha: b5589dc47349231ad1e7544f2e3c59db3fed89b0
     status: pinned
-    subject: "feat(a11y): name every volume and seek slider"
+    subject: "feat(controlcenter): show plugin trust state and Trust action in Extensions"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
