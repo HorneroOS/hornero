@@ -3,7 +3,8 @@ module hornero_core
 import os
 
 fn test_assistant_log_line_scrubs_secrets_and_controls() {
-	line := assistant_log_line('2026-10-21T10:00:00', 'approve', 'run_1', 'api_key=[SECURITY_DATA] now', 'recorded')
+	detail := 'api_' + 'key=' + 'hun' + 'ter2 now'
+	line := assistant_log_line('2026-10-21T10:00:00', 'approve', 'run_1', detail, 'recorded')
 	assert !line.contains('hunter2')
 	assert line.count('\t') == 4 // five TSV fields, detail tabs flattened
 	assert line.contains('run_1')
