@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: a01996898f4b466c55782efb8ae4aec445f4b03b
+    sha: ce1cc670cf774d41c051e10e247ebbe44b0bd9be
     status: pinned
-    subject: "test(a11y): AT-SPI probe harness for lock content"
+    subject: "docs(perf): full-shell cold-start baseline (≈1.7 s to bar in AT-SPI)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
