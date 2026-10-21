@@ -270,6 +270,10 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			render(hornero_core.assistant_clarify_report(opts.arg1, opts.arg2), mode)
 		}
 		'log' { render(hornero_core.assistant_log_report(), mode) }
+		'setup' {
+			render(hornero_core.assistant_setup_report(opts.dry_run, opts.yes, opts.remove),
+				mode)
+		}
 		'gateway' {
 			match opts.arg1 {
 				'start' {

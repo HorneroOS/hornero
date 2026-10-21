@@ -47,6 +47,21 @@ pub fn assistant_gateway_classify(enabled bool, installed bool, reachable bool, 
 	return 'running-compatible'
 }
 
+// assistant_gateway_ensure_unit writes the user unit only when its
+// content changed, returning whether it wrote. Shared by gateway
+// start and assistant setup so the unit has exactly one author.
+pub fn assistant_gateway_ensure_unit(hermes string) !bool {
+	unit_file := assistant_gateway_unit_file()
+	existing := os.read_file(unit_file) or { '' }
+	desired := assistant_gateway_unit_content(hermes)
+	if existing == desired {
+		return false
+	}
+	os.mkdir_all(os.dir(unit_file))!
+	os.write_file(unit_file, desired)!
+	return true
+}
+
 fn assistant_gateway_systemctl(args []string) ExecReport {
 	return run_exec(ExecSpec{
 		prog:        'systemctl'
@@ -131,21 +146,17 @@ pub fn assistant_gateway_start_report(dry_run bool, yes bool) CommandResult {
 	if find_on_path('systemctl').len == 0 {
 		return fail_result('assistant gateway start', 'systemd user sessions are unavailable here, so horneroctl cannot manage the gateway. Start it manually in a terminal: hermes gateway run')
 	}
-	mut wrote := false
-	existing := os.read_file(unit_file) or { '' }
-	desired := assistant_gateway_unit_content(hermes)
-	if existing != desired {
-		os.mkdir_all(os.dir(unit_file)) or {
-			return fail_result('assistant gateway start', 'Cannot create the systemd user unit directory: ${err.msg()}')
-		}
-		os.write_file(unit_file, desired) or {
-			return fail_result('assistant gateway start', 'Cannot write the user unit ${unit_file}: ${err.msg()}')
-		}
-		wrote = true
+	wrote := assistant_gateway_ensure_unit(hermes) or {
+		return fail_result('assistant gateway start', 'Cannot write the user unit ${unit_file}: ${err.msg()}')
 	}
 	if wrote {
 		assistant_gateway_systemctl(['daemon-reload'])
 	}
+	// A unit deleted while loaded (setup --remove) and then recreated
+	// leaves systemd with a stale failed/load-error state; clearing it
+	// is required before start and harmless otherwise (host-validated
+	// in the #191 setup remove→start cycle).
+	assistant_gateway_systemctl(['reset-failed', assistant_gateway_unit_name])
 	start := assistant_gateway_systemctl(['start', assistant_gateway_unit_name])
 	if !start.ok {
 		return fail_result('assistant gateway start', 'systemctl --user start ${assistant_gateway_unit_name} failed: ${start.output}. Inspect: journalctl --user -u ${assistant_gateway_unit_name} -n 30')

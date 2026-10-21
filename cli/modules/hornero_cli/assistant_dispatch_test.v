@@ -2,7 +2,7 @@ module hornero_cli
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|health|enable|disable|gateway|tools|knowledge|sessions|model|ask|stop|approve|clarify|events|log>')
+	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|ask|stop|approve|clarify|events|log>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -82,6 +82,23 @@ fn test_assistant_stream_flag_rules() {
 	}
 	help := command_help('assistant ask')
 	assert help.contains('--stream')
+}
+
+fn test_assistant_setup_parser_rules() {
+	setup := parse_assistant(['setup', '--dry-run']) or { panic(err) }
+	assert setup.leaf == 'setup' && setup.dry_run && !setup.remove
+	rm := parse_assistant(['setup', '--remove', '--yes']) or { panic(err) }
+	assert rm.remove && rm.yes
+	if _ := parse_assistant(['setup', 'extra']) {
+		panic('setup takes no argument')
+	}
+	if _ := parse_assistant(['status', '--remove']) {
+		panic('--remove outside setup must be rejected')
+	}
+	assert dispatch(['horneroctl', 'assistant', 'setup', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'setup', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'setup', '--remove', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'setup', 'extra']) == 2
 }
 
 fn test_assistant_gateway_parser_rules() {
