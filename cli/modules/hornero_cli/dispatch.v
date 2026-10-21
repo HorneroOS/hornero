@@ -1199,6 +1199,21 @@ fn run_hardware_keyboard(args []string, mode hornero_core.RenderMode) int {
 			dry_run:  opts.dry_run
 		}), mode)
 	}
+	if opts.leaf == 'rebind' {
+		if opts.rebind_action == 'status' {
+			return render(hornero_core.keyboard_rebind_status_report(), mode)
+		}
+		if opts.rebind_action == 'reset' {
+			return render(hornero_core.keyboard_rebind_reset_report(opts.dry_run,
+				opts.yes), mode)
+		}
+		return render(hornero_core.keyboard_rebind_set_report(hornero_core.RebindSetOptions{
+			old_combo: opts.old_combo
+			new_combo: opts.new_combo
+			dry_run:   opts.dry_run
+			yes:       opts.yes
+		}), mode)
+	}
 	mode_name := if opts.get {
 		'get'
 	} else if opts.current {
