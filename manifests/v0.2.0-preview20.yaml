@@ -22,7 +22,7 @@ components:
     ref: main
     sha: 58d1a30a97f746065d77145896fb20ca8bd95a4e
     status: pinned
-    subject: "docs(a11y): first AT-SPI runtime evidence + reproducible probe harness"
+    subject: "docs(perf): plugin-surface cold-start probe baseline"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
