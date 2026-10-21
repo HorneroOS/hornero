@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 057275a62432373e1237343d686effb4147c8d1a
+    sha: 2da786c8002b9a0bb562edaa970c4251d5df6a40
     status: pinned
-    subject: "feat(controlcenter): Extensions marketplace (official catalogue)"
+    subject: "fix(plugins): materialise host delegates under an Item root"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
