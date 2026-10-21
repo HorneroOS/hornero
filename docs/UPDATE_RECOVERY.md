@@ -69,4 +69,6 @@ product must keep the full-system `package upgrade` name and scope explicit.
 Likewise, system rollback should only be exposed after a supported snapshot
 backend can create, enumerate, validate, and restore snapshots across boot
 and package state, with a real recovery test. A config archive is not a
-substitute for that work.
+substitute for that work. The backend decision, contract operations,
+failure modes, and VM proof live in `docs/SNAPSHOT_BACKEND_CONTRACT.md`
+(hornero#179; implementation deferred to installer layout acceptance).
