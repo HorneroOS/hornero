@@ -355,3 +355,99 @@ pub fn package_updates_report(opts PackageCheckOptions) CommandResult {
 	message := '${updates_message}; ${package_policy_message(snapshot.policy)}'
 	return ok_result('package updates', message, data)
 }
+
+// --- Update status lanes (hornero#178) -------------------------------------
+// One read-only report that separates what a user actually needs to
+// decide: Hornero-owned packages behind, the rest of the system
+// waiting, and held/ignored policy. Snapshot availability is reported
+// honestly: no snapshot backend contract exists yet (hornero#179), so
+// the lane says "none" instead of guessing from filesystem layout.
+
+// hornero_owned_package_names is the curated HorneroOS package set.
+// Package names, not components: the edition profiles name components
+// (shell/config/horneroctl) but pacman knows packages. Keep this list
+// in sync with the AUR packages the org publishes.
+pub fn hornero_owned_package_names() []string {
+	return [
+		'hornero-shell',
+		'hornero-shell-debug',
+		'hornero-config',
+		'hornero-greeter',
+		'hornero-greeter-media-base',
+		'horneroctl-bin',
+		'horneroctl',
+	]
+}
+
+// parse_pending_update_names extracts package names from checkupdates
+// or `yay -Qua` output lines ("name oldver -> newver ...").
+pub fn parse_pending_update_names(output string) []string {
+	mut names := []string{}
+	for line in output.split_into_lines() {
+		trimmed := line.trim_space()
+		if trimmed.len == 0 {
+			continue
+		}
+		name := trimmed.split_any(' \t')[0]
+		if name.len > 0 && name !in names {
+			names << name
+		}
+	}
+	return names
+}
+
+// classify_update_lanes splits pending updates into Hornero-owned and
+// system lanes. Pure function: unit-tested without a live pacman.
+pub fn classify_update_lanes(repository_output string, aur_output string) ([]string, []string) {
+	owned := hornero_owned_package_names()
+	mut hornero_pending := []string{}
+	mut system_pending := []string{}
+	for name in parse_pending_update_names(repository_output) {
+		if name in owned {
+			hornero_pending << name
+		} else {
+			system_pending << name
+		}
+	}
+	for name in parse_pending_update_names(aur_output) {
+		if name in owned {
+			if name !in hornero_pending {
+				hornero_pending << name
+			}
+		} else if name !in system_pending {
+			system_pending << name
+		}
+	}
+	return hornero_pending, system_pending
+}
+
+pub fn package_status_report(opts PackageCheckOptions) CommandResult {
+	snapshot := run_package_update_snapshot(opts) or {
+		return fail_result('package status', err.msg())
+	}
+	if opts.dry_run {
+		mut data := package_update_data(snapshot)
+		data['dry_run'] = 'true'
+		data['snapshot_backend'] = 'none'
+		data['snapshot_status'] = 'unavailable: no snapshot backend contract yet (see docs/UPDATE_RECOVERY.md)'
+		message := 'would run: ${snapshot.repository.command_line}\nwould run: ${snapshot.aur.command_line}\n${package_policy_message(snapshot.policy)}\nSnapshots: none available (no snapshot backend contract yet)'
+		return ok_result('package status', message, data)
+	}
+	hornero_pending, system_pending := classify_update_lanes(snapshot.repository.output,
+		snapshot.aur.output)
+	mut data := package_update_data(snapshot)
+	data['hornero_pending'] = hornero_pending.join(', ')
+	data['hornero_pending_count'] = hornero_pending.len.str()
+	data['system_pending_count'] = system_pending.len.str()
+	data['snapshot_backend'] = 'none'
+	data['snapshot_status'] = 'unavailable: no snapshot backend contract yet (see docs/UPDATE_RECOVERY.md)'
+	hornero_line := if hornero_pending.len > 0 {
+		'Hornero packages behind (${hornero_pending.len}): ${hornero_pending.join(', ')}'
+	} else {
+		'Hornero packages: up to date'
+	}
+	system_line := 'System updates pending: ${system_pending.len}'
+	snapshot_line := 'Snapshots: none available (no snapshot backend contract yet)'
+	message := '${hornero_line}\n${system_line}\n${package_policy_message(snapshot.policy)}\n${snapshot_line}'
+	return ok_result('package status', message, data)
+}

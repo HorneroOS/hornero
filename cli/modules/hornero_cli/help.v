@@ -14,7 +14,7 @@ Commands:
   shell         Desktop shell integration (status, ipc, preset, lifecycle, logs)
   appearance    Appearance controls (status, sync, theme, scheme, colors, accent, night-mode, gtk, hyprlock)
   config        Configuration paths, values, validation, snapshots
-  package       System packages (check, updates, upgrade, deps)
+  package       System packages (check, updates, status, upgrade, deps)
   backup        Config backups (list, schedule, create, restore)
   power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
   lock          Screen lock (now, status)
@@ -619,6 +619,8 @@ Examples:
   horneroctl package check --dry-run
   horneroctl package updates
   horneroctl package updates --json
+  horneroctl package status
+  horneroctl package status --json
   horneroctl package upgrade --dry-run
   horneroctl package upgrade --yes
   horneroctl package deps

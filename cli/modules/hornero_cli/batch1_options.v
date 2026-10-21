@@ -80,7 +80,7 @@ pub fn parse_package_cmd(args []string) !PackageCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl package check')
 	}
 	leaf := args[0]
-	if leaf !in ['check', 'updates', 'upgrade', 'deps'] {
+	if leaf !in ['check', 'updates', 'status', 'upgrade', 'deps'] {
 		return error('unknown package subcommand: ${leaf}.\nRun: horneroctl package --help')
 	}
 	mut dry_run := false
@@ -122,7 +122,7 @@ pub fn parse_package_cmd(args []string) !PackageCmdOptions {
 		}
 		return error('unexpected argument: ${a}.\nRun: horneroctl package --help')
 	}
-	if leaf in ['check', 'updates'] && (yes || install || optional || compositor.len > 0) {
+	if leaf in ['check', 'updates', 'status'] && (yes || install || optional || compositor.len > 0) {
 		return error('package ${leaf} takes no --yes/--install/--optional/--compositor.\nExample: horneroctl package ${leaf} --dry-run')
 	}
 	if leaf == 'upgrade' && (install || optional || compositor.len > 0) {
