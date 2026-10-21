@@ -336,6 +336,7 @@ pub:
 	layout_list    bool
 	layout_set     string
 	layout_variant string
+	layout_restore bool
 }
 
 pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
@@ -359,6 +360,7 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 	mut layout_list := false
 	mut layout_set := ''
 	mut layout_variant := ''
+	mut layout_restore := false
 	mut i := 1
 	for i < args.len {
 		a := args[i]
@@ -404,6 +406,11 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 			i++
 			continue
 		}
+		if a == '--restore' {
+			layout_restore = true
+			i++
+			continue
+		}
 		if a == '--set' || a.starts_with('--set=') {
 			v, ni := hw_take_value(args, i, 'set', 'horneroctl hardware keyboard layout --set us,latam')!
 			layout_set = v
@@ -428,7 +435,7 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 		if current && get {
 			return error('pick one of --current or --get.\nExample: horneroctl hardware keyboard layout --current')
 		}
-		modes := [current, get, toggle, layout_list, layout_set.len > 0].filter(it).len
+		modes := [current, get, toggle, layout_list, layout_set.len > 0, layout_restore].filter(it).len
 		if modes > 1 {
 			return error('pick one layout mode (--current, --get, --toggle, --list or --set).\nExample: horneroctl hardware keyboard layout --list')
 		}
@@ -445,9 +452,10 @@ pub fn parse_hardware_keyboard(args []string) !HardwareKeyboardOptions {
 			layout_list:    layout_list
 			layout_set:     layout_set
 			layout_variant: layout_variant
+			layout_restore: layout_restore
 		}
 	}
-	if current || get || toggle || layout_list || layout_set.len > 0 || layout_variant.len > 0 {
+	if current || get || toggle || layout_list || layout_set.len > 0 || layout_variant.len > 0 || layout_restore {
 		return error('keyboard ${leaf} takes no layout flags.\nExample: horneroctl hardware keyboard ${leaf} --dry-run')
 	}
 	if yes {

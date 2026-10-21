@@ -89,6 +89,24 @@ fn test_layout_set_applies_and_persists() {
 	layout_test_teardown()
 }
 
+fn test_layout_restore_reapplies_persisted() {
+	layout_test_setup()
+	os.write_file(hx_layout_root + '/state', 'layout=latam variant=\n') or { assert false }
+	rep := keyboard_layout_restore_report(false, true)
+	assert rep.ok, rep.message
+	calls := os.read_file(hx_layout_root + '/calls') or { '' }
+	assert calls.contains('keyword input:kb_layout latam')
+	layout_test_teardown()
+}
+
+fn test_layout_restore_without_token_is_noop() {
+	layout_test_setup()
+	rep := keyboard_layout_restore_report(false, true)
+	assert rep.ok, rep.message
+	assert rep.message.contains('No persisted')
+	layout_test_teardown()
+}
+
 fn test_layout_set_rejects_bad_input() {
 	layout_test_setup()
 	bad := keyboard_layout_set_report(LayoutSetOptions{
