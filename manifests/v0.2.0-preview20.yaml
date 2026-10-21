@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 1f8d4a063d4ded5eae73d76ccb1fa55465c95185
+    sha: 816a0daae6956ade37e0ae8626ad554f33f8f487
     status: pinned
-    subject: "docs(plugins): which config a session actually runs"
+    subject: "feat(controlcenter): Update and Roll back for catalogue plugins"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
