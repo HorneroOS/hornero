@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: e0cefdf09a56891ad767973e0067d5db295222d3
+    sha: 58d1a30a97f746065d77145896fb20ca8bd95a4e
     status: pinned
-    subject: "feat(a11y): name notification actions and OSD sliders"
+    subject: "docs(a11y): first AT-SPI runtime evidence + reproducible probe harness"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
