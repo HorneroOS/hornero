@@ -68,6 +68,7 @@ hardware keyboard rebind reset
 hardware keyboard rebind set
 hardware keyboard rebind status
 hardware keyboard settings
+hypr input restore
 hypr input set
 hypr input status
 hypr layout restore
