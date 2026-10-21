@@ -1447,3 +1447,83 @@ pub fn assistant_clarify_report(run_id string, answer string) CommandResult {
 		'runId': run_id
 	})
 }
+
+// assistant_key_file_mode returns the key file's permission bits
+// (e.g. "0600"), or "" when the file is missing or unreadable. The
+// key itself is never read here beyond existence.
+fn assistant_key_file_mode() string {
+	path := assistant_key_file()
+	st := os.stat(path) or { return '' }
+	perm := int(st.mode) & 0o777
+	mut digits := ''
+	mut rest := perm
+	if rest == 0 {
+		digits = '0'
+	}
+	for rest > 0 {
+		digits = (rest % 8).str() + digits
+		rest /= 8
+	}
+	for digits.len < 4 {
+		digits = '0' + digits
+	}
+	return digits
+}
+
+// assistant_health_report implements `assistant health`: the
+// operator diagnosis the architecture doc promises (hornero#174) —
+// binary presence and version, enablement, endpoint loopback
+// shape, gateway reachability, protocol negotiation, and the key
+// file's permissions (never its contents). Read-only; safe to run
+// whether or not the assistant is enabled.
+pub fn assistant_health_report() CommandResult {
+	settings := assistant_load_settings()
+	hermes := find_on_path('hermes')
+	mut lines := []string{}
+	mut data := map[string]string{}
+	data['enabled'] = settings.enabled.str()
+	lines << 'enabled: ${settings.enabled}'
+	loopback := assistant_endpoint_is_loopback(settings.endpoint)
+	data['endpoint'] = settings.endpoint
+	data['endpointLoopback'] = loopback.str()
+	lines << 'endpoint: ${settings.endpoint} (loopback: ${loopback})'
+	data['studiedHermes'] = assistant_studied_hermes_commit
+	if hermes.len > 0 {
+		data['hermes'] = hermes
+		ver := run_exec(ExecSpec{
+			prog:        hermes
+			args:        ['--version']
+			timeout_sec: 10
+		})
+		version_line := ver.output.split_into_lines().first()
+		data['hermesVersion'] = version_line
+		lines << 'hermes: ${hermes} — ${version_line}'
+	} else {
+		data['hermes'] = 'not-found'
+		lines << 'hermes: not installed (install Hermes through a pinned, auditable package; this CLI never downloads it)'
+	}
+	key_mode := assistant_key_file_mode()
+	data['keyFile'] = assistant_key_file()
+	data['keyFileMode'] = key_mode
+	lines << if key_mode.len > 0 {
+		'key file: present, permissions ${key_mode} (contents never printed)'
+	} else {
+		'key file: missing (created with 0600 on assistant enable)'
+	}
+	reachable, compatible, detail := assistant_gateway_state(settings)
+	data['gateway'] = if reachable { 'reachable' } else { 'unreachable' }
+	data['gatewayDetail'] = detail
+	data['protocol'] = if compatible { 'compatible' } else { 'incompatible' }
+	lines << 'gateway: ${data['gateway']} — ${detail}'
+	lines << 'protocol: ${data['protocol']} (negotiates ${assistant_supported_hermes})'
+	healthy := settings.enabled && hermes.len > 0 && loopback && reachable && compatible
+		&& (key_mode == '0600' || key_mode == '')
+	data['healthy'] = healthy.str()
+	msg := lines.join('\n')
+	return CommandResult{
+		command: 'assistant health'
+		ok:      healthy
+		message: msg
+		data:    data
+	}
+}
