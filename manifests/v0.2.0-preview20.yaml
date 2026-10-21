@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 77063109a76e641ac201ccb85ce45f9a2932c36c
+    sha: 5a6434bc7b9ac7576f013009f753d405c3211206
     status: pinned
-    subject: "docs(perf): dashboard frame-cost bound (118/120 slots at 60 Hz)"
+    subject: "feat(a11y): name Appearance option rows as buttons"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
