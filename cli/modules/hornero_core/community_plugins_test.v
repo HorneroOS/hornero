@@ -309,3 +309,73 @@ fn test_plugin_catalog_entries_and_payload_hash() {
 	assert digest == plugin_payload_sha256(dir, manifest)
 	os.rmdir_all(dir) or {}
 }
+
+fn test_catalog_update_requires_catalogue_source() {
+	root := community_plugins_test_new_root('upd-src')
+	saved := community_plugins_test_env(root)
+	data := os.join_path(root, 'data', 'hornero', 'plugins')
+	receipts := os.join_path(root, 'state', 'hornero', 'plugins', 'receipts')
+	os.mkdir_all(os.join_path(data, 'hornero-pomodoro')) or { panic(err) }
+	os.mkdir_all(receipts) or { panic(err) }
+	receipt := '{"schema_version":1,"id":"hornero-pomodoro","name":"Hornero Pomodoro","version":"1.0.0","source":"https://example.com/other.git","revision":"local","installed_at":"1","enabled":false}'
+	os.write_file(os.join_path(receipts, 'hornero-pomodoro.json'), receipt) or { panic(err) }
+	res := community_plugin_catalog_update_report('hornero-pomodoro', CommunityPluginOptions{
+		yes: true
+	})
+	assert !res.ok
+	assert res.message.contains('not installed from the official catalogue')
+	community_plugins_test_restore(saved)
+	os.rmdir_all(root) or {}
+}
+
+fn test_catalog_rollback_without_previous_kept_refuses() {
+	root := community_plugins_test_new_root('rb-none')
+	saved := community_plugins_test_env(root)
+	res := community_plugin_catalog_rollback_report('hornero-pomodoro', CommunityPluginOptions{
+		yes: true
+	})
+	assert !res.ok
+	assert res.message.contains('nothing to roll back to')
+	community_plugins_test_restore(saved)
+	os.rmdir_all(root) or {}
+}
+
+fn test_catalog_update_requires_yes() {
+	res := community_plugin_catalog_update_report('hornero-pomodoro', CommunityPluginOptions{})
+	assert !res.ok
+	assert res.message.contains('without --yes')
+}
+
+fn test_catalog_rollback_restores_kept_payload() {
+	root := community_plugins_test_new_root('rb-ok')
+	saved := community_plugins_test_env(root)
+	data := os.join_path(root, 'data', 'hornero', 'plugins')
+	receipts := os.join_path(root, 'state', 'hornero', 'plugins', 'receipts')
+	current := os.join_path(data, 'hornero-pomodoro')
+	previous := '${current}.previous'
+	for dir, ver in {current: '9.9.9', previous: '1.0.0'} {
+		os.mkdir_all(dir) or { panic(err) }
+		manifest := '{"schemaVersion":1,"id":"hornero-pomodoro","name":"Hornero Pomodoro","version":"${ver}","description":"d","author":"a","license":"MIT","entrypoint":"Main.qml","files":["Main.qml"],"capabilities":{"processCommands":[],"networkHosts":[],"settings":{}}}'
+		os.write_file(os.join_path(dir, 'manifest.json'), manifest) or { panic(err) }
+		os.write_file(os.join_path(dir, 'Main.qml'), 'import QtQuick\nItem {}\n') or { panic(err) }
+	}
+	os.mkdir_all(receipts) or { panic(err) }
+	receipt := '{"schema_version":1,"id":"hornero-pomodoro","name":"Hornero Pomodoro","version":"9.9.9","source":"${plugin_catalog_source}","revision":"local","installed_at":"1","enabled":false}'
+	os.write_file(os.join_path(receipts, 'hornero-pomodoro.json'), receipt) or { panic(err) }
+	validator := os.join_path(root, 'validator.py')
+	os.write_file(validator, '#!/bin/sh\nexit 0\n') or { panic(err) }
+	os.chmod(validator, 0o755) or { panic(err) }
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	res := community_plugin_catalog_rollback_report('hornero-pomodoro', CommunityPluginOptions{
+		yes: true
+	})
+	assert res.ok, res.message
+	restored := os.read_file(os.join_path(current, 'manifest.json')) or { panic(err) }
+	assert restored.contains('"version":"1.0.0"') || restored.contains('"version": "1.0.0"')
+	assert !os.exists(previous)
+	saved2 := os.getenv('HORNERO_PLUGIN_VALIDATOR')
+	_ = saved2
+	os.unsetenv('HORNERO_PLUGIN_VALIDATOR')
+	community_plugins_test_restore(saved)
+	os.rmdir_all(root) or {}
+}

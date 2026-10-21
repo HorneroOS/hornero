@@ -736,3 +736,195 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 		'sha256':   digest
 	})
 }
+
+// community_plugin_catalog_update_report implements
+// `plugin catalog update <id>`: replace a catalogue-installed
+// payload with the current catalogue revision. Safety rules:
+// the new payload is hash-verified and validated BEFORE the old
+// one is touched; the previous payload is kept under
+// `<id>.previous` so `plugin catalog rollback <id>` can restore it;
+// the enabled flag is preserved (updating never enables, and an
+// enabled plugin stays enabled only across a validated payload —
+// enable itself re-validates anyway). Receipt must name the
+// official catalogue as its source: URL-installed plugins are not
+// silently re-sourced.
+pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOptions) CommandResult {
+	if !community_plugin_valid_id(id) {
+		return fail_result('plugin catalog update', 'invalid plugin id.\nExample: horneroctl plugin catalog update hornero-pomodoro --dry-run')
+	}
+	if !opts.dry_run && !opts.yes {
+		return fail_result('plugin catalog update', 'refusing to update without --yes (preview with --dry-run)')
+	}
+	root, receipts := community_plugin_roots()
+	receipt_path := os.join_path(receipts, '${id}.json')
+	destination := os.join_path(root, id)
+	if os.is_link(receipt_path) || os.is_link(destination) {
+		return fail_result('plugin catalog update', 'refusing to follow a symbolic link in the owned plugin paths')
+	}
+	if !os.is_file(receipt_path) {
+		return fail_result('plugin catalog update', 'plugin ${id} is not installed; install it first')
+	}
+	mut record := json2.decode[CommunityPluginReceipt](os.read_file(receipt_path) or { '' }) or {
+		return fail_result('plugin catalog update', 'plugin receipt is malformed; refusing to update unverified data')
+	}
+	if record.schema_version != 1 || record.id != id {
+		return fail_result('plugin catalog update', 'plugin receipt does not own the requested plugin id')
+	}
+	if record.source != plugin_catalog_source {
+		return fail_result('plugin catalog update', 'plugin ${id} was not installed from the official catalogue (source: ${record.source}); refusing to re-source it')
+	}
+	stage, revision := community_plugin_clone_catalog() or {
+		return fail_result('plugin catalog update', err.msg())
+	}
+	defer {
+		os.rmdir_all(stage) or {}
+	}
+	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
+		return fail_result('plugin catalog update', 'catalogue has no catalog.json')
+	}
+	mut found := PluginCatalogEntry{}
+	for e in plugin_catalog_entries(raw) {
+		if e.id == id {
+			found = e
+		}
+	}
+	if found.id.len == 0 {
+		return fail_result('plugin catalog update', 'plugin ${id} is no longer in the official catalogue; refusing to guess')
+	}
+	if found.version == record.version {
+		return ok_result('plugin catalog update', 'plugin ${id} is already at catalogue version ${found.version}; nothing to do', {
+			'id':       id
+			'version':  found.version
+			'revision': revision
+		})
+	}
+	pkg := os.join_path(stage, found.path)
+	if !os.is_dir(pkg) {
+		return fail_result('plugin catalog update', 'catalogue entry path missing: ${found.path}')
+	}
+	manifest := community_plugin_manifest(pkg) or {
+		return fail_result('plugin catalog update', err.msg())
+	}
+	digest := plugin_payload_sha256(pkg, manifest)
+	if found.sha256.len == 0 || digest != found.sha256 {
+		return fail_result('plugin catalog update', 'payload hash mismatch for ${id} (catalog ${found.sha256}, computed ${digest}); refusing to update')
+	}
+	if opts.dry_run {
+		return ok_result('plugin catalog update', 'would update ${found.name} ${record.version} -> ${found.version} from the official catalogue at ${revision}; hash verified. The current payload is kept for rollback.', {
+			'dry_run': 'true'
+			'id':      id
+			'from':    record.version
+			'to':      found.version
+			'sha256':  digest
+		})
+	}
+	community_plugin_run_validator(pkg) or {
+		return fail_result('plugin catalog update', err.msg())
+	}
+	previous := '${destination}.previous'
+	if os.exists(previous) || os.is_link(previous) {
+		os.rmdir_all(previous) or {
+			return fail_result('plugin catalog update', 'cannot clear the previous rollback copy')
+		}
+	}
+	if os.is_dir(destination) {
+		os.rename(destination, previous) or {
+			return fail_result('plugin catalog update', 'cannot preserve the current payload for rollback')
+		}
+	}
+	copy_dir(pkg, destination) or {
+		if os.is_dir(previous) {
+			os.rename(previous, destination) or {}
+		}
+		return fail_result('plugin catalog update', 'cannot copy validated package: ${err.msg()}')
+	}
+	enabled_before := record.enabled
+	record = CommunityPluginReceipt{1, found.id, found.name, found.version, plugin_catalog_source, revision, time.now().unix_milli().str(), enabled_before}
+	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
+	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
+		return fail_result('plugin catalog update', 'cannot write plugin receipt')
+	}
+	os.chmod(tmp, 0o600) or {}
+	os.rename(tmp, receipt_path) or {
+		os.rm(tmp) or {}
+		return fail_result('plugin catalog update', 'cannot save plugin receipt')
+	}
+	return ok_result('plugin catalog update', 'updated ${found.name} to ${found.version} [${found.trust}] from the official catalogue. Previous payload kept for `plugin catalog rollback ${id}`. Enabled state unchanged (${if enabled_before { 'enabled' } else { 'disabled' }}).', {
+		'id':       id
+		'from':     record.version
+		'version':  found.version
+		'revision': revision
+		'sha256':   digest
+	})
+}
+
+// community_plugin_catalog_rollback_report implements
+// `plugin catalog rollback <id>`: restore the payload kept by the
+// last update. The kept payload is validated before anything moves;
+// rollback consumes the kept copy (a second rollback has nothing to
+// restore and says so). Receipt version follows the restored
+// manifest; enabled state is preserved.
+pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginOptions) CommandResult {
+	if !community_plugin_valid_id(id) {
+		return fail_result('plugin catalog rollback', 'invalid plugin id.\nExample: horneroctl plugin catalog rollback hornero-pomodoro --dry-run')
+	}
+	if !opts.dry_run && !opts.yes {
+		return fail_result('plugin catalog rollback', 'refusing to roll back without --yes (preview with --dry-run)')
+	}
+	root, receipts := community_plugin_roots()
+	receipt_path := os.join_path(receipts, '${id}.json')
+	destination := os.join_path(root, id)
+	previous := '${destination}.previous'
+	if os.is_link(receipt_path) || os.is_link(destination) || os.is_link(previous) {
+		return fail_result('plugin catalog rollback', 'refusing to follow a symbolic link in the owned plugin paths')
+	}
+	if !os.is_dir(previous) {
+		return fail_result('plugin catalog rollback', 'no previous payload is kept for ${id}; nothing to roll back to')
+	}
+	if !os.is_file(receipt_path) {
+		return fail_result('plugin catalog rollback', 'plugin ${id} has a kept payload but no receipt; refusing to guess ownership')
+	}
+	mut record := json2.decode[CommunityPluginReceipt](os.read_file(receipt_path) or { '' }) or {
+		return fail_result('plugin catalog rollback', 'plugin receipt is malformed; refusing to roll back unverified data')
+	}
+	if record.schema_version != 1 || record.id != id {
+		return fail_result('plugin catalog rollback', 'plugin receipt does not own the requested plugin id')
+	}
+	prev_manifest := community_plugin_manifest(previous) or {
+		return fail_result('plugin catalog rollback', 'kept payload is unreadable: ${err.msg()}')
+	}
+	prev_version := (prev_manifest['version'] or { json2.Any('') }).str()
+	if opts.dry_run {
+		return ok_result('plugin catalog rollback', 'would restore ${id} from the kept previous payload (version ${prev_version}); the current payload is discarded', {
+			'dry_run': 'true'
+			'id':      id
+			'to':      prev_version
+		})
+	}
+	community_plugin_run_validator(previous) or {
+		return fail_result('plugin catalog rollback', err.msg())
+	}
+	if os.is_dir(destination) {
+		os.rmdir_all(destination) or {
+			return fail_result('plugin catalog rollback', 'cannot remove the current payload')
+		}
+	}
+	os.rename(previous, destination) or {
+		return fail_result('plugin catalog rollback', 'cannot restore the kept payload')
+	}
+	enabled_before := record.enabled
+	record = CommunityPluginReceipt{1, record.id, record.name, prev_version, record.source, record.revision, time.now().unix_milli().str(), enabled_before}
+	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
+	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
+		return fail_result('plugin catalog rollback', 'cannot write plugin receipt')
+	}
+	os.chmod(tmp, 0o600) or {}
+	os.rename(tmp, receipt_path) or {
+		os.rm(tmp) or {}
+		return fail_result('plugin catalog rollback', 'cannot save plugin receipt')
+	}
+	return ok_result('plugin catalog rollback', 'rolled back ${id} to the kept previous payload (version ${prev_version}). Enabled state unchanged (${if enabled_before { 'enabled' } else { 'disabled' }}).', {
+		'id':      id
+		'version': prev_version
+	})
+}

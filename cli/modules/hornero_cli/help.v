@@ -133,6 +133,10 @@ Examples:
   catalog [--json]    Browse the official HorneroOS/plugins catalogue
   catalog install <id> [--dry-run|--yes]
                       Install from the official catalogue (SHA-256 verified, pinned revision)
+  catalog update <id> [--dry-run|--yes]
+                      Update a catalogue-installed plugin (hash verified, previous payload kept)
+  catalog rollback <id> [--dry-run|--yes]
+                      Restore the payload kept by the last catalogue update
   install <https-url> [--dry-run|--yes]
                       Validate and install an inert community plugin package
   remove <id> [--dry-run|--yes]
