@@ -2,7 +2,7 @@ module hornero_cli
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|enable|disable|tools|knowledge|sessions|model|ask|stop|approve|clarify|events>')
+	assert help.contains('horneroctl assistant <status|health|enable|disable|gateway|tools|knowledge|sessions|model|ask|stop|approve|clarify|events|log>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -82,6 +82,25 @@ fn test_assistant_stream_flag_rules() {
 	}
 	help := command_help('assistant ask')
 	assert help.contains('--stream')
+}
+
+fn test_assistant_gateway_parser_rules() {
+	gw := parse_assistant(['gateway']) or { panic(err) }
+	assert gw.leaf == 'gateway' && gw.arg1 == ''
+	start := parse_assistant(['gateway', 'start', '--yes']) or { panic(err) }
+	assert start.arg1 == 'start' && start.yes && !start.dry_run
+	stop := parse_assistant(['gateway', 'stop', '--dry-run']) or { panic(err) }
+	assert stop.arg1 == 'stop' && stop.dry_run
+	if _ := parse_assistant(['gateway', 'fly']) {
+		panic('unknown gateway action must be rejected')
+	}
+	if _ := parse_assistant(['gateway', 'start', 'extra']) {
+		panic('gateway start takes no extra argument')
+	}
+	assert dispatch(['horneroctl', 'assistant', 'gateway', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'gateway', 'fly']) == 2
+	assert dispatch(['horneroctl', 'assistant', 'gateway', 'start', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'gateway', 'stop', '--dry-run']) == 0
 }
 
 fn test_assistant_enable_dry_run_dispatch_ok() {
