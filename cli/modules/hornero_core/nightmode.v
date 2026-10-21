@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import time
 
 // Native night-mode control. Ports horneroctl appearance night-mode: backend detection
 // (redshift/gammastep/wlsunset/xrandr stay external tools with
@@ -88,6 +89,123 @@ pub fn write_night_temperature(temp int) ! {
 	os.write_file(path, '${night_clamp_temperature(temp)}\n') or {
 		return error('cannot write ${path}: ${err.msg()}')
 	}
+}
+
+// -- Schedule (shell#225 remainder) -----------------------------------------
+// The schedule is enforced by two systemd user timers horneroctl
+// writes (on at --from, off at --to, Persistent=true so a boundary
+// missed while logged out is caught up). No daemon, no root; where
+// systemd user sessions are unavailable the schedule is stored and
+// reported as not enforced instead of pretending otherwise.
+
+pub fn night_parse_hhmm(s string) (int, bool) {
+	parts := s.split(':')
+	if parts.len != 2 {
+		return -1, false
+	}
+	h := parts[0]
+	m := parts[1]
+	if h.len == 0 || h.len > 2 || m.len != 2 {
+		return -1, false
+	}
+	for c in h + m {
+		if c < `0` || c > `9` {
+			return -1, false
+		}
+	}
+	hours := h.int()
+	mins := m.int()
+	if hours > 23 || mins > 59 {
+		return -1, false
+	}
+	return hours * 60 + mins, true
+}
+
+pub fn night_format_hhmm(minutes int) string {
+	h := (minutes / 60) % 24
+	m := minutes % 60
+	return '${h:02d}:${m:02d}'
+}
+
+// night_schedule_active_at reports whether now falls in the
+// [on, off) window; off <= on wraps past midnight, on == off is an
+// empty (never active) window.
+pub fn night_schedule_active_at(on_min int, off_min int, now_min int) bool {
+	if on_min == off_min {
+		return false
+	}
+	if on_min < off_min {
+		return now_min >= on_min && now_min < off_min
+	}
+	return now_min >= on_min || now_min < off_min
+}
+
+pub fn resolve_night_schedule_file() string {
+	return os.join_path(os.dir(resolve_night_state_file()), 'night_mode_schedule')
+}
+
+// read_night_schedule returns (on, off, present) in minutes.
+pub fn read_night_schedule() (int, int, bool) {
+	raw := (os.read_file(resolve_night_schedule_file()) or { '' }).trim_space()
+	if raw.len == 0 {
+		return -1, -1, false
+	}
+	parts := raw.split(' ')
+	if parts.len != 2 {
+		return -1, -1, false
+	}
+	on, ok_on := night_parse_hhmm(parts[0])
+	off, ok_off := night_parse_hhmm(parts[1])
+	if !ok_on || !ok_off {
+		return -1, -1, false
+	}
+	return on, off, true
+}
+
+pub fn write_night_schedule(on_min int, off_min int) ! {
+	path := resolve_night_schedule_file()
+	os.mkdir_all(os.dir(path)) or {
+		return error('cannot create ${os.dir(path)}: ${err.msg()}')
+	}
+	os.write_file(path, '${night_format_hhmm(on_min)} ${night_format_hhmm(off_min)}\n') or {
+		return error('cannot write ${path}: ${err.msg()}')
+	}
+}
+
+pub fn clear_night_schedule() {
+	os.rm(resolve_night_schedule_file()) or {}
+}
+
+pub fn night_schedule_unit_name(verb string, timer bool) string {
+	return 'hornero-nightlight-${verb}.${if timer { 'timer' } else { 'service' }}'
+}
+
+fn night_schedule_unit_file(verb string, timer bool) string {
+	paths := resolve_paths()
+	return os.join_path(paths.config_dir, 'systemd', 'user', night_schedule_unit_name(verb,
+		timer))
+}
+
+pub fn night_schedule_service_content(self_path string, verb string) string {
+	label := if verb == 'on' { 'on' } else { 'off' }
+	return '[Unit]\nDescription=Hornero Night Light ${label} (scheduled)\n\n[Service]\nType=oneshot\nExecStart=${self_path} appearance night-mode ${verb} --yes\n'
+}
+
+pub fn night_schedule_timer_content(hhmm string, verb string) string {
+	label := if verb == 'on' { 'on' } else { 'off' }
+	return '[Unit]\nDescription=Hornero Night Light ${label} timer\n\n[Timer]\nOnCalendar=*-*-* ${hhmm}:00\nPersistent=true\nUnit=${night_schedule_unit_name(verb, false)}\n\n[Install]\nWantedBy=timers.target\n'
+}
+
+fn night_schedule_timers_active() bool {
+	if find_on_path('systemctl').len == 0 {
+		return false
+	}
+	rep := run_exec(ExecSpec{
+		prog:        'systemctl'
+		args:        ['--user', 'is-active', night_schedule_unit_name('on', true)]
+		timeout_sec: 10
+	})
+	return rep.output.trim_space() == 'active'
 }
 
 // resolve_night_state_file is the canonical state location (WRITE
@@ -312,10 +430,13 @@ fn night_notify_best_effort(title string, body string, icon string, dry_run bool
 
 pub struct NightModeCmd {
 pub:
-	verb        string // toggle | on | off | set | status | status-icon | status-text | backends
+	verb        string // toggle | on | off | set | schedule | status | status-icon | status-text | backends
 	dry_run     bool
 	yes         bool
-	temperature int // 0 = stored/default temperature
+	temperature int    // 0 = stored/default temperature
+	schedule    string // schedule sub-action: '' | status | set | clear
+	from_min    int = -1 // schedule window start (minutes), -1 unset
+	to_min      int = -1 // schedule window end (minutes), -1 unset
 }
 
 // night_mode_run implements the night-mode verbs natively. Mutating
@@ -377,19 +498,42 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 			if !cmd.dry_run {
 				msg += '\nState file: ${if state.len > 0 { state } else { 'not found' }}'
 			}
+			sched_on, sched_off, sched_present := read_night_schedule()
 			return ok_result('appearance night-mode status', msg, {
-				'active':      '${active}'
-				'backend':     backend
-				'temperature': '${read_night_temperature()}'
+				'active':           '${active}'
+				'backend':          backend
+				'temperature':      '${read_night_temperature()}'
+				'schedule':         if sched_present {
+					'${night_format_hhmm(sched_on)}-${night_format_hhmm(sched_off)}'
+				} else {
+					''
+				}
+				'scheduleEnforced': '${sched_present && night_schedule_timers_active()}'
 			})
 		}
-		'toggle', 'auto', 'on', 'enable', 'off', 'disable', 'set' {}
+		'toggle', 'auto', 'on', 'enable', 'off', 'disable', 'set', 'schedule' {}
 		else {
 			return fail_result('appearance night-mode', 'unknown action: ${cmd.verb}.\nRun: horneroctl appearance night-mode --help')
 		}
 	}
+	if cmd.verb == 'schedule' && cmd.schedule in ['', 'status'] {
+		on, off, present := read_night_schedule()
+		if !present {
+			return ok_result('appearance night-mode schedule', 'No night light schedule is set.', {
+				'schedule': ''
+			})
+		}
+		enforced := night_schedule_timers_active()
+		return ok_result('appearance night-mode schedule', 'Schedule: night light on at ${night_format_hhmm(on)}, off at ${night_format_hhmm(off)} (enforced by user timers: ${enforced}).', {
+			'schedule':         '${night_format_hhmm(on)}-${night_format_hhmm(off)}'
+			'scheduleEnforced': '${enforced}'
+		})
+	}
 	if !cmd.yes && !cmd.dry_run {
 		return fail_result('appearance night-mode ${cmd.verb}', 'refusing to change night mode without --yes (preview with --dry-run).\nExample: horneroctl appearance night-mode ${cmd.verb} --dry-run')
+	}
+	if cmd.verb == 'schedule' {
+		return night_schedule_run(cmd)
 	}
 	active, _ := night_probe_live(cmd.dry_run)
 	mut lines := []string{}
@@ -447,6 +591,129 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 		return night_disable_native(cmd.dry_run, mut lines)
 	}
 	return night_enable_native(cmd.dry_run, mut lines, read_night_temperature())
+}
+
+// night_schedule_run implements schedule set/clear: writes the
+// two oneshot services + timers, enables them, and applies the
+// current window immediately so setting a schedule at 23:00 for
+// 22:00-07:00 turns night light on now, not tomorrow.
+fn night_schedule_run(cmd NightModeCmd) CommandResult {
+	if cmd.schedule == 'clear' {
+		if cmd.dry_run {
+			return ok_result('appearance night-mode schedule', 'would disable the hornero-nightlight timers, remove their units, and delete the stored schedule. Current on/off state is left as-is.', {
+				'dry_run': 'true'
+			})
+		}
+		if find_on_path('systemctl').len > 0 {
+			run_exec(ExecSpec{
+				prog:        'systemctl'
+				args:        ['--user', 'disable', '--now', night_schedule_unit_name('on', true),
+					night_schedule_unit_name('off', true)]
+				timeout_sec: 30
+			})
+		}
+		for verb in ['on', 'off'] {
+			os.rm(night_schedule_unit_file(verb, true)) or {}
+			os.rm(night_schedule_unit_file(verb, false)) or {}
+		}
+		if find_on_path('systemctl').len > 0 {
+			run_exec(ExecSpec{
+				prog:        'systemctl'
+				args:        ['--user', 'daemon-reload']
+				timeout_sec: 30
+			})
+		}
+		clear_night_schedule()
+		return ok_result('appearance night-mode schedule', 'Schedule cleared; timers disabled and units removed. Current night light state is unchanged.', {
+			'schedule': ''
+		})
+	}
+	if cmd.schedule != 'set' {
+		return fail_result('appearance night-mode schedule', 'unknown schedule action: ${cmd.schedule}.\nExample: horneroctl appearance night-mode schedule set --from 22:00 --to 07:00 --yes')
+	}
+	if cmd.from_min < 0 || cmd.to_min < 0 {
+		return fail_result('appearance night-mode schedule', 'schedule set needs --from and --to.\nExample: horneroctl appearance night-mode schedule set --from 22:00 --to 07:00 --yes')
+	}
+	if cmd.from_min == cmd.to_min {
+		return fail_result('appearance night-mode schedule', 'schedule window is empty (--from equals --to). Pick two different times.')
+	}
+	from := night_format_hhmm(cmd.from_min)
+	to := night_format_hhmm(cmd.to_min)
+	if cmd.dry_run {
+		return ok_result('appearance night-mode schedule', 'would store ${from}-${to}, write the hornero-nightlight user timers, and apply the current window now.', {
+			'schedule': '${from}-${to}'
+			'dry_run':  'true'
+		})
+	}
+	write_night_schedule(cmd.from_min, cmd.to_min) or {
+		return fail_result('appearance night-mode schedule', 'cannot persist schedule: ${err.msg()}')
+	}
+	mut enforced := false
+	if find_on_path('systemctl').len > 0 {
+		self := os.executable()
+		mut write_err := ''
+		for verb, hhmm in {
+			'on':  from
+			'off': to
+		} {
+			os.mkdir_all(os.dir(night_schedule_unit_file(verb, true))) or {
+				write_err = err.msg()
+			}
+			os.write_file(night_schedule_unit_file(verb, false), night_schedule_service_content(self,
+				verb)) or { write_err = err.msg() }
+			os.write_file(night_schedule_unit_file(verb, true), night_schedule_timer_content(hhmm,
+				verb)) or { write_err = err.msg() }
+		}
+		if write_err.len == 0 {
+			run_exec(ExecSpec{
+				prog:        'systemctl'
+				args:        ['--user', 'daemon-reload']
+				timeout_sec: 30
+			})
+			en := run_exec(ExecSpec{
+				prog:        'systemctl'
+				args:        ['--user', 'enable', '--now', night_schedule_unit_name('on', true),
+					night_schedule_unit_name('off', true)]
+				timeout_sec: 30
+			})
+			enforced = en.ok
+		}
+	}
+	now := time.now()
+	in_window := night_schedule_active_at(cmd.from_min, cmd.to_min, now.hour * 60 + now.minute)
+	active, _ := night_probe_live(false)
+	mut applied := 'already matches the window'
+	if in_window && !active {
+		mut lines := []string{}
+		rep := night_enable_native(false, mut lines, read_night_temperature())
+		applied = if rep.ok {
+			'turned on now (inside the window)'
+		} else {
+			'wanted on now but: ${rep.message}'
+		}
+	} else if !in_window && active {
+		mut lines := []string{}
+		rep := night_disable_native(false, mut lines)
+		applied = if rep.ok {
+			'turned off now (outside the window)'
+		} else {
+			'wanted off now but: ${rep.message}'
+		}
+	}
+	msg := if enforced {
+		'Schedule set: on at ${from}, off at ${to}, enforced by user timers; ${applied}.'
+	} else {
+		'Schedule stored (${from}-${to}) but NOT enforced: systemd user timers unavailable here, so nothing will fire at the boundaries. ${applied}.'
+	}
+	return CommandResult{
+		command: 'appearance night-mode schedule'
+		ok:      enforced
+		message: msg
+		data:    {
+			'schedule':         '${from}-${to}'
+			'scheduleEnforced': '${enforced}'
+		}
+	}
 }
 
 // night_enable_native force-enables via the first available backend

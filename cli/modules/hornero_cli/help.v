@@ -434,7 +434,7 @@ Examples:
 '
 		}
 		'appearance night-mode' {
-			return 'Usage: horneroctl appearance night-mode <status|toggle|on|off|set|status-icon|status-text|backends> [options]
+			return 'Usage: horneroctl appearance night-mode <status|toggle|on|off|set|schedule|status-icon|status-text|backends> [options]
 
   status [--dry-run]  Show whether the temperature backend is active (read-only)
   toggle [--dry-run]  Toggle night mode (needs --yes)
@@ -444,6 +444,12 @@ Examples:
   set --temperature <K> [--dry-run]
                       Store the Kelvin temperature (1000-6500);
                       reapplies immediately while active (needs --yes)
+  schedule [status]   Show the stored schedule (read-only)
+  schedule set --from <HH:MM> --to <HH:MM> [--dry-run]
+                      Enforce the window with systemd user timers
+                      and apply it now (needs --yes)
+  schedule clear [--dry-run]
+                      Remove the schedule and its timers (needs --yes)
   status-icon         Bar icon for the current state (read-only)
   status-text         Bar tooltip for the current state (read-only)
   backends            List available backends (read-only)

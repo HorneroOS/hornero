@@ -319,6 +319,19 @@ fn test_dispatch_appearance_plus() {
 	assert bare.leaf == 'set' && bare.temperature == 0
 	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'set', '--temperature', '3500',
 		'--dry-run']) == 0
+	sc := parse_appearance_night_mode(['schedule', 'set', '--from', '22:00', '--to', '07:00', '--yes']) or { panic(err) }
+	assert sc.leaf == 'schedule' && sc.schedule == 'set' && sc.from_min == 1320 && sc.to_min == 420
+	cl := parse_appearance_night_mode(['schedule', 'clear', '--yes']) or { panic(err) }
+	assert cl.schedule == 'clear' && cl.from_min == -1
+	if _ := parse_appearance_night_mode(['schedule', 'set', '--from', '25:00', '--to', '07:00']) {
+		panic('invalid schedule time must be rejected')
+	}
+	if _ := parse_appearance_night_mode(['on', '--from', '22:00']) {
+		panic('--from outside schedule must be rejected')
+	}
+	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'schedule', 'set', '--from', '22:00',
+		'--to', '07:00', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'schedule', 'clear', '--dry-run']) == 0
 	os.unsetenv('HORNERO_SMART_COLORS_BIN')
 	os.unsetenv('HORNERO_M3_COLORS_BIN')
 	os.unsetenv('HORNERO_NIGHT_MODE_BIN')

@@ -515,10 +515,13 @@ pub fn parse_appearance_accent(args []string) !AccentCmdOptions {
 // the bar helpers are read-only; toggle/on/off mutate (need --yes).
 pub struct NightModeCmdOptions {
 pub:
-	leaf        string // status | toggle | auto | on | enable | off | disable | set | status-icon | status-text | backends
+	leaf        string // status | toggle | auto | on | enable | off | disable | set | schedule | status-icon | status-text | backends
 	dry_run     bool
 	yes         bool
 	temperature int
+	schedule    string
+	from_min    int = -1
+	to_min      int = -1
 }
 
 // parse_appearance_night_mode parses `appearance night-mode <verb>` arguments.
@@ -527,13 +530,16 @@ pub fn parse_appearance_night_mode(args []string) !NightModeCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl appearance night-mode status')
 	}
 	leaf := args[0]
-	if leaf !in ['status', 'toggle', 'auto', 'on', 'enable', 'off', 'disable', 'set', 'status-icon',
-		'status-text', 'backends'] {
+	if leaf !in ['status', 'toggle', 'auto', 'on', 'enable', 'off', 'disable', 'set', 'schedule',
+		'status-icon', 'status-text', 'backends'] {
 		return error('unknown night-mode subcommand: ${leaf}.\nRun: horneroctl appearance night-mode --help')
 	}
 	mut dry_run := false
 	mut yes := false
 	mut temperature := 0
+	mut schedule := ''
+	mut from_min := -1
+	mut to_min := -1
 	mut i := 1
 	for i < args.len {
 		a := args[i]
@@ -544,6 +550,26 @@ pub fn parse_appearance_night_mode(args []string) !NightModeCmdOptions {
 		}
 		if a == '--yes' {
 			yes = true
+			continue
+		}
+		if leaf == 'schedule' && a in ['status', 'set', 'clear'] && schedule.len == 0 {
+			schedule = a
+			continue
+		}
+		if a == '--from' || a == '--to' {
+			if i >= args.len {
+				return error('${a} needs an HH:MM time.\nExample: horneroctl appearance night-mode schedule set --from 22:00 --to 07:00 --yes')
+			}
+			mins, valid := hornero_core.night_parse_hhmm(args[i])
+			i++
+			if !valid {
+				return error('invalid time for ${a} (want HH:MM, 00:00-23:59).\nExample: horneroctl appearance night-mode schedule set --from 22:00 --to 07:00 --yes')
+			}
+			if a == '--from' {
+				from_min = mins
+			} else {
+				to_min = mins
+			}
 			continue
 		}
 		if a == '--temperature' {
@@ -568,11 +594,17 @@ pub fn parse_appearance_night_mode(args []string) !NightModeCmdOptions {
 	if temperature > 0 && leaf !in ['on', 'enable', 'set', 'toggle', 'auto'] {
 		return error('--temperature applies to on/set/toggle.\nExample: horneroctl appearance night-mode set --temperature 3500 --yes')
 	}
+	if (from_min >= 0 || to_min >= 0) && leaf != 'schedule' {
+		return error('--from/--to apply to schedule set.\nExample: horneroctl appearance night-mode schedule set --from 22:00 --to 07:00 --yes')
+	}
 	return NightModeCmdOptions{
 		leaf:        leaf
 		dry_run:     dry_run
 		yes:         yes
 		temperature: temperature
+		schedule:    schedule
+		from_min:    from_min
+		to_min:      to_min
 	}
 }
 

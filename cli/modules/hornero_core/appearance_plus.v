@@ -138,10 +138,13 @@ pub fn accent_report(opts AccentOptions) CommandResult {
 
 pub struct NightModeOptions {
 pub:
-	action      string // status | toggle | on | off | set | status-icon | status-text | backends
+	action      string // status | toggle | on | off | set | schedule | status-icon | status-text | backends
 	dry_run     bool
 	yes         bool
 	temperature int
+	schedule    string
+	from_min    int = -1
+	to_min      int = -1
 }
 
 // night_mode_report implements `appearance night-mode ...` natively.
@@ -151,5 +154,8 @@ pub fn night_mode_report(opts NightModeOptions) CommandResult {
 		dry_run:     opts.dry_run
 		yes:         opts.yes
 		temperature: opts.temperature
+		schedule:    opts.schedule
+		from_min:    opts.from_min
+		to_min:      opts.to_min
 	})
 }
