@@ -221,6 +221,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 	}
 	return match opts.leaf {
 		'status' { render(hornero_core.assistant_status_report(), mode) }
+		'health' { render(hornero_core.assistant_health_report(), mode) }
 		'enable' { render(hornero_core.assistant_enable_report(opts.dry_run, opts.yes), mode) }
 		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
 		'tools' { render(hornero_core.assistant_tools_report(), mode) }

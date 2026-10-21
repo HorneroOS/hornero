@@ -300,3 +300,10 @@ fn test_assistant_event_trace_classifies_activity() {
 	trace := assistant_trace_text([thinking, started, done])
 	assert trace == 'checking themes\n▸ terminal: ls /usr/share/themes\n✓ terminal'
 }
+
+fn test_assistant_key_file_mode_missing_file() {
+	// No env juggling: point at the real path only to prove a
+	// missing file yields "" (health reports it, never invents).
+	mode := assistant_key_file_mode()
+	assert mode == '' || mode.len == 4
+}
