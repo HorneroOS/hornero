@@ -304,6 +304,21 @@ fn test_dispatch_appearance_plus() {
 	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'status']) == 1
 	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'status', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'toggle']) == 1
+	nm := parse_appearance_night_mode(['set', '--temperature', '3500', '--yes']) or { panic(err) }
+	assert nm.leaf == 'set' && nm.temperature == 3500 && nm.yes
+	if _ := parse_appearance_night_mode(['set', '--temperature', '900', '--yes']) {
+		panic('temperature below range must be rejected')
+	}
+	if _ := parse_appearance_night_mode(['set', '--temperature', 'abc', '--yes']) {
+		panic('non-numeric temperature must be rejected')
+	}
+	if _ := parse_appearance_night_mode(['status', '--temperature', '3500']) {
+		panic('--temperature on a read-only verb must be rejected')
+	}
+	bare := parse_appearance_night_mode(['set', '--yes']) or { panic(err) }
+	assert bare.leaf == 'set' && bare.temperature == 0
+	assert dispatch(['horneroctl', 'appearance', 'night-mode', 'set', '--temperature', '3500',
+		'--dry-run']) == 0
 	os.unsetenv('HORNERO_SMART_COLORS_BIN')
 	os.unsetenv('HORNERO_M3_COLORS_BIN')
 	os.unsetenv('HORNERO_NIGHT_MODE_BIN')

@@ -579,9 +579,10 @@ fn run_appearance_night_mode(args []string, mode hornero_core.RenderMode) int {
 			mode)
 	}
 	return render(hornero_core.night_mode_report(hornero_core.NightModeOptions{
-		action:  opts.leaf
-		dry_run: opts.dry_run
-		yes:     opts.yes
+		action:      opts.leaf
+		dry_run:     opts.dry_run
+		yes:         opts.yes
+		temperature: opts.temperature
 	}), mode)
 }
 

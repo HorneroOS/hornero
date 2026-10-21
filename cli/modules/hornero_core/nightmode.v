@@ -8,6 +8,88 @@ import os
 // a state file for daemon ambiguity), and the toggle/enable/disable/
 // status/status-icon/status-text/backends verbs.
 
+pub const night_default_temperature = 4000
+pub const night_min_temperature = 1000
+pub const night_max_temperature = 6500
+
+// night_clamp_temperature resolves an unset (0) or out-of-range
+// request into the supported Kelvin window.
+pub fn night_clamp_temperature(k int) int {
+	if k <= 0 {
+		return night_default_temperature
+	}
+	if k < night_min_temperature {
+		return night_min_temperature
+	}
+	if k > night_max_temperature {
+		return night_max_temperature
+	}
+	return k
+}
+
+// night_backend_temp_args is the per-backend one-shot temperature
+// argument. xrandr takes none here; it uses night_xrandr_gamma.
+pub fn night_backend_temp_args(backend string, temp int) []string {
+	return match backend {
+		'redshift', 'gammastep' { ['-O', '${temp}K'] }
+		'wlsunset' { ['-T', '${temp}'] }
+		else { []string{} }
+	}
+}
+
+fn night_gamma_component(v f64) string {
+	if v >= 0.995 {
+		return '1'
+	}
+	return '${v:.2f}'.trim_right('0').trim_right('.')
+}
+
+// night_xrandr_gamma maps Kelvin to an xrandr gamma triple by
+// piecewise-linear interpolation between the 6500K neutral point,
+// the long-standing 4000K Hornero setting, and a deep-warm 1000K.
+pub fn night_xrandr_gamma(temp int) string {
+	k := night_clamp_temperature(temp)
+	anchors := [[6500.0, 1.0, 1.0], [4000.0, 0.85, 0.6], [1000.0, 0.65, 0.35]]
+	mut g := 1.0
+	mut b := 1.0
+	for i in 0 .. anchors.len - 1 {
+		hi := anchors[i]
+		lo := anchors[i + 1]
+		if k <= hi[0] && k >= lo[0] {
+			frac := (f64(k) - lo[0]) / (hi[0] - lo[0])
+			g = lo[1] + frac * (hi[1] - lo[1])
+			b = lo[2] + frac * (hi[2] - lo[2])
+			break
+		}
+	}
+	return '1:${night_gamma_component(g)}:${night_gamma_component(b)}'
+}
+
+// resolve_night_temperature_file sits next to the state file and
+// stores the chosen Kelvin temperature (plain integer).
+pub fn resolve_night_temperature_file() string {
+	state := resolve_night_state_file()
+	return os.join_path(os.dir(state), 'night_mode_temperature')
+}
+
+pub fn read_night_temperature() int {
+	raw := (os.read_file(resolve_night_temperature_file()) or { '' }).trim_space()
+	if raw.len == 0 {
+		return night_default_temperature
+	}
+	return night_clamp_temperature(raw.int())
+}
+
+pub fn write_night_temperature(temp int) ! {
+	path := resolve_night_temperature_file()
+	os.mkdir_all(os.dir(path)) or {
+		return error('cannot create ${os.dir(path)}: ${err.msg()}')
+	}
+	os.write_file(path, '${night_clamp_temperature(temp)}\n') or {
+		return error('cannot write ${path}: ${err.msg()}')
+	}
+}
+
 // resolve_night_state_file is the canonical state location (WRITE
 // TARGET). Override with HORNERO_NIGHT_MODE_STATE_FILE.
 pub fn resolve_night_state_file() string {
@@ -230,9 +312,10 @@ fn night_notify_best_effort(title string, body string, icon string, dry_run bool
 
 pub struct NightModeCmd {
 pub:
-	verb    string // toggle | on | off | status | status-icon | status-text | backends
-	dry_run bool
-	yes     bool
+	verb        string // toggle | on | off | set | status | status-icon | status-text | backends
+	dry_run     bool
+	yes         bool
+	temperature int // 0 = stored/default temperature
 }
 
 // night_mode_run implements the night-mode verbs natively. Mutating
@@ -295,11 +378,12 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 				msg += '\nState file: ${if state.len > 0 { state } else { 'not found' }}'
 			}
 			return ok_result('appearance night-mode status', msg, {
-				'active':  '${active}'
-				'backend': backend
+				'active':      '${active}'
+				'backend':     backend
+				'temperature': '${read_night_temperature()}'
 			})
 		}
-		'toggle', 'auto', 'on', 'enable', 'off', 'disable' {}
+		'toggle', 'auto', 'on', 'enable', 'off', 'disable', 'set' {}
 		else {
 			return fail_result('appearance night-mode', 'unknown action: ${cmd.verb}.\nRun: horneroctl appearance night-mode --help')
 		}
@@ -309,14 +393,46 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 	}
 	active, _ := night_probe_live(cmd.dry_run)
 	mut lines := []string{}
+	if cmd.verb == 'set' {
+		if cmd.temperature <= 0 {
+			return fail_result('appearance night-mode set', 'set needs a temperature.\nExample: horneroctl appearance night-mode set --temperature 3500 --yes')
+		}
+		temp := night_clamp_temperature(cmd.temperature)
+		if cmd.dry_run {
+			return ok_result('appearance night-mode set', 'would store ${temp}K${if active {
+				' and reapply it now'
+			} else {
+				' for the next enable'
+			}}', {
+				'temperature': '${temp}'
+				'dry_run':     'true'
+			})
+		}
+		write_night_temperature(temp) or {
+			return fail_result('appearance night-mode set', 'cannot persist temperature: ${err.msg()}')
+		}
+		if active {
+			return night_enable_native(cmd.dry_run, mut lines, temp)
+		}
+		return ok_result('appearance night-mode set', 'Temperature set to ${temp}K; it applies on the next enable.', {
+			'temperature': '${temp}'
+			'active':      'false'
+		})
+	}
 	if cmd.verb in ['on', 'enable'] {
-		if active && !cmd.dry_run {
+		temp := if cmd.temperature > 0 {
+			night_clamp_temperature(cmd.temperature)
+		} else {
+			read_night_temperature()
+		}
+		if active && !cmd.dry_run && cmd.temperature <= 0 {
 			return ok_result('appearance night-mode on', 'Night mode is already active.',
 				{
-					'active': 'true'
+					'active':      'true'
+					'temperature': '${temp}'
 				})
 		}
-		return night_enable_native(cmd.dry_run, mut lines)
+		return night_enable_native(cmd.dry_run, mut lines, temp)
 	}
 	if cmd.verb in ['off', 'disable'] {
 		if !active && !cmd.dry_run {
@@ -330,11 +446,12 @@ pub fn night_mode_run(cmd NightModeCmd) CommandResult {
 	if active {
 		return night_disable_native(cmd.dry_run, mut lines)
 	}
-	return night_enable_native(cmd.dry_run, mut lines)
+	return night_enable_native(cmd.dry_run, mut lines, read_night_temperature())
 }
 
-// night_enable_native force-enables via the first available backend.
-fn night_enable_native(dry_run bool, mut lines []string) CommandResult {
+// night_enable_native force-enables via the first available backend
+// at the given Kelvin temperature.
+fn night_enable_native(dry_run bool, mut lines []string, temp int) CommandResult {
 	available := night_backends_available()
 	if available.len == 0 && !dry_run {
 		return fail_result('appearance night-mode on', 'No supported night mode backends found (want redshift, gammastep, wlsunset, or xrandr).')
@@ -345,42 +462,48 @@ fn night_enable_native(dry_run bool, mut lines []string) CommandResult {
 	night_pkill_best_effort('redshift', false, dry_run, mut lines)
 	night_pkill_best_effort('gammastep', false, dry_run, mut lines)
 	night_pkill_best_effort('wlsunset', false, dry_run, mut lines)
+	kelvin := night_clamp_temperature(temp)
 	if backend == 'xrandr' {
 		xr := backend_or_empty('HORNERO_XRANDR_BIN', 'xrandr')
+		gamma := night_xrandr_gamma(kelvin)
+		brightness := if kelvin >= night_max_temperature { '1.0' } else { '0.9' }
 		if dry_run {
 			lines << strict_command_line(if xr.len > 0 { xr } else { 'xrandr' }, [
 				'--output',
 				'<display>',
 				'--gamma',
-				'1:0.85:0.6',
+				gamma,
 				'--brightness',
-				'0.9',
+				brightness,
 			])
 		} else if xr.len > 0 {
 			list := strict_exec(xr, [], false).output
 			for display in parse_xrandr_displays(list) {
-				strict_exec(xr, ['--output', display, '--gamma', '1:0.85:0.6', '--brightness',
-					'0.9'], false)
-				lines << 'xrandr ${display} gamma 1:0.85:0.6 brightness 0.9'
+				strict_exec(xr, ['--output', display, '--gamma', gamma, '--brightness', brightness], false)
+				lines << 'xrandr ${display} gamma ${gamma} brightness ${brightness}'
 			}
 		}
-	} else if backend == 'wlsunset' {
-		wl := backend_or_empty('HORNERO_WLSUNSET_BIN', 'wlsunset')
-		rep := spawn_detached(if wl.len > 0 { wl } else { 'wlsunset' }, ['-T', '4000'],
-			dry_run)
-		lines << rep.command_line
-	} else if backend == 'gammastep' {
-		gs := backend_or_empty('HORNERO_GAMMASSTEP_BIN', 'gammastep')
-		rep := spawn_detached(if gs.len > 0 { gs } else { 'gammastep' }, ['-O', '4000K'],
-			dry_run)
-		lines << rep.command_line
 	} else {
-		rs := backend_or_empty('HORNERO_REDSHIFT_BIN', 'redshift')
-		rep := spawn_detached(if rs.len > 0 { rs } else { 'redshift' }, ['-O', '4000K'],
-			dry_run)
+		bin_name := if backend == 'wlsunset' {
+			'wlsunset'
+		} else if backend == 'gammastep' {
+			'gammastep'
+		} else {
+			'redshift'
+		}
+		bin_env := if backend == 'wlsunset' {
+			'HORNERO_WLSUNSET_BIN'
+		} else if backend == 'gammastep' {
+			'HORNERO_GAMMASSTEP_BIN'
+		} else {
+			'HORNERO_REDSHIFT_BIN'
+		}
+		bin := backend_or_empty(bin_env, bin_name)
+		rep := spawn_detached(if bin.len > 0 { bin } else { bin_name }, night_backend_temp_args(backend,
+			kelvin), dry_run)
 		lines << rep.command_line
 	}
-	night_notify_best_effort('Night Mode', '${backend} enabled at 4000K', 'weather-clear-night-symbolic',
+	night_notify_best_effort('Night Mode', '${backend} enabled at ${kelvin}K', 'weather-clear-night-symbolic',
 		dry_run, mut lines)
 	lines << 'write enabled to ${resolve_night_state_file()}'
 	if dry_run {
@@ -389,14 +512,19 @@ fn night_enable_native(dry_run bool, mut lines []string) CommandResult {
 				'command_line': lines.join('\n')
 				'dry_run':      'true'
 				'backend':      backend
+				'temperature':  '${kelvin}'
 			})
+	}
+	write_night_temperature(kelvin) or {
+		return fail_result('appearance night-mode on', 'backend started but temperature persist failed: ${err.msg()}')
 	}
 	write_night_state_file('enabled') or {
 		return fail_result('appearance night-mode on', 'backend started but state persist failed: ${err.msg()}')
 	}
-	return ok_result('appearance night-mode on', '${backend} enabled (night mode - 4000K)',
+	return ok_result('appearance night-mode on', '${backend} enabled (night mode - ${kelvin}K)',
 		{
-			'backend': backend
+			'backend':     backend
+			'temperature': '${kelvin}'
 		})
 }
 
