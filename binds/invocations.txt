@@ -65,6 +65,8 @@ hardware brightness up
 hardware keyboard keys
 hardware keyboard layout
 hardware keyboard settings
+hypr input set
+hypr input status
 hypr layout restore
 hypr layout set dwindle
 hypr layout set scrolling

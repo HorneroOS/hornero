@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: d1ba3d550f5ef3aba1b70e62ffcaed1d6ef594f1
+    sha: 9ece6fcae5688255e6a7c0da4925ad4fcc13ef0e
     status: pinned
-    subject: "feat(controlcenter): Night Light schedule controls (shell#225)"
+    subject: "feat(controlcenter): Input pointer & keyboard section (shell#226 slice 2)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
