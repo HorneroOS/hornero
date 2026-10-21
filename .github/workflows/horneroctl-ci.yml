@@ -37,3 +37,14 @@ jobs:
       - name: Build
         working-directory: cli
         run: ./make.vsh build-cli && ./build/horneroctl version && ./build/horneroctl config paths
+
+  signing-smoke:
+    name: Release signing smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      # Ephemeral-key tamper test for hornero#180: clean asset
+      # verifies, tampered asset is rejected. The real release key
+      # is a human custody step (docs/RELEASE_SIGNING.md).
+      - name: Signing smoke test
+        run: bash scripts/test-signing.sh
