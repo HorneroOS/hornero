@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: cc6c681a26d95501ac84b8aff2bc83d1e7b153c1
+    sha: 54c9e8bc5163fe11c5c749c8d03105e9e28e5682
     status: pinned
-    subject: "feat(a11y): name every icon-only IconButton call site"
+    subject: "feat(a11y): name every volume and seek slider"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
