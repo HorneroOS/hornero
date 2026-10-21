@@ -27,9 +27,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 297bf9b8958f4cadf3069b367b9431a8890be80a
+    sha: 0394738ab821ebff2760951cc78c31751bb92455
     status: pinned
-    subject: "feat(hypr): restore persisted input + keyboard layout at login"
+    subject: "feat(hypr): source user window-rules overlay after factory rules"
     notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
