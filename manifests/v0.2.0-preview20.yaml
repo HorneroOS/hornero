@@ -27,9 +27,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 76a552f7ec56f00ed52e122150f27639a3a8d70a
+    sha: b7a8040d1b415cf61117e1b38a9d5fd09d157d9c
     status: pinned
-    subject: "feat(themes): unique GTK theme for every Hornero Original region (#86)"
+    subject: "feat(hypr): source user keybinding overrides after defaults"
     notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
