@@ -380,3 +380,131 @@ pub fn parse_hypr_windows(args []string) !HyprWindowsOptions {
 		ephemeral: ephemeral
 	}
 }
+
+// HyprInputOptions covers `hypr input <status|set|restore>`.
+// `set` takes any subset of the input flags; omitted flags keep
+// their current (live, else persisted) values — 999/-1/''/-1 are
+// the unset sentinels the dispatcher resolves.
+pub struct HyprInputOptions {
+pub:
+	leaf           string // status | set | restore
+	sensitivity    f64 = 999
+	accel_profile  string
+	repeat_rate    int = -1
+	repeat_delay   int = -1
+	natural_scroll int = -1 // -1 unset, 0 false, 1 true
+	tap_to_click   int = -1
+	dry_run        bool
+	yes            bool
+	ephemeral      bool
+}
+
+pub fn parse_hypr_input(args []string) !HyprInputOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl hypr input status')
+	}
+	leaf := args[0]
+	if leaf !in ['status', 'set', 'restore'] {
+		return error('unknown input subcommand: ${leaf}.\nRun: horneroctl hypr input --help')
+	}
+	mut sensitivity := f64(999)
+	mut accel_profile := ''
+	mut repeat_rate := -1
+	mut repeat_delay := -1
+	mut natural_scroll := -1
+	mut tap_to_click := -1
+	mut dry_run := false
+	mut yes := false
+	mut ephemeral := false
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		i++
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a == '--ephemeral' {
+			ephemeral = true
+			continue
+		}
+		if a in ['--sensitivity', '--accel-profile', '--repeat-rate', '--repeat-delay',
+			'--natural-scroll', '--tap-to-click'] {
+			if i >= args.len {
+				return error('${a} needs a value.\nExample: horneroctl hypr input set ${a} --dry-run')
+			}
+			v := args[i]
+			i++
+			match a {
+				'--sensitivity' {
+					sensitivity = v.f64()
+					if sensitivity == 0 && v !in ['0', '0.0', '-0', '0.00'] && !v.starts_with('0.') {
+						return error('--sensitivity needs a number, got: ${v}.\nExample: horneroctl hypr input set --sensitivity 0.2 --dry-run')
+					}
+				}
+				'--accel-profile' {
+					if v !in ['adaptive', 'flat'] {
+						return error('--accel-profile must be adaptive or flat, got: ${v}.')
+					}
+					accel_profile = v
+				}
+				'--repeat-rate' {
+					if v.starts_with('-') || v.int().str() != v {
+						return error('--repeat-rate needs an integer, got: ${v}.')
+					}
+					repeat_rate = v.int()
+				}
+				'--repeat-delay' {
+					if v.starts_with('-') || v.int().str() != v {
+						return error('--repeat-delay needs an integer, got: ${v}.')
+					}
+					repeat_delay = v.int()
+				}
+				'--natural-scroll' {
+					if v !in ['true', 'false'] {
+						return error('--natural-scroll needs true or false, got: ${v}.')
+					}
+					natural_scroll = if v == 'true' { 1 } else { 0 }
+				}
+				else {
+					if v !in ['true', 'false'] {
+						return error('--tap-to-click needs true or false, got: ${v}.')
+					}
+					tap_to_click = if v == 'true' { 1 } else { 0 }
+				}
+			}
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl hypr input set --sensitivity 0.2 --dry-run')
+		}
+		return error('unexpected argument: ${a}.\nRun: horneroctl hypr input --help')
+	}
+	any_flag := sensitivity != 999 || accel_profile.len > 0 || repeat_rate >= 0
+		|| repeat_delay >= 0 || natural_scroll >= 0 || tap_to_click >= 0
+	if leaf == 'status' && (dry_run || yes || ephemeral || any_flag) {
+		return error('hypr input status takes no flags.\nExample: horneroctl hypr input status')
+	}
+	if leaf == 'restore' && any_flag {
+		return error('hypr input restore takes no setting flags.\nExample: horneroctl hypr input restore --yes')
+	}
+	if leaf == 'set' && !any_flag {
+		return error('hypr input set needs at least one setting flag.\nExample: horneroctl hypr input set --sensitivity 0.2 --dry-run')
+	}
+	return HyprInputOptions{
+		leaf:           leaf
+		sensitivity:    sensitivity
+		accel_profile:  accel_profile
+		repeat_rate:    repeat_rate
+		repeat_delay:   repeat_delay
+		natural_scroll: natural_scroll
+		tap_to_click:   tap_to_click
+		dry_run:        dry_run
+		yes:            yes
+		ephemeral:      ephemeral
+	}
+}

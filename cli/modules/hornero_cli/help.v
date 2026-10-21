@@ -715,7 +715,7 @@ Examples:
 '
 		}
 		'hypr' {
-			return 'Usage: horneroctl hypr <animations|layout|monitors|workspace|plugins|windows> [options]
+			return 'Usage: horneroctl hypr <animations|layout|monitors|workspace|plugins|windows|input> [options]
 
   animations        Animation profiles (list, current, set, next, restore)
   layout            Layout profiles (current, status, set, toggle, restore)
@@ -800,6 +800,9 @@ Examples:
 		}
 		'hypr windows' {
 			return 'Usage: horneroctl hypr windows <status|set|restore> [options]\n\n  status              Live gaps/border/rounding, else persisted (read-only)\n  set [flags] [--dry-run]\n                      Apply any subset of the geometry (needs --yes);\n                      omitted flags keep their current values\n  restore [--dry-run] Re-apply the persisted geometry (needs --yes)\n\nOptions:\n  --gaps-in <n>       Inner gap 0-100 (default 5)\n  --gaps-out <n>      Outer gap 0-200 (default 20)\n  --border-size <n>   Border width 0-20 (default 2)\n  --rounding <n>      Corner rounding 0-60 (default 10)\n  --ephemeral         Do not persist the geometry to disk\n  --dry-run           Preview the hyprctl invocations without running them\n  --yes               Confirm a mutating action\n\nApplied through hyprctl keyword and persisted under\n\\$XDG_STATE_HOME (hornero/hypr/windows/current) for restore.\nHyprland only; Niri window geometry stays experimental and is\nnever faked through this command.\n\nExamples:\n  horneroctl hypr windows status\n  horneroctl hypr windows set --gaps-in 8 --rounding 12 --yes\n  horneroctl hypr windows restore --yes\n'
+		}
+		'hypr input' {
+			return 'Usage: horneroctl hypr input <status|set|restore> [options]\n\n  status              Live pointer/keyboard settings, else persisted (read-only)\n  set [flags] [--dry-run]\n                      Apply any subset of the settings (needs --yes);\n                      omitted flags keep their current values\n  restore [--dry-run] Re-apply the persisted settings (needs --yes)\n\nOptions:\n  --sensitivity <f>   Pointer sensitivity -1.0..1.0 (default 0)\n  --accel-profile <p> Acceleration profile: adaptive or flat\n  --repeat-rate <n>   Key repeat rate 1-100 (default 50)\n  --repeat-delay <n>  Key repeat delay ms 100-2000 (default 300)\n  --natural-scroll <b>\n                      Touchpad natural scroll: true or false\n  --tap-to-click <b>  Touchpad tap-to-click: true or false\n  --ephemeral         Do not persist the settings to disk\n  --dry-run           Preview the hyprctl invocations without running them\n  --yes               Confirm a mutating action\n\nApplied through hyprctl keyword and persisted under\n\\$XDG_STATE_HOME (hornero/hypr/input/current) for restore.\nHyprland only; on other compositors status reports the\npersisted values and set fails honestly.\n\nExamples:\n  horneroctl hypr input status\n  horneroctl hypr input set --sensitivity 0.2 --repeat-rate 40 --yes\n  horneroctl hypr input restore --yes\n'
 		}
 		'hypr monitors' {
 			return 'Usage: horneroctl hypr monitors <list|status|set> [options]

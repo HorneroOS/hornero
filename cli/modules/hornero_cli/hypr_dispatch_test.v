@@ -146,6 +146,26 @@ fn test_hypr_json_and_quiet_modes() {
 	hypr_dispatch_teardown()
 }
 
+fn test_dispatch_hypr_input() {
+	hypr_dispatch_setup()
+	assert dispatch(['horneroctl', 'hypr', 'input', '--help']) == 0
+	assert dispatch(['horneroctl', '--json', 'hypr', 'input', 'status']) == 0
+	assert dispatch(['horneroctl', '--quiet', 'hypr', 'input', 'set', '--sensitivity', '0.2',
+		'--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'input', 'set', '--sensitivity', '0.2']) == 1
+	assert dispatch(['horneroctl', 'hypr', 'input', 'set']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'input', 'set', '--sensitivity', 'abc', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'input', 'set', '--accel-profile', 'custom', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'input', 'set', '--natural-scroll', 'maybe', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'input', 'status', '--yes']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'input', 'restore', '--repeat-rate', '40', '--yes']) == 2
+	inp := parse_hypr_input(['set', '--repeat-rate', '40', '--tap-to-click', 'false', '--yes']) or {
+		panic(err)
+	}
+	assert inp.repeat_rate == 40 && inp.tap_to_click == 0 && inp.sensitivity == 999
+	hypr_dispatch_teardown()
+}
+
 fn test_dispatch_hypr_windows() {
 	hypr_dispatch_setup()
 	assert dispatch(['horneroctl', '--json', 'hypr', 'windows', 'status']) == 0
