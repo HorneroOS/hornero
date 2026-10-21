@@ -296,14 +296,20 @@ pub fn parse_hypr_plugins(args []string) !HyprPluginsOptions {
 // flags keep -1 here and the dispatcher fills them from live state.
 pub struct HyprWindowsOptions {
 pub:
-	leaf      string // status | set | restore
-	gaps_in   int = -1
-	gaps_out  int = -1
-	border    int = -1
-	rounding  int = -1
-	dry_run   bool
-	yes       bool
-	ephemeral bool
+	leaf         string // status | set | restore | rules
+	gaps_in      int = -1
+	gaps_out     int = -1
+	border       int = -1
+	rounding     int = -1
+	follow_mouse int = -1
+	dry_run      bool
+	yes          bool
+	ephemeral    bool
+	rules_action string // list | add | remove
+	rule_match   string
+	rule_pattern string
+	rule_effect  string
+	rule_name    string
 }
 
 pub fn parse_hypr_windows(args []string) !HyprWindowsOptions {
@@ -311,13 +317,17 @@ pub fn parse_hypr_windows(args []string) !HyprWindowsOptions {
 		return error('missing subcommand.\nExample: horneroctl hypr windows status')
 	}
 	leaf := args[0]
-	if leaf !in ['status', 'set', 'restore'] {
+	if leaf !in ['status', 'set', 'restore', 'rules'] {
 		return error('unknown windows subcommand: ${leaf}.\nRun: horneroctl hypr windows --help')
+	}
+	if leaf == 'rules' {
+		return parse_hypr_windows_rules(args)
 	}
 	mut gaps_in := -1
 	mut gaps_out := -1
 	mut border := -1
 	mut rounding := -1
+	mut follow_mouse := -1
 	mut dry_run := false
 	mut yes := false
 	mut ephemeral := false
@@ -337,7 +347,7 @@ pub fn parse_hypr_windows(args []string) !HyprWindowsOptions {
 			ephemeral = true
 			continue
 		}
-		if a in ['--gaps-in', '--gaps-out', '--border-size', '--rounding'] {
+		if a in ['--gaps-in', '--gaps-out', '--border-size', '--rounding', '--follow-mouse'] {
 			if i >= args.len {
 				return error('${a} needs a value.\nExample: horneroctl hypr windows set ${a} 5 --dry-run')
 			}
@@ -350,6 +360,7 @@ pub fn parse_hypr_windows(args []string) !HyprWindowsOptions {
 				'--gaps-in' { gaps_in = v.int() }
 				'--gaps-out' { gaps_out = v.int() }
 				'--border-size' { border = v.int() }
+				'--follow-mouse' { follow_mouse = v.int() }
 				else { rounding = v.int() }
 			}
 			continue
@@ -360,24 +371,91 @@ pub fn parse_hypr_windows(args []string) !HyprWindowsOptions {
 		return error('unexpected argument: ${a}.\nRun: horneroctl hypr windows --help')
 	}
 	if leaf == 'status' && (dry_run || yes || ephemeral || gaps_in >= 0 || gaps_out >= 0
-		|| border >= 0 || rounding >= 0) {
+		|| border >= 0 || rounding >= 0 || follow_mouse >= 0) {
 		return error('hypr windows status takes no flags.\nExample: horneroctl hypr windows status')
 	}
-	if leaf == 'restore' && (gaps_in >= 0 || gaps_out >= 0 || border >= 0 || rounding >= 0) {
+	if leaf == 'restore' && (gaps_in >= 0 || gaps_out >= 0 || border >= 0 || rounding >= 0
+		|| follow_mouse >= 0) {
 		return error('hypr windows restore takes no geometry flags.\nExample: horneroctl hypr windows restore --yes')
 	}
-	if leaf == 'set' && gaps_in < 0 && gaps_out < 0 && border < 0 && rounding < 0 {
+	if leaf == 'set' && gaps_in < 0 && gaps_out < 0 && border < 0 && rounding < 0
+		&& follow_mouse < 0 {
 		return error('hypr windows set needs at least one geometry flag.\nExample: horneroctl hypr windows set --gaps-in 5 --dry-run')
 	}
 	return HyprWindowsOptions{
-		leaf:      leaf
-		gaps_in:   gaps_in
-		gaps_out:  gaps_out
-		border:    border
-		rounding:  rounding
-		dry_run:   dry_run
-		yes:       yes
-		ephemeral: ephemeral
+		leaf:         leaf
+		gaps_in:      gaps_in
+		gaps_out:     gaps_out
+		border:       border
+		rounding:     rounding
+		follow_mouse: follow_mouse
+		dry_run:      dry_run
+		yes:          yes
+		ephemeral:    ephemeral
+	}
+}
+
+fn parse_hypr_windows_rules(args []string) !HyprWindowsOptions {
+	if args.len < 2 {
+		return error('missing rules action.\nExample: horneroctl hypr windows rules list')
+	}
+	action := args[1]
+	if action !in ['list', 'add', 'remove'] {
+		return error('unknown rules action: ${action}.\nRun: horneroctl hypr windows --help')
+	}
+	mut match_kind := ''
+	mut pattern := ''
+	mut effect := ''
+	mut name := ''
+	mut dry_run := false
+	mut yes := false
+	mut i := 2
+	for i < args.len {
+		a := args[i]
+		i++
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a in ['--match', '--pattern', '--effect', '--name'] {
+			if i >= args.len {
+				return error('${a} needs a value.\nExample: horneroctl hypr windows rules add --match class --pattern kitty --effect float')
+			}
+			v := args[i]
+			i++
+			match a {
+				'--match' { match_kind = v }
+				'--pattern' { pattern = v }
+				'--effect' { effect = v }
+				else { name = v }
+			}
+			continue
+		}
+		return error('unknown flag: ${a}.\nRun: horneroctl hypr windows --help')
+	}
+	if action == 'add' && (match_kind.len == 0 || pattern.len == 0 || effect.len == 0) {
+		return error('rules add needs --match, --pattern and --effect.\nExample: horneroctl hypr windows rules add --match class --pattern kitty --effect float --yes')
+	}
+	if action == 'remove' && name.len == 0 {
+		return error('rules remove needs --name.\nExample: horneroctl hypr windows rules remove --name hornero-user-kitty --yes')
+	}
+	if action == 'list' && (match_kind.len > 0 || pattern.len > 0 || effect.len > 0 || name.len > 0
+		|| yes) {
+		return error('rules list takes only --dry-run.\nExample: horneroctl hypr windows rules list')
+	}
+	return HyprWindowsOptions{
+		leaf:         'rules'
+		dry_run:      dry_run
+		yes:          yes
+		rules_action: action
+		rule_match:   match_kind
+		rule_pattern: pattern
+		rule_effect:  effect
+		rule_name:    name
 	}
 }
 

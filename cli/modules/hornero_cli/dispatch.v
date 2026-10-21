@@ -983,6 +983,22 @@ fn run_hypr_windows(args []string, mode hornero_core.RenderMode) int {
 	if opts.leaf == 'status' {
 		return render(hornero_core.windows_status_report(), mode)
 	}
+	if opts.leaf == 'rules' {
+		if opts.rules_action == 'list' {
+			return render(hornero_core.windows_rules_list_report(), mode)
+		}
+		if opts.rules_action == 'add' {
+			return render(hornero_core.windows_rules_add_report(hornero_core.WindowsRulesAddOptions{
+				match_kind: opts.rule_match
+				pattern:    opts.rule_pattern
+				effect:     opts.rule_effect
+				dry_run:    opts.dry_run
+				yes:        opts.yes
+			}), mode)
+		}
+		return render(hornero_core.windows_rules_remove_report(opts.rule_name,
+			opts.dry_run, opts.yes), mode)
+	}
 	mut settings := hornero_core.windows_restore_value()
 	if opts.leaf == 'set' {
 		// Fill omitted flags from the live/persisted geometry so a
@@ -999,6 +1015,9 @@ fn run_hypr_windows(args []string, mode hornero_core.RenderMode) int {
 		}
 		if opts.rounding >= 0 {
 			settings.rounding = opts.rounding
+		}
+		if opts.follow_mouse >= 0 {
+			settings.follow_mouse = opts.follow_mouse
 		}
 	}
 	return render(hornero_core.windows_apply_report(hornero_core.WindowsApplyOptions{
