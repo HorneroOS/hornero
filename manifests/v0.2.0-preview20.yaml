@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 4c351d2538bfbec08358220fe436d4bcf956a9a9
+    sha: 52fd57a6311083f4124d26e69168c9bb463a06a0
     status: pinned
-    subject: "feat(a11y): name shared controls and Welcome action cards"
+    subject: "feat(a11y): name network, Bluetooth, audio and launcher-pane rows"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
