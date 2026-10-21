@@ -583,6 +583,9 @@ fn run_appearance_night_mode(args []string, mode hornero_core.RenderMode) int {
 		dry_run:     opts.dry_run
 		yes:         opts.yes
 		temperature: opts.temperature
+		schedule:    opts.schedule
+		from_min:    opts.from_min
+		to_min:      opts.to_min
 	}), mode)
 }
 

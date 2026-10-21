@@ -143,6 +143,70 @@ fn test_night_temperature_persists_next_to_state() {
 	os.rmdir_all(tmp) or {}
 }
 
+fn test_night_parse_hhmm_vectors() {
+	mut mins, mut ok := night_parse_hhmm('22:00')
+	assert ok && mins == 1320
+	mins, ok = night_parse_hhmm('7:05')
+	assert ok && mins == 425
+	mins, ok = night_parse_hhmm('00:00')
+	assert ok && mins == 0
+	_, ok = night_parse_hhmm('24:00')
+	assert !ok
+	_, ok = night_parse_hhmm('12:60')
+	assert !ok
+	_, ok = night_parse_hhmm('noon')
+	assert !ok
+	_, ok = night_parse_hhmm('1200')
+	assert !ok
+	assert night_format_hhmm(1320) == '22:00'
+	assert night_format_hhmm(425) == '07:05'
+	assert night_format_hhmm(0) == '00:00'
+}
+
+fn test_night_schedule_active_at_windows() {
+	// Same-day window 08:00-17:00.
+	assert night_schedule_active_at(480, 1020, 600)
+	assert !night_schedule_active_at(480, 1020, 479)
+	assert !night_schedule_active_at(480, 1020, 1020)
+	// Overnight window 22:00-07:00 wraps midnight.
+	assert night_schedule_active_at(1320, 420, 1380)
+	assert night_schedule_active_at(1320, 420, 60)
+	assert !night_schedule_active_at(1320, 420, 720)
+	assert !night_schedule_active_at(1320, 420, 420)
+	// Empty window never active.
+	assert !night_schedule_active_at(600, 600, 600)
+}
+
+fn test_night_schedule_file_roundtrip() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-night-sched')
+	os.rmdir_all(tmp) or {}
+	with_night_xdg(tmp, fn [tmp] () {
+		on, off, present := read_night_schedule()
+		assert !present && on == -1 && off == -1
+		write_night_schedule(1320, 420) or { panic(err) }
+		on2, off2, present2 := read_night_schedule()
+		assert present2 && on2 == 1320 && off2 == 420
+		assert resolve_night_schedule_file().ends_with('night_mode_schedule')
+		clear_night_schedule()
+		_, _, present3 := read_night_schedule()
+		assert !present3
+	})
+	os.rmdir_all(tmp) or {}
+}
+
+fn test_night_schedule_unit_contents() {
+	svc := night_schedule_service_content('/home/user/.local/bin/horneroctl', 'on')
+	assert svc.contains('Type=oneshot')
+	assert svc.contains('ExecStart=/home/user/.local/bin/horneroctl appearance night-mode on --yes')
+	timer := night_schedule_timer_content('22:00', 'on')
+	assert timer.contains('OnCalendar=*-*-* 22:00:00')
+	assert timer.contains('Persistent=true')
+	assert timer.contains('Unit=hornero-nightlight-on.service')
+	assert timer.contains('WantedBy=timers.target')
+	assert night_schedule_unit_name('off', true) == 'hornero-nightlight-off.timer'
+	assert night_schedule_unit_name('on', false) == 'hornero-nightlight-on.service'
+}
+
 fn test_night_set_stores_temperature_when_inactive() {
 	tmp := os.join_path(os.temp_dir(), 'hornero-night-set')
 	os.rmdir_all(tmp) or {}
