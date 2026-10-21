@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: e71e262bf8e7b771d41d260628b1e26324dcf2a3
+    sha: 34fb832b163ff2b745aa1e127e42269bd8d643a9
     status: pinned
-    subject: "docs(perf): plugin-surface cold-start probe baseline"
+    subject: "feat(plugins): allow optional author signing block in manifests"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
