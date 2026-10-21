@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 52fd57a6311083f4124d26e69168c9bb463a06a0
+    sha: fbfaceb0d56b7d6c300bd74cfdd8f7e56a6cf8ad
     status: pinned
-    subject: "feat(a11y): name network, Bluetooth, audio and launcher-pane rows"
+    subject: "docs(perf): Control Center frame-cost bound (169/180 slots)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
