@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 501e24134d1adefdf8a17f900be53f5faccc8e55
+    sha: 514860b51bc606e78059f71447e2fa504d1c1ddd
     status: pinned
-    subject: "feat(controlcenter): keybind rebind editor (shell#236 slice 2)"
+    subject: "feat(controlcenter): Input layout list/set editor (shell#226)"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
