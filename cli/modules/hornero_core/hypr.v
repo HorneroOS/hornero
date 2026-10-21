@@ -552,10 +552,11 @@ pub fn layout_status_report() CommandResult {
 
 pub struct WindowsSettings {
 pub mut:
-	gaps_in     int = 5
-	gaps_out    int = 20
-	border_size int = 2
-	rounding    int = 10
+	gaps_in      int = 5
+	gaps_out     int = 20
+	border_size  int = 2
+	rounding     int = 10
+	follow_mouse int = 1
 }
 
 pub struct WindowsApplyOptions {
@@ -579,6 +580,7 @@ pub fn resolve_hypr_windows_state_file() string {
 pub fn windows_settings_valid(s WindowsSettings) bool {
 	return s.gaps_in >= 0 && s.gaps_in <= 100 && s.gaps_out >= 0 && s.gaps_out <= 200
 		&& s.border_size >= 0 && s.border_size <= 20 && s.rounding >= 0 && s.rounding <= 60
+		&& s.follow_mouse >= 0 && s.follow_mouse <= 2
 }
 
 fn windows_persisted() WindowsSettings {
@@ -595,6 +597,7 @@ fn windows_persisted() WindowsSettings {
 			'gaps_out' { s.gaps_out = v }
 			'border_size' { s.border_size = v }
 			'rounding' { s.rounding = v }
+			'follow_mouse' { s.follow_mouse = v }
 			else {}
 		}
 	}
@@ -639,15 +642,26 @@ fn windows_live(bin string) WindowsSettings {
 	if rd >= 0 {
 		s.rounding = rd
 	}
+	frep := run_exec(ExecSpec{
+		prog: bin
+		args: ['getoption', 'input:follow_mouse', '-j']
+	})
+	if frep.ok {
+		fparsed := json2_decode_map(frep.output)
+		if fparsed.len > 0 {
+			s.follow_mouse = int(json2_f64(fparsed, 'int'))
+		}
+	}
 	return s
 }
 
 fn windows_data(s WindowsSettings) map[string]string {
 	return {
-		'gaps_in':     s.gaps_in.str()
-		'gaps_out':    s.gaps_out.str()
-		'border_size': s.border_size.str()
-		'rounding':    s.rounding.str()
+		'gaps_in':      s.gaps_in.str()
+		'gaps_out':     s.gaps_out.str()
+		'border_size':  s.border_size.str()
+		'rounding':     s.rounding.str()
+		'follow_mouse': s.follow_mouse.str()
 	}
 }
 
@@ -662,7 +676,8 @@ pub fn windows_status_report() CommandResult {
 	lines << 'gaps_out: ${live.gaps_out}'
 	lines << 'border_size: ${live.border_size}'
 	lines << 'rounding: ${live.rounding}'
-	lines << 'persisted: gaps_in=${saved.gaps_in} gaps_out=${saved.gaps_out} border_size=${saved.border_size} rounding=${saved.rounding}'
+	lines << 'follow_mouse: ${live.follow_mouse}'
+	lines << 'persisted: gaps_in=${saved.gaps_in} gaps_out=${saved.gaps_out} border_size=${saved.border_size} rounding=${saved.rounding} follow_mouse=${saved.follow_mouse}'
 	lines << 'hyprctl: ${describe_bin(bin)}'
 	mut data := windows_data(live)
 	data['hyprctl'] = describe_bin(bin)
@@ -685,7 +700,8 @@ pub fn windows_apply_report(opts WindowsApplyOptions) CommandResult {
 	}
 	s := opts.settings
 	pairs := [['general:gaps_in', s.gaps_in.str()], ['general:gaps_out', s.gaps_out.str()],
-		['general:border_size', s.border_size.str()], ['decoration:rounding', s.rounding.str()]]
+		['general:border_size', s.border_size.str()], ['decoration:rounding', s.rounding.str()],
+		['input:follow_mouse', s.follow_mouse.str()]]
 	mut previews := []string{}
 	for pr in pairs {
 		previews << command_line(bin, ['keyword', pr[0], pr[1]])
@@ -710,13 +726,13 @@ pub fn windows_apply_report(opts WindowsApplyOptions) CommandResult {
 		}
 	}
 	if !opts.ephemeral {
-		write_state_token(resolve_hypr_windows_state_file(), 'gaps_in=${s.gaps_in} gaps_out=${s.gaps_out} border_size=${s.border_size} rounding=${s.rounding}') or {
+		write_state_token(resolve_hypr_windows_state_file(), 'gaps_in=${s.gaps_in} gaps_out=${s.gaps_out} border_size=${s.border_size} rounding=${s.rounding} follow_mouse=${s.follow_mouse}') or {
 			return fail_result('hypr windows set', err.msg())
 		}
 	}
 	mut data := windows_data(s)
 	data['command_line'] = previews.join('; ')
-	return ok_result('hypr windows set', 'applied window geometry gaps_in=${s.gaps_in} gaps_out=${s.gaps_out} border_size=${s.border_size} rounding=${s.rounding}', data)
+	return ok_result('hypr windows set', 'applied window geometry gaps_in=${s.gaps_in} gaps_out=${s.gaps_out} border_size=${s.border_size} rounding=${s.rounding} follow_mouse=${s.follow_mouse}', data)
 }
 
 // windows_current_value is the live geometry when Hyprland answers,

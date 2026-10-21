@@ -177,3 +177,25 @@ fn test_dispatch_hypr_windows() {
 	assert dispatch(['horneroctl', 'hypr', 'windows', 'restore', '--gaps-in', '3', '--yes']) == 2
 	hypr_dispatch_teardown()
 }
+
+fn test_dispatch_hypr_windows_rules() {
+	hypr_dispatch_setup()
+	os.setenv('HORNERO_WINDOW_RULES_USER_FILE', '/tmp/hx-hypr-test/rules-user.conf', true)
+	os.setenv('XDG_CONFIG_HOME', '/tmp/hx-hypr-test/config', true)
+	os.rm('/tmp/hx-hypr-test/rules-user.conf') or {}
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'rules', 'list']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'rules', 'add', '--match', 'class', '--pattern',
+		'kitty', '--effect', 'float', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'rules', 'add', '--match', 'class', '--pattern',
+		'kitty', '--effect', 'float']) == 1
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'rules', 'add', '--match', 'class', '--pattern',
+		'kitty', '--effect', 'float', '--yes']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'rules', 'remove', '--name', 'hornero-user-kitty',
+		'--yes']) == 0
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'rules']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'rules', 'bogus']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'rules', 'add', '--match', 'class']) == 2
+	assert dispatch(['horneroctl', 'hypr', 'windows', 'set', '--follow-mouse', '2', '--dry-run']) == 0
+	os.unsetenv('HORNERO_WINDOW_RULES_USER_FILE')
+	hypr_dispatch_teardown()
+}
