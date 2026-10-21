@@ -1,7 +1,10 @@
 module hornero_core
 
+import crypto.ed25519
+import encoding.base64
 import os
 import time
+import x.json2
 
 fn community_plugins_test_new_root(suffix string) string {
 	root := os.join_path(os.temp_dir(), 'hornero-community-plugins-${os.getpid()}-${time.now().unix_milli()}-${suffix}')
@@ -309,6 +312,97 @@ fn test_community_plugin_enable_disable_lifecycle() {
 	assert !stale.ok && stale.message.contains('stale-trust'), stale.message
 	stale_listed := community_plugin_list_report()
 	assert stale_listed.data['plugins'].contains('"trust":"stale-trust"'), stale_listed.data['plugins']
+}
+
+fn test_minisign_verify_and_signed_plugin_enables() {
+	// Unit: minisign framing (key-id match, Ed25519 verify, tamper).
+	pub_key, priv := ed25519.generate_key() or { panic(err) }
+	key_id := []u8{len: 8, init: u8(index + 1)}
+	mut pub_raw := 'RW'.bytes()
+	pub_raw << key_id
+	pub_raw << pub_key
+	pub_str := base64.encode(pub_raw)
+	msg := 'abc123'.bytes()
+	sig := priv.sign(msg) or { panic(err) }
+	mut sig_raw := 'Ed'.bytes()
+	sig_raw << key_id
+	sig_raw << sig
+	sig_str := base64.encode(sig_raw)
+	assert minisign_verify(pub_str, sig_str, msg)
+	assert !minisign_verify(pub_str, sig_str, 'tampered'.bytes())
+	mut other_id := []u8{len: 8, init: u8(index + 1)}
+	other_id[0] = 9
+	mut bad_raw := 'Ed'.bytes()
+	bad_raw << other_id
+	bad_raw << sig
+	bad_id_sig := base64.encode(bad_raw)
+	assert !minisign_verify(pub_str, bad_id_sig, msg)
+
+	// Integration: a signed non-official plugin enables without the
+	// local trust step; a broken signature fails closed.
+	root := community_plugins_test_new_root('signed')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	fixture := community_plugins_test_fixture(root)
+	validator := os.join_path(root, 'validator')
+	git := os.join_path(root, 'git')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	community_plugins_test_write_executable(git, '#!/usr/bin/env python3\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nif "clone" in args:\n dst=pathlib.Path(args[-1]); shutil.copytree(os.environ["HORNERO_TEST_PLUGIN_SOURCE"], dst); (dst/".git").mkdir()\nelif "rev-parse" in args:\n print(os.environ.get("HORNERO_TEST_REVISION", "0123456789abcdef0123456789abcdef01234567"))\nelse:\n raise SystemExit(2)\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	os.setenv('HORNERO_GIT_BIN', git, true)
+	os.setenv('HORNERO_TEST_PLUGIN_SOURCE', fixture, true)
+	installed := community_plugin_install_report(CommunityPluginOptions{
+		value: 'https://example.invalid/community/example-clock.git'
+		yes:   true
+	})
+	assert installed.ok, installed.message
+	payload_root, _ := community_plugin_roots()
+	manifest_path := os.join_path(payload_root, 'example-clock', 'manifest.json')
+	manifest := json2.decode[map[string]json2.Any](os.read_file(manifest_path) or { '' }) or {
+		panic(err)
+	}
+	files_hash := plugin_files_sha256(os.join_path(payload_root, 'example-clock'), manifest)
+	good_sig := priv.sign(files_hash.bytes()) or { panic(err) }
+	mut good_raw := 'Ed'.bytes()
+	good_raw << key_id
+	good_raw << good_sig
+	good_sig_str := base64.encode(good_raw)
+	mut raw_manifest := os.read_file(manifest_path) or { '' }
+	raw_manifest = raw_manifest.trim_space()
+	raw_manifest = raw_manifest[..raw_manifest.len - 1] +
+		',"signing":{"publicKey":"${pub_str}","signature":"${good_sig_str}"}}'
+	os.write_file(manifest_path, raw_manifest) or { panic(err) }
+	signed_listed := community_plugin_list_report()
+	assert signed_listed.data['plugins'].contains('"trust":"signed"'), signed_listed.data['plugins']
+	enabled := community_plugin_enable_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert enabled.ok, enabled.message
+	disabled := community_plugin_disable_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert disabled.ok, disabled.message
+	// Break the signature: sign a different message with the same key.
+	wrong_sig := priv.sign('deadbeef'.bytes()) or { panic(err) }
+	mut wrong_raw := 'Ed'.bytes()
+	wrong_raw << key_id
+	wrong_raw << wrong_sig
+	wrong_sig_str := base64.encode(wrong_raw)
+	os.write_file(manifest_path, raw_manifest.replace(good_sig_str, wrong_sig_str)) or {
+		panic(err)
+	}
+	bad_listed := community_plugin_list_report()
+	assert bad_listed.data['plugins'].contains('"trust":"bad-signature"'), bad_listed.data['plugins']
+	refused := community_plugin_enable_report(CommunityPluginOptions{
+		value: 'example-clock'
+		yes:   true
+	})
+	assert !refused.ok && refused.message.contains('bad-signature'), refused.message
 }
 
 fn test_community_plugin_enable_unknown_and_invalid_payload() {

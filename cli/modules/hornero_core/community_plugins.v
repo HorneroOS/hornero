@@ -1,6 +1,8 @@
 module hornero_core
 
+import crypto.ed25519
 import crypto.sha256
+import encoding.base64
 import os
 import time
 import x.json2
@@ -460,7 +462,7 @@ fn community_plugin_set_enabled_report(opts CommunityPluginOptions, enable bool)
 		// explicit, hash-pinned trust step before they may run.
 		// Official-catalogue installs carry reviewed provenance.
 		trust := community_plugin_trust_state(record, payload)
-		if !opts.dry_run && trust != 'official' && trust != 'trusted' {
+		if !opts.dry_run && trust != 'official' && trust != 'trusted' && trust != 'signed' {
 			return fail_result('plugin enable', 'plugin ${id} is ${trust}: it did not come from the official catalogue, and no trust is recorded for the current payload. Review the code, then run: horneroctl plugin trust ${id} --yes')
 		}
 	}
@@ -505,10 +507,88 @@ fn community_plugin_payload_hash(payload string) string {
 	return plugin_payload_sha256(payload, manifest)
 }
 
+// Hash of the plugin's listed files only (manifest.json excluded).
+// This is what an author signature signs: the manifest carries the
+// signature, so the manifest itself cannot be inside the signed hash.
+fn plugin_files_sha256(plugin_dir string, manifest map[string]json2.Any) string {
+	mut names := []string{}
+	if 'files' in manifest && manifest['files'] is []json2.Any {
+		for f in manifest['files'].as_array() {
+			if f is string && f.str() !in names {
+				names << f.str()
+			}
+		}
+	}
+	names.sort()
+	mut acc := ''
+	for name in names {
+		acc += name + '\0' + (os.read_file(os.join_path(plugin_dir, name)) or { '' }) + '\0'
+	}
+	return sha256.hexhash(acc)
+}
+
+// Verify a minisign-format Ed25519 signature. Public key string is
+// base64("RW" + 8-byte key id + 32-byte key); signature string is
+// base64("Ed" + same key id + 64-byte signature). The key ids must
+// match; the signed message is the files-hash hex string.
+fn minisign_verify(public_key_b64 string, signature string, message []u8) bool {
+	pub_raw := base64.decode(public_key_b64)
+	if pub_raw.len != 42 || pub_raw[0] != `R` || pub_raw[1] != `W` {
+		return false
+	}
+	sig_raw := base64.decode(signature)
+	if sig_raw.len != 74 || sig_raw[0] != `E` || sig_raw[1] != `d` {
+		return false
+	}
+	for i in 2 .. 10 {
+		if pub_raw[i] != sig_raw[i] {
+			return false
+		}
+	}
+	verify_key := ed25519.PublicKey(pub_raw[10..].clone())
+	return ed25519.verify(verify_key, message, sig_raw[10..]) or { false }
+}
+
+// Author-signature state of an installed payload:
+// none | signed | bad-signature. A present-but-invalid signature is
+// always reported, never silently ignored.
+fn community_plugin_signature_state(payload string) string {
+	raw := os.read_file(os.join_path(payload, 'manifest.json')) or { return 'none' }
+	manifest := json2.decode[map[string]json2.Any](raw) or { return 'none' }
+	if 'signing' !in manifest {
+		return 'none'
+	}
+	signing := manifest['signing']
+	if signing !is map[string]json2.Any {
+		return 'bad-signature'
+	}
+	signing_map := signing as map[string]json2.Any
+	public_key := if 'publicKey' in signing_map { signing_map['publicKey'].str() } else { '' }
+	signature := if 'signature' in signing_map { signing_map['signature'].str() } else { '' }
+	if public_key.len == 0 || signature.len == 0 {
+		return 'bad-signature'
+	}
+	message := plugin_files_sha256(payload, manifest)
+	if minisign_verify(public_key, signature, message.bytes()) {
+		return 'signed'
+	}
+	return 'bad-signature'
+}
+
 // Trust state of a receipt relative to the current payload on disk.
+// Precedence: official provenance, then a broken signature (fail
+// closed), then a verified author signature, then the local
+// hash-pinned trust recorded via `plugin trust`.
 fn community_plugin_trust_state(record CommunityPluginReceipt, payload string) string {
 	if record.source == plugin_catalog_source {
 		return 'official'
+	}
+	signature := community_plugin_signature_state(payload)
+	if signature == 'bad-signature' {
+		return 'bad-signature'
+	}
+	if signature == 'signed' {
+		return 'signed'
 	}
 	if record.trusted_hash.len == 0 {
 		return 'untrusted'
