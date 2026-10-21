@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: a8605f84f2b3e44cb7ba541e5e797d20bbcdfcde
+    sha: 1f8d4a063d4ded5eae73d76ccb1fa55465c95185
     status: pinned
-    subject: "feat(controlcenter): Hornero update lane + snapshot honesty in Updates pane"
+    subject: "docs(plugins): which config a session actually runs"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
