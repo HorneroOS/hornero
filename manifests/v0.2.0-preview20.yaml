@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 3ed17f79a510b12c4c20f3913886e8189265c6bd
+    sha: 944294c48886fef611932551487e01576b214ddb
     status: pinned
-    subject: "docs(a11y): full-shell bar AT-SPI probe evidence"
+    subject: "docs(a11y): drawer and Control Center AT-SPI probe; launcher gap recorded"
     notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
   config:
     repo: https://github.com/HorneroOS/config
