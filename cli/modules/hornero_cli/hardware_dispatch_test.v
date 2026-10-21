@@ -247,6 +247,8 @@ fn test_dispatch_hardware_keyboard_layout_set() {
 	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--variant', 'intl']) == 2
 	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--list', '--current']) == 2
 	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'keys', '--set', 'us']) == 2
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--restore', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'hardware', 'keyboard', 'layout', '--restore', '--list']) == 2
 	os.unsetenv('HORNERO_XKB_RULES_FILE')
 	os.unsetenv('HORNERO_KEYBOARD_LAYOUT_STATE_FILE')
 	hw_dispatch_teardown()

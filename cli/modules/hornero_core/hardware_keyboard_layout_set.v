@@ -111,6 +111,46 @@ pub fn keyboard_layout_list_report(dry_run bool) CommandResult {
 	})
 }
 
+// keyboard_layout_restore_report re-applies the persisted layout
+// list at session start (config autostart runs it via exec-once).
+// Without a persisted token it is a successful no-op.
+pub fn keyboard_layout_restore_report(dry_run bool, yes bool) CommandResult {
+	raw := os.read_file(resolve_keyboard_layout_state_file()) or { '' }
+	mut layouts := ''
+	mut variant := ''
+	for part in raw.trim_space().split(' ') {
+		if part.starts_with('layout=') {
+			layouts = part[7..]
+		} else if part.starts_with('variant=') {
+			variant = part[8..]
+		}
+	}
+	if layouts.len == 0 {
+		return ok_result('hardware keyboard layout', 'No persisted keyboard layout; factory defaults apply.', {
+			'restored': 'false'
+		})
+	}
+	if !dry_run && !yes {
+		return fail_result('hardware keyboard layout', 'Restore changes the live layout. Re-run with --yes (or --dry-run to preview).')
+	}
+	rep := keyboard_layout_set_report(LayoutSetOptions{
+		layouts: layouts
+		variant: variant
+		dry_run: dry_run
+		yes:     true
+	})
+	if !rep.ok {
+		return rep
+	}
+	mut data := rep.data.clone()
+	data['restored'] = 'true'
+	return ok_result('hardware keyboard layout', 'Restored keyboard layout ${layouts}${if variant.len > 0 {
+		' (${variant})'
+	} else {
+		''
+	}}', data)
+}
+
 fn valid_xkb_token(tok string) bool {
 	if tok.len == 0 {
 		return false

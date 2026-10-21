@@ -1217,6 +1217,10 @@ fn run_hardware_keyboard(args []string, mode hornero_core.RenderMode) int {
 	if opts.layout_list {
 		return render(hornero_core.keyboard_layout_list_report(opts.dry_run), mode)
 	}
+	if opts.layout_restore {
+		return render(hornero_core.keyboard_layout_restore_report(opts.dry_run,
+			opts.yes), mode)
+	}
 	if opts.layout_set.len > 0 {
 		return render(hornero_core.keyboard_layout_set_report(hornero_core.LayoutSetOptions{
 			layouts: opts.layout_set

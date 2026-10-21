@@ -1024,6 +1024,8 @@ Examples:
   layout --set LIST [--variant V] [--dry-run] [--yes]
                       Set the layout list (e.g. us,latam) live and
                       persist it for restore
+  layout --restore [--dry-run] [--yes]
+                      Re-apply the persisted layout list
   settings [--dry-run]
                       Open the LXQt keyboard settings GUI
   keys [--category CAT] [--search TERM] [--dry-run]
@@ -1051,6 +1053,7 @@ Examples:
   horneroctl hardware keyboard layout --yes
   horneroctl hardware keyboard layout --list
   horneroctl hardware keyboard layout --set us,latam --variant intl, --dry-run
+  horneroctl hardware keyboard layout --restore --yes
   horneroctl hardware keyboard settings --dry-run
   horneroctl hardware keyboard keys --search workspace
   horneroctl hardware keyboard keys --category=Window
