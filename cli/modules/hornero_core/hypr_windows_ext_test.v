@@ -75,6 +75,17 @@ fn test_wrules_add_remove() {
 	wrules_test_teardown()
 }
 
+fn test_windows_live_gaps_parse_vec2_custom() {
+	wrules_test_setup()
+	os.write_file(hx_wrules_root + '/bin/hyprctl', '#!/bin/sh\ncase "$*" in *gaps_in*) echo \'{"custom":"6 6 6 6"}\' ;; *gaps_out*) echo \'{"custom":"18 18 18 18"}\' ;; *follow_mouse*) echo \'{"int":1}\' ;; *) echo \'{"int":2}\' ;; esac\nexit 0\n') or {
+		assert false
+	}
+	status := windows_status_report()
+	assert status.data['gaps_in'] == '6', status.message
+	assert status.data['gaps_out'] == '18'
+	wrules_test_teardown()
+}
+
 fn test_windows_follow_mouse_applies_and_persists() {
 	wrules_test_setup()
 	assert windows_settings_valid(WindowsSettings{ follow_mouse: 2 })

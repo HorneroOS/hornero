@@ -615,7 +615,16 @@ fn windows_live_value(bin string, key string) int {
 	if rep.ok {
 		parsed := json2_decode_map(rep.output)
 		if parsed.len > 0 {
-			return int(json2_f64(parsed, 'int'))
+			if 'int' in parsed {
+				return int(json2_f64(parsed, 'int'))
+			}
+			// gaps come back as a vec2 custom value ("6 6 6 6"): the
+			// uniform Hornero gap is the first component. Without
+			// this, a subset `set` would read 0 and wipe the gaps.
+			custom := json2_str(parsed, 'custom')
+			if custom.len > 0 {
+				return custom.split(' ')[0].int()
+			}
 		}
 	}
 	return -1
