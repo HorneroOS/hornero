@@ -121,6 +121,30 @@ jobs:
         run: |
           gh release upload "${{ needs.create-release.outputs.tag }}" \
             "cli/build/${{ matrix.asset }}" --clobber
+      # Signing (hornero#180): only when the maintainer has provided
+      # the release key as a secret. Without it the asset stays
+      # unsigned and the warning is loud — never fake a signature.
+      - name: Sign release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNING_KEY: ${{ secrets.HORNERO_RELEASE_GPG_PRIVATE_KEY }}
+          SIGNING_PASSPHRASE: ${{ secrets.HORNERO_RELEASE_GPG_PASSPHRASE }}
+        run: |
+          if [ -z "${SIGNING_KEY}" ]; then
+            echo "::warning::HORNERO_RELEASE_GPG_PRIVATE_KEY not set; publishing UNSIGNED asset (docs/RELEASE_SIGNING.md)"
+            exit 0
+          fi
+          export GNUPGHOME="${RUNNER_TEMP}/gnupg"
+          mkdir -p "${GNUPGHOME}" && chmod 700 "${GNUPGHOME}"
+          printf '%s' "${SIGNING_KEY}" | gpg --batch --quiet --import
+          key_id="$(gpg --batch --with-colons --list-keys \
+            | awk -F: '/^fpr:/{print $10; exit}')"
+          asset="cli/build/${{ matrix.asset }}"
+          HORNERO_RELEASE_KEY_ID="${key_id}" \
+            HORNERO_RELEASE_PASSPHRASE="${SIGNING_PASSPHRASE}" \
+            scripts/sign-release.sh "${asset}"
+          gh release upload "${{ needs.create-release.outputs.tag }}" \
+            "${asset}.asc" --clobber
 
   aur-publish:
     name: Publish horneroctl-bin to AUR
