@@ -154,6 +154,9 @@ fn run_plugin(args []string, mode hornero_core.RenderMode) int {
 	if opts.leaf == 'list' {
 		return render(hornero_core.community_plugin_list_report(), mode)
 	}
+	if opts.leaf == 'community' {
+		return render(hornero_core.community_plugin_registry_list_report(), mode)
+	}
 	if opts.leaf == 'enable' {
 		return render(hornero_core.community_plugin_enable_report(hornero_core.CommunityPluginOptions{
 			value:   opts.value

@@ -17,6 +17,7 @@ options=('!strip')
 optdepends=(
   'xdg-terminal-exec: launch terminals using Hornero terminal preferences'
   'git: install community Shell plugin packages from HTTPS repositories'
+  'minisign: verify signed HorneroOS community plugin registry indexes'
   'hornero-shell: validate community plugin packages with the Shell-owned contract checker'
 )
 source_x86_64=(

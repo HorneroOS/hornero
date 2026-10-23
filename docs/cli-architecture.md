@@ -32,6 +32,10 @@ configuration owns defaults and read-only catalogue data.
   under XDG roots, with receipts under Hornero state. Validation delegates to
   the Shell package's contract checker. The command never activates packages:
   Quickshell QML runs with user privileges and is not sandboxed.
+  Signed community-registry discovery verifies the index before exposing
+  entries and persists a per-user anti-rollback version; installation from
+  those entries remains a separate provenance-preserving slice (see
+  [`PLUGIN_REGISTRY.md`](PLUGIN_REGISTRY.md)).
 
 ## State and package data
 

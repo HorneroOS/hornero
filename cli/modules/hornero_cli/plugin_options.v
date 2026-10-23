@@ -20,7 +20,7 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 	}
 	leaf := args[0]
 	if leaf !in ['install', 'remove', 'list', 'validate', 'new', 'enable', 'disable', 'trust',
-		'catalog'] {
+		'catalog', 'community'] {
 		return error('unknown plugin subcommand: ${leaf}.\nRun: horneroctl plugin --help')
 	}
 	mut value := ''
@@ -105,6 +105,9 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 	}
 	if expected_revision.len > 0 && (leaf != 'catalog' || value !in ['install', 'update']) {
 		return error('--revision is only valid with plugin catalog install/update')
+	}
+	if leaf == 'community' && (value != 'list' || dry_run || yes) {
+		return error('plugin community supports only the read/list command.\nExample: horneroctl plugin community list --json')
 	}
 	if leaf in ['install', 'remove', 'validate'] && value.len == 0 {
 		return error('missing value.\nExample: horneroctl plugin ${leaf} <source-or-id>')
