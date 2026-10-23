@@ -432,7 +432,7 @@ pub fn community_plugin_list_report() CommandResult {
 				&& record.catalog_capabilities is map[string]json2.Any
 				&& record.catalog_sha256.len > 0
 				&& community_plugin_payload_hash(payload) == record.catalog_sha256
-			rollback_available:    record.source == plugin_catalog_source && os.is_dir('${payload}.previous')
+			rollback_available:    community_plugin_rollback_available(record, record.id, payload)
 		}
 	}
 	data := json2.encode(list_entries, escape_unicode: true)
@@ -562,6 +562,16 @@ fn community_plugin_payload_hash(payload string) string {
 	raw := os.read_file(os.join_path(payload, 'manifest.json')) or { return '' }
 	manifest := json2.decode[map[string]json2.Any](raw) or { return '' }
 	return plugin_payload_sha256(payload, manifest)
+}
+
+fn community_plugin_rollback_available(record CommunityPluginReceipt, id string, payload string) bool {
+	previous := '${payload}.previous'
+	if record.schema_version != 1 || record.id != id || record.source != plugin_catalog_source
+		|| record.previous_payload_sha256.len == 0 || os.is_link(payload) || os.is_link(previous)
+		|| !os.is_dir(previous) {
+		return false
+	}
+	return community_plugin_payload_hash(previous) == record.previous_payload_sha256
 }
 
 // Hash of the plugin's listed files only (manifest.json excluded).
@@ -936,7 +946,15 @@ pub fn community_plugin_catalog_report() CommandResult {
 		receipt := os.join_path(receipts, '${e.id}.json')
 		state := if os.is_file(receipt) { 'installed' } else { 'available' }
 		lines << '${e.id} ${e.version} [${e.trust}/${e.placement}] ${e.name} — ${state}'
-		rollback_available := state == 'installed' && os.is_dir(os.join_path(root, '${e.id}.previous'))
+		mut rollback_available := false
+		if state == 'installed' && !os.is_link(receipt) {
+			raw_receipt := os.read_file(receipt) or { '' }
+			record := json2.decode[CommunityPluginReceipt](raw_receipt) or {
+				CommunityPluginReceipt{}
+			}
+			rollback_available = community_plugin_rollback_available(record, e.id,
+				os.join_path(root, e.id))
+		}
 		rows << plugin_catalog_entry_json(e, state, rollback_available)
 	}
 	return ok_result('plugin catalog', 'Official HorneroOS catalogue (${entries.len} plugins):\n${lines.join('\n')}', {

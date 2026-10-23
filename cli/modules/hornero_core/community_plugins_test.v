@@ -552,6 +552,63 @@ fn test_catalog_entry_reports_rollback_availability() {
 	assert encoded.contains('"rollback_available":true')
 }
 
+fn test_catalog_rollback_availability_requires_receipt_and_matching_previous_payload() {
+	root := community_plugins_test_new_root('rollback-availability')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	data_root := os.join_path(root, 'data', 'hornero', 'plugins')
+	receipt_root := os.join_path(root, 'state', 'hornero', 'plugins', 'receipts')
+	catalog_root := os.join_path(root, 'catalog')
+	current := os.join_path(data_root, 'example-clock')
+	previous := '${current}.previous'
+	os.mkdir_all(current) or { panic(err) }
+	os.mkdir_all(previous) or { panic(err) }
+	os.mkdir_all(receipt_root) or { panic(err) }
+	os.mkdir_all(catalog_root) or { panic(err) }
+	os.write_file(os.join_path(current, 'manifest.json'), '{"schemaVersion":1,"id":"example-clock","name":"Example Clock","version":"2.0.0","files":["Main.qml"]}') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(current, 'Main.qml'), 'import QtQuick\nItem { property string version: "2.0.0" }\n') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(previous, 'manifest.json'), '{"schemaVersion":1,"id":"example-clock","name":"Example Clock","version":"1.0.0","files":["Main.qml"]}') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(previous, 'Main.qml'), 'import QtQuick\nItem { property string version: "1.0.0" }\n') or {
+		panic(err)
+	}
+	previous_hash := community_plugin_payload_hash(previous)
+	record := CommunityPluginReceipt{
+		schema_version:          1
+		id:                      'example-clock'
+		source:                  plugin_catalog_source
+		previous_payload_sha256: previous_hash
+	}
+	os.write_file(os.join_path(receipt_root, 'example-clock.json'), json2.encode(record)) or {
+		panic(err)
+	}
+	os.write_file(os.join_path(catalog_root, 'catalog.json'), '{"plugins":[{"id":"example-clock","name":"Example Clock","version":"2.0.0","path":"plugins/example-clock"}]}') or {
+		panic(err)
+	}
+	os.setenv('HORNERO_PLUGINS_CATALOG_URL', catalog_root, true)
+
+	listed := community_plugin_list_report()
+	catalogued := community_plugin_catalog_report()
+	assert listed.ok && listed.data['plugins'].contains('"rollback_available":true')
+	assert catalogued.ok && catalogued.data['plugins'].contains('"rollback_available":true')
+
+	os.write_file(os.join_path(previous, 'Main.qml'), 'import QtQuick\nItem { property string changed: "yes" }\n') or {
+		panic(err)
+	}
+	listed_after_change := community_plugin_list_report()
+	catalogued_after_change := community_plugin_catalog_report()
+	assert listed_after_change.ok && listed_after_change.data['plugins'].contains('"rollback_available":false')
+	assert catalogued_after_change.ok && catalogued_after_change.data['plugins'].contains('"rollback_available":false')
+}
+
 fn test_catalog_rollback_restores_kept_payload() {
 	root := community_plugins_test_new_root('rb-ok')
 	saved := community_plugins_test_env(root)
