@@ -33,6 +33,15 @@ def test_release_stays_draft_until_signed_assets_verify():
     assert set(jobs["publish-release"]["needs"]) == {"create-release", "build"}
     assert "publish-release" in jobs["aur-publish"]["needs"]
 
+    upload = next(
+        step for step in jobs["build"]["steps"] if step.get("name") == "Upload release asset"
+    )
+    publish = jobs["publish-release"]["steps"][0]
+    for step in (upload, publish):
+        assert step["env"]["RELEASE_TAG"] == "${{ needs.create-release.outputs.tag }}"
+        assert "${{ needs.create-release.outputs.tag }}" not in step["run"]
+        assert '"${RELEASE_TAG}"' in step["run"]
+
     signing = next(
         step for step in jobs["build"]["steps"] if step.get("name") == "Sign release asset"
     )

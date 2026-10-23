@@ -150,8 +150,9 @@ jobs:
       - name: Upload release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
         run: |
-          gh release upload "${{ needs.create-release.outputs.tag }}" \
+          gh release upload "${RELEASE_TAG}" \
             "cli/build/${{ matrix.asset }}" --clobber
       - name: Sign release asset
         env:
@@ -205,7 +206,8 @@ jobs:
       - name: Publish draft after every asset verifies
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ needs.create-release.outputs.tag }}" --draft=false
+          RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
+        run: gh release edit "${RELEASE_TAG}" --draft=false
 
   aur-publish:
     name: Publish horneroctl-bin to AUR
