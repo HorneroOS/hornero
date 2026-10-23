@@ -35,6 +35,13 @@ fn assistant_setup_test_restore_env(old AssistantSetupTestEnv) {
 	assistant_setup_test_restore_var('HERMES_HOME', old.hermes_home)
 }
 
+fn assistant_setup_test_move_fail_receipt(src string, dest string) ! {
+	if os.file_name(dest) == 'unit.sha256' {
+		return error('simulated ownership receipt rename failure')
+	}
+	os.mv(src, dest)!
+}
+
 fn test_assistant_knowledge_markdown_shape() {
 	md := assistant_knowledge_markdown('horneroctl-test', '2026-10-21 10:00',
 		'system_info -> horneroctl system info --json; package_updates -> horneroctl package updates --json')
@@ -99,6 +106,87 @@ fn test_assistant_setup_receipt_only_authorizes_unchanged_content() {
 		assert false
 	}
 	assert os.read_file(path)! == 'locally modified'
+}
+
+fn test_assistant_setup_receipt_is_bound_to_managed_path() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-path-receipt-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	config_a := os.join_path(root, 'config-a')
+	config_b := os.join_path(root, 'config-b')
+	config_link := os.join_path(root, 'config-link')
+	os.mkdir_all(config_a)!
+	os.mkdir_all(config_b)!
+	os.symlink(config_a, config_link)!
+	os.setenv('XDG_CONFIG_HOME', config_link, true)
+	first_path := assistant_gateway_unit_file()
+	assert assistant_setup_write_owned_file('unit', first_path, 'same content')!
+
+	os.rm(config_link)!
+	os.symlink(config_b, config_link)!
+	second_path := assistant_gateway_unit_file()
+	os.mkdir_all(os.dir(second_path))!
+	os.write_file(second_path, 'same content')!
+	assert !assistant_setup_file_is_owned('unit', second_path)
+
+	result := assistant_setup_remove_report(false, true)
+	assert result.ok
+	assert os.read_file(second_path)! == 'same content'
+	assert os.is_file(os.join_path(config_a, 'systemd', 'user', assistant_gateway_unit_name))
+}
+
+fn test_assistant_setup_rejects_non_file_receipt_before_writing_target() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-receipt-directory-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+	receipt := assistant_setup_receipt_file('unit')
+	os.mkdir_all(receipt)!
+
+	if _ := assistant_setup_write_owned_file('unit', path, 'new unit') {
+		assert false
+	}
+	assert !os.is_file(path)
+	assert os.is_dir(receipt)
+}
+
+fn test_assistant_setup_restores_previous_file_when_receipt_publish_fails() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-receipt-rollback-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+	assert assistant_setup_write_owned_file('unit', path, 'previous unit')!
+
+	if _ := assistant_setup_write_owned_file_with_move('unit', path, 'updated unit',
+		assistant_setup_test_move_fail_receipt) {
+		assert false
+	}
+	assert os.read_file(path)! == 'previous unit'
+	assert assistant_setup_file_is_owned('unit', path)
+}
+
+fn test_assistant_enable_keeps_settings_disabled_when_key_creation_fails() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-key-failure-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	hermes := os.join_path(bin, 'hermes')
+	os.write_file(hermes, '#!/bin/sh\nexit 0\n')!
+	os.chmod(hermes, 0o755)!
+	os.setenv('PATH', '${bin}:${old_path}', true)
+	os.mkdir_all(assistant_key_file())!
+
+	result := assistant_enable_report(false, true)
+	assert !result.ok
+	assert result.message.contains('Cannot write the local assistant key')
+	assert !os.is_file(assistant_settings_file())
 }
 
 fn test_assistant_setup_does_not_adopt_identical_unreceipted_file() {

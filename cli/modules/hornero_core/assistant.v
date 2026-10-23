@@ -1027,11 +1027,12 @@ pub fn assistant_enable_report(dry_run bool, yes bool) CommandResult {
 	mut settings := assistant_load_settings()
 	already := settings.enabled
 	settings.enabled = true
-	assistant_save_settings(settings) or {
-		return fail_result('assistant enable', 'Cannot write assistant settings: ${err.msg()}')
-	}
+	// Keep persisted enablement false when key creation fails.
 	assistant_ensure_key() or {
 		return fail_result('assistant enable', 'Cannot write the local assistant key: ${err.msg()}')
+	}
+	assistant_save_settings(settings) or {
+		return fail_result('assistant enable', 'Cannot write assistant settings: ${err.msg()}')
 	}
 	msg := if already {
 		'Assistant was already enabled; settings reaffirmed. Start Hermes so its gateway listens on ${settings.endpoint}.'

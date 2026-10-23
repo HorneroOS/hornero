@@ -58,10 +58,19 @@ fn assistant_setup_valid_hash(value string) bool {
 	return true
 }
 
+fn assistant_setup_receipt_hash(path string, content string) string {
+	canonical_parent := os.real_path(os.dir(path))
+	canonical_path := os.join_path(canonical_parent, os.file_name(path))
+	return sha256.hexhash('${canonical_path.len}:${canonical_path}${content}')
+}
+
 fn assistant_setup_safe_receipt_file(kind string) !string {
 	path := assistant_setup_receipt_file(kind)
 	if os.is_link(path) {
 		return error('ownership receipt path is a symbolic link; refusing to follow it')
+	}
+	if os.exists(path) && !os.is_file(path) {
+		return error('ownership receipt path exists but is not a regular file; refusing to replace it')
 	}
 	if os.is_file(path) {
 		receipt := os.read_file(path) or { return error('cannot read ownership receipt: ${err.msg()}') }
@@ -83,7 +92,8 @@ fn assistant_setup_file_is_owned(kind string, path string) bool {
 	}
 	receipt := os.read_file(receipt_path) or { return false }
 	receipt_hash := receipt.trim_space()
-	return assistant_setup_valid_hash(receipt_hash) && receipt_hash == sha256.hexhash(content)
+	return assistant_setup_valid_hash(receipt_hash)
+		&& receipt_hash == assistant_setup_receipt_hash(path, content)
 }
 
 // Existing files can only be replaced when a receipt proves Hornero wrote
@@ -103,18 +113,78 @@ fn assistant_setup_can_write_file(kind string, path string, desired string) !boo
 	return existing != desired
 }
 
-fn assistant_setup_write_owned_file(kind string, path string, content string) !bool {
+fn assistant_setup_write_temp_file(path string, content string) !string {
+	dir := os.dir(path)
+	os.mkdir_all(dir) or { return error('cannot create ${dir}: ${err.msg()}') }
+	tmp := os.join_path(dir, '.${os.file_name(path)}.tmp.${os.getpid()}')
+	if os.exists(tmp) {
+		return error('temporary file already exists: ${tmp}; inspect it before retrying')
+	}
+	os.write_file(tmp, content) or {
+		os.rm(tmp) or {}
+		return error('cannot write ${tmp}: ${err.msg()}')
+	}
+	return tmp
+}
+
+fn assistant_setup_restore_file(path string, content string) ! {
+	tmp := assistant_setup_write_temp_file(path, content)!
+	os.mv(tmp, path) or {
+		os.rm(tmp) or {}
+		return error('cannot restore ${path}: ${err.msg()}')
+	}
+}
+
+fn assistant_setup_move_file(src string, dest string) ! {
+	os.mv(src, dest)!
+}
+
+fn assistant_setup_write_owned_file_with_move(kind string, path string, content string, move_file fn (string, string) !) !bool {
 	receipt_file := assistant_setup_safe_receipt_file(kind)!
 	should_write := assistant_setup_can_write_file(kind, path, content)!
 	if !should_write {
 		return false
 	}
-	os.mkdir_all(os.dir(path))!
-	os.mkdir_all(os.dir(receipt_file))!
-	os.write_file(path, content)!
-	os.write_file(receipt_file, sha256.hexhash(content) + '\n')!
-	os.chmod(receipt_file, 0o600)!
+	had_existing_file := os.is_file(path)
+	previous_content := if had_existing_file {
+		os.read_file(path) or { return error('cannot read existing file ${path}: ${err.msg()}') }
+	} else {
+		''
+	}
+	file_tmp := assistant_setup_write_temp_file(path, content)!
+	receipt_tmp := assistant_setup_write_temp_file(receipt_file,
+		assistant_setup_receipt_hash(path, content) + '\n') or {
+		os.rm(file_tmp) or {}
+		return err
+	}
+	os.chmod(receipt_tmp, 0o600) or {
+		os.rm(file_tmp) or {}
+		os.rm(receipt_tmp) or {}
+		return error('cannot restrict ownership receipt permissions: ${err.msg()}')
+	}
+	move_file(file_tmp, path) or {
+		os.rm(file_tmp) or {}
+		os.rm(receipt_tmp) or {}
+		return error('cannot install ${path}: ${err.msg()}')
+	}
+	move_file(receipt_tmp, receipt_file) or {
+		os.rm(receipt_tmp) or {}
+		if had_existing_file {
+			assistant_setup_restore_file(path, previous_content) or {
+				return error('cannot update the ownership receipt and cannot restore ${path}: ${err.msg()}; inspect the file before retrying')
+			}
+		} else {
+			os.rm(path) or {
+				return error('cannot update the ownership receipt or remove unowned ${path}: ${err.msg()}; inspect the file before retrying')
+			}
+		}
+		return error('cannot update ownership receipt ${receipt_file}: ${err.msg()}; previous file content was restored')
+	}
 	return true
+}
+
+fn assistant_setup_write_owned_file(kind string, path string, content string) !bool {
+	return assistant_setup_write_owned_file_with_move(kind, path, content, assistant_setup_move_file)
 }
 
 // assistant_setup_plan is pure text so tests can pin the contract:
@@ -170,16 +240,16 @@ pub fn assistant_setup_report(dry_run bool, yes bool, remove bool) CommandResult
 	assistant_setup_can_write_file('skill', skill_file, skill_text) or {
 		return fail_result('assistant setup', 'Cannot manage the Hornero skill at ${skill_file}: ${err.msg()}. The existing file was preserved; reconcile its ownership with dotfiles or remove it yourself before retrying.')
 	}
-	enable := assistant_enable_report(false, true)
-	if !enable.ok {
-		return enable
-	}
 	wrote_unit := assistant_gateway_ensure_unit(hermes) or {
 		return fail_result('assistant setup', 'Cannot write the user unit ${assistant_gateway_unit_file()}: ${err.msg()}')
 	}
 	mut skill_state := 'already current (Hornero-owned)'
 	wrote_skill := assistant_setup_write_owned_file('skill', skill_file, skill_text) or {
 		return fail_result('assistant setup', 'Cannot install the Hornero skill at ${skill_file}: ${err.msg()}')
+	}
+	enable := assistant_enable_report(false, true)
+	if !enable.ok {
+		return enable
 	}
 	if wrote_skill {
 		skill_state = 'installed'
