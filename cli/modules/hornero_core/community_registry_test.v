@@ -56,6 +56,18 @@ fn test_community_registry_schema_accepts_sorted_pins_and_rejects_ambiguous_or_m
 	}
 }
 
+fn test_community_registry_file_reads_enforce_the_bound() {
+	root := community_registry_test_new_root('read-bound')
+	defer { os.rmdir_all(root) or {} }
+	path := os.join_path(root, 'bounded.json')
+	os.write_file(path, '1234') or { panic(err) }
+	if _ := community_registry_read_regular(path, 3) {
+		assert false, 'registry reads must reject content beyond the configured limit'
+	} else {
+		assert err.msg().contains('exceeds its size limit')
+	}
+}
+
 fn test_community_registry_listing_verifies_a_snapshot_and_rejects_rollback() {
 	root := community_registry_test_new_root('snapshot')
 	defer { os.rmdir_all(root) or {} }

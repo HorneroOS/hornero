@@ -298,7 +298,15 @@ fn community_registry_read_regular(path string, maximum int) ![]u8 {
 	if os.file_size(path) > u64(maximum) {
 		return error('community registry file exceeds its size limit: ${path}')
 	}
-	data := os.read_bytes(path) or { return error('cannot read community registry file ${path}: ${err.msg()}') }
+	mut file := os.open(path) or {
+		return error('cannot read community registry file ${path}: ${err.msg()}')
+	}
+	defer {
+		file.close()
+	}
+	// Allocate at most one byte over the limit. The initial stat alone cannot
+	// bound memory if the file grows or is replaced before the read completes.
+	data := file.read_bytes(maximum + 1)
 	if data.len > maximum {
 		return error('community registry file exceeds its size limit: ${path}')
 	}
