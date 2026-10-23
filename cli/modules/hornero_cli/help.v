@@ -140,9 +140,9 @@ Examples:
   new <id> --name NAME --author AUTHOR --description TEXT --license MIT --dir PATH [--dry-run|--yes]
                       Create a static community plugin scaffold (MIT template)
   catalog [--json]    Browse the official HorneroOS/plugins catalogue
-  catalog install <id> [--dry-run|--yes]
+  catalog install <id> [--revision COMMIT] [--dry-run|--yes]
                       Install from the official catalogue (SHA-256 verified, pinned revision)
-  catalog update <id> [--dry-run|--yes]
+  catalog update <id> [--revision COMMIT] [--dry-run|--yes]
                       Update a catalogue-installed plugin (hash verified, previous payload kept)
   catalog rollback <id> [--dry-run|--yes]
                       Restore the payload kept by the last catalogue update

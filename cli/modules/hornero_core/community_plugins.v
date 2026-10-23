@@ -16,12 +16,14 @@ fn C.lstat(path &char, metadata voidptr) int
 
 pub struct CommunityPluginOptions {
 pub:
-	value   string
-	dry_run bool
-	yes     bool
+	value             string
+	dry_run           bool
+	yes               bool
+	expected_revision string
 }
 
 struct CommunityPluginReceipt {
+pub mut:
 	schema_version int
 	id             string
 	name           string
@@ -29,7 +31,6 @@ struct CommunityPluginReceipt {
 	source         string
 	revision       string
 	installed_at   string
-pub mut:
 	// Enabled is the runtime lifecycle flag (M2). Receipts written before
 	// this field existed decode as disabled: installed plugins never run
 	// until the user explicitly enables them.
@@ -39,16 +40,54 @@ pub mut:
 	// Receipts written before this field decode as untrusted.
 	// Official-catalogue receipts do not need it: their provenance is
 	// the reviewed HorneroOS/plugins repo plus the catalogue hash.
-	trusted_hash string
+	trusted_hash                  string
+	catalog_sha256                string
+	catalog_capabilities          json2.Any
+	previous_catalog_sha256       string
+	previous_catalog_capabilities json2.Any
+	previous_payload_sha256       string
+	previous_trusted_hash         string
+	previous_revision             string
+	previous_version              string
 }
 
 struct CommunityPluginListEntry {
-	id        string
-	name      string
-	version   string
-	installed bool
-	enabled   bool
-	trust     string
+	id                    string
+	name                  string
+	version               string
+	installed             bool
+	enabled               bool
+	trust                 string
+	source                string
+	revision              string
+	catalog_sha256        string
+	capabilities          json2.Any
+	capabilities_verified bool
+	rollback_available    bool
+}
+
+fn community_plugin_declared_capabilities(record CommunityPluginReceipt, plugin_dir string) json2.Any {
+	if record.source == plugin_catalog_source {
+		if record.catalog_capabilities is map[string]json2.Any
+			&& record.catalog_sha256.len > 0
+			&& community_plugin_payload_hash(plugin_dir) == record.catalog_sha256 {
+			return record.catalog_capabilities
+		}
+		manifest := community_plugin_manifest(plugin_dir) or {
+			return json2.Any(map[string]json2.Any{})
+		}
+		if 'capabilities' in manifest && manifest['capabilities'] is map[string]json2.Any {
+			return manifest['capabilities']
+		}
+		return json2.Any(map[string]json2.Any{})
+	}
+	manifest := community_plugin_manifest(plugin_dir) or {
+		return json2.Any(map[string]json2.Any{})
+	}
+	if 'capabilities' in manifest && manifest['capabilities'] is map[string]json2.Any {
+		return manifest['capabilities']
+	}
+	return json2.Any(map[string]json2.Any{})
 }
 
 pub fn resolve_community_plugin_validator() string {
@@ -225,7 +264,15 @@ pub fn community_plugin_install_report(opts CommunityPluginOptions) CommandResul
 		os.rmdir_all(stage) or {}
 		return fail_result('plugin install', 'cannot install validated package: ${err.msg()}')
 	}
-	receipt := CommunityPluginReceipt{1, id, name, version, opts.value, revision, time.now().unix_milli().str(), false, ''}
+	receipt := CommunityPluginReceipt{
+		schema_version: 1
+		id:             id
+		name:           name
+		version:        version
+		source:         opts.value
+		revision:       revision
+		installed_at:   time.now().unix_milli().str()
+	}
 	_, receipts := community_plugin_roots()
 	os.mkdir_all(receipts) or {
 		os.rmdir_all(destination) or {}
@@ -369,13 +416,23 @@ pub fn community_plugin_list_report() CommandResult {
 		if record.schema_version != 1 || !community_plugin_valid_id(record.id) || file != '${record.id}.json' {
 			continue
 		}
+		payload := os.join_path(root, record.id)
 		list_entries << CommunityPluginListEntry{
-			id:        record.id
-			name:      record.name
-			version:   record.version
-			installed: os.is_dir(os.join_path(root, record.id))
-			enabled:   record.enabled && os.is_dir(os.join_path(root, record.id))
-			trust:     community_plugin_trust_state(record, os.join_path(root, record.id))
+			id:                    record.id
+			name:                  record.name
+			version:               record.version
+			installed:             os.is_dir(payload)
+			enabled:               record.enabled && os.is_dir(payload)
+			trust:                 community_plugin_trust_state(record, payload)
+			source:                record.source
+			revision:              record.revision
+			catalog_sha256:        record.catalog_sha256
+			capabilities:          community_plugin_declared_capabilities(record, payload)
+			capabilities_verified: record.source == plugin_catalog_source
+				&& record.catalog_capabilities is map[string]json2.Any
+				&& record.catalog_sha256.len > 0
+				&& community_plugin_payload_hash(payload) == record.catalog_sha256
+			rollback_available:    record.source == plugin_catalog_source && os.is_dir('${payload}.previous')
 		}
 	}
 	data := json2.encode(list_entries, escape_unicode: true)
@@ -452,7 +509,7 @@ fn community_plugin_set_enabled_report(opts CommunityPluginOptions, enable bool)
 	if !os.is_dir(payload) {
 		return fail_result('plugin ${verb}', 'plugin payload is missing at ${payload}; reinstall the package before changing its state')
 	}
-	if enable && !record.enabled {
+	if enable {
 		// Fail closed: an installed payload must still pass the static
 		// contract before it may be marked runnable.
 		community_plugin_run_validator(payload) or {
@@ -581,7 +638,14 @@ fn community_plugin_signature_state(payload string) string {
 // hash-pinned trust recorded via `plugin trust`.
 fn community_plugin_trust_state(record CommunityPluginReceipt, payload string) string {
 	if record.source == plugin_catalog_source {
-		return 'official'
+		current := community_plugin_payload_hash(payload)
+		if record.catalog_sha256.len > 0 && current == record.catalog_sha256 {
+			return 'official'
+		}
+		if record.trusted_hash.len > 0 && current.len > 0 && current == record.trusted_hash {
+			return 'trusted'
+		}
+		return if record.catalog_sha256.len == 0 { 'unverified' } else { 'modified' }
 	}
 	signature := community_plugin_signature_state(payload)
 	if signature == 'bad-signature' {
@@ -644,7 +708,12 @@ pub fn community_plugin_trust_report(opts CommunityPluginOptions) CommandResult 
 	if !opts.yes {
 		return fail_result('plugin trust', 'refusing to record trust without --yes (preview with --dry-run).\nExample: horneroctl plugin trust ${id} --dry-run')
 	}
+	was_trusted := community_plugin_trust_state(record, payload) in ['official', 'trusted', 'signed']
 	record.trusted_hash = hash
+	// Trust records review of a specific payload; it is never an implicit
+	// enable. If a previously enabled payload lost integrity, keep it disabled
+	// after trust so the user must explicitly enable it again.
+	if !was_trusted { record.enabled = false }
 	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
 		return fail_result('plugin trust', 'cannot write plugin receipt: ${err.msg()}')
@@ -654,7 +723,12 @@ pub fn community_plugin_trust_report(opts CommunityPluginOptions) CommandResult 
 		os.rm(tmp) or {}
 		return fail_result('plugin trust', 'cannot save plugin receipt: ${err.msg()}')
 	}
-	return ok_result('plugin trust', 'trust recorded for plugin ${id} at payload hash ${hash}. It is still disabled; enable it explicitly. If the payload changes, trust must be recorded again.', {
+	enabled_text := if record.enabled {
+		'It remains enabled.'
+	} else {
+		'It remains disabled; enable it explicitly.'
+	}
+	return ok_result('plugin trust', 'trust recorded for plugin ${id} at payload hash ${hash}. ${enabled_text} If the payload changes, trust must be recorded again.', {
 		'id':    id
 		'hash':  hash
 		'trust': 'trusted'
@@ -679,17 +753,20 @@ pub const plugin_catalog_source = 'https://github.com/HorneroOS/plugins.git'
 
 pub struct PluginCatalogEntry {
 pub:
-	id          string
-	name        string
-	version     string
-	description string
-	author      string
-	license     string
-	placement   string
-	category    string
-	trust       string
-	path        string
-	sha256      string
+	id             string
+	name           string
+	version        string
+	description    string
+	author         string
+	license        string
+	placement      string
+	category       string
+	trust          string
+	path           string
+	sha256         string
+	homepage       string
+	generated_from string
+	capabilities   json2.Any
 }
 
 pub fn plugin_catalog_entries(catalog_json string) []PluginCatalogEntry {
@@ -698,6 +775,11 @@ pub fn plugin_catalog_entries(catalog_json string) []PluginCatalogEntry {
 		return []
 	}
 	root := decoded.as_map()
+	generated_from := if 'generatedFrom' in root && root['generatedFrom'] is string {
+		root['generatedFrom'].str()
+	} else {
+		''
+	}
 	if !('plugins' in root) || root['plugins'] !is []json2.Any {
 		return []
 	}
@@ -714,20 +796,47 @@ pub fn plugin_catalog_entries(catalog_json string) []PluginCatalogEntry {
 			return ''
 		}
 		entries << PluginCatalogEntry{
-			id:          get('id')
-			name:        get('name')
-			version:     get('version')
-			description: get('description')
-			author:      get('author')
-			license:     get('license')
-			placement:   get('placement')
-			category:    get('category')
-			trust:       get('trust')
-			path:        get('path')
-			sha256:      get('sha256')
+			id:             get('id')
+			name:           get('name')
+			version:        get('version')
+			description:    get('description')
+			author:         get('author')
+			license:        get('license')
+			placement:      get('placement')
+			category:       get('category')
+			trust:          get('trust')
+			path:           get('path')
+			sha256:         get('sha256')
+			homepage:       get('homepage')
+			generated_from: generated_from
+			capabilities:   if 'capabilities' in m && m['capabilities'] is map[string]json2.Any {
+				m['capabilities']
+			} else {
+				json2.Any(map[string]json2.Any{})
+			}
 		}
 	}
 	return entries
+}
+
+fn plugin_catalog_entry_json(entry PluginCatalogEntry, state string, rollback_available bool) json2.Any {
+	return json2.Any({
+		'id':                 json2.Any(entry.id)
+		'name':               json2.Any(entry.name)
+		'version':            json2.Any(entry.version)
+		'description':        json2.Any(entry.description)
+		'author':             json2.Any(entry.author)
+		'license':            json2.Any(entry.license)
+		'homepage':           json2.Any(entry.homepage)
+		'placement':          json2.Any(entry.placement)
+		'category':           json2.Any(entry.category)
+		'trust':              json2.Any(entry.trust)
+		'sha256':             json2.Any(entry.sha256)
+		'generatedFrom':      json2.Any(entry.generated_from)
+		'capabilities':       entry.capabilities
+		'state':              json2.Any(state)
+		'rollback_available': json2.Any(rollback_available)
+	})
 }
 
 // Same framing as HorneroOS/plugins scripts/gen_catalog.py:
@@ -810,7 +919,7 @@ fn copy_dir(src string, dst string) ! {
 }
 
 pub fn community_plugin_catalog_report() CommandResult {
-	stage, _ := community_plugin_clone_catalog() or {
+	stage, revision := community_plugin_clone_catalog() or {
 		return fail_result('plugin catalog', err.msg())
 	}
 	defer {
@@ -820,18 +929,20 @@ pub fn community_plugin_catalog_report() CommandResult {
 		return fail_result('plugin catalog', 'catalogue has no catalog.json')
 	}
 	entries := plugin_catalog_entries(raw)
-	_, receipts := community_plugin_roots()
+	root, receipts := community_plugin_roots()
 	mut lines := []string{}
-	mut rows := []string{}
+	mut rows := []json2.Any{}
 	for e in entries {
 		receipt := os.join_path(receipts, '${e.id}.json')
 		state := if os.is_file(receipt) { 'installed' } else { 'available' }
 		lines << '${e.id} ${e.version} [${e.trust}/${e.placement}] ${e.name} — ${state}'
-		rows << '{"id":"${e.id}","name":"${e.name}","version":"${e.version}","trust":"${e.trust}","placement":"${e.placement}","category":"${e.category}","state":"${state}"}'
+		rollback_available := state == 'installed' && os.is_dir(os.join_path(root, '${e.id}.previous'))
+		rows << plugin_catalog_entry_json(e, state, rollback_available)
 	}
 	return ok_result('plugin catalog', 'Official HorneroOS catalogue (${entries.len} plugins):\n${lines.join('\n')}', {
-		'plugins': '[${rows.join(',')}]'
-		'source':  plugin_catalog_source
+		'plugins':  json2.encode(rows, escape_unicode: true)
+		'source':   plugin_catalog_source
+		'revision': revision
 	})
 }
 
@@ -847,6 +958,9 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 	}
 	defer {
 		os.rmdir_all(stage) or {}
+	}
+	if opts.expected_revision.len > 0 && opts.expected_revision != revision {
+		return fail_result('plugin catalog install', 'catalogue changed since it was displayed; refresh the catalogue and review the new version before installing')
 	}
 	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
 		return fail_result('plugin catalog install', 'catalogue has no catalog.json')
@@ -891,7 +1005,17 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 	copy_dir(pkg, destination) or {
 		return fail_result('plugin catalog install', 'cannot copy validated package: ${err.msg()}')
 	}
-	receipt := CommunityPluginReceipt{1, found.id, found.name, found.version, plugin_catalog_source, revision, time.now().unix_milli().str(), false, ''}
+	receipt := CommunityPluginReceipt{
+		schema_version:       1
+		id:                   found.id
+		name:                 found.name
+		version:              found.version
+		source:               plugin_catalog_source
+		revision:             revision
+		installed_at:         time.now().unix_milli().str()
+		catalog_sha256:       digest
+		catalog_capabilities: found.capabilities
+	}
 	os.mkdir_all(receipts) or {
 		os.rmdir_all(destination) or {}
 		return fail_result('plugin catalog install', 'cannot create plugin receipt directory')
@@ -957,6 +1081,9 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 	defer {
 		os.rmdir_all(stage) or {}
 	}
+	if opts.expected_revision.len > 0 && opts.expected_revision != revision {
+		return fail_result('plugin catalog update', 'catalogue changed since it was displayed; refresh the catalogue and review the new version before updating')
+	}
 	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
 		return fail_result('plugin catalog update', 'catalogue has no catalog.json')
 	}
@@ -969,13 +1096,6 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 	if found.id.len == 0 {
 		return fail_result('plugin catalog update', 'plugin ${id} is no longer in the official catalogue; refusing to guess')
 	}
-	if found.version == record.version {
-		return ok_result('plugin catalog update', 'plugin ${id} is already at catalogue version ${found.version}; nothing to do', {
-			'id':       id
-			'version':  found.version
-			'revision': revision
-		})
-	}
 	pkg := os.join_path(stage, found.path)
 	if !os.is_dir(pkg) {
 		return fail_result('plugin catalog update', 'catalogue entry path missing: ${found.path}')
@@ -986,6 +1106,17 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 	digest := plugin_payload_sha256(pkg, manifest)
 	if found.sha256.len == 0 || digest != found.sha256 {
 		return fail_result('plugin catalog update', 'payload hash mismatch for ${id} (catalog ${found.sha256}, computed ${digest}); refusing to update')
+	}
+	installed_payload_hash := community_plugin_payload_hash(destination)
+	if found.version == record.version && record.catalog_sha256 == digest && record.revision == revision && installed_payload_hash == digest {
+		return ok_result('plugin catalog update', 'plugin ${id} is already current at catalogue version ${found.version}; nothing to do', {
+			'id':       id
+			'version':  found.version
+			'revision': revision
+		})
+	}
+	if found.version == record.version && installed_payload_hash != digest && record.trusted_hash != installed_payload_hash {
+		return fail_result('plugin catalog update', 'installed payload for ${id} differs from the official catalogue. Trust the current payload explicitly or reinstall the official package before updating')
 	}
 	if opts.dry_run {
 		return ok_result('plugin catalog update', 'would update ${found.name} ${record.version} -> ${found.version} from the official catalogue at ${revision}; hash verified. The current payload is kept for rollback.', {
@@ -1000,6 +1131,13 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		return fail_result('plugin catalog update', err.msg())
 	}
 	previous := '${destination}.previous'
+	old_payload_digest := community_plugin_payload_hash(destination)
+	old_trusted_hash := record.trusted_hash
+	was_integrity_trusted := community_plugin_trust_state(record, destination) in [
+		'official',
+		'trusted',
+		'signed',
+	]
 	if os.exists(previous) || os.is_link(previous) {
 		os.rmdir_all(previous) or {
 			return fail_result('plugin catalog update', 'cannot clear the previous rollback copy')
@@ -1011,29 +1149,49 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		}
 	}
 	copy_dir(pkg, destination) or {
+		os.rmdir_all(destination) or {}
 		if os.is_dir(previous) {
 			os.rename(previous, destination) or {}
 		}
 		return fail_result('plugin catalog update', 'cannot copy validated package: ${err.msg()}')
 	}
+	old_version := record.version
 	enabled_before := record.enabled
-	record = CommunityPluginReceipt{1, found.id, found.name, found.version, plugin_catalog_source, revision, time.now().unix_milli().str(), enabled_before, record.trusted_hash}
+	record.previous_catalog_sha256 = record.catalog_sha256
+	record.previous_catalog_capabilities = record.catalog_capabilities
+	record.previous_revision = record.revision
+	record.previous_version = record.version
+	record.previous_payload_sha256 = old_payload_digest
+	record.previous_trusted_hash = old_trusted_hash
+	record.id = found.id
+	record.name = found.name
+	record.version = found.version
+	record.source = plugin_catalog_source
+	record.revision = revision
+	record.installed_at = time.now().unix_milli().str()
+	record.enabled = enabled_before && was_integrity_trusted
+	record.catalog_sha256 = digest
+	record.catalog_capabilities = found.capabilities
 	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
+		os.rmdir_all(destination) or {}
+		if os.is_dir(previous) { os.rename(previous, destination) or {} }
 		return fail_result('plugin catalog update', 'cannot write plugin receipt')
 	}
 	os.chmod(tmp, 0o600) or {}
 	os.rename(tmp, receipt_path) or {
 		os.rm(tmp) or {}
+		os.rmdir_all(destination) or {}
+		if os.is_dir(previous) { os.rename(previous, destination) or {} }
 		return fail_result('plugin catalog update', 'cannot save plugin receipt')
 	}
-	return ok_result('plugin catalog update', 'updated ${found.name} to ${found.version} [${found.trust}] from the official catalogue. Previous payload kept for `plugin catalog rollback ${id}`. Enabled state unchanged (${if enabled_before {
+	return ok_result('plugin catalog update', 'updated ${found.name} from ${old_version} to ${found.version} [${found.trust}] from the official catalogue. Previous payload kept for `plugin catalog rollback ${id}`. Enabled state is ${if record.enabled {
 		'enabled'
 	} else {
 		'disabled'
-	}}).', {
+	}} (was ${if enabled_before { 'enabled' } else { 'disabled' }}).', {
 		'id':       id
-		'from':     record.version
+		'from':     old_version
 		'version':  found.version
 		'revision': revision
 		'sha256':   digest
@@ -1076,6 +1234,10 @@ pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginO
 		return fail_result('plugin catalog rollback', 'kept payload is unreadable: ${err.msg()}')
 	}
 	prev_version := (prev_manifest['version'] or { json2.Any('') }).str()
+	prev_digest := community_plugin_payload_hash(previous)
+	if record.source == plugin_catalog_source && (record.previous_payload_sha256.len == 0 || prev_digest != record.previous_payload_sha256) {
+		return fail_result('plugin catalog rollback', 'kept payload does not match the previous catalogue hash; refusing to restore unverified data')
+	}
 	if opts.dry_run {
 		return ok_result('plugin catalog rollback', 'would restore ${id} from the kept previous payload (version ${prev_version}); the current payload is discarded', {
 			'dry_run': 'true'
@@ -1086,25 +1248,51 @@ pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginO
 	community_plugin_run_validator(previous) or {
 		return fail_result('plugin catalog rollback', err.msg())
 	}
+	staged_current := '${destination}.rollback-current'
+	if os.exists(staged_current) || os.is_link(staged_current) {
+		return fail_result('plugin catalog rollback', 'cannot safely stage the current payload for rollback')
+	}
 	if os.is_dir(destination) {
-		os.rmdir_all(destination) or {
-			return fail_result('plugin catalog rollback', 'cannot remove the current payload')
+		os.rename(destination, staged_current) or {
+			return fail_result('plugin catalog rollback', 'cannot preserve the current payload before rollback')
 		}
 	}
 	os.rename(previous, destination) or {
+		if os.is_dir(staged_current) { os.rename(staged_current, destination) or {} }
 		return fail_result('plugin catalog rollback', 'cannot restore the kept payload')
 	}
 	enabled_before := record.enabled
-	record = CommunityPluginReceipt{1, record.id, record.name, prev_version, record.source, record.revision, time.now().unix_milli().str(), enabled_before, record.trusted_hash}
+	record.version = if record.previous_version.len > 0 {
+		record.previous_version
+	} else {
+		prev_version
+	}
+	record.revision = record.previous_revision
+	record.installed_at = time.now().unix_milli().str()
+	record.enabled = enabled_before
+	record.catalog_sha256 = record.previous_catalog_sha256
+	record.catalog_capabilities = record.previous_catalog_capabilities
+	record.trusted_hash = record.previous_trusted_hash
+	record.previous_catalog_sha256 = ''
+	record.previous_catalog_capabilities = json2.Any(map[string]json2.Any{})
+	record.previous_revision = ''
+	record.previous_version = ''
+	record.previous_payload_sha256 = ''
+	record.previous_trusted_hash = ''
 	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
+		os.rename(destination, previous) or {}
+		if os.is_dir(staged_current) { os.rename(staged_current, destination) or {} }
 		return fail_result('plugin catalog rollback', 'cannot write plugin receipt')
 	}
 	os.chmod(tmp, 0o600) or {}
 	os.rename(tmp, receipt_path) or {
 		os.rm(tmp) or {}
+		os.rename(destination, previous) or {}
+		if os.is_dir(staged_current) { os.rename(staged_current, destination) or {} }
 		return fail_result('plugin catalog rollback', 'cannot save plugin receipt')
 	}
+	os.rmdir_all(staged_current) or {}
 	return ok_result('plugin catalog rollback', 'rolled back ${id} to the kept previous payload (version ${prev_version}). Enabled state unchanged (${if enabled_before {
 		'enabled'
 	} else {

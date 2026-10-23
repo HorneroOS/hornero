@@ -27,7 +27,8 @@ fn community_plugins_test_restore(saved map[string]string) {
 
 fn community_plugins_test_env(root string) map[string]string {
 	keys := ['XDG_DATA_HOME', 'XDG_STATE_HOME', 'HORNERO_PLUGIN_VALIDATOR', 'HORNERO_GIT_BIN',
-		'HORNERO_TEST_PLUGIN_SOURCE', 'HORNERO_TEST_REVISION', 'HORNERO_PLUGIN_TEST_ROOT']
+		'HORNERO_TEST_PLUGIN_SOURCE', 'HORNERO_TEST_REVISION', 'HORNERO_PLUGIN_TEST_ROOT',
+		'HORNERO_PLUGINS_CATALOG_URL']
 	mut saved := map[string]string{}
 	for key in keys { saved[key] = os.getenv(key) }
 	os.setenv('HORNERO_PLUGIN_TEST_ROOT', root, true)
@@ -44,7 +45,7 @@ fn community_plugins_test_write_executable(path string, content string) {
 fn community_plugins_test_fixture(root string) string {
 	fixture := os.join_path(root, 'fixture')
 	os.mkdir_all(fixture) or { panic(err) }
-	os.write_file('${fixture}/manifest.json', '{"schemaVersion":1,"id":"example-clock","name":"Example Clock","version":"1.0.0"}') or {
+	os.write_file('${fixture}/manifest.json', '{"schemaVersion":1,"id":"example-clock","name":"Example Clock","version":"1.0.0","capabilities":{"processCommands":["notify-send"],"networkHosts":[],"settings":{}}}') or {
 		panic(err)
 	}
 	os.write_file('${fixture}/Main.qml', 'import QtQuick\nItem {}\n') or { panic(err) }
@@ -74,6 +75,7 @@ fn test_community_plugin_install_validate_list_remove_round_trip() {
 	listed := community_plugin_list_report()
 	assert listed.ok
 	assert listed.data['plugins'].contains('Example Clock')
+	assert listed.data['plugins'].contains('"processCommands":["notify-send"]')
 	removed := community_plugin_remove_report(CommunityPluginOptions{ value: 'example-clock', yes: true })
 	assert removed.ok, removed.message
 	assert !os.exists('${root}/data/hornero/plugins/example-clock')
@@ -419,11 +421,20 @@ fn test_community_plugin_enable_unknown_and_invalid_payload() {
 }
 
 fn test_plugin_catalog_entries_and_payload_hash() {
-	catalog := '{"schemaVersion":1,"plugins":[{"id":"hornero-pomodoro","name":"Hornero Pomodoro","version":"1.0.0","trust":"official","placement":"bar","path":"plugins/hornero-pomodoro","sha256":"abc"}]}'
+	catalog := '{"schemaVersion":1,"generatedFrom":"0123456789abcdef0123456789abcdef01234567","plugins":[{"id":"hornero-pomodoro","name":"Hornero Pomodoro","version":"1.0.0","description":"Clock with \\"ticks\\"","author":"HorneroOS contributors","license":"MIT","homepage":"https://example.invalid/plugin","trust":"official","placement":"bar","category":"utilities","path":"plugins/hornero-pomodoro","sha256":"abc","capabilities":{"processCommands":["notify-send"],"networkHosts":[],"settings":{}}}]}'
 	entries := plugin_catalog_entries(catalog)
 	assert entries.len == 1
 	assert entries[0].id == 'hornero-pomodoro'
 	assert entries[0].trust == 'official'
+	assert entries[0].description == 'Clock with "ticks"'
+	assert entries[0].homepage == 'https://example.invalid/plugin'
+	assert entries[0].generated_from == '0123456789abcdef0123456789abcdef01234567'
+	encoded := json2.encode([plugin_catalog_entry_json(entries[0], 'available', false)],
+		escape_unicode: true
+	)
+	assert encoded.contains('"processCommands":["notify-send"]')
+	assert encoded.contains('"description":"Clock with \\"ticks\\""')
+	assert encoded.contains('"sha256":"abc"')
 	assert plugin_catalog_entries('not json').len == 0
 	assert plugin_catalog_entries('{}').len == 0
 	// Hash framing must match scripts/gen_catalog.py in HorneroOS/plugins.
@@ -436,6 +447,63 @@ fn test_plugin_catalog_entries_and_payload_hash() {
 	assert digest.len == 64
 	assert digest == plugin_payload_sha256(dir, manifest)
 	os.rmdir_all(dir) or {}
+}
+
+fn test_official_plugin_metadata_comes_from_catalog_and_payload_changes_break_official_trust() {
+	root := community_plugins_test_new_root('official-metadata')
+	payload := os.join_path(root, 'payload')
+	os.mkdir_all(payload) or { panic(err) }
+	manifest := '{"schemaVersion":1,"id":"example-clock","name":"Example Clock","version":"1.0.0","files":["Main.qml"],"capabilities":{"processCommands":[],"networkHosts":[],"settings":{}}}'
+	os.write_file(os.join_path(payload, 'manifest.json'), manifest) or { panic(err) }
+	os.write_file(os.join_path(payload, 'Main.qml'), 'import QtQuick\nItem {}\n') or { panic(err) }
+	current_hash := community_plugin_payload_hash(payload)
+	record := CommunityPluginReceipt{
+		schema_version:       1
+		id:                   'example-clock'
+		source:               plugin_catalog_source
+		catalog_sha256:       current_hash
+		catalog_capabilities: json2.Any({
+			'processCommands': json2.Any(['notify-send'])
+			'networkHosts':    json2.Any(['api.example.com'])
+			'settings':        json2.Any(map[string]json2.Any{})
+		})
+	}
+	assert community_plugin_trust_state(record, payload) == 'official'
+	os.write_file(os.join_path(payload, 'manifest.json'), manifest.replace('"networkHosts":[]', '"networkHosts":["attacker.invalid"]')) or {
+		panic(err)
+	}
+	os.write_file(os.join_path(payload, 'Main.qml'), 'import QtQuick\nItem { property string changed: "yes" }\n') or {
+		panic(err)
+	}
+	assert community_plugin_trust_state(record, payload) == 'modified'
+	declared := json2.encode(community_plugin_declared_capabilities(record, payload))
+	assert declared.contains('attacker.invalid')
+	assert !declared.contains('api.example.com')
+	mut trusted_record := record
+	trusted_record.trusted_hash = community_plugin_payload_hash(payload)
+	assert community_plugin_trust_state(trusted_record, payload) == 'trusted'
+	trusted_declared := json2.encode(community_plugin_declared_capabilities(trusted_record, payload))
+	assert trusted_declared.contains('attacker.invalid')
+	os.rmdir_all(root) or {}
+}
+
+fn test_catalog_install_refuses_to_apply_a_revision_other_than_the_displayed_snapshot() {
+	root := community_plugins_test_new_root('catalog-revision')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	catalog := os.join_path(root, 'catalog')
+	os.mkdir_all(catalog) or { panic(err) }
+	os.write_file(os.join_path(catalog, 'catalog.json'), '{"plugins":[]}') or { panic(err) }
+	os.setenv('HORNERO_PLUGINS_CATALOG_URL', catalog, true)
+	result := community_plugin_catalog_install_report('hornero-pomodoro', CommunityPluginOptions{
+		yes:               true
+		expected_revision: '0123456789abcdef0123456789abcdef01234567'
+	})
+	assert !result.ok
+	assert result.message.contains('catalogue changed since it was displayed')
 }
 
 fn test_catalog_update_requires_catalogue_source() {
@@ -474,6 +542,16 @@ fn test_catalog_update_requires_yes() {
 	assert res.message.contains('without --yes')
 }
 
+fn test_catalog_entry_reports_rollback_availability() {
+	entry := PluginCatalogEntry{
+		id:      'hornero-example'
+		name:    'Hornero Example'
+		version: '1.0.0'
+	}
+	encoded := json2.encode(plugin_catalog_entry_json(entry, 'installed', true))
+	assert encoded.contains('"rollback_available":true')
+}
+
 fn test_catalog_rollback_restores_kept_payload() {
 	root := community_plugins_test_new_root('rb-ok')
 	saved := community_plugins_test_env(root)
@@ -491,8 +569,21 @@ fn test_catalog_rollback_restores_kept_payload() {
 		os.write_file(os.join_path(dir, 'Main.qml'), 'import QtQuick\nItem {}\n') or { panic(err) }
 	}
 	os.mkdir_all(receipts) or { panic(err) }
-	receipt := '{"schema_version":1,"id":"hornero-pomodoro","name":"Hornero Pomodoro","version":"9.9.9","source":"${plugin_catalog_source}","revision":"local","installed_at":"1","enabled":false}'
-	os.write_file(os.join_path(receipts, 'hornero-pomodoro.json'), receipt) or { panic(err) }
+	receipt := CommunityPluginReceipt{
+		schema_version:          1
+		id:                      'hornero-pomodoro'
+		name:                    'Hornero Pomodoro'
+		version:                 '9.9.9'
+		source:                  plugin_catalog_source
+		revision:                'current-revision'
+		installed_at:            '1'
+		catalog_sha256:          community_plugin_payload_hash(current)
+		previous_catalog_sha256: community_plugin_payload_hash(previous)
+		previous_payload_sha256: community_plugin_payload_hash(previous)
+		previous_revision:       'previous-revision'
+		previous_version:        '1.0.0'
+	}
+	os.write_file(os.join_path(receipts, 'hornero-pomodoro.json'), json2.encode(receipt)) or { panic(err) }
 	validator := os.join_path(root, 'validator.py')
 	os.write_file(validator, '#!/bin/sh\nexit 0\n') or { panic(err) }
 	os.chmod(validator, 0o755) or { panic(err) }

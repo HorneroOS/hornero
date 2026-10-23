@@ -69,6 +69,23 @@ fn test_plugin_parser_and_dry_run_dispatch() {
 	assert dispatch(['horneroctl', 'plugin', 'validate', '--bogus']) == 2
 }
 
+fn test_plugin_catalog_action_parser_accepts_expected_revision_only_for_install_update() {
+	opts := parse_plugin(['catalog', 'install', 'hornero-pomodoro', '--revision',
+		'0123456789abcdef0123456789abcdef01234567', '--yes']) or {
+		assert false, err.msg()
+		return
+	}
+	assert opts.leaf == 'catalog'
+	assert opts.value == 'install'
+	assert opts.name == 'hornero-pomodoro'
+	assert opts.expected_revision == '0123456789abcdef0123456789abcdef01234567'
+	mut invalid_flag_accepted := false
+	if _ := parse_plugin(['catalog', 'list', '--revision', '0123456789abcdef0123456789abcdef01234567']) {
+		invalid_flag_accepted = true
+	}
+	assert !invalid_flag_accepted
+}
+
 fn test_system_help_has_machine_readable_examples() {
 	assert command_help('system').contains('Examples:')
 	assert command_help('system info').contains('horneroctl system info --json')
