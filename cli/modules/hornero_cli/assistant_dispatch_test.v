@@ -1,5 +1,8 @@
 module hornero_cli
 
+import os
+import time
+
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
 	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|ask|stop|approve|clarify|events|log>')
@@ -85,6 +88,8 @@ fn test_assistant_stream_flag_rules() {
 }
 
 fn test_assistant_setup_parser_rules() {
+	setup_help := command_help('assistant setup')
+	assert setup_help.contains('horneroctl assistant setup --adopt-dotfiles --dry-run')
 	setup := parse_assistant(['setup', '--dry-run']) or { panic(err) }
 	assert setup.leaf == 'setup' && setup.dry_run && !setup.remove
 	rm := parse_assistant(['setup', '--remove', '--yes']) or { panic(err) }
@@ -95,10 +100,50 @@ fn test_assistant_setup_parser_rules() {
 	if _ := parse_assistant(['status', '--remove']) {
 		panic('--remove outside setup must be rejected')
 	}
+	adopt := parse_assistant(['setup', '--adopt-dotfiles', '--dry-run']) or { panic(err) }
+	assert adopt.adopt_dotfiles && adopt.dry_run && !adopt.yes
+	if _ := parse_assistant(['setup', '--adopt-dotfiles', '--remove', '--yes']) {
+		panic('adoption and removal must be separate operations')
+	}
+	if _ := parse_assistant(['status', '--adopt-dotfiles']) {
+		panic('--adopt-dotfiles outside setup must be rejected')
+	}
 	assert dispatch(['horneroctl', 'assistant', 'setup', '--help']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'setup', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'setup', '--remove', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'setup', '--adopt-dotfiles']) == 1
 	assert dispatch(['horneroctl', 'assistant', 'setup', 'extra']) == 2
+}
+
+fn test_assistant_dotfiles_adoption_dispatch_dry_run_uses_isolated_paths() {
+	root := os.join_path(os.temp_dir(), 'hornero-cli-adopt-dry-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_config := os.getenv('XDG_CONFIG_HOME')
+	old_state := os.getenv('XDG_STATE_HOME')
+	old_hermes := os.getenv('HERMES_HOME')
+	os.setenv('XDG_CONFIG_HOME', os.join_path(root, 'config'), true)
+	os.setenv('XDG_STATE_HOME', os.join_path(root, 'state'), true)
+	os.setenv('HERMES_HOME', os.join_path(root, 'hermes'), true)
+	defer {
+		if old_config.len > 0 {
+			os.setenv('XDG_CONFIG_HOME', old_config, true)
+		} else {
+			os.unsetenv('XDG_CONFIG_HOME')
+		}
+		if old_state.len > 0 {
+			os.setenv('XDG_STATE_HOME', old_state, true)
+		} else {
+			os.unsetenv('XDG_STATE_HOME')
+		}
+		if old_hermes.len > 0 {
+			os.setenv('HERMES_HOME', old_hermes, true)
+		} else {
+			os.unsetenv('HERMES_HOME')
+		}
+	}
+
+	assert dispatch(['horneroctl', 'assistant', 'setup', '--adopt-dotfiles', '--dry-run']) == 0
+	assert !os.exists(root)
 }
 
 fn test_assistant_gateway_parser_rules() {

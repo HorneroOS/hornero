@@ -2,6 +2,10 @@ module hornero_core
 
 import os
 import time
+import crypto.sha256
+
+const assistant_test_dotfiles_legacy_unit = $embed_file('../../testdata/dotfiles-hornero-hermes.service')
+const assistant_test_dotfiles_legacy_skill = $embed_file('../../testdata/dotfiles-hornero-skill.md')
 
 struct AssistantSetupTestEnv {
 	config_home string
@@ -35,11 +39,18 @@ fn assistant_setup_test_restore_env(old AssistantSetupTestEnv) {
 	assistant_setup_test_restore_var('HERMES_HOME', old.hermes_home)
 }
 
-fn assistant_setup_test_move_fail_receipt(src string, dest string) ! {
-	if os.file_name(dest) == 'unit.sha256' {
-		return error('simulated ownership receipt rename failure')
+fn assistant_setup_test_adoption_target(kind string, path string, content string) AssistantSetupAdoptionTarget {
+	return AssistantSetupAdoptionTarget{
+		kind:        kind
+		path:        path
+		fingerprint: sha256.hexhash(content)
 	}
-	os.mv(src, dest)!
+}
+
+fn assistant_setup_test_move_fail_receipt(src string, dest string) ! {
+	_ = src
+	_ = dest
+	return error('simulated ownership receipt rename failure')
 }
 
 fn assistant_setup_test_external_write_before_publish(path string) ! {
@@ -47,12 +58,11 @@ fn assistant_setup_test_external_write_before_publish(path string) ! {
 }
 
 fn assistant_setup_test_mutate_then_fail_receipt(src string, dest string) ! {
-	if os.file_name(dest) == 'unit.sha256' {
-		path := os.getenv('HORNERO_TEST_TARGET')
-		os.write_file(path, 'concurrent external content')!
-		return error('simulated ownership receipt rename failure')
-	}
-	os.mv(src, dest)!
+	_ = src
+	_ = dest
+	path := os.getenv('HORNERO_TEST_TARGET')
+	os.write_file(path, 'concurrent external content')!
+	return error('simulated ownership receipt rename failure')
 }
 
 fn test_assistant_knowledge_markdown_shape() {
@@ -173,12 +183,18 @@ fn test_assistant_setup_restores_previous_file_when_receipt_publish_fails() {
 	defer { assistant_setup_test_restore_env(old_env) }
 	path := assistant_gateway_unit_file()
 	assert assistant_setup_write_owned_file('unit', path, 'previous unit')!
+	assert os.is_file(assistant_setup_receipt_file('unit'))
 
-	if _ := assistant_setup_write_owned_file_with_move('unit', path, 'updated unit',
-		assistant_setup_test_move_fail_receipt) {
-		assert false
+	mut failure := ''
+	result := assistant_setup_write_owned_file_with_move('unit', path, 'updated unit',
+		assistant_setup_test_move_fail_receipt) or {
+		failure = err.msg()
+		false
 	}
-	assert os.read_file(path)! == 'previous unit'
+	assert !result
+	assert failure.contains('simulated ownership receipt rename failure'), failure
+	actual := os.read_file(path)!
+	assert actual == 'previous unit', actual
 	assert assistant_setup_file_is_owned('unit', path)
 }
 
@@ -195,6 +211,23 @@ fn test_assistant_setup_preserves_target_created_after_preflight() {
 	}
 	assert os.read_file(path)! == 'concurrent external content'
 	assert !os.is_file(assistant_setup_receipt_file('unit'))
+}
+
+fn test_assistant_setup_restore_never_replaces_concurrent_target() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-stage-race-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	path := os.join_path(root, 'hornero-hermes.service')
+	os.mkdir_all(root)!
+	os.write_file(path, 'previous Hornero content')!
+
+	staged := assistant_setup_stage_matching_file(path, 'previous Hornero content')!
+	assert !os.exists(path)
+	os.write_file(path, 'concurrent external content')!
+	if _ := assistant_setup_restore_staged_file(path, staged) {
+		assert false
+	}
+	assert os.read_file(path)! == 'concurrent external content'
+	assert os.read_file(staged)! == 'previous Hornero content'
 }
 
 fn test_assistant_setup_preserves_existing_target_changed_after_preflight() {
@@ -223,11 +256,16 @@ fn test_assistant_setup_rollback_preserves_concurrent_target_change() {
 	os.setenv('HORNERO_TEST_TARGET', path, true)
 	defer { os.unsetenv('HORNERO_TEST_TARGET') }
 
-	if _ := assistant_setup_write_owned_file_with_move('unit', path, 'updated Hornero content',
-		assistant_setup_test_mutate_then_fail_receipt) {
-		assert false
+	mut failure := ''
+	result := assistant_setup_write_owned_file_with_move('unit', path, 'updated Hornero content',
+		assistant_setup_test_mutate_then_fail_receipt) or {
+		failure = err.msg()
+		false
 	}
-	assert os.read_file(path)! == 'concurrent external content'
+	assert !result
+	assert failure.contains('simulated ownership receipt rename failure'), failure
+	actual := os.read_file(path)!
+	assert actual == 'concurrent external content', actual
 }
 
 fn test_assistant_enable_keeps_settings_disabled_when_key_creation_fails() {
@@ -482,4 +520,221 @@ fn test_assistant_setup_remove_keeps_files_if_receipt_cannot_be_cleared() {
 	assert os.is_file(unit_file)
 	assert assistant_setup_file_is_owned('unit', unit_file)
 	os.chmod(receipt_dir, 0o700)!
+}
+
+fn test_assistant_setup_dotfiles_adoption_dry_run_is_read_only() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-adopt-dry-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+	content := 'legacy dotfiles unit\n'
+	os.mkdir_all(os.dir(path))!
+	os.write_file(path, content)!
+	target := assistant_setup_test_adoption_target('unit', path, content)
+
+	result := assistant_setup_adopt_dotfiles_report_for_targets(true, false, [target])
+	assert result.ok
+	assert result.message.contains('would only record ownership receipts')
+	assert result.message.contains(path)
+	assert os.read_file(path)! == content
+	assert !os.exists(assistant_setup_receipt_file('unit'))
+	assert !os.exists(assistant_setup_lock_file())
+	assert !os.exists(assistant_settings_file())
+	assert !os.exists(assistant_key_file())
+}
+
+fn test_assistant_setup_dotfiles_fingerprints_match_pinned_legacy_fixtures() {
+	unit := assistant_test_dotfiles_legacy_unit.to_string()
+	skill := assistant_test_dotfiles_legacy_skill.to_string()
+	assert sha256.hexhash(unit) == assistant_dotfiles_legacy_unit_sha256
+	assert sha256.hexhash(skill) == assistant_dotfiles_legacy_skill_sha256
+}
+
+fn test_assistant_setup_adopts_exact_dotfiles_files_and_setup_preserves_them() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-adopt-exact-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	unit_path := assistant_gateway_unit_file()
+	skill_path := assistant_skill_file()
+	unit := assistant_test_dotfiles_legacy_unit.to_string()
+	skill := assistant_test_dotfiles_legacy_skill.to_string()
+	os.mkdir_all(os.dir(unit_path))!
+	os.mkdir_all(os.dir(skill_path))!
+	os.write_file(unit_path, unit)!
+	os.write_file(skill_path, skill)!
+
+	adopted := assistant_setup_adopt_dotfiles_report(false, true)
+	assert adopted.ok
+	assert assistant_setup_file_receipt_mode('unit', unit_path) == 'adopted'
+	assert assistant_setup_file_receipt_mode('skill', skill_path) == 'adopted'
+	assert !assistant_setup_can_write_file('unit', unit_path,
+		assistant_gateway_unit_content('/new/hermes/path'))!
+	assert !assistant_setup_can_write_file('skill', skill_path, assistant_skill_markdown())!
+	assert os.read_file(unit_path)! == unit
+	assert os.read_file(skill_path)! == skill
+}
+
+fn test_assistant_setup_dotfiles_adoption_requires_yes() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-adopt-consent-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+	content := 'legacy dotfiles unit\n'
+	os.mkdir_all(os.dir(path))!
+	os.write_file(path, content)!
+	target := assistant_setup_test_adoption_target('unit', path, content)
+
+	result := assistant_setup_adopt_dotfiles_report_for_targets(false, false, [target])
+	assert !result.ok
+	assert result.message.contains('explicit consent')
+	assert os.read_file(path)! == content
+	assert !os.exists(assistant_setup_receipt_file('unit'))
+	assert !os.exists(assistant_setup_lock_file())
+}
+
+fn test_assistant_setup_dotfiles_adoption_records_receipt_without_mutating_files_or_settings() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-adopt-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+	content := 'legacy dotfiles unit\n'
+	os.mkdir_all(os.dir(path))!
+	os.write_file(path, content)!
+	target := assistant_setup_test_adoption_target('unit', path, content)
+
+	result := assistant_setup_adopt_dotfiles_report_for_targets(false, true, [target])
+	assert result.ok
+	assert result.message.contains('without changing their contents')
+	assert os.read_file(path)! == content
+	assert assistant_setup_file_is_owned('unit', path)
+	assert assistant_setup_file_receipt_mode('unit', path) == 'adopted'
+	assert os.stat(assistant_setup_receipt_file('unit'))!.mode & 0o777 == 0o600
+	assert !os.exists(assistant_settings_file())
+	assert !os.exists(assistant_key_file())
+}
+
+fn test_assistant_setup_dotfiles_adoption_preflights_all_targets_before_receipts() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-adopt-preflight-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	valid_path := assistant_gateway_unit_file()
+	valid_content := 'supported legacy content\n'
+	unknown_path := assistant_skill_file()
+	os.mkdir_all(os.dir(valid_path))!
+	os.mkdir_all(os.dir(unknown_path))!
+	os.write_file(valid_path, valid_content)!
+	os.write_file(unknown_path, 'modified or unknown skill\n')!
+	valid := assistant_setup_test_adoption_target('unit', valid_path, valid_content)
+	unknown := AssistantSetupAdoptionTarget{
+		kind:        'skill'
+		path:        unknown_path
+		fingerprint: '0000000000000000000000000000000000000000000000000000000000000000'
+	}
+
+	result := assistant_setup_adopt_dotfiles_report_for_targets(false, true, [valid, unknown])
+	assert !result.ok
+	assert result.message.contains('does not match a supported dotfiles version')
+	assert os.read_file(valid_path)! == valid_content
+	assert os.read_file(unknown_path)! == 'modified or unknown skill\n'
+	assert !os.exists(assistant_setup_receipt_file('unit'))
+	assert !os.exists(assistant_setup_receipt_file('skill'))
+}
+
+fn test_assistant_setup_remove_preserves_adopted_unit_without_systemd_calls() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-adopt-remove-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	calls := os.join_path(root, 'systemctl-calls')
+	systemctl := os.join_path(bin, 'systemctl')
+	os.write_file(systemctl, '#!/bin/sh\nprintf "%s\\n" "$*" >> "${calls}"\necho active\nexit 0\n')!
+	os.chmod(systemctl, 0o755)!
+	os.setenv('PATH', '${bin}:${old_path}', true)
+	unit_file := assistant_gateway_unit_file()
+	content := 'legacy dotfiles unit\n'
+	os.mkdir_all(os.dir(unit_file))!
+	os.write_file(unit_file, content)!
+	target := assistant_setup_test_adoption_target('unit', unit_file, content)
+	adopted := assistant_setup_adopt_dotfiles_report_for_targets(false, true, [target])
+	assert adopted.ok
+
+	result := assistant_setup_remove_report(false, true)
+	assert result.ok
+	assert result.message.contains('kept adopted ${unit_file}')
+	assert os.read_file(unit_file)! == content
+	assert !os.exists(assistant_setup_receipt_file('unit'))
+	assert !os.exists(calls)
+}
+
+fn test_assistant_setup_rejects_modified_adopted_file_and_preserves_it() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-adopt-modified-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+	content := 'legacy dotfiles unit\n'
+	os.mkdir_all(os.dir(path))!
+	os.write_file(path, content)!
+	target := assistant_setup_test_adoption_target('unit', path, content)
+	assert assistant_setup_adopt_dotfiles_report_for_targets(false, true, [target]).ok
+	os.write_file(path, 'user edit after adoption\n')!
+
+	if _ := assistant_setup_can_write_file('unit', path, 'CLI generated unit') {
+		assert false
+	}
+	assert os.read_file(path)! == 'user edit after adoption\n'
+	assert !assistant_setup_file_is_owned('unit', path)
+}
+
+fn test_assistant_setup_temp_file_refuses_preexisting_symlink_stage() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-temp-symlink-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	path := os.join_path(root, 'target')
+	sentinel := os.join_path(root, 'sentinel')
+	stage_dir := os.join_path(root, '.target.tmp.${os.getpid()}')
+	os.mkdir_all(root)!
+	os.write_file(sentinel, 'untouched')!
+	os.symlink(sentinel, stage_dir)!
+
+	if _ := assistant_setup_write_temp_file(path, 'attacker controlled') {
+		assert false
+	}
+	assert os.read_file(sentinel)! == 'untouched'
+	assert os.is_link(stage_dir)
+}
+
+fn test_assistant_setup_remove_preserves_external_atomic_replacement_during_stop() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-remove-external-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	stopped := os.join_path(root, 'stopped')
+	unit_file := assistant_gateway_unit_file()
+	unit_replacement := '${unit_file}.external'
+	os.mkdir_all(os.dir(unit_file))!
+	assert assistant_setup_write_owned_file('unit', unit_file,
+		assistant_gateway_unit_content('/usr/local/bin/hermes'))!
+	systemctl := os.join_path(bin, 'systemctl')
+	os.write_file(systemctl, '#!/bin/sh\nif [ "$2" = "is-active" ]; then\n  if [ -f "${stopped}" ]; then echo inactive; else echo active; fi\n  exit 0\nfi\nif [ "$2" = "stop" ]; then printf "%s\\n" "external edit" > "${unit_replacement}"; mv "${unit_replacement}" "${unit_file}"; touch "${stopped}"; fi\nexit 0\n')!
+	os.chmod(systemctl, 0o755)!
+	os.setenv('PATH', '${bin}:${os.getenv('PATH')}', true)
+
+	result := assistant_setup_remove_report(false, true)
+	assert result.ok
+	assert result.message.contains('changed or lost its ownership receipt')
+	assert os.read_file(unit_file)! == 'external edit\n'
+	assert os.is_file(assistant_setup_receipt_file('unit'))
 }

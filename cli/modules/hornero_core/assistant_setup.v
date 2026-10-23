@@ -17,6 +17,8 @@ import time
 // contents; external or locally modified files are preserved.
 
 pub const assistant_hermes_repo_url = 'https://github.com/NousResearch/hermes-agent'
+const assistant_dotfiles_legacy_unit_sha256 = 'fb25676f66a3db5644c056ef70346126dde098758c300df9ec49d9f68c7055f2'
+const assistant_dotfiles_legacy_skill_sha256 = '98c037eaea144be4c265c424af289902e3e182fc267b9728828dff1e7dac9e64'
 
 const assistant_skill_embedded = $embed_file('../../../skills/hornero/SKILL.md')
 
@@ -46,6 +48,40 @@ pub fn assistant_skill_file() string {
 fn assistant_setup_receipt_file(kind string) string {
 	paths := resolve_paths()
 	return os.join_path(paths.state_dir, 'hornero', 'assistant-setup', '${kind}.sha256')
+}
+
+struct AssistantSetupReceipt {
+	mode string
+	hash string
+}
+
+fn assistant_setup_parse_receipt(raw string) !AssistantSetupReceipt {
+	value := raw.trim_space()
+	if assistant_setup_valid_hash(value) {
+		return AssistantSetupReceipt{
+			mode: 'generated'
+			hash: value
+		}
+	}
+	if value.starts_with('generated:') {
+		digest := value['generated:'.len..]
+		if assistant_setup_valid_hash(digest) {
+			return AssistantSetupReceipt{
+				mode: 'generated'
+				hash: digest
+			}
+		}
+	}
+	if value.starts_with('adopted:') {
+		digest := value['adopted:'.len..]
+		if assistant_setup_valid_hash(digest) {
+			return AssistantSetupReceipt{
+				mode: 'adopted'
+				hash: digest
+			}
+		}
+	}
+	return error('ownership receipt has an invalid format')
 }
 
 fn assistant_setup_lock_file() string {
@@ -101,7 +137,7 @@ fn assistant_setup_safe_receipt_file(kind string) !string {
 	}
 	if os.is_file(path) {
 		receipt := os.read_file(path) or { return error('cannot read ownership receipt: ${err.msg()}') }
-		if !assistant_setup_valid_hash(receipt.trim_space()) {
+		assistant_setup_parse_receipt(receipt) or {
 			return error('ownership receipt exists but has an invalid format; refusing to overwrite it')
 		}
 	}
@@ -118,9 +154,18 @@ fn assistant_setup_file_is_owned(kind string, path string) bool {
 		return false
 	}
 	receipt := os.read_file(receipt_path) or { return false }
-	receipt_hash := receipt.trim_space()
-	return assistant_setup_valid_hash(receipt_hash)
-		&& receipt_hash == assistant_setup_receipt_hash(path, content)
+	parsed := assistant_setup_parse_receipt(receipt) or { return false }
+	return parsed.hash == assistant_setup_receipt_hash(path, content)
+}
+
+fn assistant_setup_file_receipt_mode(kind string, path string) string {
+	if !assistant_setup_file_is_owned(kind, path) {
+		return ''
+	}
+	receipt_path := assistant_setup_receipt_file(kind)
+	receipt := os.read_file(receipt_path) or { return '' }
+	parsed := assistant_setup_parse_receipt(receipt) or { return '' }
+	return parsed.mode
 }
 
 // Existing files can only be replaced when a receipt proves Hornero wrote
@@ -134,8 +179,12 @@ fn assistant_setup_can_write_file(kind string, path string, desired string) !boo
 		return true
 	}
 	existing := os.read_file(path) or { return error('cannot read existing file: ${err.msg()}') }
-	if !assistant_setup_file_is_owned(kind, path) {
+	mode := assistant_setup_file_receipt_mode(kind, path)
+	if mode == '' {
 		return error('existing file is not Hornero-owned or changed since Hornero wrote it')
+	}
+	if mode == 'adopted' {
+		return false
 	}
 	return existing != desired
 }
@@ -143,23 +192,140 @@ fn assistant_setup_can_write_file(kind string, path string, desired string) !boo
 fn assistant_setup_write_temp_file(path string, content string) !string {
 	dir := os.dir(path)
 	os.mkdir_all(dir) or { return error('cannot create ${dir}: ${err.msg()}') }
-	tmp := os.join_path(dir, '.${os.file_name(path)}.tmp.${os.getpid()}')
-	if os.exists(tmp) {
-		return error('temporary file already exists: ${tmp}; inspect it before retrying')
+	stage_dir := os.join_path(dir, '.${os.file_name(path)}.tmp.${os.getpid()}')
+	os.mkdir(stage_dir, mode: 0o700) or {
+		return error('cannot create private temporary directory ${stage_dir}: ${err.msg()}; inspect stale state before retrying')
 	}
+	tmp := os.join_path(stage_dir, 'payload')
 	os.write_file(tmp, content) or {
-		os.rm(tmp) or {}
+		os.rmdir_all(stage_dir) or {}
 		return error('cannot write ${tmp}: ${err.msg()}')
 	}
 	return tmp
 }
 
+fn assistant_setup_remove_temp_file(path string) {
+	os.rm(path) or {}
+	os.rmdir_all(os.dir(path)) or {}
+}
+
+// Detach a regular file into a private same-directory stage, then verify the
+// inode contents. A concurrent atomic replacement is restored without
+// replacing any path another writer created in the meantime.
+fn assistant_setup_stage_matching_file(path string, expected string) !string {
+	if os.is_link(path) || !os.is_file(path) {
+		return error('target is not a regular file: ${path}')
+	}
+	current := os.read_file(path) or { return error('cannot read ${path}: ${err.msg()}') }
+	if current != expected {
+		return error('target changed before staging: ${path}')
+	}
+	// Keep detach stages separate from the pending publish file and from any
+	// earlier stage retained for rollback.
+	mut tmp := ''
+	for attempt in 0 .. 100 {
+		tmp = assistant_setup_write_temp_file('${path}.stage.${attempt}', '') or { continue }
+		break
+	}
+	if tmp.len == 0 {
+		return error('cannot allocate a private stage for ${path}')
+	}
+	os.rm(tmp) or {
+		assistant_setup_remove_temp_file(tmp)
+		return error('cannot prepare private file stage for ${path}: ${err.msg()}')
+	}
+	os.mv(path, tmp) or {
+		assistant_setup_remove_temp_file(tmp)
+		return error('cannot detach ${path} for revalidation: ${err.msg()}')
+	}
+	if os.is_link(tmp) {
+		os.link(tmp, path) or {
+			return error('symbolic link moved during staging and could not be restored without overwriting concurrent state; preserved at ${tmp}: ${err.msg()}')
+		}
+		assistant_setup_remove_temp_file(tmp)
+		return error('target became a symbolic link during staging: ${path}')
+	}
+	staged := os.read_file(tmp) or {
+		os.link(tmp, path) or {
+			return error('cannot verify or restore staged target; preserved at ${tmp}: ${err.msg()}')
+		}
+		assistant_setup_remove_temp_file(tmp)
+		return error('cannot verify staged target ${path}: ${err.msg()}')
+	}
+	if staged != expected {
+		os.link(tmp, path) or {
+			return error('target changed during staging and could not be restored without overwriting concurrent state; preserved at ${tmp}: ${err.msg()}')
+		}
+		assistant_setup_remove_temp_file(tmp)
+		return error('target changed during staging; preserved ${path}')
+	}
+	return tmp
+}
+
+fn assistant_setup_restore_staged_file(path string, staged string) ! {
+	os.link(staged, path) or {
+		return error('cannot restore ${path} without overwriting concurrent state; preserved at ${staged}: ${err.msg()}')
+	}
+	assistant_setup_remove_temp_file(staged)
+}
+
+// Move a receipted file into a private same-directory staging directory before
+// deleting it. This verifies the exact inode contents after the path is
+// detached, so an external atomic replacement during systemd calls is kept.
+fn assistant_setup_remove_owned_file(kind string, path string) !bool {
+	if os.is_link(path) || !os.is_file(path) {
+		return false
+	}
+	receipt_path := assistant_setup_receipt_file(kind)
+	receipt_raw := os.read_file(receipt_path) or { return false }
+	receipt := assistant_setup_parse_receipt(receipt_raw) or { return false }
+	current := os.read_file(path) or { return false }
+	if assistant_setup_receipt_hash(path, current) != receipt.hash {
+		return false
+	}
+	tmp := assistant_setup_stage_matching_file(path, current) or {
+		if (err.msg().contains('changed') || err.msg().contains('symbolic link'))
+			&& !err.msg().contains('preserved at') {
+			return false
+		}
+		return err
+	}
+	moved := os.read_file(tmp) or {
+		assistant_setup_restore_staged_file(path, tmp) or {
+			return error('cannot read or restore staged file ${tmp}: ${err.msg()}')
+		}
+		return false
+	}
+	if assistant_setup_receipt_hash(path, moved) != receipt.hash {
+		assistant_setup_restore_staged_file(path, tmp) or {
+			return error('file changed during removal and could not be restored: ${err.msg()}')
+		}
+		return false
+	}
+	current_receipt := os.read_file(receipt_path) or { '' }
+	if current_receipt != receipt_raw {
+		assistant_setup_restore_staged_file(path, tmp) or {
+			return error('ownership receipt changed during removal and file could not be restored: ${err.msg()}')
+		}
+		return false
+	}
+	os.rm(receipt_path) or {
+		assistant_setup_restore_staged_file(path, tmp) or {
+			return error('cannot clear ownership receipt and file could not be restored: ${err.msg()}')
+		}
+		return error('cannot clear ownership receipt ${receipt_path}: ${err.msg()}')
+	}
+	assistant_setup_remove_temp_file(tmp)
+	return true
+}
+
 fn assistant_setup_restore_file(path string, content string) ! {
 	tmp := assistant_setup_write_temp_file(path, content)!
-	os.mv(tmp, path) or {
-		os.rm(tmp) or {}
+	os.link(tmp, path) or {
+		assistant_setup_remove_temp_file(tmp)
 		return error('cannot restore ${path}: ${err.msg()}')
 	}
+	assistant_setup_remove_temp_file(tmp)
 }
 
 fn assistant_setup_move_file(src string, dest string) ! {
@@ -206,95 +372,250 @@ fn assistant_setup_write_owned_file_locked(kind string, path string, content str
 	}
 	file_tmp := assistant_setup_write_temp_file(path, content)!
 	receipt_tmp := assistant_setup_write_temp_file(receipt_file,
-		assistant_setup_receipt_hash(path, content) + '\n') or {
-		os.rm(file_tmp) or {}
+		'generated:' + assistant_setup_receipt_hash(path, content) + '\n') or {
+		assistant_setup_remove_temp_file(file_tmp)
 		return err
 	}
 	os.chmod(receipt_tmp, 0o600) or {
-		os.rm(file_tmp) or {}
-		os.rm(receipt_tmp) or {}
+		assistant_setup_remove_temp_file(file_tmp)
+		assistant_setup_remove_temp_file(receipt_tmp)
 		return error('cannot restrict ownership receipt permissions: ${err.msg()}')
 	}
 	// Recheck immediately before publishing. The stable advisory lock prevents
 	// two horneroctl writers from invalidating each other's preflight.
 	before_publish(path) or {
-		os.rm(file_tmp) or {}
-		os.rm(receipt_tmp) or {}
+		assistant_setup_remove_temp_file(file_tmp)
+		assistant_setup_remove_temp_file(receipt_tmp)
 		return error('cannot recheck ${path} before publish: ${err.msg()}')
 	}
 	if had_existing_file {
 		current := os.read_file(path) or {
-			os.rm(file_tmp) or {}
-			os.rm(receipt_tmp) or {}
+			assistant_setup_remove_temp_file(file_tmp)
+			assistant_setup_remove_temp_file(receipt_tmp)
 			return error('cannot recheck ${path} before update: ${err.msg()}')
 		}
 		if current != previous_content || !assistant_setup_file_is_owned(kind, path) {
-			os.rm(file_tmp) or {}
-			os.rm(receipt_tmp) or {}
+			assistant_setup_remove_temp_file(file_tmp)
+			assistant_setup_remove_temp_file(receipt_tmp)
 			return error('existing file changed during setup; preserving it')
 		}
 	} else if os.exists(path) {
-		os.rm(file_tmp) or {}
-		os.rm(receipt_tmp) or {}
+		assistant_setup_remove_temp_file(file_tmp)
+		assistant_setup_remove_temp_file(receipt_tmp)
 		return error('target appeared during setup; preserving it')
 	}
+	mut previous_file_tmp := ''
 	if had_existing_file {
-		move_file(file_tmp, path) or {
-			os.rm(file_tmp) or {}
-			os.rm(receipt_tmp) or {}
-			return error('cannot install ${path}: ${err.msg()}')
+		// Detach-before-publish leaves a brief missing-path window. This avoids
+		// overwriting a non-cooperating writer that recreates the target.
+		previous_file_tmp = assistant_setup_stage_matching_file(path, previous_content) or {
+			assistant_setup_remove_temp_file(file_tmp)
+			assistant_setup_remove_temp_file(receipt_tmp)
+			return error('cannot safely stage existing file ${path}: ${err.msg()}')
 		}
-	} else {
-		// POSIX link is atomic and fails if another process created the target
-		// after the absence check; unlike rename, it cannot replace that file.
-		os.link(file_tmp, path) or {
-			os.rm(file_tmp) or {}
-			os.rm(receipt_tmp) or {}
-			return error('cannot install ${path} without replacing a concurrent file: ${err.msg()}')
+		staged_receipt := os.read_file(receipt_file) or { '' }
+		staged_content := os.read_file(previous_file_tmp) or { '' }
+		parsed_receipt := assistant_setup_parse_receipt(staged_receipt) or {
+			assistant_setup_restore_staged_file(path, previous_file_tmp) or {
+				return error('ownership receipt became invalid and ${path} could not be restored: ${err.msg()}')
+			}
+			assistant_setup_remove_temp_file(file_tmp)
+			assistant_setup_remove_temp_file(receipt_tmp)
+			return error('ownership receipt became invalid while staging ${path}; existing file restored')
 		}
-		// The payload is installed at this point. A leftover hard link is
-		// harmless, while aborting here would leave the target without a receipt.
-		os.rm(file_tmp) or {}
+		if staged_receipt != previous_receipt
+			|| assistant_setup_receipt_hash(path, staged_content) != parsed_receipt.hash {
+			assistant_setup_restore_staged_file(path, previous_file_tmp) or {
+				return error('ownership receipt changed while staging ${path}, and the file could not be restored: ${err.msg()}')
+			}
+			assistant_setup_remove_temp_file(file_tmp)
+			assistant_setup_remove_temp_file(receipt_tmp)
+			return error('ownership receipt or file changed while staging ${path}; existing file restored')
+		}
 	}
+	// Publish with a no-clobber hard link. If an external writer recreated the
+	// target after staging, its file stays in place and the previous inode is
+	// restored only when the target is still absent.
+	os.link(file_tmp, path) or {
+		if previous_file_tmp.len > 0 {
+			assistant_setup_restore_staged_file(path, previous_file_tmp) or {
+				assistant_setup_remove_temp_file(file_tmp)
+				assistant_setup_remove_temp_file(receipt_tmp)
+				return error('cannot publish ${path}; concurrent target preserved and previous file remains at ${previous_file_tmp}: ${err.msg()}')
+			}
+		}
+		assistant_setup_remove_temp_file(file_tmp)
+		assistant_setup_remove_temp_file(receipt_tmp)
+		return error('cannot publish ${path} without replacing a concurrent file: ${err.msg()}')
+	}
+	assistant_setup_remove_temp_file(file_tmp)
 	if receipt_existed {
 		current_receipt := os.read_file(receipt_file) or { '' }
 		if current_receipt != previous_receipt {
-			os.rm(receipt_tmp) or {}
-			assistant_setup_rollback_after_receipt_failure(path, receipt_file, content,
-				previous_content, had_existing_file, 'ownership receipt changed during setup') or {
-				return err
-			}
+			assistant_setup_remove_temp_file(receipt_tmp)
+			return error('ownership receipt changed during setup; new target ${path} was preserved and the previous file remains at ${previous_file_tmp}')
 		}
 	}
-	move_file(receipt_tmp, receipt_file) or {
-		os.rm(receipt_tmp) or {}
+	mut publish_error := ''
+	if receipt_existed {
+		move_file(receipt_tmp, receipt_file) or { publish_error = err.msg() }
+	} else {
+		os.link(receipt_tmp, receipt_file) or { publish_error = err.msg() }
+	}
+	if publish_error.len > 0 {
+		assistant_setup_remove_temp_file(receipt_tmp)
 		assistant_setup_rollback_after_receipt_failure(path, receipt_file, content,
-			previous_content, had_existing_file, err.msg()) or {
+			previous_file_tmp, had_existing_file, publish_error) or {
 			return err
 		}
+	}
+	assistant_setup_remove_temp_file(receipt_tmp)
+	if previous_file_tmp.len > 0 {
+		assistant_setup_remove_temp_file(previous_file_tmp)
 	}
 	return true
 }
 
-fn assistant_setup_rollback_after_receipt_failure(path string, receipt_file string, content string, previous_content string, had_existing_file bool, reason string) ! {
-	current := os.read_file(path) or { '' }
-	if current != content {
-		return error('cannot update ownership receipt ${receipt_file}: ${reason}; ${path} changed during rollback and was preserved')
+fn assistant_setup_rollback_after_receipt_failure(path string, receipt_file string, content string, previous_file_tmp string, had_existing_file bool, reason string) ! {
+	current_tmp := assistant_setup_stage_matching_file(path, content) or {
+		return error('cannot update ownership receipt ${receipt_file}: ${reason}; ${path} changed during rollback and was preserved. Previous content remains at ${previous_file_tmp}: ${err.msg()}')
 	}
 	if had_existing_file {
-		assistant_setup_restore_file(path, previous_content) or {
-			return error('cannot update ownership receipt and cannot restore ${path}: ${err.msg()}; inspect the file before retrying')
+		os.link(previous_file_tmp, path) or {
+			assistant_setup_restore_staged_file(path, current_tmp) or {
+				return error('cannot restore previous content to ${path}; current and previous files remain at ${current_tmp} and ${previous_file_tmp}: ${err.msg()}')
+			}
+			return error('cannot restore previous content to ${path}; concurrent target preserved and previous file remains at ${previous_file_tmp}: ${err.msg()}')
 		}
+		assistant_setup_remove_temp_file(current_tmp)
+		assistant_setup_remove_temp_file(previous_file_tmp)
 		return error('cannot update ownership receipt ${receipt_file}: ${reason}; previous file content was restored')
 	}
-	os.rm(path) or {
-		return error('cannot update ownership receipt or remove ${path}: ${err.msg()}; inspect the file before retrying')
-	}
+	assistant_setup_remove_temp_file(current_tmp)
 	return error('cannot update ownership receipt ${receipt_file}: ${reason}; newly created file was removed')
 }
 
 fn assistant_setup_write_owned_file(kind string, path string, content string) !bool {
 	return assistant_setup_write_owned_file_with_move(kind, path, content, assistant_setup_move_file)
+}
+
+struct AssistantSetupAdoptionTarget {
+	kind        string
+	path        string
+	fingerprint string
+}
+
+struct AssistantSetupAdoptionPlan {
+	lines   []string
+	targets []AssistantSetupAdoptionTarget
+}
+
+fn assistant_setup_dotfiles_adoption_targets() []AssistantSetupAdoptionTarget {
+	return [
+		AssistantSetupAdoptionTarget{
+			kind:        'unit'
+			path:        assistant_gateway_unit_file()
+			fingerprint: assistant_dotfiles_legacy_unit_sha256
+		},
+		AssistantSetupAdoptionTarget{
+			kind:        'skill'
+			path:        assistant_skill_file()
+			fingerprint: assistant_dotfiles_legacy_skill_sha256
+		},
+	]
+}
+
+fn assistant_setup_adoption_plan(targets []AssistantSetupAdoptionTarget) !AssistantSetupAdoptionPlan {
+	mut lines := []string{}
+	mut adoption_targets := []AssistantSetupAdoptionTarget{}
+	for target in targets {
+		if !os.exists(target.path) {
+			lines << 'missing ${target.path}'
+			continue
+		}
+		if os.is_link(target.path) || !os.is_file(target.path) {
+			return error('${target.path} is not a regular file; it was preserved')
+		}
+		content := os.read_file(target.path) or { return error('cannot read ${target.path}: ${err.msg()}') }
+		if sha256.hexhash(content) != target.fingerprint {
+			return error('${target.path} does not match a supported dotfiles version; it was preserved. Move personal edits to a separately named Hermes skill or a systemd drop-in, then reconcile it manually')
+		}
+		if assistant_setup_file_is_owned(target.kind, target.path) {
+			lines << 'already owned (${assistant_setup_file_receipt_mode(target.kind, target.path)}): ${target.path}'
+			continue
+		}
+		receipt := assistant_setup_safe_receipt_file(target.kind)!
+		if os.exists(receipt) {
+			return error('an ownership receipt already exists for ${target.path} but does not match; it was preserved')
+		}
+		adoption_targets << target
+		lines << 'adopt exact dotfiles file without rewriting it: ${target.path}'
+	}
+	return AssistantSetupAdoptionPlan{
+		lines:   lines
+		targets: adoption_targets
+	}
+}
+
+pub fn assistant_setup_adopt_dotfiles_report(dry_run bool, yes bool) CommandResult {
+	return assistant_setup_adopt_dotfiles_report_for_targets(dry_run, yes,
+		assistant_setup_dotfiles_adoption_targets())
+}
+
+fn assistant_setup_adopt_dotfiles_report_for_targets(dry_run bool, yes bool, targets []AssistantSetupAdoptionTarget) CommandResult {
+	if dry_run {
+		plan := assistant_setup_adoption_plan(targets) or {
+			return fail_result('assistant setup adopt-dotfiles', 'Cannot adopt legacy dotfiles files: ${err.msg()}')
+		}
+		lines := if plan.lines.len == 0 { ['no supported legacy files found'] } else { plan.lines }
+		return ok_result('assistant setup adopt-dotfiles', 'Dry run: would only record ownership receipts; files, assistant settings, keys, and systemd state would not change:\n' + lines.join('\n'), {
+			'dryRun': 'true'
+		})
+	}
+	if !yes {
+		return fail_result('assistant setup adopt-dotfiles', 'Adoption needs explicit consent. Preview with --dry-run, then run: horneroctl assistant setup --adopt-dotfiles --yes')
+	}
+	mut file_lock := assistant_setup_acquire_lock() or {
+		return fail_result('assistant setup adopt-dotfiles', 'Cannot lock assistant ownership state: ${err.msg()}')
+	}
+	defer {
+		file_lock.release()
+	}
+	plan := assistant_setup_adoption_plan(targets) or {
+		return fail_result('assistant setup adopt-dotfiles', 'Cannot adopt legacy dotfiles files: ${err.msg()}')
+	}
+	mut adopted := 0
+	for target in plan.targets {
+		receipt := assistant_setup_receipt_file(target.kind)
+		content := os.read_file(target.path) or {
+			return fail_result('assistant setup adopt-dotfiles', 'Cannot recheck ${target.path}: ${err.msg()}')
+		}
+		if sha256.hexhash(content) != target.fingerprint || os.is_link(target.path) {
+			return fail_result('assistant setup adopt-dotfiles', '${target.path} changed during adoption; preserving it')
+		}
+		tmp := assistant_setup_write_temp_file(receipt,
+			'adopted:' + assistant_setup_receipt_hash(target.path, content) + '\n') or {
+			return fail_result('assistant setup adopt-dotfiles', 'Cannot stage the ownership receipt for ${target.path}: ${err.msg()}')
+		}
+		os.chmod(tmp, 0o600) or {
+			assistant_setup_remove_temp_file(tmp)
+			return fail_result('assistant setup adopt-dotfiles', 'Cannot restrict ownership receipt permissions: ${err.msg()}')
+		}
+		os.link(tmp, receipt) or {
+			assistant_setup_remove_temp_file(tmp)
+			return fail_result('assistant setup adopt-dotfiles', 'Cannot create ownership receipt for ${target.path} without replacing existing state: ${err.msg()}')
+		}
+		assistant_setup_remove_temp_file(tmp)
+		adopted++
+	}
+	message := if adopted == 0 {
+		'No new supported dotfiles files needed adoption.'
+	} else {
+		'Adopted ${adopted} exact legacy dotfiles file(s) without changing their contents. No settings, keys, or systemd state changed. Next: horneroctl assistant setup --yes'
+	}
+	return ok_result('assistant setup adopt-dotfiles', message, {
+		'adopted': adopted.str()
+	})
 }
 
 // assistant_setup_plan is pure text so tests can pin the contract:
@@ -370,11 +691,15 @@ pub fn assistant_setup_report(dry_run bool, yes bool, remove bool) CommandResult
 	}
 	if wrote_skill {
 		skill_state = 'installed'
+	} else if assistant_setup_file_receipt_mode('skill', skill_file) == 'adopted' {
+		skill_state = 'adopted and preserved'
 	} else if !assistant_setup_file_is_owned('skill', skill_file) {
 		skill_state = 'already present (externally managed)'
 	}
 	unit_state := if wrote_unit {
 		'written'
+	} else if assistant_setup_file_receipt_mode('unit', unit_file) == 'adopted' {
+		'adopted and preserved'
 	} else if assistant_setup_file_is_owned('unit', unit_file) {
 		'already current (Hornero-owned)'
 	} else {
@@ -417,7 +742,8 @@ fn assistant_setup_remove_report_locked(dry_run bool, yes bool) CommandResult {
 	}
 	mut lines := []string{}
 	unit_owned := assistant_setup_file_is_owned('unit', unit_file)
-	if unit_owned {
+	unit_adopted := assistant_setup_file_receipt_mode('unit', unit_file) == 'adopted'
+	if unit_owned && !unit_adopted {
 		unit_state := assistant_gateway_unit_active()
 		if unit_state == 'active' {
 			stop := assistant_gateway_systemctl(['stop', assistant_gateway_unit_name])
@@ -432,25 +758,43 @@ fn assistant_setup_remove_report_locked(dry_run bool, yes bool) CommandResult {
 	} else if os.is_file(unit_file) && !unit_owned {
 		lines << 'kept ${unit_file} (no matching Hornero ownership receipt; unit was not stopped)'
 	}
-	if os.is_file(unit_file) && unit_owned {
+	if os.is_file(unit_file) && unit_adopted {
 		os.rm(assistant_setup_receipt_file('unit')) or {
-			return fail_result('assistant setup', 'Cannot clear the Hermes unit ownership receipt: ${err.msg()}. The unit file was preserved.')
+			return fail_result('assistant setup', 'Cannot clear the adopted unit ownership receipt: ${err.msg()}. The unit file was preserved.')
 		}
-		os.rm(unit_file) or {
-			return fail_result('assistant setup', 'Cannot remove the user unit ${unit_file}: ${err.msg()}. Its ownership receipt was cleared, so the preserved file is no longer treated as Hornero-owned.')
+		lines << 'kept adopted ${unit_file}; systemd was not stopped'
+	} else if os.is_file(unit_file) && unit_owned {
+		removed := assistant_setup_remove_owned_file('unit', unit_file) or {
+			if err.msg().contains('cannot clear ownership receipt') {
+				return fail_result('assistant setup', 'Cannot clear the Hermes unit ownership receipt: ${err.msg()}. The unit file was preserved.')
+			}
+			return fail_result('assistant setup', 'Cannot safely remove the Hermes unit ${unit_file}: ${err.msg()}. Its receipt was preserved.')
 		}
-		assistant_gateway_systemctl(['daemon-reload'])
-		lines << 'removed ${unit_file}'
+		if removed {
+			assistant_gateway_systemctl(['daemon-reload'])
+			lines << 'removed ${unit_file}'
+		} else {
+			lines << 'kept ${unit_file} (it changed or lost its ownership receipt during removal)'
+		}
 	}
 	if os.is_file(skill_file) {
-		if assistant_setup_file_is_owned('skill', skill_file) {
+		if assistant_setup_file_receipt_mode('skill', skill_file) == 'adopted' {
 			os.rm(assistant_setup_receipt_file('skill')) or {
-				return fail_result('assistant setup', 'Cannot clear the Hornero skill ownership receipt: ${err.msg()}. The skill file was preserved.')
+				return fail_result('assistant setup', 'Cannot clear the adopted Hornero skill ownership receipt: ${err.msg()}. The skill file was preserved.')
 			}
-			os.rm(skill_file) or {
-				return fail_result('assistant setup', 'Cannot remove the Hornero skill at ${skill_file}: ${err.msg()}. Its ownership receipt was cleared, so the preserved file is no longer treated as Hornero-owned.')
+			lines << 'kept adopted ${skill_file}'
+		} else if assistant_setup_file_is_owned('skill', skill_file) {
+			removed := assistant_setup_remove_owned_file('skill', skill_file) or {
+				if err.msg().contains('cannot clear ownership receipt') {
+					return fail_result('assistant setup', 'Cannot clear the Hornero skill ownership receipt: ${err.msg()}. The skill file was preserved.')
+				}
+				return fail_result('assistant setup', 'Cannot safely remove the Hornero skill at ${skill_file}: ${err.msg()}. Its receipt was preserved.')
 			}
-			lines << 'removed ${skill_file}'
+			if removed {
+				lines << 'removed ${skill_file}'
+			} else {
+				lines << 'kept ${skill_file} (it changed or lost its ownership receipt during removal)'
+			}
 		} else {
 			lines << 'kept ${skill_file} (no matching Hornero ownership receipt or changed since Hornero wrote it)'
 		}
