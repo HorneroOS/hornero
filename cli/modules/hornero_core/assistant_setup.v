@@ -1,7 +1,9 @@
 module hornero_core
 
 import os
+import os.filelock
 import crypto.sha256
+import time
 
 // -- Assistant setup contract (hornero#191) ---------------------------------
 // `assistant setup` performs the Hornero-owned, network-free half of
@@ -44,6 +46,31 @@ pub fn assistant_skill_file() string {
 fn assistant_setup_receipt_file(kind string) string {
 	paths := resolve_paths()
 	return os.join_path(paths.state_dir, 'hornero', 'assistant-setup', '${kind}.sha256')
+}
+
+fn assistant_setup_lock_file() string {
+	paths := resolve_paths()
+	return os.join_path(paths.state_dir, 'hornero', 'assistant-setup', 'ownership.lock')
+}
+
+fn assistant_setup_acquire_lock() !filelock.FileLock {
+	path := assistant_setup_lock_file()
+	os.mkdir_all(os.dir(path)) or { return error('cannot create assistant ownership state directory: ${err.msg()}') }
+	if os.is_link(path) {
+		return error('assistant ownership lock is a symbolic link; refusing to follow it')
+	}
+	if !os.exists(path) {
+		os.write_file(path, '') or { return error('cannot create assistant ownership lock: ${err.msg()}') }
+	}
+	if !os.is_file(path) {
+		return error('assistant ownership lock is not a regular file')
+	}
+	os.chmod(path, 0o600) or { return error('cannot restrict assistant ownership lock permissions: ${err.msg()}') }
+	mut file_lock := filelock.new_file(path, filelock.LockOptions{})
+	if !file_lock.wait_acquire(5 * time.second) {
+		return error('another horneroctl assistant setup operation is still running; retry shortly')
+	}
+	return file_lock
 }
 
 fn assistant_setup_valid_hash(value string) bool {
@@ -136,11 +163,37 @@ fn assistant_setup_restore_file(path string, content string) ! {
 }
 
 fn assistant_setup_move_file(src string, dest string) ! {
+	if !os.exists(dest) {
+		os.link(src, dest)!
+		os.rm(src) or {}
+		return
+	}
 	os.mv(src, dest)!
 }
 
 fn assistant_setup_write_owned_file_with_move(kind string, path string, content string, move_file fn (string, string) !) !bool {
+	return assistant_setup_write_owned_file_with_hooks(kind, path, content, move_file,
+		assistant_setup_noop_before_publish)
+}
+
+fn assistant_setup_noop_before_publish(_path string) ! {}
+
+fn assistant_setup_write_owned_file_with_hooks(kind string, path string, content string, move_file fn (string, string) !, before_publish fn (string) !) !bool {
+	mut file_lock := assistant_setup_acquire_lock()!
+	defer {
+		file_lock.release()
+	}
+	return assistant_setup_write_owned_file_locked(kind, path, content, move_file, before_publish)
+}
+
+fn assistant_setup_write_owned_file_locked(kind string, path string, content string, move_file fn (string, string) !, before_publish fn (string) !) !bool {
 	receipt_file := assistant_setup_safe_receipt_file(kind)!
+	receipt_existed := os.is_file(receipt_file)
+	previous_receipt := if receipt_existed {
+		os.read_file(receipt_file) or { return error('cannot read existing ownership receipt: ${err.msg()}') }
+	} else {
+		''
+	}
 	should_write := assistant_setup_can_write_file(kind, path, content)!
 	if !should_write {
 		return false
@@ -162,25 +215,82 @@ fn assistant_setup_write_owned_file_with_move(kind string, path string, content 
 		os.rm(receipt_tmp) or {}
 		return error('cannot restrict ownership receipt permissions: ${err.msg()}')
 	}
-	move_file(file_tmp, path) or {
+	// Recheck immediately before publishing. The stable advisory lock prevents
+	// two horneroctl writers from invalidating each other's preflight.
+	before_publish(path) or {
 		os.rm(file_tmp) or {}
 		os.rm(receipt_tmp) or {}
-		return error('cannot install ${path}: ${err.msg()}')
+		return error('cannot recheck ${path} before publish: ${err.msg()}')
+	}
+	if had_existing_file {
+		current := os.read_file(path) or {
+			os.rm(file_tmp) or {}
+			os.rm(receipt_tmp) or {}
+			return error('cannot recheck ${path} before update: ${err.msg()}')
+		}
+		if current != previous_content || !assistant_setup_file_is_owned(kind, path) {
+			os.rm(file_tmp) or {}
+			os.rm(receipt_tmp) or {}
+			return error('existing file changed during setup; preserving it')
+		}
+	} else if os.exists(path) {
+		os.rm(file_tmp) or {}
+		os.rm(receipt_tmp) or {}
+		return error('target appeared during setup; preserving it')
+	}
+	if had_existing_file {
+		move_file(file_tmp, path) or {
+			os.rm(file_tmp) or {}
+			os.rm(receipt_tmp) or {}
+			return error('cannot install ${path}: ${err.msg()}')
+		}
+	} else {
+		// POSIX link is atomic and fails if another process created the target
+		// after the absence check; unlike rename, it cannot replace that file.
+		os.link(file_tmp, path) or {
+			os.rm(file_tmp) or {}
+			os.rm(receipt_tmp) or {}
+			return error('cannot install ${path} without replacing a concurrent file: ${err.msg()}')
+		}
+		// The payload is installed at this point. A leftover hard link is
+		// harmless, while aborting here would leave the target without a receipt.
+		os.rm(file_tmp) or {}
+	}
+	if receipt_existed {
+		current_receipt := os.read_file(receipt_file) or { '' }
+		if current_receipt != previous_receipt {
+			os.rm(receipt_tmp) or {}
+			assistant_setup_rollback_after_receipt_failure(path, receipt_file, content,
+				previous_content, had_existing_file, 'ownership receipt changed during setup') or {
+				return err
+			}
+		}
 	}
 	move_file(receipt_tmp, receipt_file) or {
 		os.rm(receipt_tmp) or {}
-		if had_existing_file {
-			assistant_setup_restore_file(path, previous_content) or {
-				return error('cannot update the ownership receipt and cannot restore ${path}: ${err.msg()}; inspect the file before retrying')
-			}
-		} else {
-			os.rm(path) or {
-				return error('cannot update the ownership receipt or remove unowned ${path}: ${err.msg()}; inspect the file before retrying')
-			}
+		assistant_setup_rollback_after_receipt_failure(path, receipt_file, content,
+			previous_content, had_existing_file, err.msg()) or {
+			return err
 		}
-		return error('cannot update ownership receipt ${receipt_file}: ${err.msg()}; previous file content was restored')
 	}
 	return true
+}
+
+fn assistant_setup_rollback_after_receipt_failure(path string, receipt_file string, content string, previous_content string, had_existing_file bool, reason string) ! {
+	current := os.read_file(path) or { '' }
+	if current != content {
+		return error('cannot update ownership receipt ${receipt_file}: ${reason}; ${path} changed during rollback and was preserved')
+	}
+	if had_existing_file {
+		assistant_setup_restore_file(path, previous_content) or {
+			return error('cannot update ownership receipt and cannot restore ${path}: ${err.msg()}; inspect the file before retrying')
+		}
+		return error('cannot update ownership receipt ${receipt_file}: ${reason}; previous file content was restored')
+	}
+	os.rm(path) or {
+		return error('cannot update ownership receipt or remove ${path}: ${err.msg()}; inspect the file before retrying')
+	}
+	return error('cannot update ownership receipt ${receipt_file}: ${reason}; newly created file was removed')
 }
 
 fn assistant_setup_write_owned_file(kind string, path string, content string) !bool {
@@ -224,6 +334,12 @@ pub fn assistant_setup_report(dry_run bool, yes bool, remove bool) CommandResult
 	if hermes.len == 0 {
 		return fail_result('assistant setup', assistant_setup_contract_text())
 	}
+	mut file_lock := assistant_setup_acquire_lock() or {
+		return fail_result('assistant setup', 'Cannot lock assistant ownership state: ${err.msg()}')
+	}
+	defer {
+		file_lock.release()
+	}
 	unit_file := assistant_gateway_unit_file()
 	unit_content := assistant_gateway_unit_content(hermes)
 	assistant_setup_safe_receipt_file('unit') or {
@@ -240,11 +356,12 @@ pub fn assistant_setup_report(dry_run bool, yes bool, remove bool) CommandResult
 	assistant_setup_can_write_file('skill', skill_file, skill_text) or {
 		return fail_result('assistant setup', 'Cannot manage the Hornero skill at ${skill_file}: ${err.msg()}. The existing file was preserved; reconcile its ownership with dotfiles or remove it yourself before retrying.')
 	}
-	wrote_unit := assistant_gateway_ensure_unit(hermes) or {
+	wrote_unit := assistant_gateway_ensure_unit_locked(hermes) or {
 		return fail_result('assistant setup', 'Cannot write the user unit ${assistant_gateway_unit_file()}: ${err.msg()}')
 	}
 	mut skill_state := 'already current (Hornero-owned)'
-	wrote_skill := assistant_setup_write_owned_file('skill', skill_file, skill_text) or {
+	wrote_skill := assistant_setup_write_owned_file_locked('skill', skill_file, skill_text,
+		assistant_setup_move_file, assistant_setup_noop_before_publish) or {
 		return fail_result('assistant setup', 'Cannot install the Hornero skill at ${skill_file}: ${err.msg()}')
 	}
 	enable := assistant_enable_report(false, true)
@@ -274,6 +391,19 @@ pub fn assistant_setup_report(dry_run bool, yes bool, remove bool) CommandResult
 }
 
 fn assistant_setup_remove_report(dry_run bool, yes bool) CommandResult {
+	if dry_run || !yes {
+		return assistant_setup_remove_report_locked(dry_run, yes)
+	}
+	mut file_lock := assistant_setup_acquire_lock() or {
+		return fail_result('assistant setup', 'Cannot lock assistant ownership state: ${err.msg()}')
+	}
+	defer {
+		file_lock.release()
+	}
+	return assistant_setup_remove_report_locked(dry_run, yes)
+}
+
+fn assistant_setup_remove_report_locked(dry_run bool, yes bool) CommandResult {
 	unit_file := assistant_gateway_unit_file()
 	skill_file := assistant_skill_file()
 	if dry_run {

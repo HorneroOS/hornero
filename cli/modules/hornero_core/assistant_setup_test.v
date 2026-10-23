@@ -42,6 +42,19 @@ fn assistant_setup_test_move_fail_receipt(src string, dest string) ! {
 	os.mv(src, dest)!
 }
 
+fn assistant_setup_test_external_write_before_publish(path string) ! {
+	os.write_file(path, 'concurrent external content')!
+}
+
+fn assistant_setup_test_mutate_then_fail_receipt(src string, dest string) ! {
+	if os.file_name(dest) == 'unit.sha256' {
+		path := os.getenv('HORNERO_TEST_TARGET')
+		os.write_file(path, 'concurrent external content')!
+		return error('simulated ownership receipt rename failure')
+	}
+	os.mv(src, dest)!
+}
+
 fn test_assistant_knowledge_markdown_shape() {
 	md := assistant_knowledge_markdown('horneroctl-test', '2026-10-21 10:00',
 		'system_info -> horneroctl system info --json; package_updates -> horneroctl package updates --json')
@@ -96,6 +109,7 @@ fn test_assistant_setup_receipt_only_authorizes_unchanged_content() {
 	path := os.join_path(root, 'service')
 
 	assert assistant_setup_write_owned_file('unit', path, 'version one')!
+	assert os.stat(assistant_setup_lock_file())!.mode & 0o777 == 0o600
 	assert assistant_setup_file_is_owned('unit', path)
 	assert assistant_setup_can_write_file('unit', path, 'version one')! == false
 	assert assistant_setup_can_write_file('unit', path, 'version two')!
@@ -166,6 +180,54 @@ fn test_assistant_setup_restores_previous_file_when_receipt_publish_fails() {
 	}
 	assert os.read_file(path)! == 'previous unit'
 	assert assistant_setup_file_is_owned('unit', path)
+}
+
+fn test_assistant_setup_preserves_target_created_after_preflight() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-created-race-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+
+	if _ := assistant_setup_write_owned_file_with_hooks('unit', path, 'hornero content',
+		assistant_setup_move_file, assistant_setup_test_external_write_before_publish) {
+		assert false
+	}
+	assert os.read_file(path)! == 'concurrent external content'
+	assert !os.is_file(assistant_setup_receipt_file('unit'))
+}
+
+fn test_assistant_setup_preserves_existing_target_changed_after_preflight() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-modified-race-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+	assert assistant_setup_write_owned_file('unit', path, 'initial Hornero content')!
+
+	if _ := assistant_setup_write_owned_file_with_hooks('unit', path, 'updated Hornero content',
+		assistant_setup_move_file, assistant_setup_test_external_write_before_publish) {
+		assert false
+	}
+	assert os.read_file(path)! == 'concurrent external content'
+	assert !assistant_setup_file_is_owned('unit', path)
+}
+
+fn test_assistant_setup_rollback_preserves_concurrent_target_change() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-rollback-race-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := assistant_gateway_unit_file()
+	assert assistant_setup_write_owned_file('unit', path, 'previous Hornero content')!
+	os.setenv('HORNERO_TEST_TARGET', path, true)
+	defer { os.unsetenv('HORNERO_TEST_TARGET') }
+
+	if _ := assistant_setup_write_owned_file_with_move('unit', path, 'updated Hornero content',
+		assistant_setup_test_mutate_then_fail_receipt) {
+		assert false
+	}
+	assert os.read_file(path)! == 'concurrent external content'
 }
 
 fn test_assistant_enable_keeps_settings_disabled_when_key_creation_fails() {
@@ -261,6 +323,17 @@ fn test_assistant_setup_remove_preserves_unowned_unit_and_skill() {
 	assert result.message.contains('no matching Hornero ownership receipt')
 	assert !os.is_file(assistant_setup_receipt_file('unit'))
 	assert !os.is_file(assistant_setup_receipt_file('skill'))
+}
+
+fn test_assistant_setup_remove_dry_run_does_not_create_lock_state() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-remove-dry-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+
+	result := assistant_setup_remove_report(true, true)
+	assert result.ok
+	assert !os.exists(assistant_setup_lock_file())
 }
 
 fn test_assistant_setup_collision_fails_before_enabling() {

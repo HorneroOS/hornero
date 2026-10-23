@@ -51,9 +51,18 @@ pub fn assistant_gateway_classify(enabled bool, installed bool, reachable bool, 
 // whose current contents match a Hornero ownership receipt. External and
 // locally modified units are preserved; the return value reports a write.
 pub fn assistant_gateway_ensure_unit(hermes string) !bool {
+	mut file_lock := assistant_setup_acquire_lock()!
+	defer {
+		file_lock.release()
+	}
+	return assistant_gateway_ensure_unit_locked(hermes)
+}
+
+fn assistant_gateway_ensure_unit_locked(hermes string) !bool {
 	unit_file := assistant_gateway_unit_file()
 	desired := assistant_gateway_unit_content(hermes)
-	return assistant_setup_write_owned_file('unit', unit_file, desired)
+	return assistant_setup_write_owned_file_locked('unit', unit_file, desired,
+		assistant_setup_move_file, assistant_setup_noop_before_publish)
 }
 
 fn assistant_gateway_systemctl(args []string) ExecReport {
@@ -111,6 +120,19 @@ pub fn assistant_gateway_status_report() CommandResult {
 }
 
 pub fn assistant_gateway_start_report(dry_run bool, yes bool) CommandResult {
+	if dry_run || !yes {
+		return assistant_gateway_start_report_locked(dry_run, yes)
+	}
+	mut file_lock := assistant_setup_acquire_lock() or {
+		return fail_result('assistant gateway start', 'Cannot lock assistant ownership state: ${err.msg()}')
+	}
+	defer {
+		file_lock.release()
+	}
+	return assistant_gateway_start_report_locked(dry_run, yes)
+}
+
+fn assistant_gateway_start_report_locked(dry_run bool, yes bool) CommandResult {
 	settings := assistant_load_settings()
 	unit_file := assistant_gateway_unit_file()
 	if dry_run {
@@ -140,7 +162,7 @@ pub fn assistant_gateway_start_report(dry_run bool, yes bool) CommandResult {
 	if find_on_path('systemctl').len == 0 {
 		return fail_result('assistant gateway start', 'systemd user sessions are unavailable here, so horneroctl cannot manage the gateway. Start it manually in a terminal: hermes gateway run')
 	}
-	wrote := assistant_gateway_ensure_unit(hermes) or {
+	wrote := assistant_gateway_ensure_unit_locked(hermes) or {
 		return fail_result('assistant gateway start', 'Cannot write the user unit ${unit_file}: ${err.msg()}')
 	}
 	if !wrote && !assistant_setup_file_is_owned('unit', unit_file) {
@@ -172,6 +194,19 @@ pub fn assistant_gateway_start_report(dry_run bool, yes bool) CommandResult {
 }
 
 pub fn assistant_gateway_stop_report(dry_run bool, yes bool) CommandResult {
+	if dry_run || !yes {
+		return assistant_gateway_stop_report_locked(dry_run, yes)
+	}
+	mut file_lock := assistant_setup_acquire_lock() or {
+		return fail_result('assistant gateway stop', 'Cannot lock assistant ownership state: ${err.msg()}')
+	}
+	defer {
+		file_lock.release()
+	}
+	return assistant_gateway_stop_report_locked(dry_run, yes)
+}
+
+fn assistant_gateway_stop_report_locked(dry_run bool, yes bool) CommandResult {
 	settings := assistant_load_settings()
 	if dry_run {
 		return ok_result('assistant gateway stop', 'Dry run: would run systemctl --user stop ${assistant_gateway_unit_name} if Hornero manages the running gateway. The desktop and the Hermes installation are untouched.', {
