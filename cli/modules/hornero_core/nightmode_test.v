@@ -1,10 +1,18 @@
 module hornero_core
 
 import os
+import time
 
 fn with_night_xdg(tmp string, body fn ()) {
+	keys := ['XDG_CACHE_HOME', 'HORNERO_REDSHIFT_BIN', 'HORNERO_GAMMASSTEP_BIN', 'HORNERO_WLSUNSET_BIN',
+		'HORNERO_XRANDR_BIN', 'HORNERO_PKILL_BIN', 'HORNERO_NOTIFY_BIN', 'HORNERO_NIGHT_MODE_STATE_FILE']
+	mut saved := map[string]string{}
+	for key in keys {
+		saved[key] = os.getenv(key)
+	}
 	os.mkdir_all(tmp) or {}
 	os.setenv('XDG_CACHE_HOME', os.join_path(tmp, 'cache'), true)
+	os.setenv('HORNERO_NIGHT_MODE_STATE_FILE', '', true)
 	os.setenv('HORNERO_REDSHIFT_BIN', '', true)
 	os.setenv('HORNERO_GAMMASSTEP_BIN', '', true)
 	os.setenv('HORNERO_WLSUNSET_BIN', '', true)
@@ -12,13 +20,13 @@ fn with_night_xdg(tmp string, body fn ()) {
 	os.setenv('HORNERO_PKILL_BIN', '', true)
 	os.setenv('HORNERO_NOTIFY_BIN', '', true)
 	body()
-	os.unsetenv('XDG_CACHE_HOME')
-	os.unsetenv('HORNERO_REDSHIFT_BIN')
-	os.unsetenv('HORNERO_GAMMASSTEP_BIN')
-	os.unsetenv('HORNERO_WLSUNSET_BIN')
-	os.unsetenv('HORNERO_XRANDR_BIN')
-	os.unsetenv('HORNERO_PKILL_BIN')
-	os.unsetenv('HORNERO_NOTIFY_BIN')
+	for key, value in saved {
+		if value.len == 0 {
+			os.unsetenv(key)
+		} else {
+			os.setenv(key, value, true)
+		}
+	}
 }
 
 fn test_classify_night_procs_vectors() {
@@ -58,29 +66,33 @@ fn test_parse_xrandr_vectors() {
 }
 
 fn test_night_status_icon_vectors() {
-	rep := night_mode_run(NightModeCmd{
-		verb:    'status-icon'
-		dry_run: true
+	tmp := os.join_path(os.temp_dir(), 'hornero-night-status-${os.getpid()}-${time.now().unix_milli()}')
+	with_night_xdg(tmp, fn () {
+		rep := night_mode_run(NightModeCmd{
+			verb:    'status-icon'
+			dry_run: true
+		})
+		assert rep.ok
+		assert rep.message == '󰖙'
+		rep2 := night_mode_run(NightModeCmd{
+			verb:    'status-text'
+			dry_run: true
+		})
+		assert rep2.ok
+		assert rep2.message.contains('Day Mode')
+		rep3 := night_mode_run(NightModeCmd{
+			verb:    'backends'
+			dry_run: true
+		})
+		assert rep3.ok
+		assert rep3.message.contains('Available backends:')
+		rep4 := night_mode_run(NightModeCmd{
+			verb:    'bogus'
+			dry_run: true
+		})
+		assert !rep4.ok
 	})
-	assert rep.ok
-	assert rep.message == '󰖙'
-	rep2 := night_mode_run(NightModeCmd{
-		verb:    'status-text'
-		dry_run: true
-	})
-	assert rep2.ok
-	assert rep2.message.contains('Day Mode')
-	rep3 := night_mode_run(NightModeCmd{
-		verb:    'backends'
-		dry_run: true
-	})
-	assert rep3.ok
-	assert rep3.message.contains('Available backends:')
-	rep4 := night_mode_run(NightModeCmd{
-		verb:    'bogus'
-		dry_run: true
-	})
-	assert !rep4.ok
+	os.rmdir_all(tmp) or {}
 }
 
 fn test_night_toggle_needs_yes() {

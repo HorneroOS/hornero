@@ -869,7 +869,11 @@ pub fn plugin_payload_sha256(plugin_dir string, manifest map[string]json2.Any) s
 	return sha256.hexhash(acc)
 }
 
-fn community_plugin_clone_catalog() !(string, string) {
+fn community_plugin_clone_catalog(expected_revision string) !(string, string) {
+	if expected_revision.len > 0 && !community_plugin_valid_revision(expected_revision) {
+		return error('catalogue revision must be a full Git commit hash')
+	}
+	expected := expected_revision.to_lower()
 	git := if os.getenv('HORNERO_GIT_BIN').len > 0 {
 		os.getenv('HORNERO_GIT_BIN')
 	} else {
@@ -889,28 +893,105 @@ fn community_plugin_clone_catalog() !(string, string) {
 	if !community_plugin_safe_source(url) {
 		return error('catalogue source must be an HTTPS Git URL')
 	}
-	clone := run_exec(ExecSpec{
-		prog:        env
-		args:        ['GIT_TERMINAL_PROMPT=0', 'GIT_CONFIG_NOSYSTEM=1', 'GIT_CONFIG_GLOBAL=/dev/null',
-			git, '-c', 'core.hooksPath=/dev/null', '-c', 'credential.helper=', '-c',
-			'protocol.allow=never', '-c', 'protocol.https.allow=always', 'clone', '--depth', '1',
-			'--no-tags', '--', url, stage]
-		timeout_sec: 120
-	})
+	clone := community_plugin_run_catalog_git(git, env, [
+		'-c',
+		'core.hooksPath=/dev/null',
+		'-c',
+		'credential.helper=',
+		'-c',
+		'protocol.allow=never',
+		'-c',
+		'protocol.https.allow=always',
+		'clone',
+		'--depth',
+		'1',
+		'--no-tags',
+		'--',
+		url,
+		stage,
+	], 120)
 	if !clone.ok {
+		os.rmdir_all(stage) or {}
 		return error('git clone of the catalogue failed: ${clone.output}')
 	}
-	rev := run_exec(ExecSpec{
-		prog:        git
-		args:        ['-C', stage, 'rev-parse', '--verify', 'HEAD^{commit}']
-		timeout_sec: 10
-	})
+	if expected_revision.len > 0 {
+		fetch := community_plugin_run_catalog_git(git, env, [
+			'-C',
+			stage,
+			'-c',
+			'core.hooksPath=/dev/null',
+			'-c',
+			'credential.helper=',
+			'-c',
+			'protocol.allow=never',
+			'-c',
+			'protocol.https.allow=always',
+			'fetch',
+			'--depth=1',
+			'--no-tags',
+			'--no-recurse-submodules',
+			'origin',
+			expected,
+		], 120)
+		if !fetch.ok {
+			os.rmdir_all(stage) or {}
+			return error('cannot fetch the requested catalogue revision ${expected_revision}: ${fetch.output}; refusing to install different catalogue content')
+		}
+		checkout := community_plugin_run_catalog_git(git, env, [
+			'-C',
+			stage,
+			'-c',
+			'core.hooksPath=/dev/null',
+			'checkout',
+			'--detach',
+			expected,
+		], 30)
+		if !checkout.ok {
+			os.rmdir_all(stage) or {}
+			return error('cannot check out the requested catalogue revision ${expected_revision}: ${checkout.output}; refusing to install different catalogue content')
+		}
+	}
+	rev := community_plugin_run_catalog_git(git, env, [
+		'-C',
+		stage,
+		'rev-parse',
+		'--verify',
+		'HEAD^{commit}',
+	], 10)
 	revision := rev.output.trim_space()
 	if !rev.ok || !community_plugin_valid_revision(revision) {
 		os.rmdir_all(stage) or {}
 		return error('cannot pin a catalogue revision; refusing unpinned data')
 	}
+	if expected.len > 0 && revision.to_lower() != expected {
+		os.rmdir_all(stage) or {}
+		return error('checked out catalogue revision ${revision}, expected ${expected_revision}; refusing to use different catalogue content')
+	}
 	return stage, revision
+}
+
+fn community_plugin_run_catalog_git(git string, env string, args []string, timeout int) ExecReport {
+	mut command_args := []string{}
+	for name in ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY',
+		'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_NAMESPACE', 'GIT_SHALLOW_FILE',
+		'GIT_QUARANTINE_PATH', 'GIT_CONFIG', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS',
+		'GIT_CONFIG_SYSTEM', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0', 'GIT_EXEC_PATH',
+		'GIT_TEMPLATE_DIR', 'GIT_CEILING_DIRECTORIES', 'GIT_DISCOVERY_ACROSS_FILESYSTEM'] {
+		command_args << '-u'
+		command_args << name
+	}
+	command_args << [
+		'GIT_TERMINAL_PROMPT=0',
+		'GIT_CONFIG_NOSYSTEM=1',
+		'GIT_CONFIG_GLOBAL=/dev/null',
+	]
+	command_args << git
+	command_args << args
+	return run_exec(ExecSpec{
+		prog:        env
+		args:        command_args
+		timeout_sec: timeout
+	})
 }
 
 fn copy_dir(src string, dst string) ! {
@@ -930,7 +1011,7 @@ fn copy_dir(src string, dst string) ! {
 }
 
 pub fn community_plugin_catalog_report() CommandResult {
-	stage, revision := community_plugin_clone_catalog() or {
+	stage, revision := community_plugin_clone_catalog('') or {
 		return fail_result('plugin catalog', err.msg())
 	}
 	defer {
@@ -972,13 +1053,13 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 	if !opts.dry_run && !opts.yes {
 		return fail_result('plugin catalog install', 'refusing to install without --yes (preview with --dry-run)')
 	}
-	stage, revision := community_plugin_clone_catalog() or {
+	stage, revision := community_plugin_clone_catalog(opts.expected_revision) or {
 		return fail_result('plugin catalog install', err.msg())
 	}
 	defer {
 		os.rmdir_all(stage) or {}
 	}
-	if opts.expected_revision.len > 0 && opts.expected_revision != revision {
+	if opts.expected_revision.len > 0 && opts.expected_revision.to_lower() != revision.to_lower() {
 		return fail_result('plugin catalog install', 'catalogue changed since it was displayed; refresh the catalogue and review the new version before installing')
 	}
 	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
@@ -1094,13 +1175,13 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 	if record.source != plugin_catalog_source {
 		return fail_result('plugin catalog update', 'plugin ${id} was not installed from the official catalogue (source: ${record.source}); refusing to re-source it')
 	}
-	stage, revision := community_plugin_clone_catalog() or {
+	stage, revision := community_plugin_clone_catalog(opts.expected_revision) or {
 		return fail_result('plugin catalog update', err.msg())
 	}
 	defer {
 		os.rmdir_all(stage) or {}
 	}
-	if opts.expected_revision.len > 0 && opts.expected_revision != revision {
+	if opts.expected_revision.len > 0 && opts.expected_revision.to_lower() != revision.to_lower() {
 		return fail_result('plugin catalog update', 'catalogue changed since it was displayed; refresh the catalogue and review the new version before updating')
 	}
 	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {

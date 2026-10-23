@@ -452,7 +452,7 @@ pub fn community_plugin_registry_list_report() CommandResult {
 	if os.is_link(community_registry_key_path) || !os.is_file(community_registry_key_path) {
 		return fail_result('plugin community list', 'trusted Hornero community registry key is not installed at ${community_registry_key_path}; refusing unsigned or untrusted community entries')
 	}
-	stage, _ := community_plugin_clone_catalog() or {
+	stage, _ := community_plugin_clone_catalog('') or {
 		return fail_result('plugin community list', err.msg())
 	}
 	defer {
