@@ -36,6 +36,12 @@ jobs:
         working-directory: cli
         continue-on-error: true
         run: ./make.vsh test
+      # The pinned V test target is non-blocking while upstream reporter
+      # faults remain, so keep the security-critical signature integration
+      # independently blocking after installing Minisign above.
+      - name: Community registry signature integration
+        working-directory: cli
+        run: v test modules/hornero_core/community_registry_test.v
       - name: Build
         working-directory: cli
         run: ./make.vsh build-cli && ./build/horneroctl version && ./build/horneroctl config paths

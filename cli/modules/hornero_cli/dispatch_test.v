@@ -95,7 +95,9 @@ fn test_plugin_community_list_parser_and_help() {
 	assert opts.value == 'list'
 	assert !opts.dry_run && !opts.yes
 	assert command_help('plugin community').contains('/etc/hornero/registry.pub')
+	assert command_help('plugin community').contains('Examples:')
 	assert command_help('plugin').contains('plugin community list --json')
+	assert dispatch(['horneroctl', 'plugin', 'community', '--help']) == 0
 	if _ := parse_plugin(['community', 'install']) {
 		assert false, 'community install must wait for provenance-preserving lifecycle support'
 	} else {

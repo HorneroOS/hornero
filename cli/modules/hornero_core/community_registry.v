@@ -134,7 +134,7 @@ fn community_registry_integer(value json2.Any) ?int {
 			}
 		}
 		i64 {
-			if value >= 0 {
+			if value >= 0 && u64(value) <= u64(max_int) {
 				return int(value)
 			}
 		}
