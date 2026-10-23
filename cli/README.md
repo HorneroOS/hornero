@@ -34,6 +34,11 @@ Run `horneroctl --help` for the installed command list and
   license template; install/list/remove operate on receipt-owned data, and
   validate delegates to the Shell-owned contract checker. This CLI does not
   load or sandbox third-party QML.
+- `plugin catalog list|install|update|rollback` for the reviewed official
+  HorneroOS extension catalogue. Catalogue installs verify payload hashes and
+  keep extensions inert until separately enabled. `--revision <commit>` fetches
+  and checks out that exact catalogue commit, so links pinned by the website
+  remain reproducible after `main` advances.
 
 `horneroctl system info` reads the immutable profile record installed by a
 HorneroOS installer composition. It reports the installed edition, role,

@@ -28,7 +28,9 @@ fn community_plugins_test_restore(saved map[string]string) {
 fn community_plugins_test_env(root string) map[string]string {
 	keys := ['XDG_DATA_HOME', 'XDG_STATE_HOME', 'HORNERO_PLUGIN_VALIDATOR', 'HORNERO_GIT_BIN',
 		'HORNERO_TEST_PLUGIN_SOURCE', 'HORNERO_TEST_REVISION', 'HORNERO_PLUGIN_TEST_ROOT',
-		'HORNERO_PLUGINS_CATALOG_URL']
+		'HORNERO_TEST_REQUESTED_REVISION', 'HORNERO_TEST_STAGE_LOG', 'HORNERO_TEST_FETCH_FAIL',
+		'HORNERO_PLUGINS_CATALOG_URL', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_CONFIG_COUNT',
+		'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0']
 	mut saved := map[string]string{}
 	for key in keys { saved[key] = os.getenv(key) }
 	os.setenv('HORNERO_PLUGIN_TEST_ROOT', root, true)
@@ -511,6 +513,58 @@ fn test_catalog_install_refuses_to_apply_a_revision_other_than_the_displayed_sna
 	})
 	assert !result.ok
 	assert result.message.contains('catalogue changed since it was displayed')
+}
+
+fn test_catalog_clone_fetches_and_checks_out_the_requested_full_revision() {
+	root := community_plugins_test_new_root('catalog-pinned-fetch')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	source := os.join_path(root, 'source')
+	os.mkdir_all(source) or { panic(err) }
+	requested := '0123456789ABCDEF0123456789ABCDEF01234567'
+	requested_lower := requested.to_lower()
+	current := 'abcdef0123456789abcdef0123456789abcdef01'
+	git := os.join_path(root, 'git')
+	community_plugins_test_write_executable(git, '#!/usr/bin/env python3\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nfor key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"):\n if key in os.environ: raise SystemExit("inherited Git environment: " + key)\nif "clone" in args:\n dst=pathlib.Path(args[-1]); shutil.copytree(os.environ["HORNERO_TEST_PLUGIN_SOURCE"], dst); (dst/".git").mkdir(); pathlib.Path(os.environ["HORNERO_TEST_STAGE_LOG"]).write_text(str(dst))\nelif "fetch" in args:\n if args[-1] != os.environ["HORNERO_TEST_REQUESTED_REVISION"]: raise SystemExit(3)\n if os.environ.get("HORNERO_TEST_FETCH_FAIL"): raise SystemExit(4)\nelif "checkout" in args:\n repo=pathlib.Path(args[args.index("-C")+1]); (repo/".git"/"hornero-requested-head").write_text(args[-1])\nelif "rev-parse" in args:\n repo=pathlib.Path(args[args.index("-C")+1]); head=repo/".git"/"hornero-requested-head"; print(head.read_text() if head.exists() else os.environ["HORNERO_TEST_REVISION"])\nelse:\n raise SystemExit(2)\n')
+	os.setenv('HORNERO_GIT_BIN', git, true)
+	os.setenv('HORNERO_TEST_PLUGIN_SOURCE', source, true)
+	os.setenv('HORNERO_TEST_REQUESTED_REVISION', requested_lower, true)
+	os.setenv('HORNERO_TEST_REVISION', current, true)
+	stage_log := os.join_path(root, 'stage-path')
+	os.setenv('HORNERO_TEST_STAGE_LOG', stage_log, true)
+	os.setenv('HORNERO_PLUGINS_CATALOG_URL', 'https://example.invalid/catalog.git', true)
+	os.setenv('GIT_DIR', os.join_path(root, 'wrong-repository'), true)
+	os.setenv('GIT_WORK_TREE', root, true)
+	os.setenv('GIT_CONFIG_COUNT', '1', true)
+	os.setenv('GIT_CONFIG_KEY_0', 'protocol.allow', true)
+	os.setenv('GIT_CONFIG_VALUE_0', 'never', true)
+
+	stage, revision := community_plugin_clone_catalog(requested) or { panic(err) }
+	defer { os.rmdir_all(stage) or {} }
+	assert revision == requested_lower
+	head := os.read_file(os.join_path(stage, '.git', 'hornero-requested-head')) or { '' }
+	assert head == requested_lower
+
+	os.setenv('HORNERO_TEST_FETCH_FAIL', '1', true)
+	_, _ := community_plugin_clone_catalog(requested) or {
+		assert err.msg().contains('cannot fetch the requested catalogue revision'), err.msg()
+		failed_stage := os.read_file(stage_log) or { '' }
+		assert failed_stage.len > 0
+		assert !os.exists(failed_stage)
+		return
+	}
+	assert false
+}
+
+fn test_catalog_clone_rejects_a_non_full_requested_revision_before_git() {
+	_, _ := community_plugin_clone_catalog('main') or {
+		assert err.msg().contains('full Git commit hash'), err.msg()
+		return
+	}
+	assert false
 }
 
 fn test_catalog_update_requires_catalogue_source() {
