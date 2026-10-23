@@ -20,10 +20,10 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 2fcc59de53fa7761b6958fc87e65123a7296af6d
+    sha: 8dc622dd0af26a41df328d6ed386e83eebb5ea19
     status: pinned
-    subject: "feat(notifs): promote critical battery/VPN conditions to notifications (shell#224)"
-    notes: Desktop shell / Quickshell UX, static plugin contract validator, reliable terminal selection, and accessible Control Center navigation.
+    subject: "feat(controlcenter): add official extensions marketplace (shell#309)"
+    notes: Desktop shell / Quickshell UX, accessible Control Center navigation, and provenance-backed official extensions marketplace.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
