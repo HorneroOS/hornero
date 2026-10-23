@@ -49,6 +49,19 @@ def test_desktop_composition_contains_a_login_manager_and_hornero_greeter():
     assert required <= packages
 
 
+def test_desktop_composition_installs_factory_default_providers():
+    packages = set(resolver.resolve_edition(resolver.load_catalogue(), "desktop")["packages"])
+    required = {
+        "exo",
+        "papirus-icon-theme",
+        "qt6ct",
+        "ttf-cascadia-code-nerd",
+        "ttf-material-symbols-variable",
+        "ttf-rubik-vf",
+    }
+    assert required <= packages
+
+
 def test_server_is_headless_and_remote_admin_focused():
     result = resolver.resolve_edition(resolver.load_catalogue(), "server")
     assert result["compositor"] is None

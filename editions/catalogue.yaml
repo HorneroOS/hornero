@@ -25,10 +25,16 @@ packageSets:
       - hornero-config
       - horneroctl-bin
       - quickshell
+      - exo
       - kitty
       - thunar
       - networkmanager
       - xdg-desktop-portal
+      - qt6ct
+      - papirus-icon-theme
+      - ttf-cascadia-code-nerd
+      - ttf-material-symbols-variable
+      - ttf-rubik-vf
       - sddm
       - hornero-greeter
       - hornero-greeter-media-base
