@@ -22,6 +22,10 @@ def test_release_stays_draft_until_signed_assets_verify():
         (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     )
     jobs = workflow["jobs"]
+    release_tag_expression = "${{ needs.create-release.outputs.tag }}"
+    for job in jobs.values():
+        for step in job.get("steps", []):
+            assert release_tag_expression not in step.get("run", "")
 
     create_release = next(
         step for step in jobs["create-release"]["steps"]
@@ -38,16 +42,17 @@ def test_release_stays_draft_until_signed_assets_verify():
     )
     publish = jobs["publish-release"]["steps"][0]
     for step in (upload, publish):
-        assert step["env"]["RELEASE_TAG"] == "${{ needs.create-release.outputs.tag }}"
-        assert "${{ needs.create-release.outputs.tag }}" not in step["run"]
+        assert step["env"]["RELEASE_TAG"] == release_tag_expression
         assert '"${RELEASE_TAG}"' in step["run"]
 
     signing = next(
         step for step in jobs["build"]["steps"] if step.get("name") == "Sign release asset"
     )
     assert "HORNERO_RELEASE_GPG_PRIVATE_KEY" in signing["env"]["SIGNING_KEY"]
+    assert signing["env"]["RELEASE_TAG"] == release_tag_expression
     assert "refusing an unsigned release" in signing["run"]
     assert "scripts/verify-release.sh" in signing["run"]
+    assert '"${RELEASE_TAG}"' in signing["run"]
 
 
 def test_release_pin_export_uses_runner_yaml_without_installing_a_package():

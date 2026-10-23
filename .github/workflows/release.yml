@@ -159,6 +159,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SIGNING_KEY: ${{ secrets.HORNERO_RELEASE_GPG_PRIVATE_KEY }}
           SIGNING_PASSPHRASE: ${{ secrets.HORNERO_RELEASE_GPG_PASSPHRASE }}
+          RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
         run: |
           set -euo pipefail
           if [ -z "${SIGNING_KEY}" ]; then
@@ -193,7 +194,7 @@ jobs:
             HORNERO_RELEASE_PASSPHRASE="${SIGNING_PASSPHRASE}" \
             scripts/sign-release.sh "${asset}"
           scripts/verify-release.sh "${asset}"
-          gh release upload "${{ needs.create-release.outputs.tag }}" \
+          gh release upload "${RELEASE_TAG}" \
             "${asset}.asc" --clobber
 
   publish-release:
