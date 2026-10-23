@@ -1,15 +1,38 @@
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_cli_package_source_filename_changes_with_package_version():
+def test_cli_package_sources_include_signed_architecture_assets():
     pkgbuild = (ROOT / "packaging/horneroctl-bin/PKGBUILD").read_text()
 
-    assert 'source_x86_64=("horneroctl-${pkgver}::' in pkgbuild
-    assert 'source_aarch64=("horneroctl-${pkgver}::' in pkgbuild
+    assert '"horneroctl-${pkgver}::' in pkgbuild
+    assert '"horneroctl-${pkgver}.asc::' in pkgbuild
+    assert "horneroctl-linux-x86_64.asc" in pkgbuild
+    assert "horneroctl-linux-arm64.asc" in pkgbuild
+    assert "validpgpkeys=(" in pkgbuild
     assert '"${srcdir}/horneroctl-${pkgver}"' in pkgbuild
+
+
+def test_release_stays_draft_until_signed_assets_verify():
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    )
+    jobs = workflow["jobs"]
+
+    assert jobs["create-release"]["steps"][-1]["with"]["draft"] is True
+    assert set(jobs["publish-release"]["needs"]) == {"create-release", "build"}
+    assert "publish-release" in jobs["aur-publish"]["needs"]
+
+    signing = next(
+        step for step in jobs["build"]["steps"] if step.get("name") == "Sign release asset"
+    )
+    assert "HORNERO_RELEASE_GPG_PRIVATE_KEY" in signing["env"]["SIGNING_KEY"]
+    assert "refusing an unsigned release" in signing["run"]
+    assert "scripts/verify-release.sh" in signing["run"]
 
 
 def test_plugin_management_tools_are_documented_optional_dependencies():
