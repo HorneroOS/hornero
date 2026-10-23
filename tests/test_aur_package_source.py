@@ -23,7 +23,13 @@ def test_release_stays_draft_until_signed_assets_verify():
     )
     jobs = workflow["jobs"]
 
-    assert jobs["create-release"]["steps"][-1]["with"]["draft"] is True
+    create_release = next(
+        step for step in jobs["create-release"]["steps"]
+        if step.get("name") == "Create or resume draft release"
+    )
+    assert "gh release create" in create_release["run"]
+    assert "--draft --generate-notes" in create_release["run"]
+    assert "Reusing existing draft release" in create_release["run"]
     assert set(jobs["publish-release"]["needs"]) == {"create-release", "build"}
     assert "publish-release" in jobs["aur-publish"]["needs"]
 
