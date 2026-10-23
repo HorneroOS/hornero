@@ -20,10 +20,10 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 8dc622dd0af26a41df328d6ed386e83eebb5ea19
+    sha: 248f0c9dd020f5b83bad71503ecc488a6d0d6857
     status: pinned
-    subject: "feat(controlcenter): add official extensions marketplace (shell#309)"
-    notes: Desktop shell / Quickshell UX, accessible Control Center navigation, and provenance-backed official extensions marketplace.
+    subject: "test: Add scoped Appearance AT-SPI probe (shell#311)"
+    notes: Desktop shell / Quickshell UX, accessible Control Center navigation, provenance-backed official extensions marketplace, and a scoped Appearance AT-SPI probe. The appearance gate is still marked FAIL pending graphical acceptance.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
