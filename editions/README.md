@@ -25,6 +25,10 @@ the Calamares installation path across editions. Desktop also owns SDDM and the
 Hornero greeter packages so the selected desktop composition can boot to its
 configured login screen.
 
+The desktop package set includes the providers used by its factory defaults:
+Exo's `exo-open` launcher, Material Symbols and Papirus icons, Qt6ct, and the
+Rubik and Caskaydia Cove font families.
+
 Niri exposes real event-driven compositor state and uses its native screencast
 path through the GNOME portal backend, with GTK providing the fallback and file
 chooser portal, over PipeWire. Labwc remains planned and is not offered as an
