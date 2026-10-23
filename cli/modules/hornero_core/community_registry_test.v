@@ -56,6 +56,16 @@ fn test_community_registry_schema_accepts_sorted_pins_and_rejects_ambiguous_or_m
 	}
 }
 
+fn test_community_registry_integer_fits_the_native_int_range() {
+	assert community_registry_integer(i64(max_int)) or { -1 } == max_int
+	if i64(max_int) < 9223372036854775807 {
+		too_large := i64(max_int) + 1
+		if _ := community_registry_integer(too_large) {
+			assert false, 'registry integer must not overflow the native int range'
+		}
+	}
+}
+
 fn test_community_registry_file_reads_enforce_the_bound() {
 	root := community_registry_test_new_root('read-bound')
 	defer { os.rmdir_all(root) or {} }
