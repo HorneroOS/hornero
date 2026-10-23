@@ -5,9 +5,9 @@ that verifies every signed `horneroctl` release asset.
 
 **Status: not committed yet.** Generating the private key is a human
 maintainer action (see `docs/RELEASE_SIGNING.md`). Until the public
-key lands in this directory:
+key and matching GitHub private-key secret are configured:
 
-- release assets are published unsigned (SHA-256 only), and
+- release publication fails closed before publishing unsigned assets, and
 - `scripts/verify-release.sh` fails closed, by design.
 
 Never commit private key material here or anywhere in this repo.

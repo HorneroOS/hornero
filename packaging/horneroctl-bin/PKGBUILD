@@ -19,10 +19,19 @@ optdepends=(
   'git: install community Shell plugin packages from HTTPS repositories'
   'hornero-shell: validate community plugin packages with the Shell-owned contract checker'
 )
-source_x86_64=("horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-x86_64")
-source_aarch64=("horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-arm64")
-sha256sums_x86_64=('0000000000000000000000000000000000000000000000000000000000000000')
-sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000')
+source_x86_64=(
+  "horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-x86_64"
+  "horneroctl-${pkgver}.asc::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-x86_64.asc"
+)
+source_aarch64=(
+  "horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-arm64"
+  "horneroctl-${pkgver}.asc::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-arm64.asc"
+)
+# Set to the committed release-key fingerprint by the release workflow.
+# An unstamped template intentionally cannot pass makepkg signature checks.
+validpgpkeys=('0000000000000000000000000000000000000000')
+sha256sums_x86_64=('0000000000000000000000000000000000000000000000000000000000000000' '0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000' '0000000000000000000000000000000000000000000000000000000000000000')
 
 package() {
   install -Dm755 "${srcdir}/horneroctl-${pkgver}" "${pkgdir}/usr/bin/horneroctl"

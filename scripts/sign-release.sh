@@ -12,13 +12,14 @@ key_id="${HORNERO_RELEASE_KEY_ID:?set HORNERO_RELEASE_KEY_ID to the release key 
 
 [ -f "${file}" ] || { echo "no such file: ${file}" >&2; exit 1; }
 
-passphrase_args=()
 if [ -n "${HORNERO_RELEASE_PASSPHRASE:-}" ]; then
-  passphrase_args=(--pinentry-mode loopback --passphrase "${HORNERO_RELEASE_PASSPHRASE}")
+  printf '%s' "${HORNERO_RELEASE_PASSPHRASE}" \
+    | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+      --local-user "${key_id}" \
+      --detach-sign --armor --output "${file}.asc" "${file}"
+else
+  gpg --batch --yes --local-user "${key_id}" \
+    --detach-sign --armor --output "${file}.asc" "${file}"
 fi
-
-gpg --batch --yes "${passphrase_args[@]}" \
-  --local-user "${key_id}" \
-  --detach-sign --armor --output "${file}.asc" "${file}"
 
 echo "signed: ${file}.asc (key ${key_id})"

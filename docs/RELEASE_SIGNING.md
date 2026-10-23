@@ -27,11 +27,20 @@ repo). Do not conflate them.
   signature or the public key is missing.
 - `scripts/test-signing.sh` — CI smoke: ephemeral key, clean asset
   verifies, tampered asset is rejected. Runs in `horneroctl-ci`.
-- `.github/workflows/release.yml` — when the
-  `HORNERO_RELEASE_GPG_PRIVATE_KEY` secret exists, each built asset
-  is signed and its `.asc` uploaded next to it. Without the secret
-  the release is published unsigned with a loud workflow warning;
-  nothing pretends otherwise.
+- `.github/workflows/release.yml` — creates a draft release, requires
+  the private-key secret and a matching committed public key, signs
+  and verifies each architecture's asset, and publishes only after
+  both builds succeed. Missing or mismatched key material fails the
+  workflow; an unsigned public release is not produced.
+- The AUR package includes each detached `.asc` beside its binary,
+  pins the release fingerprint in `validpgpkeys`, and stamps hashes
+  for both files. Users building the AUR package must import the public
+  key into their GPG keyring before `makepkg`:
+
+  ```sh
+  curl -fsSLO https://raw.githubusercontent.com/HorneroOS/hornero/main/packaging/keys/hornero-release.pub.asc
+  gpg --import hornero-release.pub.asc
+  ```
 
 ## The human step (maintainer only)
 
@@ -45,18 +54,24 @@ repo). Do not conflate them.
 3. Add the armoured **private** key export as the GitHub secret
    `HORNERO_RELEASE_GPG_PRIVATE_KEY` (and its passphrase, if any, as
    `HORNERO_RELEASE_GPG_PASSPHRASE`). Never commit it.
-4. Record the fingerprint in `packaging/horneroctl-bin/PKGBUILD`:
-   add `.asc` companions to `source_x86_64`/`source_aarch64` and set
-   `validpgpkeys=('<fingerprint>')`. Do this only once signed assets
-   actually exist, or AUR builds will fail looking for signatures.
+4. The release workflow reads the committed public key fingerprints
+   and stamps `validpgpkeys` plus binary/signature hashes into the AUR
+   PKGBUILD. Do not publish a tag until the public key and matching
+   GitHub secret are configured; the workflow fails closed otherwise.
+5. Verify a downloaded release directly with
+   `scripts/verify-release.sh <asset> [signature]`. The script imports
+   only the in-repository public key into a temporary keyring.
 
 ## Rotation
 
-1. Generate the new key; export its public key alongside the old one
-   (both keys in `hornero-release.pub.asc` during the overlap).
-2. Sign new releases with the new key; update `validpgpkeys` to the
-   new fingerprint.
-3. After one full release cycle on the new key, revoke the old key,
-   publish the revocation, and drop it from the in-repo file.
+1. Generate the replacement key and export its public key alongside
+   the old key in `hornero-release.pub.asc`.
+2. Update the GitHub private-key secret to contain the replacement
+   key. The release workflow selects a secret key whose fingerprint
+   appears in the committed public key bundle; only such signatures
+   pass release verification.
+3. Keep both fingerprints in the public bundle and AUR `validpgpkeys`
+   for one full release cycle. Then revoke the old key, publish its
+   revocation, and remove it from the bundle in a reviewed change.
 4. Announce the rotation in the release notes of the first release
-   signed with the new key.
+   signed with the replacement key.
