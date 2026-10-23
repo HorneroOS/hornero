@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   create-release:
-    name: Create GitHub Release
+    name: Create draft GitHub Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,12 +31,36 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           fetch-depth: 0
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3
-        with:
-          generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+      - name: Verify release tag points to main
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor \
+            "${RELEASE_SHA}" refs/remotes/origin/main; then
+            echo "Refusing to release a commit that is not on main." >&2
+            exit 1
+          fi
+      - name: Create or resume draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" --json isDraft --jq .isDraft >/dev/null 2>&1; then
+            is_draft="$(gh release view "${TAG}" --json isDraft --jq .isDraft)"
+            if [ "${is_draft}" != true ]; then
+              echo "Refusing to overwrite an already-published release: ${TAG}" >&2
+              exit 1
+            fi
+            echo "Reusing existing draft release ${TAG} after the previous gated attempt."
+          else
+            release_args=(--draft --generate-notes)
+            if [[ "${TAG}" == *-* ]]; then
+              release_args+=(--prerelease)
+            fi
+            gh release create "${TAG}" "${release_args[@]}"
+          fi
 
   build:
     name: Build ${{ matrix.asset }}
@@ -80,19 +104,27 @@ jobs:
       # version`, exactly as scripts/compose.sh does for composed builds.
       - name: Export composition pins
         run: |
-          pip install --quiet pyyaml
           manifest="manifests/$(grep -v '^#' manifests/candidate | grep -v '^$' | head -1)"
-          python3 - "$manifest" >> "$GITHUB_ENV" <<'PY'
-          import sys, yaml
-          from pathlib import Path
-          m = yaml.safe_load(open(sys.argv[1]))
-          rel = Path("releases") / (Path(sys.argv[1]).stem + ".yaml")
-          version = yaml.safe_load(open(rel)).get("version", "unknown") if rel.is_file() else "unknown"
-          print(f"HX_SHELL_SHA={m['components']['shell']['sha']}")
-          print(f"HX_CONFIG_SHA={m['components']['config']['sha']}")
-          print(f"HX_MANIFEST={m['name']}")
-          print(f"HX_RELEASE={version}")
-          PY
+          ruby -ryaml - "$manifest" >> "$GITHUB_ENV" <<'RUBY'
+          manifest_path = ARGV.fetch(0)
+          options = { permitted_classes: [], permitted_symbols: [], aliases: false }
+          manifest = YAML.safe_load_file(manifest_path, **options)
+          abort "manifest must be a YAML mapping" unless manifest.is_a?(Hash)
+
+          release_path = File.join("releases", "#{File.basename(manifest_path, ".yaml")}.yaml")
+          release = File.file?(release_path) ? YAML.safe_load_file(release_path, **options) : {}
+          release = {} unless release.is_a?(Hash)
+          values = {
+            "HX_SHELL_SHA" => manifest.dig("components", "shell", "sha"),
+            "HX_CONFIG_SHA" => manifest.dig("components", "config", "sha"),
+            "HX_MANIFEST" => manifest["name"],
+            "HX_RELEASE" => release.fetch("version", "unknown")
+          }
+          values.each do |name, value|
+            abort "missing or invalid #{name}" unless value.is_a?(String) && !value.match?(/[\r\n]/)
+            puts "#{name}=#{value}"
+          end
+          RUBY
       - name: Build native CLI
         working-directory: cli
         run: ./make.vsh build-cli
@@ -118,37 +150,69 @@ jobs:
       - name: Upload release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
         run: |
-          gh release upload "${{ needs.create-release.outputs.tag }}" \
+          gh release upload "${RELEASE_TAG}" \
             "cli/build/${{ matrix.asset }}" --clobber
-      # Signing (hornero#180): only when the maintainer has provided
-      # the release key as a secret. Without it the asset stays
-      # unsigned and the warning is loud — never fake a signature.
       - name: Sign release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SIGNING_KEY: ${{ secrets.HORNERO_RELEASE_GPG_PRIVATE_KEY }}
           SIGNING_PASSPHRASE: ${{ secrets.HORNERO_RELEASE_GPG_PASSPHRASE }}
+          RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
         run: |
+          set -euo pipefail
           if [ -z "${SIGNING_KEY}" ]; then
-            echo "::warning::HORNERO_RELEASE_GPG_PRIVATE_KEY not set; publishing UNSIGNED asset (docs/RELEASE_SIGNING.md)"
-            exit 0
+            echo "HORNERO_RELEASE_GPG_PRIVATE_KEY is required; refusing an unsigned release." >&2
+            exit 1
+          fi
+          pubkey="packaging/keys/hornero-release.pub.asc"
+          if [ ! -s "${pubkey}" ]; then
+            echo "Committed release public key is missing: ${pubkey}" >&2
+            exit 1
           fi
           export GNUPGHOME="${RUNNER_TEMP}/gnupg"
           mkdir -p "${GNUPGHOME}" && chmod 700 "${GNUPGHOME}"
           printf '%s' "${SIGNING_KEY}" | gpg --batch --quiet --import
-          key_id="$(gpg --batch --with-colons --list-keys \
-            | awk -F: '/^fpr:/{print $10; exit}')"
+          public_fingerprints="$(gpg --batch --with-colons --show-keys "${pubkey}" \
+            | awk -F: '$1 == "pub" { want=1; next } want && $1 == "fpr" { print $10; want=0 }')"
+          secret_fingerprints="$(gpg --batch --with-colons --list-secret-keys \
+            | awk -F: '$1 == "sec" { want=1; next } want && $1 == "fpr" { print $10; want=0 }')"
+          key_id=""
+          while IFS= read -r candidate; do
+            if printf '%s\n' "${public_fingerprints}" | grep -Fxq "${candidate}"; then
+              key_id="${candidate}"
+              break
+            fi
+          done <<< "${secret_fingerprints}"
+          if [ -z "${key_id}" ]; then
+            echo "No private key in the release secret matches the committed public key." >&2
+            exit 1
+          fi
           asset="cli/build/${{ matrix.asset }}"
           HORNERO_RELEASE_KEY_ID="${key_id}" \
             HORNERO_RELEASE_PASSPHRASE="${SIGNING_PASSPHRASE}" \
             scripts/sign-release.sh "${asset}"
-          gh release upload "${{ needs.create-release.outputs.tag }}" \
+          scripts/verify-release.sh "${asset}"
+          gh release upload "${RELEASE_TAG}" \
             "${asset}.asc" --clobber
+
+  publish-release:
+    name: Publish verified release
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft after every asset verifies
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
+        run: gh release edit "${RELEASE_TAG}" --draft=false
 
   aur-publish:
     name: Publish horneroctl-bin to AUR
-    needs: [create-release, build]
+    needs: [create-release, publish-release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -171,31 +235,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          tag: ${{ needs.create-release.outputs.tag }}
         run: |
-          tag="${{ needs.create-release.outputs.tag }}"
-          ver="${tag#horneroctl-v}"
-          # makepkg forbids hyphens in pkgver; pre-release tags use them
-          # (0.2.0-preview2), so stamp the AUR-safe form and keep the real
-          # tag in _reltag for the download URLs.
-          aurver="$(printf '%s' "${ver}" | tr '-' '_')"
           pkgdir="${GITHUB_WORKSPACE}/packaging/horneroctl-bin"
           pkgbuild="${pkgdir}/PKGBUILD"
-          # Exactly one mutation target each: fail loudly otherwise.
-          [ "$(grep -c '^_reltag=' "${pkgbuild}")" -eq 1 ]
-          [ "$(grep -c '^pkgver=' "${pkgbuild}")" -eq 1 ]
-          [ "$(grep -c '^sha256sums_x86_64=(' "${pkgbuild}")" -eq 1 ]
-          [ "$(grep -c '^sha256sums_aarch64=(' "${pkgbuild}")" -eq 1 ]
-          sed -i "s/^_reltag=.*/_reltag=${tag}/" "${pkgbuild}"
-          sed -i "s/^pkgver=.*/pkgver=${aurver}/" "${pkgbuild}"
           mkdir -p /tmp/assets
           gh release download "${tag}" -D /tmp/assets \
-            -p 'horneroctl-linux-x86_64' -p 'horneroctl-linux-arm64'
-          cd /tmp/assets
-          x86="$(sha256sum horneroctl-linux-x86_64 | cut -d' ' -f1)"
-          arm="$(sha256sum horneroctl-linux-arm64 | cut -d' ' -f1)"
-          cd - >/dev/null
-          sed -i "s/x86_64=('.*')/x86_64=('${x86}')/" "${pkgbuild}"
-          sed -i "s/aarch64=('.*')/aarch64=('${arm}')/" "${pkgbuild}"
+            -p 'horneroctl-linux-x86_64' -p 'horneroctl-linux-x86_64.asc' \
+            -p 'horneroctl-linux-arm64' -p 'horneroctl-linux-arm64.asc'
+          scripts/stamp-aur-package.sh "${tag}" /tmp/assets "${pkgbuild}"
           grep -E '^(pkgver|source_|sha256sums_)' "${pkgbuild}"
       - name: Publish AUR package
         uses: ulises-jeremias/github-actions-aur-publish@507f0dba7755bdc2ad351232405bd7e4cd4a4a67  # v1
