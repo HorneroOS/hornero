@@ -16,9 +16,12 @@ exit 1 names the offenders.
 
 Scanned suffixes: *.conf (hypr binds, exec-once), *.sh, *.desktop
 (Exec=), *.qml (`"horneroctl", "verb", ...` arrays and `sh -c` backtick
-bodies). `//` and `#` line comments are stripped before matching;
-`/* */` blocks, escaped backticks, and commands built purely at
-runtime are out of scope.
+bodies), *.lua (hornero#177: `exec_cmd` string literals, table-form
+argv `{"horneroctl", ...}`, and shell bodies in `[[...]]` strings).
+`//`, `#` and Lua `--` line comments are stripped before matching
+(Lua stripping is quote-aware, `--[[ ]]` blocks included); `/* */`
+blocks, escaped backticks, and commands built purely at runtime are
+out of scope.
 """
 import argparse
 import re
@@ -32,6 +35,7 @@ MANIFEST = ROOT / "binds" / "invocations.txt"
 CONF_SUFFIXES = {".conf"}
 SCRIPT_SUFFIXES = {".sh", ".desktop"}
 QML_SUFFIXES = {".qml"}
+LUA_SUFFIXES = {".lua"}
 
 # Bare form: `horneroctl verb ...` up to a shell operator, quote,
 # redirection, assignment, or comment. Flags are cut in post-processing
@@ -53,6 +57,66 @@ def strip_comments(text: str, suffix: str) -> str:
             line = line.split("#", 1)[0]
         out.append(line)
     return "\n".join(out)
+
+
+LUA_LONG_OPEN_RE = re.compile(r"\[(=*)\[")
+LUA_LONG_STRING_RE = re.compile(r"\[(=*)\[(.*?)\]\1\]", re.DOTALL)
+
+
+def _lua_long_string_bounds(text: str, start: int):
+    """Return (content_start, content_end, after_end) for a Lua long string."""
+    opener = LUA_LONG_OPEN_RE.match(text, start)
+    if not opener:
+        return None
+    closer = "]" + opener.group(1) + "]"
+    end = text.find(closer, opener.end())
+    if end < 0:
+        return (opener.end(), len(text), len(text))
+    return (opener.end(), end, end + len(closer))
+
+
+def strip_lua_comments(text: str) -> str:
+    """Remove Lua comments while preserving quoted and long string bodies."""
+    out = []
+    i = 0
+    while i < len(text):
+        if text.startswith("--", i):
+            bounds = _lua_long_string_bounds(text, i + 2)
+            if bounds:
+                _, _, after = bounds
+                out.extend("\n" if char == "\n" else " "
+                           for char in text[i:after])
+                i = after
+            else:
+                end = text.find("\n", i)
+                if end < 0:
+                    break
+                out.append("\n")
+                i = end + 1
+            continue
+        if text[i] in "\"'":
+            quote = text[i]
+            start = i
+            i += 1
+            while i < len(text):
+                if text[i] == "\\":
+                    i += 2
+                elif text[i] == quote:
+                    i += 1
+                    break
+                else:
+                    i += 1
+            out.append(text[start:i])
+            continue
+        bounds = _lua_long_string_bounds(text, i)
+        if bounds:
+            _, _, after = bounds
+            out.append(text[i:after])
+            i = after
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
 
 
 def chain_of(tokens: list) -> str:
@@ -77,14 +141,90 @@ SH_GATE_RE = re.compile(r"^\s*(?:[A-Za-z_]+=\S+\s+)*(?:exec\s+|sudo\s+)?horneroc
 # QML-embedded shell scripts: `command: ["sh", "-c", `...`]`. Escaped
 # backticks inside are out of scope (none in tree as of Preview 9).
 SHC_RE = re.compile(r'\["(?:sh|bash)",\s*"-c",\s*`(.*?)`', re.DOTALL)
+# Lua (hornero#177): invocations hide in exec-position string literals
+# (`hl.exec_cmd("horneroctl ...")`, `hl.dsp.exec_cmd(...)`,
+# `os.execute(...)`), in table-form argv (`{"horneroctl", "verb"}`),
+# and in shell bodies inside long strings (`[[ ... ]]`). Prose strings
+# that merely mention horneroctl are not in exec position and must
+# never become chains — same positional rule as QML.
+LUA_STR_RE = re.compile(r'"([^"]*)"|\'([^\']*)\'')
+LUA_ARRAY_RE = re.compile(
+    r'\{\s*["\']horneroctl["\']((?:\s*,\s*["\'][^"\']*["\'])*)')
+LUA_EXEC_CALL_RE = re.compile(r"\b\w*exec\w*\s*\(")
+
+
+def _lua_exec_call_regions(text: str):
+    """Yield balanced call bodies for Lua execution-named functions."""
+    for match in LUA_EXEC_CALL_RE.finditer(text):
+        start = match.end() - 1
+        depth = 1
+        i = start + 1
+        quote = None
+        while i < len(text) and depth:
+            char = text[i]
+            if quote:
+                if char == "\\":
+                    i += 2
+                    continue
+                if char == quote:
+                    quote = None
+                i += 1
+                continue
+            if char in "\"'":
+                quote = char
+                i += 1
+                continue
+            bounds = _lua_long_string_bounds(text, i)
+            if bounds:
+                i = bounds[2]
+                continue
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    yield text[start + 1:i]
+                    break
+            i += 1
+
+
+def chains_in_lua(text: str) -> set:
+    found = set()
+    for region in _lua_exec_call_regions(text):
+        literals = [m.group(1) if m.group(1) is not None else m.group(2)
+                    for m in LUA_STR_RE.finditer(region)]
+        literals.extend(m.group(2) for m in LUA_LONG_STRING_RE.finditer(region))
+        for literal in literals:
+            for line in literal.splitlines():
+                for b in BARE_RE.finditer(line):
+                    chain = chain_of(b.group(1).split())
+                    if chain:
+                        found.add(chain)
+    for m in LUA_ARRAY_RE.finditer(text):
+        toks = [a or b for a, b in LUA_STR_RE.findall(m.group(1)) if (a or b)]
+        chain = chain_of(toks)
+        if chain:
+            found.add(chain)
+    for block in LUA_LONG_STRING_RE.finditer(text):
+        for line in block.group(1).splitlines():
+            if not SH_GATE_RE.search(line):
+                continue
+            for b in BARE_RE.finditer(line):
+                chain = chain_of(b.group(1).split())
+                if chain:
+                    found.add(chain)
+    return found
 
 
 def chains_in_file(path: Path) -> set:
     try:
-        text = strip_comments(path.read_text(encoding="utf-8", errors="ignore"),
-                              path.suffix)
+        raw = path.read_text(encoding="utf-8", errors="ignore")
+        text = (strip_lua_comments(raw) if path.suffix in LUA_SUFFIXES
+                else strip_comments(raw, path.suffix))
     except OSError:
         return set()
+    if path.suffix in LUA_SUFFIXES:
+        return chains_in_lua(text)
     found = set()
     suffix = path.suffix
     for line in text.splitlines():
@@ -143,7 +283,7 @@ TEST_HINTS = ("test", "tests", "fixtures", "snapshots")
 
 
 def collect(shell_dir: Path, config_dir: Path) -> set:
-    suffixes = CONF_SUFFIXES | SCRIPT_SUFFIXES | QML_SUFFIXES
+    suffixes = CONF_SUFFIXES | SCRIPT_SUFFIXES | QML_SUFFIXES | LUA_SUFFIXES
     found = set()
     for base in (shell_dir, config_dir):
         if not base.is_dir():
@@ -182,7 +322,7 @@ def write_manifest(manifest: Path, chains: set) -> None:
     manifest.parent.mkdir(exist_ok=True)
     lines = ["# HorneroOS bind audit: every `horneroctl` invocation reachable",
              "# from keybinds, autostart, .desktop launchers, first-boot",
-             "# scripts, and shell QML. One verb chain per line, sorted.",
+             "# scripts, shell QML, and Lua config. One verb chain per line, sorted.",
              "# Refresh: python3 scripts/check-binds.py --refresh \\",
              "#   --binary cli/build/horneroctl --shell-dir <shell> --config-dir <config>",
              "# The gate fails on unhandled chains and on drift vs this file.",
