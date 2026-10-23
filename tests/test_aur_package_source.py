@@ -41,6 +41,19 @@ def test_release_stays_draft_until_signed_assets_verify():
     assert "scripts/verify-release.sh" in signing["run"]
 
 
+def test_release_pin_export_uses_runner_yaml_without_installing_a_package():
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    )
+    steps = workflow["jobs"]["build"]["steps"]
+    export_pins = next(step for step in steps if step.get("name") == "Export composition pins")
+
+    assert "pip install" not in export_pins["run"]
+    assert "ruby -ryaml" in export_pins["run"]
+    assert "YAML.safe_load_file" in export_pins["run"]
+    assert "aliases: false" in export_pins["run"]
+
+
 def test_plugin_management_tools_are_documented_optional_dependencies():
     pkgbuild = (ROOT / "packaging/horneroctl-bin/PKGBUILD").read_text()
 
