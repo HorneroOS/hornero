@@ -33,10 +33,13 @@ CONFIG_FILES = {
     # prose mentioning horneroctl must not.
     "desktop/hypr/hyprland.lua.d/autostart.lua":
         'hl.exec_cmd("horneroctl shell ipc -- call lock")\n'
+        'hl.exec_cmd(\n  "horneroctl package updates"\n)\n'
+        'os.execute([=[\nhorneroctl system info\n]=])\n'
         'local msg = "horneroctl did not respond"\n',
     "desktop/hypr/hyprland.lua.d/binds.lua":
         'hl.bind("SUPER + W", hl.dsp.exec_cmd("horneroctl welcome open"))\n'
         'hl.bind("SUPER + T", {"horneroctl", "terminal", "open"})\n'
+        '--[=[ hl.exec_cmd("horneroctl nope long comment") ]=]\n'
         '-- hl.exec_cmd("horneroctl nope commented")\n',
 }
 
@@ -67,18 +70,19 @@ def _run(tmp_path: Path, *extra: str) -> subprocess.CompletedProcess:
 def test_binds_pass_when_handled_and_in_sync(tmp_path):
     first = _run(tmp_path, "--refresh")
     assert first.returncode == 0, first.stderr
-    assert "REFRESH: 5 chains" in first.stdout
+    assert "REFRESH: 7 chains" in first.stdout
     manifest = (tmp_path / "invocations.txt").read_text()
     # Lua forms extracted: exec_cmd bare chain (flags cut), dsp
     # string, and table argv. Prose and commented horneroctl stay out.
     for chain in ("shell start", "apps launch", "shell ipc",
-                  "welcome open", "terminal open"):
+                  "welcome open", "terminal open", "package updates",
+                  "system info"):
         assert f"\n{chain}\n" in f"\n{manifest}"
     assert "did not respond" not in manifest
     assert "nope commented" not in manifest
     second = _run(tmp_path)
     assert second.returncode == 0, second.stdout
-    assert "BIND-AUDIT-PASS: 5 chains" in second.stdout
+    assert "BIND-AUDIT-PASS: 7 chains" in second.stdout
 
 
 def test_binds_fail_on_unhandled_lua_chain(tmp_path):
@@ -86,12 +90,16 @@ def test_binds_fail_on_unhandled_lua_chain(tmp_path):
     config = tmp_path / "config"
     _tree(config, {
         "desktop/hypr/hyprland.lua.d/broken.lua":
-            'hl.bind("SUPER + X", hl.dsp.exec_cmd("horneroctl nope bad"))\n',
+            'hl.bind("SUPER + X", hl.dsp.exec_cmd("horneroctl nope bad"))\n'
+            'hl.exec_cmd(\n  "horneroctl nope multiline"\n)\n'
+            'os.execute([=[horneroctl nope long-delimiter]=])\n',
     })
     proc = _run(tmp_path)
     assert proc.returncode == 1
     assert "BIND-AUDIT-FAIL: unhandled" in proc.stdout
     assert "horneroctl nope bad" in proc.stdout
+    assert "horneroctl nope multiline" in proc.stdout
+    assert "horneroctl nope long-delimiter" in proc.stdout
 
 
 def test_binds_fail_on_unhandled_chain(tmp_path):

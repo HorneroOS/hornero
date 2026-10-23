@@ -59,40 +59,64 @@ def strip_comments(text: str, suffix: str) -> str:
     return "\n".join(out)
 
 
-LUA_BLOCK_COMMENT_RE = re.compile(r"--\[\[.*?\]\]", re.DOTALL)
+LUA_LONG_OPEN_RE = re.compile(r"\[(=*)\[")
+LUA_LONG_STRING_RE = re.compile(r"\[(=*)\[(.*?)\]\1\]", re.DOTALL)
+
+
+def _lua_long_string_bounds(text: str, start: int):
+    """Return (content_start, content_end, after_end) for a Lua long string."""
+    opener = LUA_LONG_OPEN_RE.match(text, start)
+    if not opener:
+        return None
+    closer = "]" + opener.group(1) + "]"
+    end = text.find(closer, opener.end())
+    if end < 0:
+        return (opener.end(), len(text), len(text))
+    return (opener.end(), end, end + len(closer))
 
 
 def strip_lua_comments(text: str) -> str:
-    """Remove Lua comments without eating `--` inside string literals."""
-    text = LUA_BLOCK_COMMENT_RE.sub("", text)
+    """Remove Lua comments while preserving quoted and long string bodies."""
     out = []
-    for line in text.splitlines():
-        buf = []
-        quote = None
-        i = 0
-        while i < len(line):
-            c = line[i]
-            if quote:
-                buf.append(c)
-                if c == "\\" and i + 1 < len(line):
-                    buf.append(line[i + 1])
-                    i += 2
-                    continue
-                if c == quote:
-                    quote = None
-                i += 1
-                continue
-            if c in "\"'":
-                quote = c
-                buf.append(c)
-                i += 1
-                continue
-            if c == "-" and line[i + 1:i + 2] == "-":
-                break
-            buf.append(c)
+    i = 0
+    while i < len(text):
+        if text.startswith("--", i):
+            bounds = _lua_long_string_bounds(text, i + 2)
+            if bounds:
+                _, _, after = bounds
+                out.extend("\n" if char == "\n" else " "
+                           for char in text[i:after])
+                i = after
+            else:
+                end = text.find("\n", i)
+                if end < 0:
+                    break
+                out.append("\n")
+                i = end + 1
+            continue
+        if text[i] in "\"'":
+            quote = text[i]
+            start = i
             i += 1
-        out.append("".join(buf))
-    return "\n".join(out)
+            while i < len(text):
+                if text[i] == "\\":
+                    i += 2
+                elif text[i] == quote:
+                    i += 1
+                    break
+                else:
+                    i += 1
+            out.append(text[start:i])
+            continue
+        bounds = _lua_long_string_bounds(text, i)
+        if bounds:
+            _, _, after = bounds
+            out.append(text[i:after])
+            i = after
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
 
 
 def chain_of(tokens: list) -> str:
@@ -126,17 +150,53 @@ SHC_RE = re.compile(r'\["(?:sh|bash)",\s*"-c",\s*`(.*?)`', re.DOTALL)
 LUA_STR_RE = re.compile(r'"([^"]*)"|\'([^\']*)\'')
 LUA_ARRAY_RE = re.compile(
     r'\{\s*["\']horneroctl["\']((?:\s*,\s*["\'][^"\']*["\'])*)')
-LUA_LONG_RE = re.compile(r"\[\[(.*?)\]\]", re.DOTALL)
-LUA_EXEC_GATE_RE = re.compile(r"exec")
+LUA_EXEC_CALL_RE = re.compile(r"\b\w*exec\w*\s*\(")
+
+
+def _lua_exec_call_regions(text: str):
+    """Yield balanced call bodies for Lua execution-named functions."""
+    for match in LUA_EXEC_CALL_RE.finditer(text):
+        start = match.end() - 1
+        depth = 1
+        i = start + 1
+        quote = None
+        while i < len(text) and depth:
+            char = text[i]
+            if quote:
+                if char == "\\":
+                    i += 2
+                    continue
+                if char == quote:
+                    quote = None
+                i += 1
+                continue
+            if char in "\"'":
+                quote = char
+                i += 1
+                continue
+            bounds = _lua_long_string_bounds(text, i)
+            if bounds:
+                i = bounds[2]
+                continue
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    yield text[start + 1:i]
+                    break
+            i += 1
 
 
 def chains_in_lua(text: str) -> set:
     found = set()
-    for line in text.splitlines():
-        if LUA_EXEC_GATE_RE.search(line):
-            for m in LUA_STR_RE.finditer(line):
-                literal = m.group(1) if m.group(1) is not None else m.group(2)
-                for b in BARE_RE.finditer(literal):
+    for region in _lua_exec_call_regions(text):
+        literals = [m.group(1) if m.group(1) is not None else m.group(2)
+                    for m in LUA_STR_RE.finditer(region)]
+        literals.extend(m.group(2) for m in LUA_LONG_STRING_RE.finditer(region))
+        for literal in literals:
+            for line in literal.splitlines():
+                for b in BARE_RE.finditer(line):
                     chain = chain_of(b.group(1).split())
                     if chain:
                         found.add(chain)
@@ -145,7 +205,7 @@ def chains_in_lua(text: str) -> set:
         chain = chain_of(toks)
         if chain:
             found.add(chain)
-    for block in LUA_LONG_RE.finditer(text):
+    for block in LUA_LONG_STRING_RE.finditer(text):
         for line in block.group(1).splitlines():
             if not SH_GATE_RE.search(line):
                 continue
