@@ -594,13 +594,14 @@ fn plugin_files_sha256(plugin_dir string, manifest map[string]json2.Any) string 
 	return sha256.hexhash(acc)
 }
 
-// Verify a minisign-format Ed25519 signature. Public key string is
-// base64("RW" + 8-byte key id + 32-byte key); signature string is
-// base64("Ed" + same key id + 64-byte signature). The key ids must
-// match; the signed message is the files-hash hex string.
+// Verify a minisign legacy Ed25519 signature. Minisign public-key files
+// store base64("Ed" + 8-byte key id + 32-byte key); the signature line
+// stores base64("Ed" + the same key id + 64-byte signature). Authors
+// sign the fixed-length files-hash text with `minisign -Sl`; default
+// prehashed signatures use the incompatible `ED` BLAKE2b format.
 fn minisign_verify(public_key_b64 string, signature string, message []u8) bool {
 	pub_raw := base64.decode(public_key_b64)
-	if pub_raw.len != 42 || pub_raw[0] != `R` || pub_raw[1] != `W` {
+	if pub_raw.len != 42 || pub_raw[0] != `E` || pub_raw[1] != `d` {
 		return false
 	}
 	sig_raw := base64.decode(signature)
