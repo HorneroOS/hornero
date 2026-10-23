@@ -47,19 +47,13 @@ pub fn assistant_gateway_classify(enabled bool, installed bool, reachable bool, 
 	return 'running-compatible'
 }
 
-// assistant_gateway_ensure_unit writes the user unit only when its
-// content changed, returning whether it wrote. Shared by gateway
-// start and assistant setup so the unit has exactly one author.
+// assistant_gateway_ensure_unit creates a missing unit or refreshes one
+// whose current contents match a Hornero ownership receipt. External and
+// locally modified units are preserved; the return value reports a write.
 pub fn assistant_gateway_ensure_unit(hermes string) !bool {
 	unit_file := assistant_gateway_unit_file()
-	existing := os.read_file(unit_file) or { '' }
 	desired := assistant_gateway_unit_content(hermes)
-	if existing == desired {
-		return false
-	}
-	os.mkdir_all(os.dir(unit_file))!
-	os.write_file(unit_file, desired)!
-	return true
+	return assistant_setup_write_owned_file('unit', unit_file, desired)
 }
 
 fn assistant_gateway_systemctl(args []string) ExecReport {
@@ -149,6 +143,9 @@ pub fn assistant_gateway_start_report(dry_run bool, yes bool) CommandResult {
 	wrote := assistant_gateway_ensure_unit(hermes) or {
 		return fail_result('assistant gateway start', 'Cannot write the user unit ${unit_file}: ${err.msg()}')
 	}
+	if !wrote && !assistant_setup_file_is_owned('unit', unit_file) {
+		return fail_result('assistant gateway start', 'The unit ${unit_file} already exists but has no matching Hornero ownership receipt. It was preserved and will not be started by Hornero; reconcile its ownership with dotfiles or manage it directly with systemctl --user.')
+	}
 	if wrote {
 		assistant_gateway_systemctl(['daemon-reload'])
 	}
@@ -199,6 +196,9 @@ pub fn assistant_gateway_stop_report(dry_run bool, yes bool) CommandResult {
 				false, false)
 			'unit':  assistant_gateway_unit_name
 		})
+	}
+	if !assistant_setup_file_is_owned('unit', assistant_gateway_unit_file()) {
+		return fail_result('assistant gateway stop', 'The active ${assistant_gateway_unit_name} unit has no matching Hornero ownership receipt, so Hornero will not stop it. Manage it through its owning configuration.')
 	}
 	stop := assistant_gateway_systemctl(['stop', assistant_gateway_unit_name])
 	if !stop.ok {

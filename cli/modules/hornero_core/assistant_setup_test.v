@@ -1,5 +1,40 @@
 module hornero_core
 
+import os
+import time
+
+struct AssistantSetupTestEnv {
+	config_home string
+	state_home  string
+	hermes_home string
+}
+
+fn assistant_setup_test_set_env(root string) AssistantSetupTestEnv {
+	old := AssistantSetupTestEnv{
+		config_home: os.getenv('XDG_CONFIG_HOME')
+		state_home:  os.getenv('XDG_STATE_HOME')
+		hermes_home: os.getenv('HERMES_HOME')
+	}
+	os.setenv('XDG_CONFIG_HOME', os.join_path(root, 'config'), true)
+	os.setenv('XDG_STATE_HOME', os.join_path(root, 'state'), true)
+	os.setenv('HERMES_HOME', os.join_path(root, 'hermes'), true)
+	return old
+}
+
+fn assistant_setup_test_restore_var(key string, value string) {
+	if value.len > 0 {
+		os.setenv(key, value, true)
+	} else {
+		os.unsetenv(key)
+	}
+}
+
+fn assistant_setup_test_restore_env(old AssistantSetupTestEnv) {
+	assistant_setup_test_restore_var('XDG_CONFIG_HOME', old.config_home)
+	assistant_setup_test_restore_var('XDG_STATE_HOME', old.state_home)
+	assistant_setup_test_restore_var('HERMES_HOME', old.hermes_home)
+}
+
 fn test_assistant_knowledge_markdown_shape() {
 	md := assistant_knowledge_markdown('horneroctl-test', '2026-10-21 10:00',
 		'system_info -> horneroctl system info --json; package_updates -> horneroctl package updates --json')
@@ -44,4 +79,246 @@ fn test_assistant_embedded_skill_is_the_hornero_skill() {
 	assert skill.contains('name: hornero')
 	assert skill.contains('horneroctl assistant tools --json')
 	assert skill.contains('auto-answer an approval')
+}
+
+fn test_assistant_setup_receipt_only_authorizes_unchanged_content() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-ownership-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := os.join_path(root, 'service')
+
+	assert assistant_setup_write_owned_file('unit', path, 'version one')!
+	assert assistant_setup_file_is_owned('unit', path)
+	assert assistant_setup_can_write_file('unit', path, 'version one')! == false
+	assert assistant_setup_can_write_file('unit', path, 'version two')!
+
+	os.write_file(path, 'locally modified')!
+	assert !assistant_setup_file_is_owned('unit', path)
+	if _ := assistant_setup_can_write_file('unit', path, 'version two') {
+		assert false
+	}
+	assert os.read_file(path)! == 'locally modified'
+}
+
+fn test_assistant_setup_does_not_adopt_identical_unreceipted_file() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-unowned-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	path := os.join_path(root, 'skill')
+	os.mkdir_all(root)!
+	os.write_file(path, 'same content')!
+
+	if _ := assistant_setup_write_owned_file('skill', path, 'same content') {
+		assert false
+	}
+	assert !assistant_setup_file_is_owned('skill', path)
+	assert !os.is_file(assistant_setup_receipt_file('skill'))
+	assert os.read_file(path)! == 'same content'
+}
+
+fn test_assistant_setup_does_not_claim_symlinked_files() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-symlink-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	target := os.join_path(root, 'target')
+	link := os.join_path(root, 'linked')
+	assert assistant_setup_write_owned_file('unit', target, 'same content')!
+	os.symlink(target, link)!
+
+	assert !assistant_setup_file_is_owned('unit', link)
+	if _ := assistant_setup_can_write_file('unit', link, 'replacement') {
+		assert false
+	}
+	assert os.read_file(target)! == 'same content'
+}
+
+fn test_assistant_setup_does_not_follow_symlinked_receipt() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-receipt-link-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	receipt := assistant_setup_receipt_file('skill')
+	receipt_target := os.join_path(root, 'outside-receipt')
+	target_file := os.join_path(root, 'new-skill')
+	os.mkdir_all(os.dir(receipt))!
+	os.write_file(receipt_target, 'keep this file')!
+	os.symlink(receipt_target, receipt)!
+
+	if _ := assistant_setup_write_owned_file('skill', target_file, 'new skill') {
+		assert false
+	}
+	assert !os.is_file(target_file)
+	assert os.read_file(receipt_target)! == 'keep this file'
+}
+
+fn test_assistant_setup_remove_preserves_unowned_unit_and_skill() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-remove-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	unit_file := assistant_gateway_unit_file()
+	skill_file := assistant_skill_file()
+	os.mkdir_all(os.dir(unit_file))!
+	os.mkdir_all(os.dir(skill_file))!
+	os.write_file(unit_file, 'dotfiles-managed unit')!
+	os.write_file(skill_file, 'dotfiles-managed skill')!
+
+	result := assistant_setup_remove_report(false, true)
+	assert result.ok
+	assert os.read_file(unit_file)! == 'dotfiles-managed unit'
+	assert os.read_file(skill_file)! == 'dotfiles-managed skill'
+	assert result.message.contains('no matching Hornero ownership receipt')
+	assert !os.is_file(assistant_setup_receipt_file('unit'))
+	assert !os.is_file(assistant_setup_receipt_file('skill'))
+}
+
+fn test_assistant_setup_collision_fails_before_enabling() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-preflight-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	bin := os.join_path(root, 'bin')
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	os.mkdir_all(bin)!
+	hermes := os.join_path(bin, 'hermes')
+	os.write_file(hermes, '#!/bin/sh\nexit 0\n')!
+	os.chmod(hermes, 0o755) or { panic(err) }
+	os.setenv('PATH', '${bin}:${os.getenv('PATH')}', true)
+	unit_file := assistant_gateway_unit_file()
+	os.mkdir_all(os.dir(unit_file))!
+	os.write_file(unit_file, 'dotfiles-managed unit')!
+
+	result := assistant_setup_report(false, true, false)
+	assert !result.ok
+	assert result.message.contains('existing file is not Hornero-owned')
+	assert os.read_file(unit_file)! == 'dotfiles-managed unit'
+	assert !os.is_file(assistant_settings_file())
+	assert !os.is_file(assistant_key_file())
+}
+
+fn test_assistant_gateway_ensure_unit_refuses_unowned_replacement() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-unit-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	unit_file := assistant_gateway_unit_file()
+	os.mkdir_all(os.dir(unit_file))!
+	os.write_file(unit_file, 'dotfiles-managed unit')!
+
+	if _ := assistant_gateway_ensure_unit('/usr/local/bin/hermes') {
+		assert false
+	}
+	assert os.read_file(unit_file)! == 'dotfiles-managed unit'
+	assert !os.is_file(assistant_setup_receipt_file('unit'))
+}
+
+fn test_assistant_setup_remove_stops_and_removes_receipted_files() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-owned-remove-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	stopped := os.join_path(root, 'stopped')
+	calls := os.join_path(root, 'calls')
+	systemctl := os.join_path(bin, 'systemctl')
+	os.write_file(systemctl, '#!/bin/sh\nif [ "$2" = "is-active" ]; then\n  if [ -f "${stopped}" ]; then echo inactive; else echo active; fi\n  exit 0\nfi\nif [ "$2" = "stop" ]; then touch "${stopped}"; fi\nprintf "%s\\n" "$*" >> "${calls}"\nexit 0\n')!
+	os.chmod(systemctl, 0o755) or { panic(err) }
+	os.setenv('PATH', '${bin}:${os.getenv('PATH')}', true)
+	unit_file := assistant_gateway_unit_file()
+	skill_file := assistant_skill_file()
+	assert assistant_setup_write_owned_file('unit', unit_file,
+		assistant_gateway_unit_content('/usr/local/bin/hermes'))!
+	assert assistant_setup_write_owned_file('skill', skill_file, assistant_skill_markdown())!
+
+	result := assistant_setup_remove_report(false, true)
+	assert result.ok
+	assert os.read_file(calls)!.contains('--user stop ${assistant_gateway_unit_name}')
+	assert !os.is_file(unit_file)
+	assert !os.is_file(skill_file)
+	assert !os.is_file(assistant_setup_receipt_file('unit'))
+	assert !os.is_file(assistant_setup_receipt_file('skill'))
+}
+
+fn test_assistant_setup_remove_preserves_unit_when_systemd_cannot_stop_it() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-stop-failure-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	systemctl := os.join_path(bin, 'systemctl')
+	os.write_file(systemctl, '#!/bin/sh\nif [ "$2" = "is-active" ]; then echo active; exit 0; fi\nif [ "$2" = "stop" ]; then echo "stop refused" >&2; exit 1; fi\nexit 0\n')!
+	os.chmod(systemctl, 0o755) or { panic(err) }
+	os.setenv('PATH', '${bin}:${os.getenv('PATH')}', true)
+	unit_file := assistant_gateway_unit_file()
+	assert assistant_setup_write_owned_file('unit', unit_file,
+		assistant_gateway_unit_content('/usr/local/bin/hermes'))!
+
+	result := assistant_setup_remove_report(false, true)
+	assert !result.ok
+	assert result.message.contains('systemd did not confirm')
+	assert os.is_file(unit_file)
+	assert assistant_setup_file_is_owned('unit', unit_file)
+}
+
+fn test_assistant_setup_remove_preserves_unit_when_systemd_state_is_unknown() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-unknown-state-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	systemctl := os.join_path(bin, 'systemctl')
+	os.write_file(systemctl, '#!/bin/sh\necho unknown\nexit 1\n')!
+	os.chmod(systemctl, 0o755) or { panic(err) }
+	os.setenv('PATH', '${bin}:${os.getenv('PATH')}', true)
+	unit_file := assistant_gateway_unit_file()
+	assert assistant_setup_write_owned_file('unit', unit_file,
+		assistant_gateway_unit_content('/usr/local/bin/hermes'))!
+
+	result := assistant_setup_remove_report(false, true)
+	assert !result.ok
+	assert result.message.contains('could not confirm')
+	assert os.is_file(unit_file)
+	assert assistant_setup_file_is_owned('unit', unit_file)
+}
+
+fn test_assistant_setup_remove_keeps_files_if_receipt_cannot_be_cleared() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-receipt-readonly-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	systemctl := os.join_path(bin, 'systemctl')
+	os.write_file(systemctl, '#!/bin/sh\nif [ "$2" = "is-active" ]; then echo inactive; fi\nexit 0\n')!
+	os.chmod(systemctl, 0o755) or { panic(err) }
+	os.setenv('PATH', '${bin}:${os.getenv('PATH')}', true)
+	unit_file := assistant_gateway_unit_file()
+	assert assistant_setup_write_owned_file('unit', unit_file,
+		assistant_gateway_unit_content('/usr/local/bin/hermes'))!
+	receipt_file := assistant_setup_receipt_file('unit')
+	receipt_dir := os.dir(receipt_file)
+	os.chmod(receipt_dir, 0o500)!
+	defer { os.chmod(receipt_dir, 0o700) or {} }
+
+	result := assistant_setup_remove_report(false, true)
+	assert !result.ok
+	assert result.message.contains('Cannot clear the Hermes unit ownership receipt')
+	assert os.is_file(unit_file)
+	assert assistant_setup_file_is_owned('unit', unit_file)
+	os.chmod(receipt_dir, 0o700)!
 }
