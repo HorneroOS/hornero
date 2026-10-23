@@ -2,16 +2,17 @@ module hornero_cli
 
 pub struct AssistantCmdOptions {
 pub:
-	leaf    string
-	value   string
-	arg1    string
-	arg2    string
-	dry_run bool
-	yes     bool
-	remove  bool
-	stream  bool
-	attach  []string
-	session string
+	leaf           string
+	value          string
+	arg1           string
+	arg2           string
+	dry_run        bool
+	yes            bool
+	remove         bool
+	adopt_dotfiles bool
+	stream         bool
+	attach         []string
+	session        string
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -27,6 +28,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut dry_run := false
 	mut yes := false
 	mut remove := false
+	mut adopt_dotfiles := false
 	mut stream := false
 	mut attach := []string{}
 	mut session := ''
@@ -60,6 +62,10 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		}
 		if arg == '--remove' {
 			remove = true
+			continue
+		}
+		if arg == '--adopt-dotfiles' {
+			adopt_dotfiles = true
 			continue
 		}
 		if arg == '--stream' {
@@ -114,19 +120,26 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if remove && leaf != 'setup' {
 		return error('--remove only applies to setup.\nExample: horneroctl assistant setup --remove --yes')
 	}
+	if adopt_dotfiles && leaf != 'setup' {
+		return error('--adopt-dotfiles only applies to setup.\nExample: horneroctl assistant setup --adopt-dotfiles --dry-run')
+	}
+	if remove && adopt_dotfiles {
+		return error('--remove and --adopt-dotfiles are separate setup operations.\nExample: horneroctl assistant setup --adopt-dotfiles --dry-run')
+	}
 	if leaf == 'setup' && value.len > 0 {
 		return error('setup takes no argument.\nExample: horneroctl assistant setup --dry-run')
 	}
 	return AssistantCmdOptions{
-		leaf:    leaf
-		value:   value
-		arg1:    if parts.len > 0 { parts[0] } else { '' }
-		arg2:    if parts.len > 1 { parts[1..].join(' ') } else { '' }
-		dry_run: dry_run
-		yes:     yes
-		remove:  remove
-		stream:  stream
-		attach:  attach
-		session: session
+		leaf:           leaf
+		value:          value
+		arg1:           if parts.len > 0 { parts[0] } else { '' }
+		arg2:           if parts.len > 1 { parts[1..].join(' ') } else { '' }
+		dry_run:        dry_run
+		yes:            yes
+		remove:         remove
+		adopt_dotfiles: adopt_dotfiles
+		stream:         stream
+		attach:         attach
+		session:        session
 	}
 }

@@ -67,6 +67,7 @@ fn test_parse_xrandr_vectors() {
 
 fn test_night_status_icon_vectors() {
 	tmp := os.join_path(os.temp_dir(), 'hornero-night-status-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(tmp) or {} }
 	with_night_xdg(tmp, fn () {
 		rep := night_mode_run(NightModeCmd{
 			verb:    'status-icon'
@@ -92,7 +93,6 @@ fn test_night_status_icon_vectors() {
 		})
 		assert !rep4.ok
 	})
-	os.rmdir_all(tmp) or {}
 }
 
 fn test_night_toggle_needs_yes() {

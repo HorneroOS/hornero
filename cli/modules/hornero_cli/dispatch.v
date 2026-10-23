@@ -276,8 +276,13 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		}
 		'log' { render(hornero_core.assistant_log_report(), mode) }
 		'setup' {
-			render(hornero_core.assistant_setup_report(opts.dry_run, opts.yes, opts.remove),
-				mode)
+			if opts.adopt_dotfiles {
+				render(hornero_core.assistant_setup_adopt_dotfiles_report(opts.dry_run,
+					opts.yes), mode)
+			} else {
+				render(hornero_core.assistant_setup_report(opts.dry_run, opts.yes,
+					opts.remove), mode)
+			}
 		}
 		'gateway' {
 			match opts.arg1 {
