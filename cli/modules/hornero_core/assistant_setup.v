@@ -510,6 +510,54 @@ struct AssistantSetupAdoptionPlan {
 	targets []AssistantSetupAdoptionTarget
 }
 
+struct AssistantSetupStagedAdoptionReceipt {
+	path    string
+	temp    string
+	content string
+}
+
+fn assistant_setup_link_receipt(source string, destination string) ! {
+	os.link(source, destination)!
+}
+
+fn assistant_setup_publish_adoption_receipts(receipts []AssistantSetupStagedAdoptionReceipt, publish fn (string, string) !) !int {
+	mut published := []AssistantSetupStagedAdoptionReceipt{}
+	for receipt in receipts {
+		publish(receipt.temp, receipt.path) or {
+			mut rollback_failures := []string{}
+			for previous in published {
+				if os.is_link(previous.path) || !os.is_file(previous.path) {
+					rollback_failures << 'receipt changed during rollback and was preserved: ${previous.path}'
+					continue
+				}
+				current := os.read_file(previous.path) or {
+					rollback_failures << 'cannot verify receipt during rollback; preserved ${previous.path}: ${err.msg()}'
+					continue
+				}
+				if current != previous.content {
+					rollback_failures << 'receipt changed during rollback and was preserved: ${previous.path}'
+					continue
+				}
+				os.rm(previous.path) or {
+					rollback_failures << 'cannot remove partial receipt ${previous.path}: ${err.msg()}'
+				}
+			}
+			if rollback_failures.len > 0 {
+				return error('cannot publish ownership receipt ${receipt.path}: ${err.msg()}; partial adoption remains and needs reconciliation: ' + rollback_failures.join('; '))
+			}
+			return error('cannot publish ownership receipt ${receipt.path}: ${err.msg()}; earlier receipts were rolled back')
+		}
+		published << receipt
+	}
+	return published.len
+}
+
+fn assistant_setup_remove_staged_adoption_receipts(receipts []AssistantSetupStagedAdoptionReceipt) {
+	for receipt in receipts {
+		assistant_setup_remove_temp_file(receipt.temp)
+	}
+}
+
 fn assistant_setup_dotfiles_adoption_targets() []AssistantSetupAdoptionTarget {
 	return [
 		AssistantSetupAdoptionTarget{
@@ -584,30 +632,39 @@ fn assistant_setup_adopt_dotfiles_report_for_targets(dry_run bool, yes bool, tar
 	plan := assistant_setup_adoption_plan(targets) or {
 		return fail_result('assistant setup adopt-dotfiles', 'Cannot adopt legacy dotfiles files: ${err.msg()}')
 	}
-	mut adopted := 0
+	mut staged_receipts := []AssistantSetupStagedAdoptionReceipt{}
 	for target in plan.targets {
 		receipt := assistant_setup_receipt_file(target.kind)
 		content := os.read_file(target.path) or {
+			assistant_setup_remove_staged_adoption_receipts(staged_receipts)
 			return fail_result('assistant setup adopt-dotfiles', 'Cannot recheck ${target.path}: ${err.msg()}')
 		}
 		if sha256.hexhash(content) != target.fingerprint || os.is_link(target.path) {
+			assistant_setup_remove_staged_adoption_receipts(staged_receipts)
 			return fail_result('assistant setup adopt-dotfiles', '${target.path} changed during adoption; preserving it')
 		}
 		tmp := assistant_setup_write_temp_file(receipt,
 			'adopted:' + assistant_setup_receipt_hash(target.path, content) + '\n') or {
+			assistant_setup_remove_staged_adoption_receipts(staged_receipts)
 			return fail_result('assistant setup adopt-dotfiles', 'Cannot stage the ownership receipt for ${target.path}: ${err.msg()}')
 		}
 		os.chmod(tmp, 0o600) or {
 			assistant_setup_remove_temp_file(tmp)
+			assistant_setup_remove_staged_adoption_receipts(staged_receipts)
 			return fail_result('assistant setup adopt-dotfiles', 'Cannot restrict ownership receipt permissions: ${err.msg()}')
 		}
-		os.link(tmp, receipt) or {
-			assistant_setup_remove_temp_file(tmp)
-			return fail_result('assistant setup adopt-dotfiles', 'Cannot create ownership receipt for ${target.path} without replacing existing state: ${err.msg()}')
+		staged_receipts << AssistantSetupStagedAdoptionReceipt{
+			path:    receipt
+			temp:    tmp
+			content: 'adopted:' + assistant_setup_receipt_hash(target.path, content) + '\n'
 		}
-		assistant_setup_remove_temp_file(tmp)
-		adopted++
 	}
+	adopted := assistant_setup_publish_adoption_receipts(staged_receipts,
+		assistant_setup_link_receipt) or {
+		assistant_setup_remove_staged_adoption_receipts(staged_receipts)
+		return fail_result('assistant setup adopt-dotfiles', err.msg())
+	}
+	assistant_setup_remove_staged_adoption_receipts(staged_receipts)
 	message := if adopted == 0 {
 		'No new supported dotfiles files needed adoption.'
 	} else {
@@ -687,7 +744,12 @@ pub fn assistant_setup_report(dry_run bool, yes bool, remove bool) CommandResult
 	}
 	enable := assistant_enable_report(false, true)
 	if !enable.ok {
-		return enable
+		return CommandResult{
+			command: enable.command
+			ok:      enable.ok
+			message: enable.message + '\nAssistant setup did not complete. Any unit or skill files written during this attempt remain tracked by Hornero ownership receipts; pre-existing external files were preserved. Resolve the reported assistant error before retrying setup.'
+			data:    enable.data
+		}
 	}
 	if wrote_skill {
 		skill_state = 'installed'

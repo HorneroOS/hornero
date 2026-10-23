@@ -175,16 +175,38 @@ fn assistant_generate_key() !string {
 	return raw.hex()
 }
 
-fn assistant_ensure_key() !string {
+struct AssistantEnsuredKey {
+	value   string
+	created bool
+}
+
+fn assistant_remove_generated_key(key string) ! {
+	path := assistant_key_file()
+	staged := assistant_setup_stage_matching_file(path, '${key}\n')!
+	assistant_setup_remove_temp_file(staged)
+}
+
+fn assistant_ensure_key() !AssistantEnsuredKey {
 	existing := os.read_file(assistant_key_file()) or { '' }.trim_space()
 	if existing.len >= 16 {
-		return existing
+		return AssistantEnsuredKey{
+			value: existing
+		}
 	}
 	key := assistant_generate_key()!
 	os.mkdir_all(assistant_dir())!
 	os.write_file(assistant_key_file(), key + '\n')!
-	os.chmod(assistant_key_file(), 0o600)!
-	return key
+	os.chmod(assistant_key_file(), 0o600) or {
+		chmod_error := err.msg()
+		assistant_remove_generated_key(key) or {
+			return error('cannot restrict the local assistant key permissions: ${chmod_error}; cleanup failed: ${err.msg()}')
+		}
+		return error('cannot restrict the local assistant key permissions: ${chmod_error}')
+	}
+	return AssistantEnsuredKey{
+		value:   key
+		created: true
+	}
 }
 
 // assistant_tool_argv is the exhaustive slice-1 read-only allowlist.
@@ -1028,11 +1050,17 @@ pub fn assistant_enable_report(dry_run bool, yes bool) CommandResult {
 	already := settings.enabled
 	settings.enabled = true
 	// Keep persisted enablement false when key creation fails.
-	assistant_ensure_key() or {
+	key := assistant_ensure_key() or {
 		return fail_result('assistant enable', 'Cannot write the local assistant key: ${err.msg()}')
 	}
 	assistant_save_settings(settings) or {
-		return fail_result('assistant enable', 'Cannot write assistant settings: ${err.msg()}')
+		settings_error := err.msg()
+		if key.created {
+			assistant_remove_generated_key(key.value) or {
+				return fail_result('assistant enable', 'Cannot write assistant settings: ${settings_error}. Could not remove the newly generated local key: ${err.msg()}')
+			}
+		}
+		return fail_result('assistant enable', 'Cannot write assistant settings: ${settings_error}')
 	}
 	msg := if already {
 		'Assistant was already enabled; settings reaffirmed. Start Hermes so its gateway listens on ${settings.endpoint}.'

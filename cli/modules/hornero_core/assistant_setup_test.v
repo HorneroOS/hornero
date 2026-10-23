@@ -65,6 +65,13 @@ fn assistant_setup_test_mutate_then_fail_receipt(src string, dest string) ! {
 	return error('simulated ownership receipt rename failure')
 }
 
+fn assistant_setup_test_fail_second_adoption_receipt(src string, dest string) ! {
+	if dest.ends_with('/skill.sha256') {
+		return error('simulated second receipt publication failure')
+	}
+	os.link(src, dest)!
+}
+
 fn test_assistant_knowledge_markdown_shape() {
 	md := assistant_knowledge_markdown('horneroctl-test', '2026-10-21 10:00',
 		'system_info -> horneroctl system info --json; package_updates -> horneroctl package updates --json')
@@ -286,6 +293,56 @@ fn test_assistant_enable_keeps_settings_disabled_when_key_creation_fails() {
 	result := assistant_enable_report(false, true)
 	assert !result.ok
 	assert result.message.contains('Cannot write the local assistant key')
+	assert !os.is_file(assistant_settings_file())
+}
+
+fn test_assistant_enable_removes_new_key_when_settings_save_fails() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-settings-failure-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	hermes := os.join_path(bin, 'hermes')
+	os.write_file(hermes, '#!/bin/sh\nexit 0\n')!
+	os.chmod(hermes, 0o755)!
+	os.setenv('PATH', '${bin}:${old_path}', true)
+	os.mkdir_all(assistant_settings_file())!
+
+	result := assistant_enable_report(false, true)
+	assert !result.ok
+	assert result.message.contains('Cannot write assistant settings')
+	assert !os.exists(assistant_key_file())
+	assert os.is_dir(assistant_settings_file())
+}
+
+fn test_assistant_setup_reports_receipt_tracked_files_when_enablement_fails() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-setup-enable-failure-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	old_path := os.getenv('PATH')
+	defer { assistant_setup_test_restore_var('PATH', old_path) }
+	bin := os.join_path(root, 'bin')
+	os.mkdir_all(bin)!
+	hermes := os.join_path(bin, 'hermes')
+	os.write_file(hermes, '#!/bin/sh\nexit 0\n')!
+	os.chmod(hermes, 0o755)!
+	os.setenv('PATH', '${bin}:${old_path}', true)
+	os.mkdir_all(assistant_key_file())!
+
+	result := assistant_setup_report(false, true, false)
+	unit_file := assistant_gateway_unit_file()
+	skill_file := assistant_skill_file()
+	assert !result.ok
+	assert result.message.contains('Cannot write the local assistant key')
+	assert result.message.contains('unit or skill files written during this attempt remain tracked by Hornero ownership receipts')
+	assert os.is_file(unit_file)
+	assert os.is_file(skill_file)
+	assert assistant_setup_file_is_owned('unit', unit_file)
+	assert assistant_setup_file_is_owned('skill', skill_file)
 	assert !os.is_file(assistant_settings_file())
 }
 
@@ -643,6 +700,39 @@ fn test_assistant_setup_dotfiles_adoption_preflights_all_targets_before_receipts
 	assert os.read_file(unknown_path)! == 'modified or unknown skill\n'
 	assert !os.exists(assistant_setup_receipt_file('unit'))
 	assert !os.exists(assistant_setup_receipt_file('skill'))
+}
+
+fn test_assistant_setup_dotfiles_adoption_rolls_back_when_later_receipt_publish_fails() {
+	root := os.join_path(os.temp_dir(), 'hornero-assistant-adopt-publish-failure-${os.getpid()}-${time.now().unix_milli()}')
+	defer { os.rmdir_all(root) or {} }
+	old_env := assistant_setup_test_set_env(root)
+	defer { assistant_setup_test_restore_env(old_env) }
+	unit_receipt := assistant_setup_receipt_file('unit')
+	skill_receipt := assistant_setup_receipt_file('skill')
+	unit_temp := assistant_setup_write_temp_file(unit_receipt, 'adopted:unit\n')!
+	skill_temp := assistant_setup_write_temp_file(skill_receipt, 'adopted:skill\n')!
+	receipts := [
+		AssistantSetupStagedAdoptionReceipt{
+			path:    unit_receipt
+			temp:    unit_temp
+			content: 'adopted:unit\n'
+		},
+		AssistantSetupStagedAdoptionReceipt{
+			path:    skill_receipt
+			temp:    skill_temp
+			content: 'adopted:skill\n'
+		},
+	]
+
+	if _ := assistant_setup_publish_adoption_receipts(receipts,
+		assistant_setup_test_fail_second_adoption_receipt) {
+		assert false
+	} else {
+		assert err.msg().contains('earlier receipts were rolled back'), err.msg()
+	}
+	assert !os.exists(unit_receipt)
+	assert !os.exists(skill_receipt)
+	assistant_setup_remove_staged_adoption_receipts(receipts)
 }
 
 fn test_assistant_setup_remove_preserves_adopted_unit_without_systemd_calls() {
