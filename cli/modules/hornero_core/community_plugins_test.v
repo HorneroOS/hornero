@@ -320,10 +320,13 @@ fn test_minisign_verify_and_signed_plugin_enables() {
 	// Unit: minisign framing (key-id match, Ed25519 verify, tamper).
 	pub_key, priv := ed25519.generate_key() or { panic(err) }
 	key_id := []u8{len: 8, init: u8(index + 1)}
-	mut pub_raw := 'RW'.bytes()
+	// The standard minisign public-key line starts with "RW" in base64,
+	// which decodes to the binary algorithm tag "Ed".
+	mut pub_raw := 'Ed'.bytes()
 	pub_raw << key_id
 	pub_raw << pub_key
 	pub_str := base64.encode(pub_raw)
+	assert pub_str.starts_with('RW')
 	msg := 'abc123'.bytes()
 	sig := priv.sign(msg) or { panic(err) }
 	mut sig_raw := 'Ed'.bytes()
@@ -332,6 +335,10 @@ fn test_minisign_verify_and_signed_plugin_enables() {
 	sig_str := base64.encode(sig_raw)
 	assert minisign_verify(pub_str, sig_str, msg)
 	assert !minisign_verify(pub_str, sig_str, 'tampered'.bytes())
+	mut prehashed_raw := 'ED'.bytes()
+	prehashed_raw << key_id
+	prehashed_raw << sig
+	assert !minisign_verify(pub_str, base64.encode(prehashed_raw), msg)
 	mut other_id := []u8{len: 8, init: u8(index + 1)}
 	other_id[0] = 9
 	mut bad_raw := 'Ed'.bytes()
