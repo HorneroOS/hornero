@@ -27,10 +27,10 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: f95b1f51aefc4e42f642a3fc84759822c6c0f74d
+    sha: 64557c05ecf368fb3d5ed6ced69bc5e05901edbe
     status: pinned
-    subject: "feat(hypr): restore persisted cursor size at login"
-    notes: Reusable desktop and system defaults, including the canonical terminal integration catalogue.
+    subject: "fix(hypr): resolve modules relative to config file (#96)"
+    notes: Reusable desktop and system defaults, including Hyprland module imports resolved relative to the active config file.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
     path: cli/
