@@ -2,15 +2,16 @@ module hornero_cli
 
 pub struct PluginCmdOptions {
 pub:
-	leaf    string
-	value   string
-	dry_run bool
-	yes     bool
-	name    string
-	author  string
-	desc    string
-	license string
-	dir     string
+	leaf              string
+	value             string
+	dry_run           bool
+	yes               bool
+	name              string
+	author            string
+	desc              string
+	license           string
+	dir               string
+	expected_revision string
 }
 
 pub fn parse_plugin(args []string) !PluginCmdOptions {
@@ -28,6 +29,7 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 	mut desc := ''
 	mut license := ''
 	mut dir := ''
+	mut expected_revision := ''
 	mut dry_run := false
 	mut yes := false
 	mut i := 1
@@ -41,6 +43,14 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		if arg == '--yes' {
 			yes = true
 			i++
+			continue
+		}
+		if arg == '--revision' {
+			if i + 1 >= args.len || args[i + 1].starts_with('--') {
+				return error('missing value for --revision.\nExample: horneroctl plugin catalog install hornero-pomodoro --revision <catalogue-commit> --yes')
+			}
+			expected_revision = args[i + 1]
+			i += 2
 			continue
 		}
 		if arg in ['--name', '--author', '--description', '--license', '--dir'] {
@@ -93,6 +103,9 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 	if leaf == 'list' && (value.len > 0 || dry_run || yes) {
 		return error('plugin list takes no arguments.\nExample: horneroctl plugin list --json')
 	}
+	if expected_revision.len > 0 && (leaf != 'catalog' || value !in ['install', 'update']) {
+		return error('--revision is only valid with plugin catalog install/update')
+	}
 	if leaf in ['install', 'remove', 'validate'] && value.len == 0 {
 		return error('missing value.\nExample: horneroctl plugin ${leaf} <source-or-id>')
 	}
@@ -100,14 +113,15 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		return error('plugin ${leaf} is read-only and takes no mutation flags.\nExample: horneroctl plugin ${leaf}')
 	}
 	return PluginCmdOptions{
-		leaf:    leaf
-		value:   value
-		dry_run: dry_run
-		yes:     yes
-		name:    name
-		author:  author
-		desc:    desc
-		license: license
-		dir:     dir
+		leaf:              leaf
+		value:             value
+		dry_run:           dry_run
+		yes:               yes
+		name:              name
+		author:            author
+		desc:              desc
+		license:           license
+		dir:               dir
+		expected_revision: expected_revision
 	}
 }

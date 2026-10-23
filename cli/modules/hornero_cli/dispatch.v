@@ -190,14 +190,16 @@ fn run_plugin(args []string, mode hornero_core.RenderMode) int {
 	if opts.leaf == 'catalog' {
 		if opts.value == 'install' {
 			return render(hornero_core.community_plugin_catalog_install_report(opts.name, hornero_core.CommunityPluginOptions{
-				dry_run: opts.dry_run
-				yes:     opts.yes
+				dry_run:           opts.dry_run
+				yes:               opts.yes
+				expected_revision: opts.expected_revision
 			}), mode)
 		}
 		if opts.value == 'update' {
 			return render(hornero_core.community_plugin_catalog_update_report(opts.name, hornero_core.CommunityPluginOptions{
-				dry_run: opts.dry_run
-				yes:     opts.yes
+				dry_run:           opts.dry_run
+				yes:               opts.yes
+				expected_revision: opts.expected_revision
 			}), mode)
 		}
 		if opts.value == 'rollback' {
