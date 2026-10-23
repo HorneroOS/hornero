@@ -86,6 +86,23 @@ fn test_plugin_catalog_action_parser_accepts_expected_revision_only_for_install_
 	assert !invalid_flag_accepted
 }
 
+fn test_plugin_community_list_parser_and_help() {
+	opts := parse_plugin(['community', 'list']) or {
+		assert false, err.msg()
+		return
+	}
+	assert opts.leaf == 'community'
+	assert opts.value == 'list'
+	assert !opts.dry_run && !opts.yes
+	assert command_help('plugin community').contains('/etc/hornero/registry.pub')
+	assert command_help('plugin').contains('plugin community list --json')
+	if _ := parse_plugin(['community', 'install']) {
+		assert false, 'community install must wait for provenance-preserving lifecycle support'
+	} else {
+		assert err.msg().contains('only the read/list command')
+	}
+}
+
 fn test_system_help_has_machine_readable_examples() {
 	assert command_help('system').contains('Examples:')
 	assert command_help('system info').contains('horneroctl system info --json')

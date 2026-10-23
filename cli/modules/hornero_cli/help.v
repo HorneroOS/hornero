@@ -135,7 +135,7 @@ Examples:
 		}
 		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate',
 		'plugin catalog' {
-			return 'Usage: horneroctl plugin <new|install|remove|list|validate|enable|disable|trust|catalog> [value] [options]
+			return 'Usage: horneroctl plugin <new|install|remove|list|validate|enable|disable|trust|catalog|community> [value] [options]
 
   new <id> --name NAME --author AUTHOR --description TEXT --license MIT --dir PATH [--dry-run|--yes]
                       Create a static community plugin scaffold (MIT template)
@@ -146,6 +146,9 @@ Examples:
                       Update a catalogue-installed plugin (hash verified, previous payload kept)
   catalog rollback <id> [--dry-run|--yes]
                       Restore the payload kept by the last catalogue update
+  community list      List entries from the signed community registry
+                      (requires the system registry key and minisign; records
+                      the highest accepted index version under XDG state)
   install <https-url> [--dry-run|--yes]
                       Validate and install an inert community plugin package
   remove <id> [--dry-run|--yes]
@@ -172,6 +175,7 @@ Examples:
   horneroctl plugin new example-clock --name "Example Clock" --author "Your Name" --description "A clock widget" --license MIT --dir ./example-clock --dry-run
   horneroctl plugin new example-clock --name "Example Clock" --author "Your Name" --description "A clock widget" --license MIT --dir ./example-clock --yes
   horneroctl plugin list --json
+  horneroctl plugin community list --json
   horneroctl plugin validate ./my-plugin
   horneroctl plugin install https://github.com/example/my-plugin.git --dry-run
   horneroctl plugin install https://github.com/example/my-plugin.git --yes
@@ -181,6 +185,9 @@ Examples:
 		}
 		'plugin enable' {
 			return 'Usage: horneroctl plugin enable <id> [--dry-run|--yes]\n\nMark a receipt-owned, installed plugin as runnable. The installed\npayload must still pass the static contract validator, or enabling\nfails and the plugin stays disabled. Plugins are disabled by\ndefault when installed. Enabled QML runs with your user privileges;\nit is not sandboxed.\n\nExamples:\n  horneroctl plugin enable example-clock --dry-run\n  horneroctl plugin enable example-clock --yes\n'
+		}
+		'plugin community' {
+			return 'Usage: horneroctl plugin community list [--json|--quiet]\n\nFetch the HorneroOS/plugins repository, verify the detached Minisign signature\nagainst /etc/hornero/registry.pub, validate the strict index schema, and reject\nindex versions older than the highest version previously accepted by this user.\nA registry signature proves publication, not code review or safety.\n\nThe command fails closed when the trusted key, signed index, or minisign is\nmissing or invalid. It records accepted indexVersion in XDG state.\n\nExamples:\n  horneroctl plugin community list\n  horneroctl plugin community list --json\n'
 		}
 		'plugin disable' {
 			return 'Usage: horneroctl plugin disable <id> [--dry-run|--yes]\n\nMark a plugin as not runnable. The payload and receipt stay in\nplace; enable it again at any time.\n\nExamples:\n  horneroctl plugin disable example-clock --dry-run\n  horneroctl plugin disable example-clock --yes\n'

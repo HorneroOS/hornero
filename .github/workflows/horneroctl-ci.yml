@@ -18,6 +18,8 @@ jobs:
         uses: ./.github/actions/setup-v
       - name: Verify toolchain
         run: v version
+      - name: Install Minisign for community registry tests
+        run: sudo apt-get update && sudo apt-get install --yes minisign
       - name: Format check
         working-directory: cli
         run: ./make.vsh fmt-check
