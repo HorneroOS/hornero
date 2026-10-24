@@ -12,8 +12,11 @@ temporary snapshots, then parses the exact index bytes that were verified. It
 rejects duplicate JSON keys, unknown schema fields, unsupported versions,
 mutable or malformed revisions, non-approved repository hosts, invalid hashes,
 duplicate/unsorted IDs, and entries with an invalid author-key fingerprint.
-It records the highest accepted `indexVersion` under XDG state and refuses a
-lower version on subsequent reads. The state write is locked and atomic.
+It records the highest accepted `indexVersion` and exact index SHA-256 under
+XDG state. It refuses lower versions and different index bytes that reuse the
+same version. State writes are locked and atomic. Legacy state files containing
+only a version are upgraded to include the digest after that version is
+verified again.
 
 The trusted key is deliberately not included yet. A maintainer must provision
 the production public key and review its bootstrap and rotation policy before
@@ -39,4 +42,5 @@ cd cli
 
 The CLI integration tests use ephemeral Minisign keys in CI. They cover signed
 index acceptance, signature failure, the exact-bytes verification boundary,
-strict schema validation, and persistent rollback rejection.
+strict schema validation, persistent rollback rejection, and same-version
+content equivocation rejection.

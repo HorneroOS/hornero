@@ -2,6 +2,7 @@ module hornero_core
 
 import os
 import time
+import crypto.sha256
 
 fn community_registry_test_repeat(ch u8, count int) string {
 	mut value := ''
@@ -78,6 +79,25 @@ fn test_community_registry_file_reads_enforce_the_bound() {
 	}
 }
 
+fn test_community_registry_high_water_state_is_strict_and_migrates_legacy_shape() {
+	root := community_registry_test_new_root('high-water-schema')
+	defer { os.rmdir_all(root) or {} }
+	path := os.join_path(root, 'state.json')
+	os.write_file(path, '{"indexVersion":4}\n') or { panic(err) }
+	version, digest := community_registry_high_water(path) or {
+		assert false, err.msg()
+		return
+	}
+	assert version == 4
+	assert digest == ''
+	os.write_file(path, '{"indexVersion":4,"unexpected":true}\n') or { panic(err) }
+	if _, _ := community_registry_high_water(path) {
+		assert false, 'unknown rollback state fields must fail closed'
+	} else {
+		assert err.msg().contains('unsupported fields')
+	}
+}
+
 fn test_community_registry_listing_verifies_a_snapshot_and_rejects_rollback() {
 	root := community_registry_test_new_root('snapshot')
 	defer { os.rmdir_all(root) or {} }
@@ -124,7 +144,14 @@ fn test_community_registry_listing_verifies_a_snapshot_and_rejects_rollback() {
 	assert listed.ok, listed.message
 	assert listed.data['indexVersion'] == '2'
 	state_after_list := os.read_file(state_path) or { '' }
-	assert state_after_list == '{"indexVersion":2}\n'
+	assert state_after_list == '{"indexVersion":2,"indexDigest":"${sha256.hexhash(community_registry_test_index(2, '[]'))}"}\n'
+
+	// A publisher cannot silently replace the signed bytes at the same version.
+	os.write_file(index_path, community_registry_test_index(2, '[${community_registry_test_entry('alpha')}]')) or { panic(err) }
+	equivocated := community_plugin_registry_list_from(repository, key_path, state_path)
+	assert !equivocated.ok
+	assert equivocated.message.contains('without an indexVersion increase')
+	assert (os.read_file(state_path) or { '' }) == state_after_list
 
 	// Replace the index with a valid older signed payload and keep the test
 	// verifier successful. The persistent high-water mark must reject it.
@@ -137,7 +164,7 @@ fn test_community_registry_listing_verifies_a_snapshot_and_rejects_rollback() {
 	assert !rolled_back.ok
 	assert rolled_back.message.contains('older than the highest accepted version 2')
 	state_after_rollback := os.read_file(state_path) or { '' }
-	assert state_after_rollback == '{"indexVersion":2}\n'
+	assert state_after_rollback == state_after_list
 }
 
 fn test_community_registry_listing_with_real_minisign_and_tamper_rejection() {
