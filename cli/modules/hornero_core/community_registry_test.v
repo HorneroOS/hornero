@@ -206,5 +206,5 @@ fn test_community_registry_listing_with_real_minisign_and_tamper_rejection() {
 	assert !tampered.ok
 	assert tampered.message.contains('signature verification failed')
 	state := os.read_file(state_path) or { '' }
-	assert state == '{"indexVersion":7}\n'
+	assert state == '{"indexVersion":7,"indexDigest":"${sha256.hexhash(community_registry_test_index(7, '[]'))}"}\n'
 }
