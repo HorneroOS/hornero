@@ -4,6 +4,7 @@ import os
 import os.filelock
 import time
 import x.json2
+import crypto.sha256
 
 const community_registry_key_path = '/etc/hornero/registry.pub'
 const community_registry_relative_index = 'community/index.json'
@@ -344,12 +345,12 @@ fn community_registry_verify_bytes(index []u8, signature []u8, public_key []u8) 
 	}
 }
 
-fn community_registry_high_water(path string) !int {
+fn community_registry_high_water(path string) !(int, string) {
 	if os.is_link(path) {
 		return error('community registry rollback state is a symbolic link; refusing to trust it')
 	}
 	if !os.exists(path) {
-		return 0
+		return 0, ''
 	}
 	if !os.is_file(path) {
 		return error('community registry rollback state is not a regular file')
@@ -359,7 +360,8 @@ fn community_registry_high_water(path string) !int {
 	decoded := json2.decode[map[string]json2.Any](raw) or {
 		return error('community registry rollback state is malformed')
 	}
-	if !community_registry_exact_fields(decoded, ['indexVersion']) {
+	if !('indexVersion' in decoded) || (decoded.len == 1 && 'indexDigest' in decoded)
+		|| (decoded.len == 2 && 'indexDigest' !in decoded) || decoded.len !in [1, 2] {
 		return error('community registry rollback state has unsupported fields')
 	}
 	version := community_registry_integer(decoded['indexVersion']) or {
@@ -368,10 +370,21 @@ fn community_registry_high_water(path string) !int {
 	if version < 1 {
 		return error('community registry rollback state has an invalid indexVersion')
 	}
-	return version
+	digest := if 'indexDigest' in decoded {
+		community_registry_string(decoded['indexDigest']) or { return error('community registry rollback state has an invalid indexDigest') }
+	} else {
+		''
+	}
+	if 'indexDigest' in decoded && (digest.len != 64 || !community_registry_lower_hex(digest)) {
+		return error('community registry rollback state has an invalid indexDigest')
+	}
+	return version, digest
 }
 
-fn community_registry_write_high_water(path string, version int) ! {
+fn community_registry_write_high_water(path string, version int, digest string) ! {
+	if version < 1 || digest.len != 64 || !community_registry_lower_hex(digest) {
+		return error('refusing to save invalid community registry high-water state')
+	}
 	parent := os.dir(path)
 	os.mkdir_all(parent, os.MkdirParams{ mode: 0o700 }) or {
 		return error('cannot create community registry state directory: ${err.msg()}')
@@ -392,15 +405,18 @@ fn community_registry_write_high_water(path string, version int) ! {
 	defer {
 		registry_lock.release()
 	}
-	current := community_registry_high_water(path)!
+	current, current_digest := community_registry_high_water(path)!
 	if version < current {
 		return error('refusing to replace community registry rollback state with an older version')
 	}
-	if version == current {
+	if version == current && current_digest.len > 0 && digest != current_digest {
+		return error('refusing community index content change without an indexVersion increase')
+	}
+	if version == current && current_digest == digest {
 		return
 	}
 	tmp := '${path}.tmp-${os.getpid()}-${time.now().unix_nano()}'
-	os.write_file(tmp, '{"indexVersion":${version}}\n') or {
+	os.write_file(tmp, '{"indexVersion":${version},"indexDigest":"${digest}"}\n') or {
 		return error('cannot write community registry rollback state: ${err.msg()}')
 	}
 	os.chmod(tmp, 0o600) or {
@@ -431,17 +447,22 @@ fn community_plugin_registry_list_from(repository string, public_key_path string
 	index := community_registry_validate_index(index_bytes.bytestr()) or {
 		return fail_result('plugin community list', 'signed community index is invalid: ${err.msg()}')
 	}
-	current := community_registry_high_water(state_path) or {
+	current, current_digest := community_registry_high_water(state_path) or {
 		return fail_result('plugin community list', err.msg())
 	}
 	if index.index_version < current {
 		return fail_result('plugin community list', 'community index version ${index.index_version} is older than the highest accepted version ${current}; refusing rollback')
 	}
-	community_registry_write_high_water(state_path, index.index_version) or {
+	digest := sha256.hexhash(index_bytes.bytestr())
+	if index.index_version == current && current_digest.len > 0 && digest != current_digest {
+		return fail_result('plugin community list', 'community index content changed without an indexVersion increase; refusing equivocation')
+	}
+	community_registry_write_high_water(state_path, index.index_version, digest) or {
 		return fail_result('plugin community list', err.msg())
 	}
 	return ok_result('plugin community list', 'Verified community registry index v${index.index_version}. Registry publication is not a code review; extensions remain unsandboxed and require review before installation or enablement.', {
 		'indexVersion':  index.index_version.str()
+		'indexDigest':   digest
 		'generatedFrom': index.generated_from
 		'plugins':       json2.encode(index.plugins)
 		'source':        plugin_catalog_source
