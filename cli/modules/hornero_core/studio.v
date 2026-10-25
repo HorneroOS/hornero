@@ -182,12 +182,12 @@ pub fn write_studio_selection(sel StudioSelection) !string {
 
 fn studio_selection_data(sel StudioSelection, present bool, path string) map[string]string {
 	return {
-		'state':            if present { 'recorded' } else { 'not-selected' }
-		'file':             path
-		'schema_version':   '${sel.schema_version}'
-		'specializations':  sel.specializations.join(',')
-		'applications':     sel.applications.join(',')
-		'package_apply':    'not-executed'
+		'state':           if present { 'recorded' } else { 'not-selected' }
+		'file':            path
+		'schema_version':  '${sel.schema_version}'
+		'specializations': sel.specializations.join(',')
+		'applications':    sel.applications.join(',')
+		'package_apply':   'not-executed'
 	}
 }
 
