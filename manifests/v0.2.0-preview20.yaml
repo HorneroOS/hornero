@@ -20,16 +20,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: cc8a3a6530e8b7a7fab10287846c79231ca2ed42
+    sha: 02f319bdf0d6dab67db58c41b4f8dbf6db6abf33
     status: pinned
-    subject: "feat: add public PluginKit and desktop widget slots (#312)"
+    subject: "feat(controlcenter): add Studio readiness checklist (#326)"
     notes: Desktop shell / Quickshell UX, accessible Control Center navigation, provenance-backed official extensions marketplace, and a scoped Appearance AT-SPI probe. The appearance gate is still marked FAIL pending graphical acceptance.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 6cb6f3067db75191cda3d5638e8a989ae92cfab1
+    sha: 10c9477cb770c986908d64a58e95dac8c2870e69
     status: pinned
-    subject: "feat(config): add safe reversible Studio audio policy profiles (#103)"
+    subject: "feat(config): mirror Studio creator workspace preset from shell (#106)"
     notes: Reusable desktop and system defaults, including Hyprland module imports resolved relative to the active config file.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
