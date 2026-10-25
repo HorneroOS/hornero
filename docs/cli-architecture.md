@@ -34,6 +34,14 @@ configuration owns defaults and read-only catalogue data.
   specialization/application IDs from `editions/catalogue.yaml` and never
   duplicates package lists. Recording a selection installs nothing; the
   package-apply lifecycle is a separate later slice.
+- `horneroctl studio jobs` is the launchable, allow-listed render-job API
+  (HorneroOS/hornero#289): adapters `blender-render` and `ffmpeg-export`
+  build fixed argv (no shell, no custom flags), outputs are never
+  overwritten, and `run` needs `--yes`. Jobs persist under Hornero state as
+  `<id>.json`/`<id>.log`; a persisted `running` state reconciles to
+  `interrupted` after a crash. Logs are only shown through `studio jobs
+  log` with secret redaction. Storage review uses a fixed `df` evidence
+  probe; this slice does not infer arbitrary process completions.
 - `horneroctl plugin` manages community extension packages as user-owned data
   under XDG roots, with receipts under Hornero state. Validation delegates to
   the Shell package's contract checker. The command never activates packages:

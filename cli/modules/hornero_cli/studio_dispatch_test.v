@@ -17,3 +17,14 @@ fn test_studio_unknown_subcommand_fails() {
 	assert dispatch(['horneroctl', 'studio', 'nope']) != 0
 	assert dispatch(['horneroctl', 'studio']) != 0
 }
+
+fn test_studio_jobs_help_is_discoverable() {
+	assert command_help('studio jobs').contains('studio jobs submit')
+	assert command_help('studio jobs').contains('ffmpeg-export')
+	assert command_help('studio').contains('jobs')
+}
+
+fn test_studio_jobs_unknown_subcommand_fails() {
+	assert dispatch(['horneroctl', 'studio', 'jobs', 'nope']) != 0
+	assert dispatch(['horneroctl', 'studio', 'jobs', 'status']) != 0
+}

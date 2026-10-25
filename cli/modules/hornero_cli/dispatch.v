@@ -318,6 +318,64 @@ fn run_studio(args []string, mode hornero_core.RenderMode) int {
 			}
 			return render(hornero_core.studio_doctor_result(), mode)
 		}
+		'jobs' {
+			if args.len == 1 {
+				return render(hornero_core.studio_jobs_list_result(), mode)
+			}
+			match args[1] {
+				'list' {
+					return render(hornero_core.studio_jobs_list_result(), mode)
+				}
+				'status', 'cancel', 'log', 'run' {
+					if args.len < 3 {
+						return render_error(hornero_core.err_usage('studio.usage',
+							'expected a job id.\nExample: horneroctl studio jobs ${args[1]} <job-id>'), mode)
+					}
+					return render(match args[1] {
+						'status' { hornero_core.studio_job_status_result(args[2]) }
+						'cancel' { hornero_core.studio_job_cancel_result(args[2]) }
+						'log' { hornero_core.studio_job_log_result(args[2]) }
+						else { hornero_core.studio_job_run_result(args[2], '--yes' in args) }
+					}, mode)
+				}
+				'submit' {
+					mut adapter := ''
+					mut input := ''
+					mut output := ''
+					mut execute := false
+					mut yes := false
+					mut i := 2
+					for i < args.len {
+						if args[i] == '--adapter' && i + 1 < args.len {
+							adapter = args[i + 1]
+							i += 2
+						} else if args[i] == '--input' && i + 1 < args.len {
+							input = args[i + 1]
+							i += 2
+						} else if args[i] == '--output' && i + 1 < args.len {
+							output = args[i + 1]
+							i += 2
+						} else if args[i] == '--execute' {
+							execute = true
+							i++
+						} else if args[i] == '--yes' {
+							yes = true
+							i++
+						} else {
+							return render_error(hornero_core.err_usage('studio.usage',
+								'unexpected argument: ${args[i]}.\nExample: horneroctl studio jobs submit --adapter ffmpeg-export --input in.mov --output out.mp4'),
+								mode)
+						}
+					}
+					return render(hornero_core.studio_job_submit_result(adapter, input,
+						output, execute, yes), mode)
+				}
+				else {
+					return render_error(hornero_core.err_usage('studio.usage',
+						'unknown studio jobs subcommand: ${args[1]}.\nExample: horneroctl studio jobs list'), mode)
+				}
+			}
+		}
 		'selection' {
 			if args.len == 1 || args[1] == 'show' {
 				return render(hornero_core.studio_selection_result(), mode)
