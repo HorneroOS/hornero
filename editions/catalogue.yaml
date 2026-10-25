@@ -306,3 +306,146 @@ studioProvenance:
     notes: >-
       Management tool for yabridge. Same Wine and user-supplied Windows
       plugin requirements as yabridge.
+  gimp:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/gimp/
+    licenses: [GPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  inkscape:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/inkscape/
+    licenses: [GPL, LGPL]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  darktable:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/darktable/
+    licenses: [GPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  rawtherapee:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/rawtherapee/
+    licenses: [GPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  scribus:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/scribus/
+    licenses: [GPL-2.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  freecad:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/freecad/
+    licenses: [LGPL-2.0-only]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  godot:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/godot/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  carla:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/carla/
+    licenses: [GPL-2.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  audacity:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/audacity/
+    licenses: [GPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+  graphite:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/graphite/
+    licenses: [LGPL-2.1-or-later, MPL-2.0, GPL-2.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+# User-selectable Studio applications. Inclusion is a reviewed catalogue
+# entry, not an installability or support claim. `packages` are resolved
+# through studioProvenance; an entry with no packages is reference-only and
+# can never be selected for installation.
+studioApplications:
+  ardour: {title: Ardour, packages: [ardour]}
+  guitarix: {title: Guitarix, packages: [guitarix]}
+  carla: {title: Carla, packages: [carla]}
+  audacity: {title: Audacity, packages: [audacity]}
+  reaper: {title: REAPER, packages: [reaper]}
+  yabridge: {title: yabridge (Windows VST bridge), packages: [yabridge, yabridgectl]}
+  obs-studio: {title: OBS Studio, packages: [obs-studio, ffmpeg]}
+  kdenlive: {title: Kdenlive, packages: [kdenlive, ffmpeg]}
+  blender: {title: Blender, packages: [blender]}
+  krita: {title: Krita, packages: [krita]}
+  gimp: {title: GIMP, packages: [gimp]}
+  inkscape: {title: Inkscape, packages: [inkscape]}
+  darktable: {title: darktable, packages: [darktable]}
+  rawtherapee: {title: RawTherapee, packages: [rawtherapee]}
+  graphite: {title: Graphite, packages: [graphite], experimental: true}
+  penpot: {title: Penpot, packages: [], availability: reference-only, notes: "Browser-based design tool; use the hosted service or a self-hosted instance. No Arch package is installed."}
+  scribus: {title: Scribus, packages: [scribus]}
+  freecad: {title: FreeCAD, packages: [freecad]}
+  godot: {title: Godot, packages: [godot]}
+# Shared creative platform every Studio selection builds on (pro audio stack
+# and session management). Application packages are added per selection.
+studioPlatformPackages: [pipewire, pipewire-audio, pipewire-alsa, pipewire-pulse, pipewire-jack, wireplumber, qpwgraph]
+# Ten user-selectable specializations. Proprietary applications listed in a
+# specialization are never installed by group selection alone; they require
+# an explicit application-level opt-in. `complete-creative-workstation` must
+# stay the union of the other curated groups and `custom-selection` stays
+# empty so users can pick applications without a mandatory group.
+studioSpecializations:
+  audio-music-production:
+    title: Audio & Music Production
+    applications: [ardour, guitarix, carla, audacity, reaper, yabridge]
+  video-editing-post-production:
+    title: Video Editing & Post-Production
+    applications: [kdenlive, blender]
+  streaming-content-creation:
+    title: Streaming & Content Creation
+    applications: [obs-studio]
+  graphic-design-illustration:
+    title: Graphic Design & Illustration
+    applications: [krita, gimp, inkscape, scribus, graphite]
+  photography-raw-processing:
+    title: Photography & RAW Processing
+    applications: [darktable, rawtherapee, gimp]
+  3d-animation-vfx:
+    title: 3D, Animation & VFX
+    applications: [blender, krita]
+  game-development:
+    title: Game Development
+    applications: [godot, blender, krita, inkscape]
+  maker-cad:
+    title: Maker & CAD
+    applications: [freecad, blender, inkscape]
+  complete-creative-workstation:
+    title: Complete Creative Workstation
+    applications: [ardour, guitarix, carla, audacity, reaper, yabridge, kdenlive, blender, obs-studio, krita, gimp, inkscape, scribus, graphite, darktable, rawtherapee, godot, freecad]
+  custom-selection:
+    title: Custom Selection
+    applications: []
