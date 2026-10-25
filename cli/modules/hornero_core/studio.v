@@ -248,10 +248,18 @@ pub fn studio_doctor_checks() []DoctorCheck {
 	}
 	checks << bin_check('pipewire', 'pipewire')
 	checks << bin_check('wireplumber', 'wireplumber')
+	mode_state, _ := load_studio_mode() or {
+		checks << DoctorCheck{
+			name:   'studio-audio-mode'
+			ok:     false
+			detail: 'invalid mode state: ${err.msg()}'
+		}
+		return checks
+	}
 	checks << DoctorCheck{
 		name:   'studio-audio-mode'
 		ok:     true
-		detail: 'Balanced (device default rate/quantum; Low Latency and Advanced are explicit opt-ins)'
+		detail: 'recorded: ${mode_state.audio_mode} (Balanced is the device default; Low Latency and Advanced are explicit opt-ins; quantum is a scheduling period, not physical latency)'
 	}
 	checks << DoctorCheck{
 		name:   'studio-package-apply'

@@ -28,3 +28,13 @@ fn test_studio_jobs_unknown_subcommand_fails() {
 	assert dispatch(['horneroctl', 'studio', 'jobs', 'nope']) != 0
 	assert dispatch(['horneroctl', 'studio', 'jobs', 'status']) != 0
 }
+
+fn test_studio_mode_help_is_discoverable() {
+	assert command_help('studio mode').contains('studio mode restore')
+	assert command_help('studio').contains('mode')
+}
+
+fn test_studio_mode_unknown_subcommand_fails() {
+	assert dispatch(['horneroctl', 'studio', 'mode', 'nope']) != 0
+	assert dispatch(['horneroctl', 'studio', 'mode', 'audio']) != 0
+}
