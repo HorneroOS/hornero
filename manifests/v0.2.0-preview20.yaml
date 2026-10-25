@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 4958249c7e93d418d6799e8b1bf07da0e66eea24
+    sha: 02c61e400e17a6fbb0a9ea71e67a4adcce98cd34
     status: pinned
-    subject: "feat(controlcenter): reversible Studio performance controls (#327)"
+    subject: "feat(controlcenter): add gated Studio render jobs surface (#328)"
     notes: Desktop shell / Quickshell UX, accessible Control Center navigation, provenance-backed official extensions marketplace, and a scoped Appearance AT-SPI probe. The appearance gate is still marked FAIL pending graphical acceptance.
   config:
     repo: https://github.com/HorneroOS/config
