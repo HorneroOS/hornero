@@ -168,7 +168,13 @@ def _validate_studio_provenance(doc: dict, sets: object, studio: object) -> list
             entry = provenance.get(integration["id"])
             if isinstance(entry, dict) and entry.get("source") != integration.get("source"):
                 errors.append(f"integration '{integration['id']}' source disagrees with studioProvenance")
-    allowed = set(studio_packages) | set(integration_ids) | {"yabridgectl"}
+    application_packages: set[str] = set()
+    applications = doc.get("studioApplications")
+    if isinstance(applications, dict):
+        for application in applications.values():
+            if isinstance(application, dict) and isinstance(application.get("packages"), list):
+                application_packages.update(p for p in application["packages"] if isinstance(p, str))
+    allowed = set(studio_packages) | set(integration_ids) | {"yabridgectl"} | application_packages
     for package in studio_packages:
         if package not in provenance:
             errors.append(f"studio package '{package}' is missing provenance metadata")
@@ -201,7 +207,157 @@ def _validate_studio_provenance(doc: dict, sets: object, studio: object) -> list
             errors.append(f"AUR studioProvenance entry '{name}' must be optional with manual install; AUR recipes are never executed")
         if name in integration_ids and entry.get("optional") is not True:
             errors.append(f"integration '{name}' must be optional in studioProvenance")
+        if name in application_packages and name not in studio_packages and entry.get("optional") is not True:
+            errors.append(f"selectable application package '{name}' must be optional in studioProvenance")
+    errors.extend(_validate_studio_selection_model(doc, provenance, studio_packages))
     return errors
+
+
+REQUIRED_SPECIALIZATIONS = {
+    "audio-music-production",
+    "video-editing-post-production",
+    "streaming-content-creation",
+    "graphic-design-illustration",
+    "photography-raw-processing",
+    "3d-animation-vfx",
+    "game-development",
+    "maker-cad",
+    "complete-creative-workstation",
+    "custom-selection",
+}
+
+
+def _validate_studio_selection_model(doc: dict, provenance: dict, studio_packages: list[str]) -> list[str]:
+    errors: list[str] = []
+    applications = doc.get("studioApplications")
+    specializations = doc.get("studioSpecializations")
+    platform = doc.get("studioPlatformPackages")
+    if not isinstance(applications, dict) or not applications:
+        return ["studioApplications must be a non-empty mapping"]
+    if not isinstance(specializations, dict) or not specializations:
+        return errors + ["studioSpecializations must be a non-empty mapping"]
+    if set(specializations) != REQUIRED_SPECIALIZATIONS:
+        errors.append("studioSpecializations must define exactly the ten required specializations")
+    if not isinstance(platform, list) or not platform:
+        errors.append("studioPlatformPackages must be a non-empty list")
+    else:
+        for package in platform:
+            if package not in provenance:
+                errors.append(f"studio platform package '{package}' is missing provenance metadata")
+            if package not in studio_packages:
+                errors.append(f"studio platform package '{package}' must belong to the studio package set")
+    for app_id, application in applications.items():
+        if not isinstance(application, dict) or not isinstance(application.get("title"), str) or not application["title"]:
+            errors.append(f"studio application '{app_id}' needs a title")
+            continue
+        packages = application.get("packages")
+        if not isinstance(packages, list) or any(not isinstance(p, str) or not p for p in packages):
+            errors.append(f"studio application '{app_id}' packages must be a list of package names")
+            continue
+        if not packages and application.get("availability") != "reference-only":
+            errors.append(f"studio application '{app_id}' has no packages and is not reference-only")
+        for package in packages:
+            if package not in provenance:
+                errors.append(f"studio application '{app_id}' package '{package}' is missing provenance metadata")
+    curated_union: set[str] = set()
+    for spec_id, specialization in specializations.items():
+        if not isinstance(specialization, dict) or not isinstance(specialization.get("title"), str) or not specialization["title"]:
+            errors.append(f"studio specialization '{spec_id}' needs a title")
+            continue
+        apps = specialization.get("applications")
+        if not isinstance(apps, list) or any(not isinstance(a, str) for a in apps):
+            errors.append(f"studio specialization '{spec_id}' applications must be a list of application ids")
+            continue
+        if len(apps) != len(set(apps)):
+            errors.append(f"studio specialization '{spec_id}' has duplicate applications")
+        for app_id in apps:
+            if app_id not in applications:
+                errors.append(f"studio specialization '{spec_id}' references unknown application '{app_id}'")
+        if spec_id not in ("complete-creative-workstation", "custom-selection"):
+            curated_union.update(a for a in apps if isinstance(a, str))
+    complete = specializations.get("complete-creative-workstation")
+    if isinstance(complete, dict) and isinstance(complete.get("applications"), list):
+        if set(complete["applications"]) != curated_union:
+            errors.append("complete-creative-workstation must be the union of the other curated specializations")
+    custom = specializations.get("custom-selection")
+    if isinstance(custom, dict) and custom.get("applications") not in ([], None):
+        errors.append("custom-selection must not require any specialization applications")
+    return errors
+
+
+def _application_is_proprietary(doc: dict, app_id: str) -> bool:
+    provenance = doc.get("studioProvenance") or {}
+    application = (doc.get("studioApplications") or {}).get(app_id) or {}
+    return any(
+        (provenance.get(package) or {}).get("licenseClass") == "proprietary"
+        for package in application.get("packages", [])
+    )
+
+
+def resolve_studio_selection(
+    doc: dict,
+    specialization_ids: list[str] | tuple[str, ...] = (),
+    application_ids: list[str] | tuple[str, ...] = (),
+) -> dict:
+    """Resolve a user Studio selection into a deterministic package plan.
+
+    Specialization membership never installs proprietary applications:
+    those need an explicit application-level selection. Reference-only
+    applications (no Arch package) fail with an actionable error instead
+    of silently falling back to a full workstation.
+    """
+    applications = doc.get("studioApplications") or {}
+    specializations = doc.get("studioSpecializations") or {}
+    provenance = doc.get("studioProvenance") or {}
+    unknown_specs = [item for item in specialization_ids if item not in specializations]
+    if unknown_specs:
+        raise ValueError(
+            f"unknown studio specialization '{unknown_specs[0]}' (valid: {', '.join(sorted(specializations))})"
+        )
+    unknown_apps = [item for item in application_ids if item not in applications]
+    if unknown_apps:
+        raise ValueError(
+            f"unknown studio application '{unknown_apps[0]}' (valid: {', '.join(sorted(applications))})"
+        )
+    selected: list[str] = []
+    opt_in_required: list[str] = []
+    for spec_id in specialization_ids:
+        for app_id in specializations[spec_id].get("applications", []):
+            if _application_is_proprietary(doc, app_id):
+                if app_id not in opt_in_required:
+                    opt_in_required.append(app_id)
+                continue
+            if app_id not in selected:
+                selected.append(app_id)
+    for app_id in application_ids:
+        if app_id not in selected:
+            selected.append(app_id)
+    packages: list[str] = []
+    for package in doc.get("studioPlatformPackages") or []:
+        if package not in packages:
+            packages.append(package)
+    experimental: list[str] = []
+    for app_id in selected:
+        application = applications[app_id]
+        if application.get("availability") == "reference-only" or not application.get("packages"):
+            raise ValueError(
+                f"studio application '{app_id}' is reference-only and cannot be installed from the catalogue; "
+                "remove it from the selection"
+            )
+        if application.get("experimental") and app_id not in experimental:
+            experimental.append(app_id)
+        for package in application["packages"]:
+            if package not in packages:
+                packages.append(package)
+    return {
+        "schemaVersion": 1,
+        "specializations": list(specialization_ids),
+        "applications": selected,
+        "packages": packages,
+        "packageProvenance": {package: provenance[package] for package in packages if package in provenance},
+        "proprietaryOptInRequired": opt_in_required,
+        "experimental": experimental,
+    }
 
 
 def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = None) -> dict:
@@ -283,8 +439,15 @@ def main() -> int:
     parser.add_argument("edition", choices=("desktop", "server", "agents", "studio"))
     parser.add_argument("--compositor", choices=("hyprland", "niri"))
     parser.add_argument("--json", action="store_true", help="Print machine-readable composition")
+    parser.add_argument("--specialization", action="append", default=[], help="Studio specialization id (repeatable, studio only)")
+    parser.add_argument("--application", action="append", default=[], help="Studio application id (repeatable, studio only)")
     args = parser.parse_args()
     try:
+        if args.specialization or args.application:
+            if args.edition != "studio":
+                parser.error("--specialization/--application are only valid for the studio edition")
+            print(json.dumps(resolve_studio_selection(load_catalogue(), args.specialization, args.application), indent=2))
+            return 0
         result = resolve_edition(load_catalogue(), args.edition, args.compositor)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
