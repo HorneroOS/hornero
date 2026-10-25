@@ -26,6 +26,7 @@ Commands:
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   system        Installed edition and active compositor information
+  studio        Studio selection state and read-only diagnostics (doctor, selection)
   assistant     Optional Hermes AI assistant (status, enable, disable, tools, knowledge, ask, stop)
   completion    Print shell completions
   help          Show help for a command
@@ -81,6 +82,15 @@ Examples:
 		}
 		'system' {
 			return 'Usage: horneroctl system info [--json|--quiet]\n\nRead the installed HorneroOS edition profile and report the active supported compositor. A profile is recorded by the Hornero installer; other installation methods report the edition as unrecorded rather than guessing from installed packages.\n\nExamples:\n  horneroctl system info\n  horneroctl system info --json\n'
+		}
+		'studio' {
+			return 'Usage: horneroctl studio <doctor|selection> [options]\n\nStudio workload selection state and diagnostics. The canonical\nspecialization/application model lives in editions/catalogue.yaml;\nthis command validates stable IDs and records user selection intent.\nIt never installs packages: recording a selection is not an install,\nand package lifecycle is a separate, later step.\n\n  doctor              Read-only Studio health checks\n  selection show      Show the recorded selection (default)\n  selection set       Record a selection (--specialization/--application, --dry-run)\n\nExamples:\n  horneroctl studio doctor\n  horneroctl studio selection show --json\n  horneroctl studio selection set --specialization audio-music-production --application reaper\n'
+		}
+		'studio doctor' {
+			return 'Usage: horneroctl studio doctor [--json|--quiet]\n\nRead-only checks: recorded selection validity, PipeWire and\nWirePlumber presence, and the safe Balanced audio default. Never\nchanges anything and never reports quantum as measured latency.\n\nExamples:\n  horneroctl studio doctor\n  horneroctl studio doctor --json\n'
+		}
+		'studio selection' {
+			return 'Usage: horneroctl studio selection <show|set> [options]\n\nshow (default) prints the recorded Studio selection from\n~/.config/hornero/studio-selection.json. set records a new selection\natomically after validating every specialization/application ID\nagainst the canonical catalogue IDs; --dry-run validates without\nwriting. Recording a selection installs nothing.\n\nExamples:\n  horneroctl studio selection show\n  horneroctl studio selection set --specialization streaming-content-creation\n  horneroctl studio selection set --application krita --dry-run\n'
 		}
 		'system info' {
 			return 'Usage: horneroctl system info [--json|--quiet]\n\nReport the installed edition, its package-set composition, configured compositor and maturity, the source revision, and the compositor active in this session. If this installation has no profile record, the command says so explicitly.\n\nExamples:\n  horneroctl system info\n  horneroctl system info --json\n'
@@ -1438,7 +1448,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps system help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps system studio help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1452,7 +1462,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware completion welcome wallpaper capture apps system assistant help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware completion welcome wallpaper capture apps system assistant studio help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1478,5 +1488,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper im
 complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, recording, clipboard"
 complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"
 complete -c horneroctl -f -n __fish_use_subcommand -a system -d "Installed edition and compositor"
+complete -c horneroctl -f -n __fish_use_subcommand -a studio -d "Studio selection and diagnostics"
 '
 }

@@ -21,7 +21,7 @@ import hornero_core
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'apps', 'system', 'assistant', 'help']
+	'apps', 'system', 'assistant', 'studio', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -132,6 +132,9 @@ pub fn dispatch(args []string) int {
 		}
 		'system' {
 			run_system(rest[1..], mode)
+		}
+		'studio' {
+			run_studio(rest[1..], mode)
 		}
 		'assistant' {
 			run_assistant(rest[1..], mode)
@@ -298,6 +301,63 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			}
 		}
 		else { render(hornero_core.assistant_stop_report(opts.value), mode) }
+	}
+}
+
+fn run_studio(args []string, mode hornero_core.RenderMode) int {
+	if args.len == 0 {
+		return render_error(hornero_core.err_usage('studio.usage',
+			'expected a subcommand: doctor, selection.\nExample: horneroctl studio doctor --json'),
+			mode)
+	}
+	match args[0] {
+		'doctor' {
+			if args.len > 1 {
+				return render_error(hornero_core.err_usage('studio.usage',
+					'unexpected argument: ${args[1]}.\nExample: horneroctl studio doctor'), mode)
+			}
+			return render(hornero_core.studio_doctor_result(), mode)
+		}
+		'selection' {
+			if args.len == 1 || args[1] == 'show' {
+				return render(hornero_core.studio_selection_result(), mode)
+			}
+			if args[1] == 'set' {
+				mut specializations := []string{}
+				mut applications := []string{}
+				mut dry_run := false
+				mut i := 2
+				for i < args.len {
+					if args[i] == '--specialization' && i + 1 < args.len {
+						specializations << args[i + 1]
+						i += 2
+					} else if args[i] == '--application' && i + 1 < args.len {
+						applications << args[i + 1]
+						i += 2
+					} else if args[i] == '--dry-run' {
+						dry_run = true
+						i++
+					} else {
+						return render_error(hornero_core.err_usage('studio.usage',
+							'unexpected argument: ${args[i]}.\nExample: horneroctl studio selection set --specialization audio-music-production --application krita'),
+							mode)
+					}
+				}
+				if specializations.len == 0 && applications.len == 0 {
+					return render_error(hornero_core.err_usage('studio.usage',
+						'selection set needs at least one --specialization or --application'),
+						mode)
+				}
+				return render(hornero_core.studio_selection_set_result(specializations,
+					applications, dry_run), mode)
+			}
+			return render_error(hornero_core.err_usage('studio.usage',
+				'expected show or set.\nExample: horneroctl studio selection show'), mode)
+		}
+		else {
+			return render_error(hornero_core.err_usage('studio.usage',
+				'unknown studio subcommand: ${args[0]}.\nExample: horneroctl studio doctor'), mode)
+		}
 	}
 }
 
