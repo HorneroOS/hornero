@@ -1,5 +1,6 @@
 module hornero_core
 
+import db.sqlite
 import os
 
 fn test_assistant_tool_allowlist_read_only() {
@@ -306,4 +307,34 @@ fn test_assistant_key_file_mode_missing_file() {
 	// missing file yields "" (health reports it, never invents).
 	mode := assistant_key_file_mode()
 	assert mode == '' || mode.len == 4
+}
+
+fn test_assistant_usage_report_aggregates() {
+	dir := os.join_path(os.temp_dir(), 'hornero-usage-test-${os.getpid()}')
+	os.mkdir_all(dir) or { panic(err) }
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	db_path := os.join_path(dir, 'state.db')
+	mut db := sqlite.connect(db_path) or { panic(err) }
+	db.exec('CREATE TABLE session_model_usage (session_id TEXT, model TEXT, billing_provider TEXT, billing_base_url TEXT, billing_mode TEXT, task TEXT, api_call_count INTEGER, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, reasoning_tokens INTEGER, PRIMARY KEY (session_id, model, billing_provider, billing_base_url, billing_mode, task))') or {
+		panic(err)
+	}
+	db.exec("INSERT INTO session_model_usage VALUES ('s1','gpt-5','','','','',2,100,10,3,1,4)") or {
+		panic(err)
+	}
+	db.exec("INSERT INTO session_model_usage VALUES ('s2','gpt-5','','','','',1,50,5,0,0,0)") or {
+		panic(err)
+	}
+	db.close()
+	result := assistant_usage_report_at(db_path)
+	assert result.ok
+	assert result.data['sessions'] == '2'
+	assert result.data['apiCalls'] == '3'
+	assert result.data['inputTokens'] == '150'
+	assert result.data['outputTokens'] == '15'
+	assert result.data['totalTokens'] == '165'
+	assert result.data['models'] == 'gpt-5:165'
+	missing := assistant_usage_report_at(os.join_path(dir, 'nope.db'))
+	assert !missing.ok
 }

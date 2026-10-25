@@ -21,7 +21,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	}
 	leaf := args[0]
 	if leaf !in ['status', 'health', 'enable', 'disable', 'tools', 'knowledge', 'sessions', 'model',
-		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup'] {
+		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup', 'usage'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
@@ -102,7 +102,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf == 'gateway' && parts.len > 1 {
 		return error('gateway ${parts[0]} takes no extra argument.\nExample: horneroctl assistant gateway ${parts[0]}')
 	}
-	if leaf in ['status', 'tools', 'knowledge'] && value.len > 0 {
+	if leaf in ['status', 'tools', 'knowledge', 'usage'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')
 	}
 	if session.len > 0 && leaf != 'ask' {

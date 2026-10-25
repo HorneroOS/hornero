@@ -2,6 +2,7 @@ module hornero_core
 
 import crypto.rand
 import crypto.sha256
+import db.sqlite
 import encoding.base64
 import net.http
 import os
@@ -834,6 +835,59 @@ pub fn assistant_models_report() CommandResult {
 	return ok_result('assistant model', 'Available models: ${ids.join(', ')}', {
 		'models': ids.join(',')
 		'model':  ids[0]
+	})
+}
+
+// assistant_usage_report implements `assistant usage`: read-only token
+// aggregates from Hermes' own state database
+// (session_model_usage). Only totals are read — never prompts, message
+// bodies, or credentials — and the database is only ever SELECTed from.
+pub fn assistant_usage_report() CommandResult {
+	hermes_home := os.getenv('HERMES_HOME')
+	base := if hermes_home.len > 0 {
+		hermes_home
+	} else {
+		os.join_path(os.home_dir(), '.hermes')
+	}
+	return assistant_usage_report_at(os.join_path(base, 'state.db'))
+}
+
+pub fn assistant_usage_report_at(db_path string) CommandResult {
+	if !os.exists(db_path) {
+		return fail_result('assistant usage', 'No Hermes state database at ${db_path}. Is Hermes installed?')
+	}
+	mut db := sqlite.connect(db_path) or {
+		return fail_result('assistant usage', 'Cannot open Hermes state database: ${err.msg()}')
+	}
+	defer {
+		db.close()
+	}
+	totals := db.exec('SELECT COUNT(DISTINCT session_id), COALESCE(SUM(api_call_count),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_write_tokens),0), COALESCE(SUM(reasoning_tokens),0) FROM session_model_usage') or {
+		return fail_result('assistant usage', 'Hermes state has no usage table yet (no recorded runs?).')
+	}
+	if totals.len == 0 {
+		return fail_result('assistant usage', 'Hermes state has no usage rows yet.')
+	}
+	t := totals[0].vals
+	model_rows := db.exec('SELECT model, COALESCE(SUM(input_tokens),0) + COALESCE(SUM(output_tokens),0) FROM session_model_usage GROUP BY model ORDER BY 2 DESC') or {
+		return fail_result('assistant usage', 'Cannot read per-model usage from Hermes state.')
+	}
+	mut models := []string{}
+	for row in model_rows {
+		models << '${row.vals[0]}:${row.vals[1]}'
+	}
+	input_tokens := t[2].i64()
+	output_tokens := t[3].i64()
+	return ok_result('assistant usage', 'Hermes token usage (all recorded sessions): ${input_tokens} in / ${output_tokens} out across ${t[0]} session(s), ${t[1]} API call(s). Per-model detail lives in the Hermes dashboard.', {
+		'sessions':         t[0]
+		'apiCalls':         t[1]
+		'inputTokens':      t[2]
+		'outputTokens':     t[3]
+		'cacheReadTokens':  t[4]
+		'cacheWriteTokens': t[5]
+		'reasoningTokens':  t[6]
+		'totalTokens':      (input_tokens + output_tokens).str()
+		'models':           models.join(',')
 	})
 }
 

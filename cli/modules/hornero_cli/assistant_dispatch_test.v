@@ -5,7 +5,7 @@ import time
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|ask|stop|approve|clarify|events|log>')
+	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
