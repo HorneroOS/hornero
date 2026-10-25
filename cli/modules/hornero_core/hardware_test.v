@@ -467,3 +467,12 @@ fn test_hw_keybindings_lua_parse() {
 	assert parse_keybindings_auto('/tmp/k.lua', text).len == 3
 	assert parse_keybindings_auto('/tmp/k.conf', text).len == 0
 }
+
+fn test_hw_keybindings_lua_parse_multiline_bind() {
+	// stylua wraps long binds across lines; they must still be listed.
+	text := '-- ============\n-- Media\n-- ============\nhl.bind(\n\t"XF86MonBrightnessUp",\n\thl.dsp.exec_cmd("horneroctl hardware brightness up --step 0.1 --yes"),\n\t{ repeating = true, locked = true }\n)\nhl.bind("SUPER + Return", hl.dsp.exec_cmd("kitty"))\n'
+	lines := parse_keybindings_lua(text)
+	assert lines.len == 2
+	assert lines[0] == '[Media] XF86MonBrightnessUp -> hl.dsp.exec_cmd("horneroctl hardware brightness up --step 0.1 --yes"), { repeating = true, locked = true }'
+	assert lines[1] == '[Media] SUPER + Return -> hl.dsp.exec_cmd("kitty")'
+}
