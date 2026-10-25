@@ -31,6 +31,26 @@ proprietary and opt-in; yabridge is only a Wine compatibility layer for
 Windows plugins the user obtained legally. AUR entries, if ever added, must
 stay optional with manual install: no consumer executes AUR build recipes.
 
+Studio workloads are composable. `studioApplications` maps stable
+application IDs to packages, `studioSpecializations` defines the ten
+user-facing specializations (Audio & Music Production through Custom
+Selection), and `studioPlatformPackages` is the shared pro-audio platform
+every selection builds on. Resolve a selection plan without installing
+anything:
+
+```sh
+python3 scripts/resolve-edition.py studio \
+  --specialization audio-music-production --application reaper
+```
+
+The plan is deterministic and versioned (`schemaVersion`): selected IDs,
+the deduplicated package closure, and provenance for every package.
+Proprietary applications in a specialization are reported under
+`proprietaryOptInRequired` and only enter the package list when selected
+explicitly by application ID. Experimental applications are flagged, and
+reference-only entries (for example Penpot, which has no Arch package) fail
+with an actionable error instead of falling back to a full workstation.
+
 The shared base carries the filesystem, encryption, and GRUB tools needed by
 the Calamares installation path across editions. Desktop also owns SDDM and the
 Hornero greeter packages so the selected desktop composition can boot to its
