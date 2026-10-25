@@ -76,6 +76,16 @@ fn test_job_queue_execute_and_redacted_log() {
 	assert log.ok
 	assert !log.message.contains('abc123')
 	assert log.message.contains('export done')
+
+	// Structured list rows for Shell consumers (job_<n>, tab-separated).
+	list := studio_jobs_list_result()
+	assert list.ok
+	assert list.data['count'] == '1'
+	row := list.data['job_0'].split('\t')
+	assert row.len == 5
+	assert row[0] == job_id
+	assert row[1] == 'succeeded'
+	assert row[2] == 'ffmpeg-export'
 }
 
 fn test_job_cancel_and_interrupted_reconcile() {
