@@ -260,6 +260,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			}
 		}
 		'model' { render(hornero_core.assistant_models_report(), mode) }
+		'usage' { render(hornero_core.assistant_usage_report(), mode) }
 		'approve' {
 			render(hornero_core.assistant_approve_report(opts.arg1, opts.arg2), mode)
 		}
