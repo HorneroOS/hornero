@@ -27,9 +27,9 @@ components:
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 363958fbb978dcc70d1051603187f77e671e1ba1
+    sha: 6cb6f3067db75191cda3d5638e8a989ae92cfab1
     status: pinned
-    subject: "fix(config): resync factory shell default with shell cc8a3a6 (#102)"
+    subject: "feat(config): add safe reversible Studio audio policy profiles (#103)"
     notes: Reusable desktop and system defaults, including Hyprland module imports resolved relative to the active config file.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
