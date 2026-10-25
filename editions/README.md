@@ -20,6 +20,17 @@ Hermes is the first workload target, not the host architecture. Studio inherits
 Desktop and records REAPER/yabridge as optional user-licensed integrations;
 those packages and proprietary plugins are excluded from the core package set.
 
+Every Studio package and optional integration carries `studioProvenance`
+metadata: Arch source and package link, license identifiers and class,
+install method, optional/opt-in state, and support maturity. The resolver
+validates that metadata and exposes it as `packageProvenance` /
+`optionalIntegrations` in its JSON output, so installer, CLI, and Shell
+consumers never duplicate a package list. Provenance is auditable metadata,
+not a support claim and never a software license grant. REAPER stays
+proprietary and opt-in; yabridge is only a Wine compatibility layer for
+Windows plugins the user obtained legally. AUR entries, if ever added, must
+stay optional with manual install: no consumer executes AUR build recipes.
+
 The shared base carries the filesystem, encryption, and GRUB tools needed by
 the Calamares installation path across editions. Desktop also owns SDDM and the
 Hornero greeter packages so the selected desktop composition can boot to its

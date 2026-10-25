@@ -136,3 +136,85 @@ def test_inheritance_cycle_with_non_mapping_entry_does_not_raise():
     changed["editions"]["agents"] = []
     errors = resolver.validate_catalogue(changed)
     assert any("edition 'agents' must be a mapping" in error for error in errors)
+
+
+def test_studio_provenance_covers_every_studio_package_and_integration():
+    catalogue = resolver.load_catalogue()
+    provenance = catalogue["studioProvenance"]
+    studio_packages = set(catalogue["packageSets"]["studio"]["packages"])
+    assert studio_packages <= set(provenance)
+    assert {"reaper", "yabridge", "yabridgectl"} <= set(provenance)
+    for entry in provenance.values():
+        assert entry["source"] == "arch-extra"
+        assert entry["sourceUrl"].startswith("https://archlinux.org/packages/extra/x86_64/")
+        assert entry["licenses"]
+        assert entry["support"] == "planned"
+
+
+def test_studio_optional_integrations_use_arch_extra_not_aur():
+    catalogue = resolver.load_catalogue()
+    integrations = {item["id"]: item for item in catalogue["editions"]["studio"]["optionalIntegrations"]}
+    assert integrations["reaper"]["source"] == "arch-extra"
+    assert integrations["yabridge"]["source"] == "arch-extra"
+    reaper = catalogue["studioProvenance"]["reaper"]
+    assert reaper["licenseClass"] == "proprietary"
+    assert reaper["optional"] is True
+    assert "reaper" not in resolver.resolve_edition(catalogue, "studio")["packages"]
+    yabridge = catalogue["studioProvenance"]["yabridge"]
+    assert yabridge["optional"] is True
+    assert "Wine" in yabridge["notes"]
+
+
+def test_studio_resolution_exposes_provenance_without_changing_packages():
+    catalogue = resolver.load_catalogue()
+    result = resolver.resolve_edition(catalogue, "studio", "niri")
+    assert set(result["packageProvenance"]) == set(catalogue["packageSets"]["studio"]["packages"])
+    assert result["packageProvenance"]["ardour"]["licenses"]
+    assert {item["id"] for item in result["optionalIntegrations"]} == {"reaper", "yabridge"}
+    desktop = resolver.resolve_edition(catalogue, "desktop")
+    assert desktop["packageProvenance"] == {}
+    assert desktop["optionalIntegrations"] == []
+
+
+def test_studio_provenance_rejects_missing_and_invalid_metadata():
+    import copy
+
+    catalogue = resolver.load_catalogue()
+    missing = copy.deepcopy(catalogue)
+    del missing["studioProvenance"]["ardour"]
+    assert any("missing provenance" in error for error in resolver.validate_catalogue(missing))
+
+    invalid = copy.deepcopy(catalogue)
+    invalid["studioProvenance"]["ardour"]["source"] = "somewhere"
+    invalid["studioProvenance"]["ardour"]["licenses"] = []
+    errors = resolver.validate_catalogue(invalid)
+    assert any("invalid source" in error for error in errors)
+    assert any("licenses" in error for error in errors)
+
+
+def test_studio_provenance_rejects_proprietary_defaults_and_aur_execution():
+    import copy
+
+    catalogue = resolver.load_catalogue()
+    proprietary = copy.deepcopy(catalogue)
+    proprietary["studioProvenance"]["reaper"]["optional"] = False
+    assert any("proprietary" in error for error in resolver.validate_catalogue(proprietary))
+
+    aur = copy.deepcopy(catalogue)
+    aur["studioProvenance"]["ardour"]["source"] = "aur"
+    aur["studioProvenance"]["ardour"]["installMethod"] = "pacman-repository"
+    assert any("AUR" in error for error in resolver.validate_catalogue(aur))
+
+
+def test_studio_composition_excludes_legacy_pipewire_media_session():
+    import copy
+
+    catalogue = resolver.load_catalogue()
+    assert "pipewire-media-session" not in catalogue["packageSets"]["studio"]["packages"]
+    assert catalogue["studioProvenance"]["wireplumber"]["source"] == "arch-extra"
+    changed = copy.deepcopy(catalogue)
+    changed["packageSets"]["studio"]["packages"].append("pipewire-media-session")
+    changed["studioProvenance"]["pipewire-media-session"] = copy.deepcopy(
+        changed["studioProvenance"]["wireplumber"]
+    )
+    assert any("legacy package 'pipewire-media-session'" in error for error in resolver.validate_catalogue(changed))

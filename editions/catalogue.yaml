@@ -146,8 +146,163 @@ editions:
       inherit: desktop
     optionalIntegrations:
       - id: reaper
-        source: aur
+        source: arch-extra
         licensing: proprietary-user-license
       - id: yabridge
-        source: aur
+        source: arch-extra
         licensing: user-supplied-windows-vst
+# Provenance and licensing metadata for every package in the Studio set and
+# for the optional Studio integrations above. Verified against the Arch
+# package index on 2026-10-25; package presence never implies HorneroOS
+# support, and catalogue metadata never grants a software license.
+# `support` uses the same maturity vocabulary as editions and compositors.
+# AUR-sourced entries must use `manual` install and stay optional: no
+# consumer may execute AUR build recipes on the user's behalf.
+studioProvenance:
+  pipewire:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/pipewire/
+    licenses: [LGPL-2.1-or-later, MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  pipewire-audio:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/pipewire-audio/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  pipewire-alsa:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/pipewire-alsa/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  pipewire-pulse:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/pipewire-pulse/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  pipewire-jack:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/pipewire-jack/
+    licenses: [GPL-2.0-only, LGPL-2.1-or-later, MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  wireplumber:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/wireplumber/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  qpwgraph:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/qpwgraph/
+    licenses: [GPL-2.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  ardour:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/ardour/
+    licenses: [CC0-1.0, GPL-2.0-or-later, GPL-3.0-or-later, MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  guitarix:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/guitarix/
+    licenses: [GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  obs-studio:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/obs-studio/
+    licenses: [GPL-2.0-only]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  kdenlive:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/kdenlive/
+    licenses: [GPL-2.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  ffmpeg:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/ffmpeg/
+    licenses: [GPL-3.0-only]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  blender:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/blender/
+    licenses: [Apache-2.0, BSD-2-Clause, BSD-3-Clause, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-2.1-or-later, MIT, MPL-2.0, Zlib]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  krita:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/krita/
+    licenses: [GPL3]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  reaper:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/reaper/
+    licenses: [LicenseRef-EULA]
+    licenseClass: proprietary
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+    notes: >-
+      Proprietary DAW distributed free of charge by Cockos under its own
+      EULA. Opt-in only; HorneroOS ships no license and grants no usage
+      rights beyond the vendor's terms.
+  yabridge:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/yabridge/
+    licenses: [GPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+    notes: >-
+      Windows VST compatibility layer. Requires Wine and Windows plugins the
+      user has legally obtained; HorneroOS supplies neither Wine
+      configuration nor any plugin.
+  yabridgectl:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/yabridgectl/
+    licenses: [GPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+    notes: >-
+      Management tool for yabridge. Same Wine and user-supplied Windows
+      plugin requirements as yabridge.
