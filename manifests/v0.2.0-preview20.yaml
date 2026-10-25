@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 86722da6601d5c5d9d06a79febdd98cb9c683652
+    sha: 5e14df7c0a90e1f4a84a270c946813dcd27d68e7
     status: pinned
-    subject: "chore(controlcenter): remove diagnostic geometry logging (#322)"
+    subject: "Merge pull request #331 from HorneroOS/feat/shell-ux-pass-2"
     notes: Desktop shell / Quickshell UX, accessible Control Center navigation, provenance-backed official extensions marketplace, and a scoped Appearance AT-SPI probe. The appearance gate is still marked FAIL pending graphical acceptance.
   config:
     repo: https://github.com/HorneroOS/config
