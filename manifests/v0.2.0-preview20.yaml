@@ -20,16 +20,16 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 248f0c9dd020f5b83bad71503ecc488a6d0d6857
+    sha: cc8a3a6530e8b7a7fab10287846c79231ca2ed42
     status: pinned
-    subject: "test: Add scoped Appearance AT-SPI probe (shell#311)"
+    subject: "feat: add public PluginKit and desktop widget slots (#312)"
     notes: Desktop shell / Quickshell UX, accessible Control Center navigation, provenance-backed official extensions marketplace, and a scoped Appearance AT-SPI probe. The appearance gate is still marked FAIL pending graphical acceptance.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 64557c05ecf368fb3d5ed6ced69bc5e05901edbe
+    sha: 363958fbb978dcc70d1051603187f77e671e1ba1
     status: pinned
-    subject: "fix(hypr): resolve modules relative to config file (#96)"
+    subject: "fix(config): resync factory shell default with shell cc8a3a6 (#102)"
     notes: Reusable desktop and system defaults, including Hyprland module imports resolved relative to the active config file.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
