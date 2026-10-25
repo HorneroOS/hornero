@@ -34,6 +34,17 @@ configuration owns defaults and read-only catalogue data.
   specialization/application IDs from `editions/catalogue.yaml` and never
   duplicates package lists. Recording a selection installs nothing; the
   package-apply lifecycle is a separate later slice.
+- `horneroctl studio mode` is the reversible Studio mode lifecycle
+  (HorneroOS/hornero#286, consuming the #287 catalogue contract):
+  `mode show|audio|performance|restore`. State lives in
+  `~/.config/hornero/studio-mode.json` (schemaVersion 1, fail-closed
+  parse) and records the exact previous audio mode and power profile.
+  Low Latency/Advanced and Temporary Performance are explicit opt-ins
+  (`--yes`). horneroctl records audio intent only — PipeWire drop-in
+  values stay owned by HorneroOS/config — while Temporary Performance
+  switches through power-profiles-daemon fixed argv and restores the
+  recorded profile. Quantum is never presented as physical latency; no
+  RT kernel, IRQ, governor, GPU, I/O scheduler, or privilege change.
 - `horneroctl studio jobs` is the launchable, allow-listed render-job API
   (HorneroOS/hornero#289): adapters `blender-render` and `ffmpeg-export`
   build fixed argv (no shell, no custom flags), outputs are never

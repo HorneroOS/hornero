@@ -307,7 +307,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 fn run_studio(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('studio.usage',
-			'expected a subcommand: doctor, selection.\nExample: horneroctl studio doctor --json'),
+			'expected a subcommand: doctor, selection, jobs, mode.\nExample: horneroctl studio doctor --json'),
 			mode)
 	}
 	match args[0] {
@@ -317,6 +317,48 @@ fn run_studio(args []string, mode hornero_core.RenderMode) int {
 					'unexpected argument: ${args[1]}.\nExample: horneroctl studio doctor'), mode)
 			}
 			return render(hornero_core.studio_doctor_result(), mode)
+		}
+		'mode' {
+			if args.len == 1 || args[1] == 'show' {
+				return render(hornero_core.studio_mode_show_result(), mode)
+			}
+			match args[1] {
+				'audio' {
+					if args.len < 3 {
+						return render_error(hornero_core.err_usage('studio.usage',
+							'expected an audio mode id.\nExample: horneroctl studio mode audio low-latency --yes'),
+							mode)
+					}
+					return render(hornero_core.studio_audio_mode_set_result(args[2],
+						'--yes' in args), mode)
+				}
+				'performance' {
+					mut timeout := 0
+					mut i := 2
+					for i < args.len {
+						if args[i] == '--timeout-minutes' && i + 1 < args.len {
+							timeout = args[i + 1].int()
+							i += 2
+						} else if args[i] == '--yes' {
+							i++
+						} else {
+							return render_error(hornero_core.err_usage('studio.usage',
+								'unexpected argument: ${args[i]}.\nExample: horneroctl studio mode performance --yes [--timeout-minutes 120]'),
+								mode)
+						}
+					}
+					return render(hornero_core.studio_performance_set_result('--yes' in args,
+						timeout), mode)
+				}
+				'restore' {
+					return render(hornero_core.studio_mode_restore_result(), mode)
+				}
+				else {
+					return render_error(hornero_core.err_usage('studio.usage',
+						'unknown studio mode subcommand: ${args[1]}.\nExample: horneroctl studio mode audio low-latency --yes'),
+						mode)
+				}
+			}
 		}
 		'jobs' {
 			if args.len == 1 {
