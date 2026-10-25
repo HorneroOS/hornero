@@ -46,12 +46,16 @@ assistant clarify
 assistant disable
 assistant enable
 assistant events
+assistant gateway start
+assistant gateway stop
 assistant model list
 assistant sessions
+assistant sessions list
 assistant sessions new
 assistant sessions use
 assistant status
 assistant stop
+assistant usage
 backup create
 capture clipboard
 capture record pause
