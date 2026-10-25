@@ -28,6 +28,12 @@ configuration owns defaults and read-only catalogue data.
   It distinguishes the selected compositor from the active session and reports
   installations without a record as unrecorded instead of inferring a product
   edition from package coincidence.
+- `horneroctl studio` records versioned Studio selection intent
+  (`~/.config/hornero/studio-selection.json`, schemaVersion 1) and reports
+  read-only diagnostics (`studio doctor`). It validates the canonical
+  specialization/application IDs from `editions/catalogue.yaml` and never
+  duplicates package lists. Recording a selection installs nothing; the
+  package-apply lifecycle is a separate later slice.
 - `horneroctl plugin` manages community extension packages as user-owned data
   under XDG roots, with receipts under Hornero state. Validation delegates to
   the Shell package's contract checker. The command never activates packages:
