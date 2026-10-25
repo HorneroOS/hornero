@@ -446,6 +446,35 @@ fn keybindings_path() string {
 	return os.join_path(base, 'hypr', 'hyprland.conf.d', 'keybindings.conf')
 }
 
+// lua_paren_balance counts parentheses outside double-quoted strings.
+// Formatters (stylua) wrap long hl.bind calls across lines; the parser
+// joins those physical lines back into one logical bind first.
+fn lua_paren_balance(line string) int {
+	mut balance := 0
+	mut in_string := false
+	mut escaped := false
+	for c in line {
+		if in_string {
+			if escaped {
+				escaped = false
+			} else if c == `\\` {
+				escaped = true
+			} else if c == `"` {
+				in_string = false
+			}
+			continue
+		}
+		if c == `"` {
+			in_string = true
+		} else if c == `(` {
+			balance++
+		} else if c == `)` {
+			balance--
+		}
+	}
+	return balance
+}
+
 // parse_keybindings_lua renders `hl.bind("MODS + key", dispatcher)`
 // lines in the same `[cat] mods + key -> action` shape as the legacy
 // parser, with `-- ===` / `-- Title` comment headers as categories.
@@ -456,8 +485,29 @@ fn parse_keybindings_lua(text string) []string {
 	mut stage := 0
 	mut candidate := ''
 	mut cat := ''
-	for raw in text.split_into_lines() {
-		line := raw.trim_space()
+	// Join formatter-wrapped hl.bind calls into single logical lines.
+	mut logical := []string{}
+	mut pending := ''
+	for raw_line in text.split_into_lines() {
+		physical := raw_line.trim_space()
+		if pending.len > 0 {
+			pending += ' ' + physical
+			if lua_paren_balance(pending) <= 0 {
+				logical << pending
+				pending = ''
+			}
+			continue
+		}
+		if physical.starts_with('hl.bind(') && lua_paren_balance(physical) > 0 {
+			pending = physical
+			continue
+		}
+		logical << physical
+	}
+	if pending.len > 0 {
+		logical << pending
+	}
+	for line in logical {
 		if line.starts_with('--') {
 			rest := line[2..].trim_space()
 			mut is_sep := rest.len > 0
