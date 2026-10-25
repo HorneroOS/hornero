@@ -318,9 +318,16 @@ pub fn studio_jobs_list_result() CommandResult {
 		})
 	}
 	lines := jobs.map('${it.id}  ${it.state}  ${it.adapter}  ${it.input} -> ${it.output}')
-	return ok_result('studio jobs list', lines.join('\n'), {
+	// Structured per-job rows for Shell consumers: tab-separated fields
+	// under job_<n> keys (paths may contain commas/spaces, never tabs in
+	// practice; ids/states/adapters are controlled vocabularies).
+	mut data := {
 		'count': '${jobs.len}'
-	})
+	}
+	for i, job in jobs {
+		data['job_${i}'] = '${job.id}\t${job.state}\t${job.adapter}\t${job.input}\t${job.output}'
+	}
+	return ok_result('studio jobs list', lines.join('\n'), data)
 }
 
 pub fn studio_job_status_result(id string) CommandResult {

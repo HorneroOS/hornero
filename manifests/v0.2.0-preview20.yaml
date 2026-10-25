@@ -20,9 +20,9 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 02f319bdf0d6dab67db58c41b4f8dbf6db6abf33
+    sha: 4958249c7e93d418d6799e8b1bf07da0e66eea24
     status: pinned
-    subject: "feat(controlcenter): add Studio readiness checklist (#326)"
+    subject: "feat(controlcenter): reversible Studio performance controls (#327)"
     notes: Desktop shell / Quickshell UX, accessible Control Center navigation, provenance-backed official extensions marketplace, and a scoped Appearance AT-SPI probe. The appearance gate is still marked FAIL pending graphical acceptance.
   config:
     repo: https://github.com/HorneroOS/config
