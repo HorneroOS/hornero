@@ -293,3 +293,20 @@ def test_ledger_covers_every_release():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_studio_profile_records_composition_without_duplicating_packages():
+    import yaml
+
+    profile = yaml.safe_load(read_text(ROOT / "profiles" / "studio.yaml"))
+    assert profile["kind"] == "EditionProfile"
+    assert profile["extends"] == "desktop"
+    assert profile["manifest"] == candidate_manifest_name(ROOT)
+    assert profile["target"] == "hardware"
+    assert {c["name"] for c in profile["components"]} == {"shell", "config", "horneroctl"}
+    # Release profiles record pinned components only: no package composition.
+    text = read_text(ROOT / "profiles" / "studio.yaml")
+    for package in ("ardour", "obs-studio", "pipewire", "blender"):
+        assert package not in text
+    catalogue = yaml.safe_load(read_text(ROOT / "editions" / "catalogue.yaml"))
+    assert catalogue["editions"]["studio"]["maturity"] == "planned"

@@ -6,8 +6,10 @@ edition and package-set source of truth is [`../editions/catalogue.yaml`](../edi
 
 ## Files
 
-- `base.yaml`, `desktop.yaml`, `developer.yaml` — composition profiles
+- `base.yaml`, `desktop.yaml`, `developer.yaml`, `studio.yaml` — composition profiles
   referenced by the current candidate and its corresponding release record.
+  `studio.yaml` extends `desktop` and records release composition only;
+  Studio package composition stays in the edition catalogue.
 
 ## Rules
 
