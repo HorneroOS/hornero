@@ -12,6 +12,12 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 CATALOGUE = ROOT / "editions" / "catalogue.yaml"
 MATURITIES = {"planned", "experimental", "preview", "supported"}
+PROVENANCE_SOURCES = {"arch-core", "arch-extra", "aur", "vendor"}
+LICENSE_CLASSES = {"open-source", "proprietary"}
+INSTALL_METHODS = {"pacman-repository", "pacman-repository-opt-in", "manual"}
+# Legacy session manager superseded by WirePlumber; it must never return to
+# the Studio composition (HorneroOS/hornero#284).
+FORBIDDEN_STUDIO_PACKAGES = {"pipewire-media-session"}
 
 
 def load_catalogue(path: Path = CATALOGUE) -> dict:
@@ -117,6 +123,7 @@ def validate_catalogue(doc: object) -> list[str]:
     studio = editions.get("studio")
     if isinstance(studio, dict) and studio.get("extends") != "desktop":
         errors.append("Studio must derive from Desktop")
+    errors.extend(_validate_studio_provenance(doc, sets, studio))
     desktop_names = {"hornero-shell", "hornero-config", "horneroctl-bin", "quickshell", "hyprland", "niri"}
     server_sets = ["server"]
     for set_name in server_sets:
@@ -127,6 +134,73 @@ def validate_catalogue(doc: object) -> list[str]:
         leaked = names & desktop_names
         if leaked:
             errors.append(f"server package set leaks desktop packages: {', '.join(sorted(leaked))}")
+    return errors
+
+
+def _validate_studio_provenance(doc: dict, sets: object, studio: object) -> list[str]:
+    """Every Studio package and optional integration needs auditable source,
+    license and install metadata. Provenance never implies support, and a
+    proprietary or AUR entry can never become a silent default."""
+    provenance = doc.get("studioProvenance")
+    if not isinstance(provenance, dict) or not provenance:
+        return ["studioProvenance must be a non-empty mapping"]
+    studio_packages: list[str] = []
+    if isinstance(sets, dict):
+        studio_set = sets.get("studio")
+        if isinstance(studio_set, dict) and isinstance(studio_set.get("packages"), list):
+            studio_packages = [p for p in studio_set["packages"] if isinstance(p, str)]
+    errors: list[str] = []
+    for forbidden in sorted(set(studio_packages) & FORBIDDEN_STUDIO_PACKAGES):
+        errors.append(f"studio package set must not contain legacy package '{forbidden}'")
+    integration_ids: list[str] = []
+    if isinstance(studio, dict):
+        integrations = studio.get("optionalIntegrations", [])
+        if not isinstance(integrations, list):
+            errors.append("studio optionalIntegrations must be a list")
+            integrations = []
+        for integration in integrations:
+            if not isinstance(integration, dict) or not isinstance(integration.get("id"), str):
+                errors.append("studio optionalIntegrations entries need an id")
+                continue
+            integration_ids.append(integration["id"])
+            if integration.get("source") not in PROVENANCE_SOURCES:
+                errors.append(f"integration '{integration['id']}' has invalid source '{integration.get('source')}'")
+            entry = provenance.get(integration["id"])
+            if isinstance(entry, dict) and entry.get("source") != integration.get("source"):
+                errors.append(f"integration '{integration['id']}' source disagrees with studioProvenance")
+    allowed = set(studio_packages) | set(integration_ids) | {"yabridgectl"}
+    for package in studio_packages:
+        if package not in provenance:
+            errors.append(f"studio package '{package}' is missing provenance metadata")
+    for name, entry in provenance.items():
+        if name not in allowed:
+            errors.append(f"studioProvenance entry '{name}' does not match a Studio package or integration")
+            continue
+        if not isinstance(entry, dict):
+            errors.append(f"studioProvenance entry '{name}' must be a mapping")
+            continue
+        if entry.get("source") not in PROVENANCE_SOURCES:
+            errors.append(f"studioProvenance entry '{name}' has invalid source '{entry.get('source')}'")
+        source_url = entry.get("sourceUrl")
+        if not isinstance(source_url, str) or not source_url.startswith("https://"):
+            errors.append(f"studioProvenance entry '{name}' needs an https sourceUrl")
+        licenses = entry.get("licenses")
+        if not isinstance(licenses, list) or not licenses or any(not isinstance(item, str) or not item for item in licenses):
+            errors.append(f"studioProvenance entry '{name}' needs a non-empty licenses list")
+        if entry.get("licenseClass") not in LICENSE_CLASSES:
+            errors.append(f"studioProvenance entry '{name}' has invalid licenseClass '{entry.get('licenseClass')}'")
+        if entry.get("installMethod") not in INSTALL_METHODS:
+            errors.append(f"studioProvenance entry '{name}' has invalid installMethod '{entry.get('installMethod')}'")
+        if not isinstance(entry.get("optional"), bool):
+            errors.append(f"studioProvenance entry '{name}' optional must be a boolean")
+        if entry.get("support") not in MATURITIES:
+            errors.append(f"studioProvenance entry '{name}' has invalid support maturity '{entry.get('support')}'")
+        if entry.get("licenseClass") == "proprietary" and entry.get("optional") is not True:
+            errors.append(f"proprietary studioProvenance entry '{name}' must be optional and opt-in")
+        if entry.get("source") == "aur" and (entry.get("installMethod") != "manual" or entry.get("optional") is not True):
+            errors.append(f"AUR studioProvenance entry '{name}' must be optional with manual install; AUR recipes are never executed")
+        if name in integration_ids and entry.get("optional") is not True:
+            errors.append(f"integration '{name}' must be optional in studioProvenance")
     return errors
 
 
@@ -179,6 +253,16 @@ def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = 
         for package in package_set.get("optionalPackages", []):
             if package not in packages and package not in optional_packages:
                 optional_packages.append(package)
+    provenance_index = doc.get("studioProvenance") if isinstance(doc.get("studioProvenance"), dict) else {}
+    package_provenance = {
+        package: provenance_index[package] for package in packages if package in provenance_index
+    }
+    integrations = []
+    if edition_name == "studio":
+        for integration in edition.get("optionalIntegrations", []):
+            entry = dict(integration)
+            entry["provenance"] = provenance_index.get(integration.get("id"))
+            integrations.append(entry)
     return {
         "edition": edition_name,
         "title": edition["title"],
@@ -189,6 +273,8 @@ def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = 
         "packageSets": package_sets,
         "packages": packages,
         "optionalPackages": optional_packages,
+        "packageProvenance": package_provenance,
+        "optionalIntegrations": integrations,
     }
 
 
