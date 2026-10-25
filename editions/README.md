@@ -70,3 +70,16 @@ The Calamares image builder generates a small `hornero-profile-*` package for
 each installable composition. Its `/usr/lib/hornero/system-profile.json` file
 records the resolved profile and catalogue revision for post-install
 introspection; it does not define or duplicate package composition.
+
+## Studio audio and performance modes
+
+`studioAudioModes` defines Balanced (the only default), Low Latency, and
+Advanced modes. Low Latency and Advanced require explicit opt-in, may be
+calibrated per interface in Advanced, and always restore the exact previous
+rate/quantum/device state on disable, error, logout, or reboot. Quantum is a
+scheduling period, never physical round-trip latency, and no consumer may
+present it as such. `studioPerformanceMode` is a temporary, opt-in mode that
+reuses power-profiles-daemon and restores the previous power profile on
+timeout, cancellation, error, or reboot. Neither contract ever forces an RT
+kernel, IRQ tuning, CPU governor, GPU tuning, I/O scheduler, or
+privilege-policy change.

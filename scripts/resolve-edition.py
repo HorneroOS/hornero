@@ -124,6 +124,7 @@ def validate_catalogue(doc: object) -> list[str]:
     if isinstance(studio, dict) and studio.get("extends") != "desktop":
         errors.append("Studio must derive from Desktop")
     errors.extend(_validate_studio_provenance(doc, sets, studio))
+    errors.extend(_validate_studio_modes(doc))
     desktop_names = {"hornero-shell", "hornero-config", "horneroctl-bin", "quickshell", "hyprland", "niri"}
     server_sets = ["server"]
     for set_name in server_sets:
@@ -360,6 +361,48 @@ def resolve_studio_selection(
     }
 
 
+AUDIO_MODES = {"balanced", "low-latency", "advanced"}
+FORBIDDEN_MODE_OPERATIONS = {"rt-kernel", "irq-tuning", "cpu-governor", "gpu-tuning", "io-scheduler", "privilege-policy"}
+RESTORE_EVENTS = {"disable", "error", "logout", "reboot", "timeout", "cancel"}
+
+
+def _validate_studio_modes(doc: dict) -> list[str]:
+    errors: list[str] = []
+    modes = doc.get("studioAudioModes")
+    if not isinstance(modes, dict) or set(modes) != AUDIO_MODES:
+        errors.append("studioAudioModes must define exactly balanced, low-latency, and advanced")
+        modes = modes if isinstance(modes, dict) else {}
+    defaults = [name for name, mode in modes.items() if isinstance(mode, dict) and mode.get("default") is True]
+    if defaults != ["balanced"]:
+        errors.append("balanced must be the only default Studio audio mode")
+    for name, mode in modes.items():
+        if not isinstance(mode, dict):
+            errors.append(f"studio audio mode '{name}' must be a mapping")
+            continue
+        if name != "balanced" and mode.get("explicitOptIn") is not True:
+            errors.append(f"studio audio mode '{name}' must require explicit opt-in")
+        if mode.get("presentsQuantumAsPhysicalLatency") is not False:
+            errors.append(f"studio audio mode '{name}' must not present quantum as physical latency")
+        restores = mode.get("restoresPreviousStateOn")
+        if not isinstance(restores, list) or not {"disable", "error"} <= set(restores) or not set(restores) <= RESTORE_EVENTS:
+            errors.append(f"studio audio mode '{name}' must restore previous state on disable and error")
+    performance = doc.get("studioPerformanceMode")
+    if not isinstance(performance, dict):
+        errors.append("studioPerformanceMode must be a mapping")
+    else:
+        if performance.get("explicitOptIn") is not True or performance.get("temporary") is not True:
+            errors.append("studio performance mode must be explicit opt-in and temporary")
+        if performance.get("usesPowerProfilesDaemon") is not True:
+            errors.append("studio performance mode must reuse power-profiles-daemon instead of writing governor settings")
+        restores = performance.get("restoresPreviousStateOn")
+        if not isinstance(restores, list) or not {"timeout", "cancel", "error"} <= set(restores):
+            errors.append("studio performance mode must restore previous state on timeout, cancel, and error")
+        forbidden = performance.get("forbiddenOperations")
+        if not isinstance(forbidden, list) or set(forbidden) != FORBIDDEN_MODE_OPERATIONS:
+            errors.append("studio performance mode must forbid rt-kernel, irq-tuning, cpu-governor, gpu-tuning, io-scheduler, and privilege-policy changes")
+    return errors
+
+
 def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = None) -> dict:
     editions = doc["editions"]
     if edition_name not in editions:
@@ -431,6 +474,8 @@ def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = 
         "optionalPackages": optional_packages,
         "packageProvenance": package_provenance,
         "optionalIntegrations": integrations,
+        "audioModes": doc.get("studioAudioModes") if edition_name == "studio" else None,
+        "performanceMode": doc.get("studioPerformanceMode") if edition_name == "studio" else None,
     }
 
 

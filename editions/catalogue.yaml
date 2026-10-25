@@ -449,3 +449,41 @@ studioSpecializations:
   custom-selection:
     title: Custom Selection
     applications: []
+# Reversible Studio mode contract (HorneroOS/hornero#287). Hornero owns these
+# semantics; config supplies portable policy values and Shell presents them.
+# A mode never forces an RT kernel, IRQ tuning, CPU governor, GPU, I/O
+# scheduler, or privilege-policy change. Quantum is a scheduling period, NOT
+# physical round-trip latency, and must never be presented as such.
+studioAudioModes:
+  balanced:
+    title: Balanced
+    default: true
+    explicitOptIn: false
+    rate: follow-device
+    quantum: follow-device
+    presentsQuantumAsPhysicalLatency: false
+    restoresPreviousStateOn: [disable, error, logout, reboot]
+  low-latency:
+    title: Low Latency
+    default: false
+    explicitOptIn: true
+    rate: follow-device
+    quantum: smallest-supported
+    presentsQuantumAsPhysicalLatency: false
+    restoresPreviousStateOn: [disable, error, logout, reboot]
+  advanced:
+    title: Advanced
+    default: false
+    explicitOptIn: true
+    rate: per-interface
+    quantum: per-interface
+    perInterfaceCalibration: true
+    presentsQuantumAsPhysicalLatency: false
+    restoresPreviousStateOn: [disable, error, logout, reboot]
+studioPerformanceMode:
+  title: Temporary Performance
+  explicitOptIn: true
+  temporary: true
+  usesPowerProfilesDaemon: true
+  restoresPreviousStateOn: [timeout, cancel, error, reboot]
+  forbiddenOperations: [rt-kernel, irq-tuning, cpu-governor, gpu-tuning, io-scheduler, privilege-policy]
