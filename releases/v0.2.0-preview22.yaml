@@ -17,8 +17,9 @@ summary: >-
   packages 64%: no leaked calamares-root mount, live session usable).
   Same product composition as preview21; ISO signed with the HorneroOS
   releases key, SHA-256 38ec76d7c9c10ea3e956b2c9f2d8d420e3d09b61899dc453a2858622d7e90bd2.
-  Studio remains planned; hornero-qa studio-gate remains BLOCKED pending
-  hardware fixture acceptance. Published as GitHub prerelease; the 2.6 GB
+  Studio was promoted planned -> preview by maintainer decision in #318
+  (it is not 'supported': hornero-qa studio-gate hardware evidence remains
+  BLOCKED pending fixture acceptance). Published as GitHub prerelease; the 2.6 GB
   ISO binary exceeds GitHub's 2 GB asset limit and is distributed
   out-of-band with checksum/signature verification.
 tag: v0.2.0-preview22
