@@ -25,4 +25,4 @@ summary: >-
   GitHub prerelease (ISO binary distributed out-of-band; it exceeds
   GitHub's 2 GB release-asset limit).
 tag: v0.2.0-preview21
-published: false
+published: true
