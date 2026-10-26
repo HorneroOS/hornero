@@ -1,0 +1,25 @@
+# Hornero OS release: v0.2.0-preview21
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview21
+version: 0.2.0-preview21
+status: pre-release
+manifest: hornero-0.2.0-preview21
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview21-checklist.md
+summary: >-
+  Unpublished release candidate for the first Desktop + Studio Preview
+  ISO. Delta install QA executed on the pinned ISO (Studio 4/4 PASS,
+  Desktop UEFI-encrypted smoke PASS, hornero#310 fixed); creative
+  workflow evidence is partial (Blender/Kdenlive/persistence PASS, OBS
+  BLOCKED in the VM harness, mode transition safely refused without
+  power-profiles-daemon); cancel-during-install leaks the Calamares
+  target mount (FAIL, recorded). hornero-qa studio-gate remains BLOCKED
+  pending maintainer evidence acceptance, Studio remains planned, and
+  the ISO is unsigned. Do not tag or publish without maintainer approval.
+tag: v0.2.0-preview21
+published: false
