@@ -1,0 +1,25 @@
+# Hornero OS release: v0.2.0-preview22
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview22
+version: 0.2.0-preview22
+status: pre-release
+manifest: hornero-0.2.0-preview22
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview22-checklist.md
+summary: >-
+  Desktop + Studio Preview ISO release candidate with the installer#31
+  cancel mount-cleanup fix verified end-to-end (cancel at Install
+  packages 64%: no leaked calamares-root mount, live session usable).
+  Same product composition as preview21; ISO signed with the HorneroOS
+  releases key, SHA-256 38ec76d7c9c10ea3e956b2c9f2d8d420e3d09b61899dc453a2858622d7e90bd2.
+  Studio remains planned; hornero-qa studio-gate remains BLOCKED pending
+  hardware fixture acceptance. Published as GitHub prerelease; the 2.6 GB
+  ISO binary exceeds GitHub's 2 GB asset limit and is distributed
+  out-of-band with checksum/signature verification.
+tag: v0.2.0-preview22
+published: false

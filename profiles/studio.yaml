@@ -3,7 +3,7 @@
 apiVersion: hornero.os/v1
 kind: EditionProfile
 name: studio
-manifest: hornero-0.2.0-preview21
+manifest: hornero-0.2.0-preview22
 description: >-
   Creative-workstation release profile. Extends desktop with the same
   pinned components; Studio package composition, specializations, and
