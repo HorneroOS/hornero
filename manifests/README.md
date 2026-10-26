@@ -33,8 +33,9 @@ candidate is a release-architecture bug, and tests fail it
   and `config`.
 - `local` — built from this repository at release time (currently
   `horneroctl` from `cli/`). Never carries a `sha`.
-- `future` — a named slot with no resolved version yet (currently
-  `installer` and `iso`). Never carries a `sha` or `ref`.
+- `future` — a named slot with no resolved version yet. Never carries
+  a `sha` or `ref`. (`installer` and `iso` carried this status until
+  the signed v0.2.0-preview22 ISO was published.)
 
 ## No git submodules
 
