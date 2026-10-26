@@ -19,7 +19,10 @@ summary: >-
   BLOCKED in the VM harness, mode transition safely refused without
   power-profiles-daemon); cancel-during-install leaks the Calamares
   target mount (FAIL, recorded). hornero-qa studio-gate remains BLOCKED
-  pending maintainer evidence acceptance, Studio remains planned, and
-  the ISO is unsigned. Do not tag or publish without maintainer approval.
+  pending maintainer evidence acceptance, Studio remains planned.
+  Maintainer delegated the launch decision on 2026-10-26: the ISO is signed
+  with the HorneroOS releases key and this RC is tagged and published as a
+  GitHub prerelease (ISO binary distributed out-of-band; it exceeds
+  GitHub's 2 GB release-asset limit).
 tag: v0.2.0-preview21
 published: false
