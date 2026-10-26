@@ -51,9 +51,9 @@ repository that owns it:
 Composition is live: `horneroctl` builds from `cli/`, release manifests pin
 the shell/config sources, and `scripts/compose.sh` materializes and validates
 the pinned composition. The edition catalogue resolves four products from a
-shared base and role package sets. Desktop remains in Preview; Hyprland is
-supported and Niri is experimental. Server, Agents and Studio are planned,
-not installable editions yet. Package resolution alone does not claim that an
+shared base and role package sets. Desktop and Studio are in Preview; Hyprland is
+supported and Niri is experimental. Server and Agents are planned, not
+installable editions yet. Package resolution alone does not claim that an
 edition is bootable or validated, and this repository does not produce images.
 
 ## License
