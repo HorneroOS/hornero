@@ -309,4 +309,4 @@ def test_studio_profile_records_composition_without_duplicating_packages():
     for package in ("ardour", "obs-studio", "pipewire", "blender"):
         assert package not in text
     catalogue = yaml.safe_load(read_text(ROOT / "editions" / "catalogue.yaml"))
-    assert catalogue["editions"]["studio"]["maturity"] == "planned"
+    assert catalogue["editions"]["studio"]["maturity"] == "preview"
