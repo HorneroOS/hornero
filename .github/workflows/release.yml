@@ -207,6 +207,7 @@ jobs:
       - name: Publish draft after every asset verifies
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
         run: gh release edit "${RELEASE_TAG}" --draft=false
 
