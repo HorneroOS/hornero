@@ -19,7 +19,7 @@ def test_catalogue_has_the_four_user_facing_editions():
     assert catalogue["editions"]["desktop"]["maturity"] == "preview"
     assert catalogue["editions"]["server"]["maturity"] == "planned"
     assert catalogue["editions"]["agents"]["maturity"] == "planned"
-    assert catalogue["editions"]["studio"]["maturity"] == "planned"
+    assert catalogue["editions"]["studio"]["maturity"] == "preview"
 
 
 def test_desktop_uses_one_selected_compositor_backend():
