@@ -22,4 +22,4 @@ summary: >-
   ISO binary exceeds GitHub's 2 GB asset limit and is distributed
   out-of-band with checksum/signature verification.
 tag: v0.2.0-preview22
-published: false
+published: true
