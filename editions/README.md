@@ -11,8 +11,11 @@ python3 scripts/resolve-edition.py server --json
 
 The resolver produces a deterministic Arch package list. A package list is not
 an image or proof of a working system. Desktop is in Preview, Hyprland is
-supported, and Niri is experimental. Server, Agents, and Studio remain planned
-until their install, runtime, security, and acceptance work is complete.
+supported, and Niri is experimental. Desktop and Studio are in Preview:
+Studio installs from the signed v0.2.0-preview22 ISO, is not Supported,
+and its hardware evidence is still pending. Server and Agents remain
+planned until their install, runtime, security, and acceptance work is
+complete.
 
 Agents inherit Server and use a rootless Podman/systemd direction. The
 catalogue explicitly forbids the host Docker socket and secrets in images.

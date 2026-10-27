@@ -4,8 +4,9 @@ HorneroOS is an Arch-based operating-system project with a composable
 product model. HorneroOS Desktop is a Wayland-first desktop powered by
 Hornero Shell; Hyprland is its current validated compositor backend, not the
 identity of the operating system. One edition catalogue defines the shared
-base, desktop compositor choices, and planned server, agent-host, and creative
-workstation compositions with explicit maturity.
+base, desktop compositor choices, the planned server and agent-host
+compositions, and the Preview creative-workstation (Studio) composition,
+each with explicit maturity.
 
 This repository defines **HorneroOS as a composed product**: which components
 make up the operating system, how editions combine package sets and what gets

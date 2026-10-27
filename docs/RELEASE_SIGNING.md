@@ -15,8 +15,10 @@ native minisign verification, so every user would need a custom
 ecosystem fit; minisign was rejected for the AUR flow specifically.
 
 This is a different key from the AUR SSH publishing key
-(HorneroOS/.github#9) and from any future ISO signing key (installer
-repo). Do not conflate them.
+(HorneroOS/.github#9). Do not conflate them. The v0.2.0-preview22 ISO
+is signed with this same HorneroOS releases key
+(FCFBEE43925AB5429362278AE59EAB44AA2498DC); a separate ISO signing
+key, if ever adopted, must be documented here before use.
 
 ## State today
 
