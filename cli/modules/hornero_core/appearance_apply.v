@@ -694,8 +694,16 @@ pub fn regenerate_hyprland_native(dry_run bool) CommandResult {
 	os.mkdir_all(dir) or {
 		return fail_result('appearance hyprland', 'cannot create ${dir}: ${err.msg()}')
 	}
-	os.write_file(out, render_hyprland_lua(sp)) or {
-		return fail_result('appearance hyprland', 'cannot write ${out}: ${err.msg()}')
+	// Write atomically (tmp + rename): Hyprland may evaluate its config
+	// at any moment, and a half-written Lua chunk would silently drop
+	// back to the factory palette.
+	tmp := out + '.tmp.' + os.getpid().str()
+	defer { os.rm(tmp) or {} }
+	os.write_file(tmp, render_hyprland_lua(sp)) or {
+		return fail_result('appearance hyprland', 'cannot write ${tmp}: ${err.msg()}')
+	}
+	os.rename(tmp, out) or {
+		return fail_result('appearance hyprland', 'cannot replace ${out}: ${err.msg()}')
 	}
 	return ok_result('appearance hyprland', 'wrote Hyprland border colours to ${out}', {
 		'output': out
@@ -1003,6 +1011,7 @@ pub fn wallpaper_reload_native(dry_run bool) CommandResult {
 	if !hypr_result.ok {
 		return fail_result('wallpaper reload', 'M3 colours regenerated, but Hyprland border refresh failed: ${hypr_result.message}')
 	}
+	default_hyprctl_run(false)
 	return ok_result('wallpaper reload', 'wallpaper pipeline reloaded from ${wallpaper}',
 		{
 			'wallpaper': wallpaper

@@ -545,7 +545,8 @@ fn run_shell_preset(args []string, mode hornero_core.RenderMode) int {
 
 fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 	if args.len > 0
-		&& args[0] in ['theme', 'scheme', 'colors', 'accent', 'night-mode', 'gtk', 'hyprlock'] {
+		&& args[0] in ['theme', 'scheme', 'colors', 'accent', 'night-mode', 'gtk', 'hyprlock',
+			'hyprland'] {
 		if wants_help(args) {
 			print(command_help('appearance ' + args[0]))
 			return 0
@@ -567,6 +568,9 @@ fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 		}
 		if args[0] == 'hyprlock' {
 			return run_appearance_hyprlock(args[1..], mode)
+		}
+		if args[0] == 'hyprland' {
+			return run_appearance_hyprland(args[1..], mode)
 		}
 		return run_appearance_scheme(args[1..], mode)
 	}
@@ -729,6 +733,18 @@ fn run_appearance_hyprlock(args []string, mode hornero_core.RenderMode) int {
 	}
 	return render(hornero_core.regenerate_hyprlock_native(opts.wallpaper, opts.dry_run),
 		mode)
+}
+
+fn run_appearance_hyprland(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_appearance_hyprland(args) or {
+		return render_error(hornero_core.err_usage('appearance.hyprland.usage', err.msg()),
+			mode)
+	}
+	if !opts.yes && !opts.dry_run {
+		return render_error(hornero_core.err_usage('appearance.hyprland.usage', 'refusing to regenerate without --yes (preview with --dry-run).\nExample: horneroctl appearance hyprland --dry-run'),
+			mode)
+	}
+	return render(hornero_core.regenerate_hyprland_native(opts.dry_run), mode)
 }
 
 fn run_appearance_accent(args []string, mode hornero_core.RenderMode) int {

@@ -689,6 +689,38 @@ pub:
 	yes       bool
 }
 
+// HyprlandCmdOptions covers `appearance hyprland` (regenerate
+// colors-hyprland.lua from the live scheme).
+pub struct HyprlandCmdOptions {
+pub:
+	dry_run bool
+	yes     bool
+}
+
+// parse_appearance_hyprland parses `appearance hyprland` arguments.
+pub fn parse_appearance_hyprland(args []string) !HyprlandCmdOptions {
+	mut dry_run := false
+	mut yes := false
+	for a in args {
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl appearance hyprland --dry-run')
+		}
+		return error('unexpected argument: ${a}.\nRun: horneroctl appearance hyprland --help')
+	}
+	return HyprlandCmdOptions{
+		dry_run: dry_run
+		yes:     yes
+	}
+}
+
 // parse_appearance_hyprlock parses `appearance hyprlock` arguments.
 pub fn parse_appearance_hyprlock(args []string) !HyprlockCmdOptions {
 	mut wallpaper := ''
