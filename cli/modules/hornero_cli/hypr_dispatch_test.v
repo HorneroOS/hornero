@@ -218,3 +218,15 @@ fn test_dispatch_hypr_windows_rules() {
 	os.unsetenv('HORNERO_WINDOW_RULES_USER_FILE')
 	hypr_dispatch_teardown()
 }
+
+fn test_appearance_hyprland_help_and_parser() {
+	h := command_help('appearance hyprland')
+	assert h.contains('Examples:')
+	assert h.contains('horneroctl appearance hyprland --yes')
+	assert dispatch(['horneroctl', 'appearance', 'hyprland', '--help']) == 0
+	opts := parse_appearance_hyprland(['--dry-run']) or { panic(err) }
+	assert opts.dry_run && !opts.yes
+	if _ := parse_appearance_hyprland(['--bogus']) {
+		assert false
+	}
+}

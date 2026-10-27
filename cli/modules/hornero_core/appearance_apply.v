@@ -115,7 +115,8 @@ pub struct PaletteBackends {
 	gtk_sync    fn (dry_run bool) CommandResult @[required]
 	gtk_apply   fn (theme string, icon string, policy string, dry_run bool) CommandResult @[required]
 	hyprlock    fn (wallpaper string, dry_run bool) CommandResult                         @[required]
-	hyprctl_run fn (dry_run bool) @[required]
+	hyprland    fn (dry_run bool) CommandResult @[required]
+	hyprctl_run fn (dry_run bool)               @[required]
 }
 
 fn default_m3_exec(image string, output string, flavour string, mode string, accent string, dry_run bool) ExecReport {
@@ -141,6 +142,10 @@ fn default_hyprlock(wallpaper string, dry_run bool) CommandResult {
 	return regenerate_hyprlock_native(wallpaper, dry_run)
 }
 
+fn default_hyprland(dry_run bool) CommandResult {
+	return regenerate_hyprland_native(dry_run)
+}
+
 fn default_hyprctl_run(dry_run bool) {
 	if dry_run {
 		return
@@ -157,6 +162,7 @@ pub fn default_palette_backends() PaletteBackends {
 		gtk_sync:    default_gtk_sync
 		gtk_apply:   default_gtk_apply
 		hyprlock:    default_hyprlock
+		hyprland:    default_hyprland
 		hyprctl_run: default_hyprctl_run
 	}
 }
@@ -271,6 +277,7 @@ pub fn run_palette_pipeline_with(wallpaper string, flavour string, mode string, 
 			'would run: sync state.json from scheme.json'
 			'would run: sync GTK color-scheme policy'
 			'would run: regenerate colors-hyprlock.conf'
+			'would run: regenerate colors-hyprland.lua'
 			'would run: hyprctl reload (when present)',
 		]
 		return ok_result('appearance palette', lines.join('\n'), {
@@ -304,6 +311,10 @@ pub fn run_palette_pipeline_with(wallpaper string, flavour string, mode string, 
 	lock_result := deps.hyprlock(wallpaper, false)
 	if !lock_result.ok {
 		return fail_result('appearance palette', 'colour scheme applied, but lock screen refresh failed: ${lock_result.message}')
+	}
+	hypr_result := deps.hyprland(false)
+	if !hypr_result.ok {
+		return fail_result('appearance palette', 'colour scheme applied, but Hyprland border refresh failed: ${hypr_result.message}')
 	}
 	deps.hyprctl_run(false)
 	return ok_result('appearance palette', 'wallpaper and generated colours applied', {
@@ -625,6 +636,80 @@ pub fn regenerate_hyprlock_native(wallpaper_arg string, dry_run bool) CommandRes
 	})
 }
 
+// regenerate_hyprland_native rebuilds colors-hyprland.lua from the live
+// scheme.json colours, mirroring regenerate_hyprlock_native. This is what
+// makes Hyprland's border colours follow the wallpaper: the palette
+// pipeline regenerates the M3 scheme on every wallpaper change, and the
+// Lua entrypoint (desktop/hypr/hyprland.lua.d/smart-colors.lua in
+// HorneroOS/config) loads this file on every config evaluation. Without
+// it, Hyprland silently keeps the factory palette and borders stop
+// following the wallpaper. The xrdb-era `colors generate` path still
+// writes the same file for compatibility.
+pub fn regenerate_hyprland_native(dry_run bool) CommandResult {
+	scheme := color_scheme_file()
+	if !os.is_file(scheme) && !dry_run {
+		return fail_result('appearance hyprland', 'scheme.json not found at ${scheme} — regenerate first.')
+	}
+	dir := smart_colors_dir()
+	out := os.join_path(dir, 'colors-hyprland.lua')
+	if dry_run {
+		return ok_result('appearance hyprland', 'would run: write ${out} from ${scheme}',
+			{
+				'command_line': 'write ${out}'
+				'dry_run':      'true'
+			})
+	}
+	raw := os.read_file(scheme) or {
+		return fail_result('appearance hyprland', 'cannot read ${scheme}: ${err.msg()}')
+	}
+	parsed := json2.decode[json2.Any](raw) or {
+		return fail_result('appearance hyprland', 'scheme.json is not JSON: ${err.msg()}')
+	}
+	mut colours := map[string]string{}
+	if parsed is map[string]json2.Any {
+		cmap := parsed.clone()
+		if 'colours' in cmap {
+			for k, v in cmap['colours'].as_map() {
+				colours[k] = v.str()
+			}
+		}
+	}
+	pick := fn [colours] (keys []string, fallback string) string {
+		for k in keys {
+			if colours[k].len > 0 {
+				return colours[k]
+			}
+		}
+		return fallback
+	}
+	mut base := [16]string{}
+	base[8] = pick(['outline', 'surfaceVariant', 'onSurfaceVariant'], '6b4e3b')
+	sp := SmartPalette{
+		accent:  pick(['primary'], 'e07856')
+		info:    pick(['secondary', 'tertiary'], 'f2b749')
+		warning: pick(['tertiary', 'secondary'], 'f2b749')
+		base:    base
+		light:   scheme_json_field(scheme, 'mode') == 'light'
+	}
+	os.mkdir_all(dir) or {
+		return fail_result('appearance hyprland', 'cannot create ${dir}: ${err.msg()}')
+	}
+	// Write atomically (tmp + rename): Hyprland may evaluate its config
+	// at any moment, and a half-written Lua chunk would silently drop
+	// back to the factory palette.
+	tmp := out + '.tmp.' + os.getpid().str()
+	defer { os.rm(tmp) or {} }
+	os.write_file(tmp, render_hyprland_lua(sp)) or {
+		return fail_result('appearance hyprland', 'cannot write ${tmp}: ${err.msg()}')
+	}
+	os.rename(tmp, out) or {
+		return fail_result('appearance hyprland', 'cannot replace ${out}: ${err.msg()}')
+	}
+	return ok_result('appearance hyprland', 'wrote Hyprland border colours to ${out}', {
+		'output': out
+	})
+}
+
 // read_appearance_status_native gathers the live appearance state without
 // any backend: wallpaper pointer, scheme state, gtk3 ini, gsettings icon.
 pub fn read_appearance_status_native() AppearanceStatus {
@@ -904,6 +989,7 @@ pub fn wallpaper_reload_native(dry_run bool) CommandResult {
 	lines << 'sync state.json from scheme.json'
 	lines << 'sync GTK color-scheme policy'
 	lines << 'regenerate colors-hyprlock.conf'
+	lines << 'regenerate colors-hyprland.lua'
 	if dry_run {
 		return ok_result('wallpaper reload', 'would run:\n' + lines.join('\n'), {
 			'command_line': lines.join('\n')
@@ -921,6 +1007,11 @@ pub fn wallpaper_reload_native(dry_run bool) CommandResult {
 	if !lock_result.ok {
 		return fail_result('wallpaper reload', 'M3 colours regenerated, but lock screen refresh failed: ${lock_result.message}')
 	}
+	hypr_result := regenerate_hyprland_native(false)
+	if !hypr_result.ok {
+		return fail_result('wallpaper reload', 'M3 colours regenerated, but Hyprland border refresh failed: ${hypr_result.message}')
+	}
+	default_hyprctl_run(false)
 	return ok_result('wallpaper reload', 'wallpaper pipeline reloaded from ${wallpaper}',
 		{
 			'wallpaper': wallpaper

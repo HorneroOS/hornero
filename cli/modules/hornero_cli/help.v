@@ -345,6 +345,7 @@ Examples:
   horneroctl appearance night-mode status
   horneroctl appearance gtk list
   horneroctl appearance hyprlock --dry-run
+  horneroctl appearance hyprland --dry-run
 '
 		}
 		'appearance theme' {
@@ -532,6 +533,18 @@ Examples:
 Examples:
   horneroctl appearance hyprlock --dry-run
   horneroctl appearance hyprlock --yes
+'
+		}
+		'appearance hyprland' {
+			return 'Usage: horneroctl appearance hyprland [options]
+
+  Regenerate colors-hyprland.lua from the live scheme.json
+  colours so Hyprland border colours follow the wallpaper
+  (needs --yes); --dry-run only previews.
+
+Examples:
+  horneroctl appearance hyprland --dry-run
+  horneroctl appearance hyprland --yes
 '
 		}
 		'config' {

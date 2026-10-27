@@ -371,3 +371,37 @@ fn test_theme_apply_via_shell_syncs_scheme_state() {
 	})
 	os.rmdir_all(tmp) or {}
 }
+
+fn test_regenerate_hyprland_writes_border_colours_from_scheme() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-hyprland-regen')
+	os.rmdir_all(tmp) or {}
+	with_apply_xdg(tmp, fn [tmp] () {
+		dir := os.join_path(tmp, 'cache', 'hornero', 'smart-colors')
+		os.mkdir_all(dir) or {}
+		scheme := '{"name":"fixture","flavour":"tonal-spot","mode":"dark","colours":{"primary":"AA557F","secondary":"D9BFD0","tertiary":"F3B7A0","outline":"958E94"}}\n'
+		os.write_file(os.join_path(dir, 'scheme.json'), scheme) or {}
+		// Dry run reports the write without creating the Lua file.
+		dry := regenerate_hyprland_native(true)
+		assert dry.ok
+		assert !os.is_file(os.join_path(dir, 'colors-hyprland.lua'))
+		rep := regenerate_hyprland_native(false)
+		assert rep.ok
+		body := os.read_file(os.join_path(dir, 'colors-hyprland.lua')) or { '' }
+		assert body.contains('hl.config({')
+		assert body.contains('rgba(aa557fee)')
+		assert body.contains('rgba(d9bfd0ee)')
+		assert body.contains('rgba(958e94aa)')
+	})
+	os.rmdir_all(tmp) or {}
+}
+
+fn test_regenerate_hyprland_fails_without_scheme() {
+	tmp := os.join_path(os.temp_dir(), 'hornero-hyprland-missing')
+	os.rmdir_all(tmp) or {}
+	with_apply_xdg(tmp, fn [tmp] () {
+		rep := regenerate_hyprland_native(false)
+		assert !rep.ok
+		assert rep.message.contains('scheme.json not found')
+	})
+	os.rmdir_all(tmp) or {}
+}
