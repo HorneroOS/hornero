@@ -27,17 +27,17 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: 5e14df7c0a90e1f4a84a270c946813dcd27d68e7
+    sha: ca8f5ca735ffbb8581537ac5b5f1a1d74082fcb0
     status: pinned
-    subject: "Merge pull request #331 from HorneroOS/feat/shell-ux-pass-2"
-    notes: Desktop shell / Quickshell UX as pinned by the ISO AUR recipe hornero-shell 1.2.56-1 (unchanged from preview22).
+    subject: "fix(appearance): regenerate Hyprland border colours before reload (#332)"
+    notes: Candidate pin tracks shell main for the next composition refresh; the preview23 ISO itself ships the preview22 lock (hornero-shell 1.2.56-1).
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: 75c196f58b5c4237461c9885b4cb7ed7c5c61ac9
+    sha: 811ecd73fd201de30cf333af53ccfa7cdb966740
     status: pinned
-    subject: "feat(hypr): migrate Hyprland config and helpers to Lua-only (#107)"
-    notes: Lua-only Hyprland configuration as shipped inside the ISO (unchanged from preview22; hornero-config 0.3.13 was published to AUR after this composition was locked and lands in the next refresh).
+    subject: "docs(hypr): fix duplicated words in hyprland.lua header (#110)"
+    notes: Candidate pin tracks config main (Lua-only Hyprland, hornero-config 0.3.13 on AUR); the preview23 ISO itself ships the preview22 lock.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
     path: cli/

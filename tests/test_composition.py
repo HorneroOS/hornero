@@ -174,9 +174,9 @@ def test_candidate_pointer_is_explicit_and_deterministic():
     import yaml
 
     filename = read_candidate_name(ROOT)
-    assert filename == "v0.2.0-preview22.yaml"
+    assert filename == "v0.2.0-preview23.yaml"
     doc = yaml.safe_load(read_text(ROOT / "manifests" / filename))
-    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview22"
+    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview23"
 
 
 def test_published_candidate_is_treated_as_immutable_history():
@@ -196,7 +196,7 @@ def test_candidate_manifest_pins_release_candidate():
 def test_profiles_track_candidate_manifest():
     import yaml
 
-    candidate = "hornero-0.2.0-preview22"
+    candidate = "hornero-0.2.0-preview23"
     assert candidate_manifest_name(ROOT) == candidate
     for edition in ("base", "desktop", "developer"):
         profile = yaml.safe_load(read_text(ROOT / "profiles" / f"{edition}.yaml"))
