@@ -1,0 +1,54 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview23
+#
+# Unpublished release candidate. This manifest is not a release until the
+# gates in releases/v0.2.0-preview23-checklist.md pass and a maintainer
+# approves tagging/publication. Historical manifests are never edited.
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview23
+date: "2026-10-28"
+description: >-
+  Third Desktop + Studio Preview ISO release candidate. Product
+  composition, package lock and catalogue are identical to preview22;
+  the only delta is the Calamares installer branding refresh
+  (HorneroOS/installer#37, installer main
+  5c1c0cc2599bdaa80de84bd1de9f9e2c9a6da4f5): canonical HorneroOS brand
+  banner, logo and sidebar palette plus flagship wallpapers in the
+  slideshow. Built only in the disposable build VM; guest+host SHA-256
+  and detached signature verified (see the release checklist for the
+  recorded hashes). Studio remains preview (maintainer decision #318),
+  not supported: hornero-qa studio-gate hardware evidence remains
+  BLOCKED pending fixture acceptance. The 2.6 GB ISO exceeds GitHub's
+  2 GB asset limit and is distributed out-of-band with checksum and
+  signature verification.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 5e14df7c0a90e1f4a84a270c946813dcd27d68e7
+    status: pinned
+    subject: "Merge pull request #331 from HorneroOS/feat/shell-ux-pass-2"
+    notes: Desktop shell / Quickshell UX as pinned by the ISO AUR recipe hornero-shell 1.2.56-1 (unchanged from preview22).
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 75c196f58b5c4237461c9885b4cb7ed7c5c61ac9
+    status: pinned
+    subject: "feat(hypr): migrate Hyprland config and helpers to Lua-only (#107)"
+    notes: Lua-only Hyprland configuration as shipped inside the ISO (unchanged from preview22; hornero-config 0.3.13 was published to AUR after this composition was locked and lands in the next refresh).
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned. The ISO ships the signed AUR horneroctl-bin 0.2.0_preview33-1 (tag horneroctl-v0.2.0-preview33, product revision bcc53ede593d54f6b9e7562a50cf6c620e56b275), unchanged from preview22.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. The provisional Calamares candidate (installer revision 5c1c0cc2599bdaa80de84bd1de9f9e2c9a6da4f5, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the RC ISO below; it is not yet a pinned component of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: "Reserved slot. RC artifact: horneroos-2026.10-preview23-x86_64.iso; SHA-256 and signature recorded in releases/v0.2.0-preview23-checklist.md, built in a disposable VM with guest+host checksum verification. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."
