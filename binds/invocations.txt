@@ -18,6 +18,7 @@ appearance gtk list
 appearance gtk set-icons
 appearance gtk sync-color-scheme
 appearance gtk theme
+appearance hyprland
 appearance hyprlock
 appearance night-mode
 appearance night-mode backends
