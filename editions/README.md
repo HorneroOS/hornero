@@ -51,7 +51,9 @@ the deduplicated package closure, and provenance for every package.
 Proprietary applications in a specialization are reported under
 `proprietaryOptInRequired` and only enter the package list when selected
 explicitly by application ID. Experimental applications are flagged, and
-reference-only entries (for example Penpot, which has no Arch package) fail
+reference-only entries (for example Penpot, which has no Arch package, and
+the ArtCraft Launcher, whose manual runbook is
+`docs/studio-artcraft-launcher.md`) fail
 with an actionable error instead of falling back to a full workstation.
 
 The shared base carries the filesystem, encryption, and GRUB tools needed by
