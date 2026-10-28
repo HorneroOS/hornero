@@ -23,4 +23,4 @@ summary: >-
   remains preview (maintainer decision #318), not supported. Signed
   with the HorneroOS releases key; SHA-256 recorded in the checklist.
 tag: v0.2.0-preview23
-published: false
+published: true
