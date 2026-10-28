@@ -15,10 +15,11 @@ Fuente: https://github.com/storytold/craft-launcher/releases
 Versión probada: `0.8.1` (actualizar aquí cuando se revalide).
 
 Verificado 2026-10-28 en CachyOS (base Arch, kernel con KVM):
-AppImage x86_64 de 12 MB, `SHA256SUMS.txt` OK, ELF x86-64 type2-runtime,
-`--help` arranca (log `ArtCraft Launcher 0.8.1`) y sale 0 sin display.
-Requiere FUSE en el host (`fuse2`/`fuse3` presentes acá); verificar que la
-ISO Preview los incluya o documentar `APPIMAGE_EXTRACT_AND_RUN=1`.
+AppImage x86_64 de 12 MB, `SHA256SUMS.txt` OK, ELF x86-64 type2-runtime
+estático, `--help` arranca (log `ArtCraft Launcher 0.8.1`) y sale 0 sin
+display. El montaje normal requiere FUSE funcional en el host (presente
+acá); verificar que la ISO Preview lo traiga, si no usar
+`APPIMAGE_EXTRACT_AND_RUN=1`.
 GUI en Hyprland/Niri pendiente (requiere VM Hornero).
 Smoke test real 2026-10-28 en PC del equipo (CachyOS/Arch, Hyprland 0.56.2,
 Wayland, `xdg-desktop-portal` + `xdg-desktop-portal-hyprland` activos):
@@ -37,18 +38,22 @@ Evidencia (en `/tmp/opencode/artcraft-verify/`):
 
 ```bash
 mkdir -p ~/Applications && cd ~/Applications
-# Descargar el AppImage x86_64 (o aarch64) + SHA256SUMS.txt del release
-curl -LO https://github.com/storytold/craft-launcher/releases/download/v0.8.1/artcraft-launcher-0.8.1-linux-x86_64.AppImage
+ARCH=$(uname -m)  # x86_64 o aarch64, igual que los assets del release
+curl -LO https://github.com/storytold/craft-launcher/releases/download/v0.8.1/artcraft-launcher-0.8.1-linux-${ARCH}.AppImage
 curl -LO https://github.com/storytold/craft-launcher/releases/download/v0.8.1/SHA256SUMS.txt
-sha256sum -c SHA256SUMS.txt --ignore-missing
-chmod +x artcraft-launcher-*-linux-*.AppImage
-./artcraft-launcher-*-linux-*.AppImage
+grep "artcraft-launcher-0.8.1-linux-${ARCH}.AppImage$" SHA256SUMS.txt | sha256sum -c -
+chmod +x artcraft-launcher-0.8.1-linux-${ARCH}.AppImage
+./artcraft-launcher-0.8.1-linux-${ARCH}.AppImage
 ```
+El `grep` limita la verificación al archivo descargado: si la entrada
+falta o el nombre no coincide, falla en vez de pasar en silencio
+(`--ignore-missing` ocultaría ese caso).
 
 Prerequisitos Wayland/Hyprland (ya están en Desktop; si falta algo):
 `wayland, xdg-desktop-portal[-hyprland], mesa/vulkan-icd-loader, noto-fonts-cjk`
-(opcional CJK), `fuse2/fuse3` solo si el AppImage no monta
-(alternativa: `APPIMAGE_EXTRACT_AND_RUN=1`).
+(opcional CJK). El AppImage usa un runtime estático; para el montaje
+normal se necesita FUSE funcional en el host, pero no `libfuse2`.
+Si FUSE no está disponible, usar `APPIMAGE_EXTRACT_AND_RUN=1`.
 
 Las Craft apps se instalan/actualizan desde el propio launcher, fuera de
 pacman: la versión del catálogo solo vale al momento de la instalación.
