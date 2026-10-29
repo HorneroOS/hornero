@@ -109,6 +109,32 @@ fn test_gaming_doctor_continues_after_invalid_selection() {
 	assert steam.ok
 }
 
+fn test_gaming_selection_set_roundtrip_and_dry_run() {
+	path := gaming_set_file('set')
+	defer {
+		gaming_unset_file()
+	}
+	dry := gaming_selection_set_result(['handheld'], ['lutris'], true)
+	assert dry.ok
+	_, present_before := load_gaming_selection() or {
+		assert false, err.msg()
+		return
+	}
+	assert !present_before
+	done := gaming_selection_set_result(['handheld'], ['lutris'], false)
+	assert done.ok
+	loaded, present := load_gaming_selection() or {
+		assert false, err.msg()
+		return
+	}
+	assert present
+	assert loaded.specializations == ['handheld']
+	assert loaded.applications == ['lutris']
+	assert path == gaming_selection_file()
+	bad := gaming_selection_set_result(['esports'], [], false)
+	assert !bad.ok
+}
+
 fn test_gaming_ids_cover_catalogue_model() {
 	assert gaming_specialization_ids.len == 6
 	assert 'desktop-gaming' in gaming_specialization_ids

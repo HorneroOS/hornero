@@ -311,7 +311,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 fn run_gaming(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('gaming.usage',
-			'expected a subcommand: doctor.\nExample: horneroctl gaming doctor --json'),
+			'expected a subcommand: doctor, selection.\nExample: horneroctl gaming doctor --json'),
 			mode)
 	}
 	match args[0] {
@@ -321,6 +321,42 @@ fn run_gaming(args []string, mode hornero_core.RenderMode) int {
 					'unexpected argument: ${args[1]}.\nExample: horneroctl gaming doctor'), mode)
 			}
 			return render(hornero_core.gaming_doctor_result(), mode)
+		}
+		'selection' {
+			if args.len == 1 || args[1] == 'show' {
+				return render(hornero_core.gaming_selection_result(), mode)
+			}
+			if args[1] == 'set' {
+				mut specializations := []string{}
+				mut applications := []string{}
+				mut dry_run := false
+				mut i := 2
+				for i < args.len {
+					if args[i] == '--specialization' && i + 1 < args.len {
+						specializations << args[i + 1]
+						i += 2
+					} else if args[i] == '--application' && i + 1 < args.len {
+						applications << args[i + 1]
+						i += 2
+					} else if args[i] == '--dry-run' {
+						dry_run = true
+						i++
+					} else {
+						return render_error(hornero_core.err_usage('gaming.usage',
+							'unexpected argument: ${args[i]}.\nExample: horneroctl gaming selection set --specialization desktop-gaming --application steam'),
+							mode)
+					}
+				}
+				if specializations.len == 0 && applications.len == 0 {
+					return render_error(hornero_core.err_usage('gaming.usage',
+						'selection set needs at least one --specialization or --application'),
+						mode)
+				}
+				return render(hornero_core.gaming_selection_set_result(specializations,
+					applications, dry_run), mode)
+			}
+			return render_error(hornero_core.err_usage('gaming.usage',
+				'expected show or set.\nExample: horneroctl gaming selection show'), mode)
 		}
 		else {
 			return render_error(hornero_core.err_usage('gaming.usage',

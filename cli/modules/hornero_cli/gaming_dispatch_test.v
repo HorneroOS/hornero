@@ -15,6 +15,13 @@ fn test_gaming_completions_include_gaming() {
 	assert fish_completion().contains('gaming')
 }
 
+fn test_gaming_selection_help_is_discoverable() {
+	assert command_help('gaming').contains('selection')
+	assert command_help('gaming selection').contains('gaming-selection.json')
+	assert dispatch(['horneroctl', 'gaming', 'selection', 'set']) != 0
+	assert dispatch(['horneroctl', 'gaming', 'selection', 'bogus']) != 0
+}
+
 fn test_gaming_unknown_subcommand_fails() {
 	assert dispatch(['horneroctl', 'gaming', 'nope']) != 0
 	assert dispatch(['horneroctl', 'gaming']) != 0

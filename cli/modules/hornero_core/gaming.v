@@ -165,6 +165,63 @@ fn file_check(name string, path string, present_detail string) DoctorCheck {
 	}
 }
 
+pub fn write_gaming_selection(sel GamingSelection) !string {
+	gaming_validate_selection(sel)!
+	path := gaming_selection_file()
+	dir := os.dir(path)
+	os.mkdir_all(dir) or { return error('cannot create ${dir}: ${err.msg()}') }
+	tmp := os.join_path(dir, '.gaming-selection.json.tmp')
+	os.write_file(tmp, gaming_encode_selection(sel)) or {
+		return error('cannot write ${tmp}: ${err.msg()}')
+	}
+	os.mv(tmp, path) or { return error('cannot move ${tmp} to ${path}: ${err.msg()}') }
+	return path
+}
+
+fn gaming_selection_data(sel GamingSelection, present bool, path string) map[string]string {
+	return {
+		'state':           if present { 'recorded' } else { 'not-selected' }
+		'file':            path
+		'schema_version':  '${sel.schema_version}'
+		'specializations': sel.specializations.join(',')
+		'applications':    sel.applications.join(',')
+		'package_apply':   'not-executed'
+	}
+}
+
+pub fn gaming_selection_result() CommandResult {
+	sel, present := load_gaming_selection() or {
+		return fail_result('gaming selection', err.msg())
+	}
+	path := gaming_selection_file()
+	if !present {
+		return ok_result('gaming selection',
+			'No Gaming selection recorded at ${path}. Use horneroctl gaming selection set --specialization <id> [--application <id>] to record one; nothing is installed by recording a selection.',
+			gaming_selection_data(sel, present, path))
+	}
+	return ok_result('gaming selection',
+		'Gaming selection recorded at ${path}: specializations=${sel.specializations.join(', ')} applications=${sel.applications.join(', ')} (package apply not executed).',
+		gaming_selection_data(sel, present, path))
+}
+
+pub fn gaming_selection_set_result(specializations []string, applications []string, dry_run bool) CommandResult {
+	sel := GamingSelection{
+		schema_version:  gaming_schema_version
+		specializations: specializations
+		applications:    applications
+	}
+	gaming_validate_selection(sel) or { return fail_result('gaming selection set', err.msg()) }
+	if dry_run {
+		return ok_result('gaming selection set',
+			'Dry run: would record specializations=${specializations.join(', ')} applications=${applications.join(', ')} at ${gaming_selection_file()}; nothing written, no packages installed.',
+			gaming_selection_data(sel, false, gaming_selection_file()))
+	}
+	path := write_gaming_selection(sel) or { return fail_result('gaming selection set', err.msg()) }
+	return ok_result('gaming selection set',
+		'Recorded Gaming selection at ${path}: specializations=${specializations.join(', ')} applications=${applications.join(', ')}. Package installation is not executed by this command.',
+		gaming_selection_data(sel, true, path))
+}
+
 // gaming_selection_state never fails: it returns the selection, whether
 // a file was present, and the load error (empty when readable). Doctor
 // uses it so one broken state file cannot hide independent checks.
