@@ -432,6 +432,7 @@ studioApplications:
   rawtherapee: {title: RawTherapee, packages: [rawtherapee]}
   graphite: {title: Graphite, packages: [graphite], experimental: true}
   penpot: {title: Penpot, packages: [], availability: reference-only, notes: "Browser-based design tool; use the hosted service or a self-hosted instance. No Arch package is installed."}
+  artcraft-launcher: {title: ArtCraft Launcher (AppImage, manual), packages: [], availability: reference-only, notes: "Craft suite manager; tested 0.8.1 AppImage from github.com/storytold/craft-launcher/releases, verify SHA256SUMS.txt, chmod +x, run from ~/Applications. Self-updates outside pacman: installed app versions drift by design."}
   scribus: {title: Scribus, packages: [scribus]}
   freecad: {title: FreeCAD, packages: [freecad]}
   godot: {title: Godot, packages: [godot]}
