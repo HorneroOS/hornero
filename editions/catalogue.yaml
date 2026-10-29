@@ -38,6 +38,11 @@ packageSets:
       - sddm
       - hornero-greeter
       - hornero-greeter-media-base
+      - pipewire
+      - pipewire-audio
+      - pipewire-alsa
+      - pipewire-pulse
+      - wireplumber
   compositor:hyprland:
     packages:
       - hyprland
