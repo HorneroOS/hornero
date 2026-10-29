@@ -76,6 +76,13 @@ Gaming plans record hardware intent only. No consumer derives a GPU vendor
 driver from a PCI ID, and provenance is never a hardware-compatibility or
 performance claim.
 
+Post-install, `horneroctl gaming selection show|set` records the same
+selection intent in `~/.config/hornero/gaming-selection.json` (validating
+IDs fail-closed; recording installs nothing), and
+`horneroctl gaming doctor [--json]` reports capability and readiness
+only. The Control Center Gaming pane and the QA gaming gate consume
+that single state source.
+
 The shared base carries the filesystem, encryption, and GRUB tools needed by
 the Calamares installation path across editions. Desktop also owns SDDM and the
 Hornero greeter packages so the selected desktop composition can boot to its
