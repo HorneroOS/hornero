@@ -57,6 +57,13 @@ def test_unknown_and_reference_only_selections_fail_actionably():
         resolver.resolve_gaming_selection(catalogue, [], ["steamvr"])
 
 
+def test_every_specialization_resolves_without_reference_only_apps():
+    catalogue = resolver.load_catalogue()
+    for spec_id in catalogue["gamingSpecializations"]:
+        plan = resolver.resolve_gaming_selection(catalogue, [spec_id])
+        assert plan["specializations"] == [spec_id]
+
+
 def test_vr_specialization_is_flagged_experimental():
     catalogue = resolver.load_catalogue()
     plan = resolver.resolve_gaming_selection(catalogue, ["vr"], ["steam"])

@@ -706,7 +706,7 @@ gamingSpecializations:
     applications: [steam, obs-studio]
   multi-launcher:
     title: Multi-launcher
-    applications: [steam, lutris, bottles, heroic-games-launcher]
+    applications: [steam, lutris, bottles]
   vr:
     title: VR
     experimental: true
