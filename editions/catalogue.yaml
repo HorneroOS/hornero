@@ -85,6 +85,18 @@ packageSets:
       - ffmpeg
       - blender
       - krita
+  gaming:
+    packages:
+      - vulkan-icd-loader
+      - lib32-vulkan-icd-loader
+      - vulkan-tools
+      - xorg-xwayland
+      - steam-devices
+      - gamemode
+      - lib32-gamemode
+      - gamescope
+      - mangohud
+      - lib32-mangohud
 compositors:
   hyprland:
     maturity: supported
@@ -151,6 +163,14 @@ editions:
       - id: yabridge
         source: arch-extra
         licensing: user-supplied-windows-vst
+  gaming:
+    title: HorneroOS Gaming
+    maturity: planned
+    role: gaming-workstation
+    extends: desktop
+    packageSets: [gaming]
+    compositor:
+      inherit: desktop
 # Provenance and licensing metadata for every package in the Studio set and
 # for the optional Studio integrations above. Verified against the Arch
 # package index on 2026-10-25; package presence never implies HorneroOS
@@ -487,3 +507,210 @@ studioPerformanceMode:
   usesPowerProfilesDaemon: true
   restoresPreviousStateOn: [timeout, cancel, error, reboot]
   forbiddenOperations: [rt-kernel, irq-tuning, cpu-governor, gpu-tuning, io-scheduler, privilege-policy]
+
+# Provenance and licensing metadata for the Gaming platform packages and
+# selectable Gaming applications. Verified against the Arch package index
+# on 2026-10-28; package presence never implies HorneroOS support, game
+# compatibility, or hardware qualification, and catalogue metadata never
+# grants a software license. `support` uses the edition maturity
+# vocabulary. AUR-sourced entries must use `manual` install and stay
+# optional: no consumer may execute AUR build recipes on the user's
+# behalf. Proprietary entries (Steam) are explicit application-level
+# opt-ins only and never enter a selection through specialization
+# membership alone.
+gamingProvenance:
+  vulkan-icd-loader:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/vulkan-icd-loader/
+    licenses: [Apache-2.0]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  lib32-vulkan-icd-loader:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/lib32-vulkan-icd-loader/
+    licenses: [Apache-2.0]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  vulkan-tools:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/vulkan-tools/
+    licenses: [Apache-2.0]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  xorg-xwayland:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/xorg-xwayland/
+    licenses: [MIT, X11]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  steam-devices:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/steam-devices/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+    notes: >-
+      Controller and VR device udev rules shipped with Steam; harmless
+      without Steam installed and required for controller discovery.
+  gamemode:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/gamemode/
+    licenses: [BSD-3-Clause]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+    notes: >-
+      Feral Interactive GameMode daemon. Process-scoped and temporary;
+      HorneroOS never enables it globally or persists its tweaks.
+  lib32-gamemode:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/lib32-gamemode/
+    licenses: [BSD-3-Clause]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  gamescope:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/gamescope/
+    licenses: [BSD-2-Clause, BSD-3-Clause, LicenseRef-Reshade]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+    notes: >-
+      Valve Gamescope micro-compositor, available as a tool and as the
+      handheld Gaming Session compositor. Never forced around every
+      game; session use is hardware-qualified per device.
+  mangohud:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/mangohud/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+    notes: Diagnostics and measurement overlay only; not a tuning tool.
+  lib32-mangohud:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/lib32-mangohud/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  steam:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/steam/
+    licenses: [LicenseRef-steam-subscriber-agreement]
+    licenseClass: proprietary
+    installMethod: pacman-repository-opt-in
+    optional: true
+    support: planned
+    notes: >-
+      Proprietary Valve client distributed under the Steam Subscriber
+      Agreement. Opt-in only; HorneroOS ships no license and grants no
+      usage rights beyond Valve's terms. Valve Proton is managed by
+      Steam itself and is never repackaged. Anti-cheat support depends
+      on each game publisher enabling it for Proton; Windows kernel
+      anti-cheat is unsupported and cannot be fixed by packaging.
+  lutris:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/lutris/
+    licenses: [GPL-3.0-only]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: true
+    support: planned
+  bottles:
+    source: aur
+    sourceUrl: https://aur.archlinux.org/packages/bottles
+    licenses: [GPL-3.0-only]
+    licenseClass: open-source
+    installMethod: manual
+    optional: true
+    support: planned
+    notes: >-
+      AUR-only on Arch. Manual install only; HorneroOS never executes
+      AUR build recipes on the user's behalf.
+  wine:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/wine/
+    licenses: [LGPL-2.1-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: true
+    support: planned
+    notes: >-
+      Compatibility tooling for explicit opt-in use. Windows binaries
+      and community compatibility builds must never run as root.
+  vkbasalt:
+    source: aur
+    sourceUrl: https://aur.archlinux.org/packages/vkbasalt
+    licenses: [zlib]
+    licenseClass: open-source
+    installMethod: manual
+    optional: true
+    support: planned
+    notes: AUR-only on Arch. Manual install only, like bottles.
+  lib32-vkbasalt:
+    source: aur
+    sourceUrl: https://aur.archlinux.org/packages/lib32-vkbasalt
+    licenses: [zlib]
+    licenseClass: open-source
+    installMethod: manual
+    optional: true
+    support: planned
+  obs-studio:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/obs-studio/
+    licenses: [GPL-2.0-only]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: true
+    support: planned
+
+gamingPlatformPackages: [vulkan-icd-loader, lib32-vulkan-icd-loader, vulkan-tools, xorg-xwayland, steam-devices, gamemode, lib32-gamemode, gamescope, mangohud, lib32-mangohud]
+
+gamingApplications:
+  steam: {title: Steam, packages: [steam]}
+  lutris: {title: Lutris, packages: [lutris]}
+  bottles: {title: Bottles, packages: [bottles]}
+  wine: {title: Wine, packages: [wine]}
+  vkbasalt: {title: vkBasalt, packages: [vkbasalt, lib32-vkbasalt]}
+  obs-studio: {title: OBS Studio, packages: [obs-studio]}
+  heroic-games-launcher: {title: Heroic Games Launcher, packages: [], availability: reference-only}
+  steamvr: {title: SteamVR, packages: [], availability: reference-only, experimental: true}
+
+gamingSpecializations:
+  desktop-gaming:
+    title: Desktop Gaming
+    default: true
+    applications: [steam]
+  handheld:
+    title: Handheld Gaming
+    applications: [steam]
+  streaming:
+    title: Streaming
+    applications: [steam, obs-studio]
+  multi-launcher:
+    title: Multi-launcher
+    applications: [steam, lutris, bottles]
+  vr:
+    title: VR
+    experimental: true
+    applications: [steam]
+  advanced-compat:
+    title: Advanced Compatibility
+    applications: [wine, vkbasalt]

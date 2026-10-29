@@ -12,7 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 CATALOGUE = ROOT / "editions" / "catalogue.yaml"
 MATURITIES = {"planned", "experimental", "preview", "supported"}
-PROVENANCE_SOURCES = {"arch-core", "arch-extra", "aur", "vendor"}
+PROVENANCE_SOURCES = {"arch-core", "arch-extra", "arch-multilib", "aur", "vendor"}
 LICENSE_CLASSES = {"open-source", "proprietary"}
 INSTALL_METHODS = {"pacman-repository", "pacman-repository-opt-in", "manual"}
 # Legacy session manager superseded by WirePlumber; it must never return to
@@ -115,8 +115,8 @@ def validate_catalogue(doc: object) -> list[str]:
                     errors.append(f"edition '{name}' references unknown compositor '{backend}'")
                 elif compositors[backend].get("maturity") == "planned":
                     errors.append(f"edition '{name}' advertises planned compositor '{backend}'")
-    if set(editions) != {"desktop", "server", "agents", "studio"}:
-        errors.append("user-facing editions must be desktop, server, agents, and studio")
+    if set(editions) != {"desktop", "server", "agents", "studio", "gaming"}:
+        errors.append("user-facing editions must be desktop, server, agents, studio, and gaming")
     agents = editions.get("agents")
     if isinstance(agents, dict) and agents.get("extends") != "server":
         errors.append("Agents must derive from Server")
@@ -125,6 +125,10 @@ def validate_catalogue(doc: object) -> list[str]:
         errors.append("Studio must derive from Desktop")
     errors.extend(_validate_studio_provenance(doc, sets, studio))
     errors.extend(_validate_studio_modes(doc))
+    gaming = editions.get("gaming")
+    if isinstance(gaming, dict) and gaming.get("extends") != "desktop":
+        errors.append("Gaming must derive from Desktop")
+    errors.extend(_validate_gaming_provenance(doc, sets))
     desktop_names = {"hornero-shell", "hornero-config", "horneroctl-bin", "quickshell", "hyprland", "niri"}
     server_sets = ["server"]
     for set_name in server_sets:
@@ -295,6 +299,205 @@ def _application_is_proprietary(doc: dict, app_id: str) -> bool:
     )
 
 
+def _validate_gaming_provenance(doc: dict, sets: object) -> list[str]:
+    """Every Gaming platform/selectable package needs auditable source,
+    license and install metadata. Provenance never implies support, game
+    compatibility, or hardware qualification, and a proprietary or AUR
+    entry can never become a silent default."""
+    provenance = doc.get("gamingProvenance")
+    if not isinstance(provenance, dict) or not provenance:
+        return ["gamingProvenance must be a non-empty mapping"]
+    gaming_packages: list[str] = []
+    if isinstance(sets, dict):
+        gaming_set = sets.get("gaming")
+        if isinstance(gaming_set, dict) and isinstance(gaming_set.get("packages"), list):
+            gaming_packages = [p for p in gaming_set["packages"] if isinstance(p, str)]
+    applications = doc.get("gamingApplications")
+    application_packages: set[str] = set()
+    if isinstance(applications, dict):
+        for application in applications.values():
+            if isinstance(application, dict) and isinstance(application.get("packages"), list):
+                application_packages.update(p for p in application["packages"] if isinstance(p, str))
+    allowed = set(gaming_packages) | application_packages
+    errors: list[str] = []
+    for package in gaming_packages:
+        if package not in provenance:
+            errors.append(f"gaming package '{package}' is missing provenance metadata")
+    for name, entry in provenance.items():
+        if name not in allowed:
+            errors.append(f"gamingProvenance entry '{name}' does not match a Gaming package")
+            continue
+        if not isinstance(entry, dict):
+            errors.append(f"gamingProvenance entry '{name}' must be a mapping")
+            continue
+        if entry.get("source") not in PROVENANCE_SOURCES:
+            errors.append(f"gamingProvenance entry '{name}' has invalid source '{entry.get('source')}'")
+        source_url = entry.get("sourceUrl")
+        if not isinstance(source_url, str) or not source_url.startswith("https://"):
+            errors.append(f"gamingProvenance entry '{name}' needs an https sourceUrl")
+        licenses = entry.get("licenses")
+        if not isinstance(licenses, list) or not licenses or any(not isinstance(item, str) or not item for item in licenses):
+            errors.append(f"gamingProvenance entry '{name}' needs a non-empty licenses list")
+        if entry.get("licenseClass") not in LICENSE_CLASSES:
+            errors.append(f"gamingProvenance entry '{name}' has invalid licenseClass '{entry.get('licenseClass')}'")
+        if entry.get("installMethod") not in INSTALL_METHODS:
+            errors.append(f"gamingProvenance entry '{name}' has invalid installMethod '{entry.get('installMethod')}'")
+        if not isinstance(entry.get("optional"), bool):
+            errors.append(f"gamingProvenance entry '{name}' optional must be a boolean")
+        if entry.get("support") not in MATURITIES:
+            errors.append(f"gamingProvenance entry '{name}' has invalid support maturity '{entry.get('support')}'")
+        if entry.get("licenseClass") == "proprietary" and entry.get("optional") is not True:
+            errors.append(f"proprietary gamingProvenance entry '{name}' must be optional and opt-in")
+        if entry.get("source") == "aur" and (entry.get("installMethod") != "manual" or entry.get("optional") is not True):
+            errors.append(f"AUR gamingProvenance entry '{name}' must be optional with manual install; AUR recipes are never executed")
+        if name in application_packages and name not in gaming_packages and entry.get("optional") is not True:
+            errors.append(f"selectable gaming application package '{name}' must be optional in gamingProvenance")
+    errors.extend(_validate_gaming_selection_model(doc, provenance, gaming_packages))
+    return errors
+
+
+REQUIRED_GAMING_SPECIALIZATIONS = {
+    "desktop-gaming",
+    "handheld",
+    "streaming",
+    "multi-launcher",
+    "vr",
+    "advanced-compat",
+}
+
+
+def _validate_gaming_selection_model(doc: dict, provenance: dict, gaming_packages: list[str]) -> list[str]:
+    errors: list[str] = []
+    applications = doc.get("gamingApplications")
+    specializations = doc.get("gamingSpecializations")
+    platform = doc.get("gamingPlatformPackages")
+    if not isinstance(applications, dict) or not applications:
+        return ["gamingApplications must be a non-empty mapping"]
+    if not isinstance(specializations, dict) or not specializations:
+        return errors + ["gamingSpecializations must be a non-empty mapping"]
+    if set(specializations) != REQUIRED_GAMING_SPECIALIZATIONS:
+        errors.append("gamingSpecializations must define exactly the six required specializations")
+    defaults = [spec_id for spec_id, spec in specializations.items() if isinstance(spec, dict) and spec.get("default") is True]
+    if defaults != ["desktop-gaming"]:
+        errors.append("desktop-gaming must be the only default gaming specialization")
+    if not isinstance(platform, list) or not platform:
+        errors.append("gamingPlatformPackages must be a non-empty list")
+    else:
+        for package in platform:
+            if package not in provenance:
+                errors.append(f"gaming platform package '{package}' is missing provenance metadata")
+            if package not in gaming_packages:
+                errors.append(f"gaming platform package '{package}' must belong to the gaming package set")
+    for app_id, application in applications.items():
+        if not isinstance(application, dict) or not isinstance(application.get("title"), str) or not application["title"]:
+            errors.append(f"gaming application '{app_id}' needs a title")
+            continue
+        packages = application.get("packages")
+        if not isinstance(packages, list) or any(not isinstance(p, str) or not p for p in packages):
+            errors.append(f"gaming application '{app_id}' packages must be a list of package names")
+            continue
+        if not packages and application.get("availability") != "reference-only":
+            errors.append(f"gaming application '{app_id}' has no packages and is not reference-only")
+        for package in packages:
+            if package not in provenance:
+                errors.append(f"gaming application '{app_id}' package '{package}' is missing provenance metadata")
+    for spec_id, specialization in specializations.items():
+        if not isinstance(specialization, dict) or not isinstance(specialization.get("title"), str) or not specialization["title"]:
+            errors.append(f"gaming specialization '{spec_id}' needs a title")
+            continue
+        apps = specialization.get("applications")
+        if not isinstance(apps, list) or any(not isinstance(a, str) for a in apps):
+            errors.append(f"gaming specialization '{spec_id}' applications must be a list of application ids")
+            continue
+        if len(apps) != len(set(apps)):
+            errors.append(f"gaming specialization '{spec_id}' has duplicate applications")
+        for app_id in apps:
+            if app_id not in applications:
+                errors.append(f"gaming specialization '{spec_id}' references unknown application '{app_id}'")
+    return errors
+
+
+def _gaming_application_is_proprietary(doc: dict, app_id: str) -> bool:
+    provenance = doc.get("gamingProvenance") or {}
+    application = (doc.get("gamingApplications") or {}).get(app_id) or {}
+    return any(
+        (provenance.get(package) or {}).get("licenseClass") == "proprietary"
+        for package in application.get("packages", [])
+    )
+
+
+def resolve_gaming_selection(
+    doc: dict,
+    specialization_ids: list[str] | tuple[str, ...] = (),
+    application_ids: list[str] | tuple[str, ...] = (),
+) -> dict:
+    """Resolve a user Gaming selection into a deterministic package plan.
+
+    Specialization membership never installs proprietary applications:
+    those need an explicit application-level selection. Reference-only
+    applications (managed outside the catalogue, e.g. SteamVR inside
+    Steam) fail with an actionable error instead of silently falling
+    back. GPU drivers are never resolved here: they are a hardware
+    decision for the installer/first-boot diagnostics, not a package
+    catalogue promise.
+    """
+    applications = doc.get("gamingApplications") or {}
+    specializations = doc.get("gamingSpecializations") or {}
+    provenance = doc.get("gamingProvenance") or {}
+    unknown_specs = [item for item in specialization_ids if item not in specializations]
+    if unknown_specs:
+        raise ValueError(
+            f"unknown gaming specialization '{unknown_specs[0]}' (valid: {', '.join(sorted(specializations))})"
+        )
+    unknown_apps = [item for item in application_ids if item not in applications]
+    if unknown_apps:
+        raise ValueError(
+            f"unknown gaming application '{unknown_apps[0]}' (valid: {', '.join(sorted(applications))})"
+        )
+    selected: list[str] = []
+    opt_in_required: list[str] = []
+    for spec_id in specialization_ids:
+        for app_id in specializations[spec_id].get("applications", []):
+            if _gaming_application_is_proprietary(doc, app_id):
+                if app_id not in opt_in_required:
+                    opt_in_required.append(app_id)
+                continue
+            if app_id not in selected:
+                selected.append(app_id)
+    for app_id in application_ids:
+        if app_id not in selected:
+            selected.append(app_id)
+    packages: list[str] = []
+    for package in doc.get("gamingPlatformPackages") or []:
+        if package not in packages:
+            packages.append(package)
+    experimental: list[str] = []
+    for app_id in selected:
+        application = applications[app_id]
+        if application.get("availability") == "reference-only" or not application.get("packages"):
+            raise ValueError(
+                f"gaming application '{app_id}' is reference-only and cannot be installed from the catalogue; "
+                "remove it from the selection"
+            )
+        if application.get("experimental") and app_id not in experimental:
+            experimental.append(app_id)
+        for package in application["packages"]:
+            if package not in packages:
+                packages.append(package)
+    for spec_id in specialization_ids:
+        if specializations[spec_id].get("experimental") and spec_id not in experimental:
+            experimental.append(spec_id)
+    return {
+        "schemaVersion": 1,
+        "specializations": list(specialization_ids),
+        "applications": selected,
+        "packages": packages,
+        "packageProvenance": {package: provenance[package] for package in packages if package in provenance},
+        "proprietaryOptInRequired": opt_in_required,
+        "experimental": experimental,
+    }
+
+
 def resolve_studio_selection(
     doc: dict,
     specialization_ids: list[str] | tuple[str, ...] = (),
@@ -452,7 +655,13 @@ def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = 
         for package in package_set.get("optionalPackages", []):
             if package not in packages and package not in optional_packages:
                 optional_packages.append(package)
-    provenance_index = doc.get("studioProvenance") if isinstance(doc.get("studioProvenance"), dict) else {}
+    # Provenance is edition-scoped: a shared package (for example
+    # obs-studio) must report the provenance of the edition being
+    # resolved, never the other edition's optional/opt-in flags.
+    provenance_key = "gamingProvenance" if edition_name == "gaming" else "studioProvenance"
+    provenance_index: dict = {}
+    if isinstance(doc.get(provenance_key), dict):
+        provenance_index.update(doc[provenance_key])
     package_provenance = {
         package: provenance_index[package] for package in packages if package in provenance_index
     }
@@ -481,18 +690,21 @@ def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Resolve a HorneroOS edition package composition")
-    parser.add_argument("edition", choices=("desktop", "server", "agents", "studio"))
+    parser.add_argument("edition", choices=("desktop", "server", "agents", "studio", "gaming"))
     parser.add_argument("--compositor", choices=("hyprland", "niri"))
     parser.add_argument("--json", action="store_true", help="Print machine-readable composition")
-    parser.add_argument("--specialization", action="append", default=[], help="Studio specialization id (repeatable, studio only)")
-    parser.add_argument("--application", action="append", default=[], help="Studio application id (repeatable, studio only)")
+    parser.add_argument("--specialization", action="append", default=[], help="Studio/Gaming specialization id (repeatable, studio and gaming only)")
+    parser.add_argument("--application", action="append", default=[], help="Studio/Gaming application id (repeatable, studio and gaming only)")
     args = parser.parse_args()
     try:
         if args.specialization or args.application:
-            if args.edition != "studio":
-                parser.error("--specialization/--application are only valid for the studio edition")
-            print(json.dumps(resolve_studio_selection(load_catalogue(), args.specialization, args.application), indent=2))
-            return 0
+            if args.edition == "studio":
+                print(json.dumps(resolve_studio_selection(load_catalogue(), args.specialization, args.application), indent=2))
+                return 0
+            if args.edition == "gaming":
+                print(json.dumps(resolve_gaming_selection(load_catalogue(), args.specialization, args.application), indent=2))
+                return 0
+            parser.error("--specialization/--application are only valid for the studio and gaming editions")
         result = resolve_edition(load_catalogue(), args.edition, args.compositor)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
