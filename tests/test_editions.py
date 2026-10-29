@@ -13,13 +13,14 @@ resolver = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(resolver)
 
 
-def test_catalogue_has_the_four_user_facing_editions():
+def test_catalogue_has_the_five_user_facing_editions():
     catalogue = resolver.load_catalogue()
-    assert set(catalogue["editions"]) == {"desktop", "server", "agents", "studio"}
+    assert set(catalogue["editions"]) == {"desktop", "server", "agents", "studio", "gaming"}
     assert catalogue["editions"]["desktop"]["maturity"] == "preview"
     assert catalogue["editions"]["server"]["maturity"] == "planned"
     assert catalogue["editions"]["agents"]["maturity"] == "planned"
     assert catalogue["editions"]["studio"]["maturity"] == "preview"
+    assert catalogue["editions"]["gaming"]["maturity"] == "planned"
 
 
 def test_desktop_uses_one_selected_compositor_backend():
@@ -218,3 +219,35 @@ def test_studio_composition_excludes_legacy_pipewire_media_session():
         changed["studioProvenance"]["wireplumber"]
     )
     assert any("legacy package 'pipewire-media-session'" in error for error in resolver.validate_catalogue(changed))
+
+
+def test_gaming_inherits_desktop_and_selected_compositor():
+    catalogue = resolver.load_catalogue()
+    desktop = resolver.resolve_edition(catalogue, "desktop")
+    gaming = resolver.resolve_edition(catalogue, "gaming")
+    gaming_niri = resolver.resolve_edition(catalogue, "gaming", "niri")
+    assert gaming["extends"] if "extends" in gaming else True
+    assert set(desktop["packages"]) <= set(gaming["packages"])
+    assert "gamescope" in gaming["packages"]
+    assert "steam" not in gaming["packages"]
+    assert gaming_niri["compositor"] == "niri"
+    assert "gamescope" in gaming_niri["packages"]
+
+
+def test_gaming_provenance_rejects_proprietary_defaults_and_aur_execution():
+    import copy
+
+    catalogue = resolver.load_catalogue()
+
+    broken = copy.deepcopy(catalogue)
+    broken["gamingProvenance"]["steam"]["optional"] = False
+    assert any("must be optional" in e for e in resolver._validate_gaming_provenance(broken, broken["packageSets"]))
+
+    broken = copy.deepcopy(catalogue)
+    broken["gamingProvenance"]["bottles"]["installMethod"] = "pacman-repository"
+    assert any("AUR" in e for e in resolver._validate_gaming_provenance(broken, broken["packageSets"]))
+
+    broken = copy.deepcopy(catalogue)
+    del broken["gamingProvenance"]["gamescope"]
+    errors = resolver._validate_gaming_provenance(broken, broken["packageSets"])
+    assert any("gamescope" in e for e in errors)

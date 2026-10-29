@@ -27,6 +27,7 @@ Commands:
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   system        Installed edition and active compositor information
   studio        Studio selection state and read-only diagnostics (doctor, selection)
+  gaming        Gaming readiness diagnostics (doctor)
   assistant     Optional Hermes AI assistant (status, enable, disable, tools, knowledge, ask, stop)
   completion    Print shell completions
   help          Show help for a command
@@ -89,6 +90,12 @@ Examples:
 		'studio' {
 			return 'Usage: horneroctl studio <doctor|selection> [options]\n\nStudio workload selection state and diagnostics. The canonical\nspecialization/application model lives in editions/catalogue.yaml;\nthis command validates stable IDs and records user selection intent.\nIt never installs packages: recording a selection is not an install,\nand package lifecycle is a separate, later step.\n\n  doctor              Read-only Studio health checks
   jobs                Render jobs: submit, list, status, run, cancel, log\n  mode                Audio mode + Temporary Performance: show, audio, performance, restore\n  selection show      Show the recorded selection (default)\n  selection set       Record a selection (--specialization/--application, --dry-run)\n\nExamples:\n  horneroctl studio doctor\n  horneroctl studio selection show --json\n  horneroctl studio selection set --specialization audio-music-production --application reaper\n'
+		}
+		'gaming' {
+			return 'Usage: horneroctl gaming <doctor> [options]\n\nGaming readiness diagnostics. The canonical specialization and\napplication model lives in editions/catalogue.yaml; this command\nonly reads state and system capability. It never installs\npackages, never changes configuration, and never reports game\ncompatibility, hardware qualification, or measured performance.\nGaming remains planned.\n\n  doctor              Read-only Gaming readiness checks\n\nExamples:\n  horneroctl gaming doctor\n  horneroctl gaming doctor --json\n'
+		}
+		'gaming doctor' {
+			return 'Usage: horneroctl gaming doctor [--json|--quiet]\n\nRead-only checks: recorded selection validity, Vulkan loader and\nICD registration (64-bit loader plus 32-bit loader presence),\nSteam, Feral GameMode, Gamescope and MangoHud availability,\nPipeWire/WirePlumber and portal presence, controller visibility,\nand recovery readiness. Detection is not hardware qualification,\nand nothing here claims a game will run.\n\nExamples:\n  horneroctl gaming doctor\n  horneroctl gaming doctor --json\n'
 		}
 		'studio doctor' {
 			return 'Usage: horneroctl studio doctor [--json|--quiet]\n\nRead-only checks: recorded selection validity, PipeWire and\nWirePlumber presence, and the safe Balanced audio default. Never\nchanges anything and never reports quantum as measured latency.\n\nExamples:\n  horneroctl studio doctor\n  horneroctl studio doctor --json\n'
@@ -1468,7 +1475,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps system studio help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps system studio gaming help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1482,7 +1489,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware completion welcome wallpaper capture apps system assistant studio help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware completion welcome wallpaper capture apps system assistant studio gaming help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1509,5 +1516,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, re
 complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"
 complete -c horneroctl -f -n __fish_use_subcommand -a system -d "Installed edition and compositor"
 complete -c horneroctl -f -n __fish_use_subcommand -a studio -d "Studio selection and diagnostics"
+complete -c horneroctl -f -n __fish_use_subcommand -a gaming -d "Gaming readiness diagnostics"
 '
 }

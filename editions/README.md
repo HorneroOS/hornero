@@ -54,6 +54,27 @@ explicitly by application ID. Experimental applications are flagged, and
 reference-only entries (for example Penpot, which has no Arch package) fail
 with an actionable error instead of falling back to a full workstation.
 
+Gaming extends Desktop and is planned: it has no installable image yet.
+Its package layer carries the cross-vendor Mesa/Vulkan baseline, 32-bit
+compat, GameMode and MangoHud; compositor choice and graphics experience
+match Desktop, and Steam enters the package set from the gaming set.
+`gamingApplications` and `gamingSpecializations` mirror Studio's
+composable model with six profiles: Desktop Gaming (the only default),
+Handheld, Streaming, Multi-Launcher, VR (experimental), and Advanced
+Compatibility. Steam is proprietary and opt-in: only an explicit
+`--application steam` selects it. AUR entries stay manual and optional,
+reference-only entries (Heroic, SteamVR) fail actionably, and every package
+carries `gamingProvenance`. Resolve a plan without installing anything:
+
+```sh
+python3 scripts/resolve-edition.py gaming --specialization desktop-gaming
+python3 scripts/resolve-edition.py gaming --application steam
+```
+
+Gaming plans record hardware intent only. No consumer derives a GPU vendor
+driver from a PCI ID, and provenance is never a hardware-compatibility or
+performance claim.
+
 The shared base carries the filesystem, encryption, and GRUB tools needed by
 the Calamares installation path across editions. Desktop also owns SDDM and the
 Hornero greeter packages so the selected desktop composition can boot to its

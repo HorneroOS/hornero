@@ -21,7 +21,7 @@ import hornero_core
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'apps', 'system', 'assistant', 'studio', 'help']
+	'apps', 'system', 'assistant', 'studio', 'gaming', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -135,6 +135,9 @@ pub fn dispatch(args []string) int {
 		}
 		'studio' {
 			run_studio(rest[1..], mode)
+		}
+		'gaming' {
+			run_gaming(rest[1..], mode)
 		}
 		'assistant' {
 			run_assistant(rest[1..], mode)
@@ -302,6 +305,27 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			}
 		}
 		else { render(hornero_core.assistant_stop_report(opts.value), mode) }
+	}
+}
+
+fn run_gaming(args []string, mode hornero_core.RenderMode) int {
+	if args.len == 0 {
+		return render_error(hornero_core.err_usage('gaming.usage',
+			'expected a subcommand: doctor.\nExample: horneroctl gaming doctor --json'),
+			mode)
+	}
+	match args[0] {
+		'doctor' {
+			if args.len > 1 {
+				return render_error(hornero_core.err_usage('gaming.usage',
+					'unexpected argument: ${args[1]}.\nExample: horneroctl gaming doctor'), mode)
+			}
+			return render(hornero_core.gaming_doctor_result(), mode)
+		}
+		else {
+			return render_error(hornero_core.err_usage('gaming.usage',
+				'unknown gaming subcommand: ${args[0]}.\nExample: horneroctl gaming doctor'), mode)
+		}
 	}
 }
 
