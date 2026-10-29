@@ -1,0 +1,57 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview24
+#
+# Published pre-release. Historical manifests are never edited.
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview24
+date: "2026-10-29"
+description: >-
+  Fourth Desktop + Studio Preview ISO and the first with HorneroOS
+  Gaming (Preview) in the installer edition list. Product composition is
+  hornero 8436a8a97961d9f65a2e866e0584f4e4755741e1 (#332 promotes Gaming
+  from planned to preview in the canonical catalogue) with the signed
+  AUR horneroctl-bin 0.2.0_preview36-1; installer
+  02b17a19e3a62992977f0a3f27533f5cbe129ab3 renders Desktop, Studio and
+  Gaming base choices (Hyprland plus experimental Niri) from that
+  catalogue. Built only in the disposable build VM; guest and host
+  SHA-256 match and the detached signature verifies (see the release
+  checklist). A clean Gaming (Hyprland) install from this ISO passed in
+  a disposable QEMU/UEFI VM. Gaming is Preview, not supported: no Proton
+  gameplay, controller/handheld, AMD/Intel/hybrid, VRR/HDR or
+  suspend/resume qualification is claimed. Known gap carried from
+  earlier previews: the base composition catalogue has no PipeWire audio
+  stack (WirePlumber) outside the Studio set; `horneroctl gaming
+  doctor` reports it truthfully. The 2.6 GB ISO exceeds GitHub's 2 GB
+  asset limit and is distributed via Vercel Blob with checksum and
+  signature verification.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: ca8f5ca735ffbb8581537ac5b5f1a1d74082fcb0
+    status: pinned
+    subject: "shell pin shipped in the preview24 ISO lock (hornero-shell 1.2.56-1)"
+    notes: As reported by the installed system (`horneroctl version` on the VM-installed Gaming system).
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 811ecd73fd201de30cf333af53ccfa7cdb966740
+    status: pinned
+    subject: "config pin shipped in the preview24 ISO lock (hornero-config 0.3.11-1)"
+    notes: As reported by the installed system (`horneroctl version` on the VM-installed Gaming system).
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned. The ISO ships the signed AUR horneroctl-bin 0.2.0_preview36-1 (tag horneroctl-v0.2.0-preview36, product revision 8436a8a97961d9f65a2e866e0584f4e4755741e1) with `horneroctl gaming doctor`.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. The provisional Calamares installer (installer revision 02b17a19e3a62992977f0a3f27533f5cbe129ab3, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the ISO below; it is not yet a pinned component of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: "Reserved slot. Artifact: horneroos-2026.10-preview24-x86_64.iso; SHA-256 868e7d9ab09d1738e28aabeb47bb2e7d862b36d41bf061e9156ca51814f0e663 and signature recorded in releases/v0.2.0-preview24-checklist.md, built in a disposable VM with guest+host checksum verification. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."
