@@ -259,7 +259,7 @@ pub fn gaming_doctor_checks() []DoctorCheck {
 			detail: if present {
 				'recorded: ${sel.specializations.len} specialization(s), ${sel.applications.len} application(s)'
 			} else {
-				'no selection recorded (Gaming is planned; nothing is installed by default)'
+				'no selection recorded (Gaming is Preview; nothing is installed by default)'
 			}
 		}
 	}
