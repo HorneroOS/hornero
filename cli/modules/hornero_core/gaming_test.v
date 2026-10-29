@@ -89,6 +89,26 @@ fn test_gaming_doctor_reports_selection_and_capability_checks() {
 	assert selection.detail.contains('planned')
 }
 
+fn test_gaming_doctor_continues_after_invalid_selection() {
+	path := gaming_set_file('invalid-doctor')
+	defer {
+		gaming_unset_file()
+	}
+	os.write_file(path, '{"schemaVersion": 1, "specializations": ["esports"], "applications": []}\n') or {
+		assert false
+	}
+	checks := gaming_doctor_checks()
+	names := checks.map(it.name)
+	selection := checks.filter(it.name == 'gaming-selection')[0]
+	assert !selection.ok
+	assert 'vulkan-icd' in names
+	assert 'recovery-readiness' in names
+	// With Steam unselected, a missing binary is informational and a
+	// present one is fine: either way the check must not fail.
+	steam := checks.filter(it.name == 'steam')[0]
+	assert steam.ok
+}
+
 fn test_gaming_ids_cover_catalogue_model() {
 	assert gaming_specialization_ids.len == 6
 	assert 'desktop-gaming' in gaming_specialization_ids

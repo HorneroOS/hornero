@@ -165,6 +165,18 @@ fn file_check(name string, path string, present_detail string) DoctorCheck {
 	}
 }
 
+// gaming_selection_state never fails: it returns the selection, whether
+// a file was present, and the load error (empty when readable). Doctor
+// uses it so one broken state file cannot hide independent checks.
+fn gaming_selection_state() (GamingSelection, bool, string) {
+	sel, present := load_gaming_selection() or {
+		return GamingSelection{
+			schema_version: gaming_schema_version
+		}, false, err.msg()
+	}
+	return sel, present, ''
+}
+
 // gaming_doctor_checks is read-only. Platform probes report whether the
 // hardware-neutral Gaming platform is usable; application probes (Steam)
 // report capability only. A missing controller never fails Desktop
@@ -172,21 +184,26 @@ fn file_check(name string, path string, present_detail string) DoctorCheck {
 // Handheld specialization requires one, on qualified hardware.
 pub fn gaming_doctor_checks() []DoctorCheck {
 	mut checks := []DoctorCheck{}
-	sel, present := load_gaming_selection() or {
+	// An invalid selection fails its own check but never hides the
+	// independent capability checks below: diagnostics matter most
+	// precisely when state is broken. Without a readable selection,
+	// Steam is treated as not selected (informational only).
+	sel, present, load_error := gaming_selection_state()
+	if load_error.len > 0 {
 		checks << DoctorCheck{
 			name:   'gaming-selection'
 			ok:     false
-			detail: 'invalid selection state: ${err.msg()}'
+			detail: 'invalid selection state: ${load_error}'
 		}
-		return checks
-	}
-	checks << DoctorCheck{
-		name:   'gaming-selection'
-		ok:     true
-		detail: if present {
-			'recorded: ${sel.specializations.len} specialization(s), ${sel.applications.len} application(s)'
-		} else {
-			'no selection recorded (Gaming is planned; nothing is installed by default)'
+	} else {
+		checks << DoctorCheck{
+			name:   'gaming-selection'
+			ok:     true
+			detail: if present {
+				'recorded: ${sel.specializations.len} specialization(s), ${sel.applications.len} application(s)'
+			} else {
+				'no selection recorded (Gaming is planned; nothing is installed by default)'
+			}
 		}
 	}
 	checks << bin_check('vulkan-tools', 'vulkaninfo')
@@ -203,7 +220,17 @@ pub fn gaming_doctor_checks() []DoctorCheck {
 	}
 	checks << file_check('vulkan-32bit-loader', '/usr/lib32/libvulkan.so.1',
 		'32-bit Vulkan loader present (driver qualification is a hardware decision, not checked here)')
-	checks << bin_check('steam', 'steam')
+	// Steam is proprietary opt-in: missing Steam only fails readiness
+	// when the recorded selection actually selected it.
+	mut steam_check := bin_check('steam', 'steam')
+	if !steam_check.ok && 'steam' !in sel.applications {
+		steam_check = DoctorCheck{
+			name:   steam_check.name
+			ok:     true
+			detail: 'not selected (explicit opt-in only); ${steam_check.detail}'
+		}
+	}
+	checks << steam_check
 	checks << bin_check('gamemode', 'gamemoderun')
 	checks << bin_check('gamescope', 'gamescope')
 	checks << bin_check('mangohud', 'mangohud')
@@ -226,10 +253,20 @@ pub fn gaming_doctor_checks() []DoctorCheck {
 			'no controller detected (optional for Desktop Gaming; required only by the Handheld specialization on qualified hardware)'
 		}
 	}
+	// Recovery readiness is probed, never asserted: a fallback kernel
+	// image or a snapshot tool must actually be present.
+	lts_kernel := os.is_file('/boot/vmlinuz-linux-lts') || os.is_file('/boot/vmlinuz-linux-lts-fallback')
+	snapshot_tool := bin_check('snapper', 'snapper').ok || bin_check('timeshift', 'timeshift').ok
 	checks << DoctorCheck{
 		name:   'recovery-readiness'
-		ok:     true
-		detail: 'graphics recovery uses the system update/snapshot path; gaming doctor changes nothing and a known-good kernel (LTS where installed) remains the fallback'
+		ok:     lts_kernel || snapshot_tool
+		detail: if lts_kernel {
+			'LTS fallback kernel present in /boot; graphics recovery uses the system update/snapshot path and gaming doctor changes nothing'
+		} else if snapshot_tool {
+			'snapshot tool present; graphics recovery uses the system update/snapshot path and gaming doctor changes nothing'
+		} else {
+			'no LTS fallback kernel or snapshot tool detected; install linux-lts or configure snapshots before graphics-sensitive updates'
+		}
 	}
 	return checks
 }

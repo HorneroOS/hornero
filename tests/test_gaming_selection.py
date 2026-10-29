@@ -70,3 +70,13 @@ def test_selection_plan_is_deterministic_and_provenance_complete():
     assert first == second
     for package in first["packages"]:
         assert package in first["packageProvenance"]
+
+
+def test_provenance_is_edition_scoped_for_shared_packages():
+    catalogue = resolver.load_catalogue()
+    gaming = resolver.resolve_gaming_selection(catalogue, ["streaming"])
+    studio = resolver.resolve_studio_selection(
+        catalogue, ["streaming-content-creation"]
+    )
+    assert gaming["packageProvenance"]["obs-studio"]["optional"] is True
+    assert studio["packageProvenance"]["obs-studio"]["optional"] is False

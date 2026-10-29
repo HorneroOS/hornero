@@ -4,6 +4,8 @@ fn test_gaming_help_is_discoverable() {
 	assert command_help('gaming').contains('horneroctl gaming doctor')
 	assert command_help('gaming doctor').contains('Read-only')
 	assert command_help('gaming doctor').contains('not hardware qualification')
+	assert command_help('gaming doctor').contains('Examples:')
+	assert dispatch(['horneroctl', 'gaming', 'doctor', '--help']) == 0
 	assert root_help().contains('gaming')
 }
 

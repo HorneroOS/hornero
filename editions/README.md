@@ -57,7 +57,8 @@ with an actionable error instead of falling back to a full workstation.
 Gaming extends Desktop and is planned: it has no installable image yet.
 Its package layer carries the cross-vendor Mesa/Vulkan baseline, 32-bit
 compat, GameMode and MangoHud; compositor choice and graphics experience
-match Desktop, and Steam enters the package set from the gaming set.
+match Desktop. Steam is not in the gaming package set: it only enters
+when explicitly selected by application ID (see below).
 `gamingApplications` and `gamingSpecializations` mirror Studio's
 composable model with six profiles: Desktop Gaming (the only default),
 Handheld, Streaming, Multi-Launcher, VR (experimental), and Advanced

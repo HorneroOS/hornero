@@ -655,10 +655,13 @@ def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = 
         for package in package_set.get("optionalPackages", []):
             if package not in packages and package not in optional_packages:
                 optional_packages.append(package)
+    # Provenance is edition-scoped: a shared package (for example
+    # obs-studio) must report the provenance of the edition being
+    # resolved, never the other edition's optional/opt-in flags.
+    provenance_key = "gamingProvenance" if edition_name == "gaming" else "studioProvenance"
     provenance_index: dict = {}
-    for key in ("studioProvenance", "gamingProvenance"):
-        if isinstance(doc.get(key), dict):
-            provenance_index.update(doc[key])
+    if isinstance(doc.get(provenance_key), dict):
+        provenance_index.update(doc[provenance_key])
     package_provenance = {
         package: provenance_index[package] for package in packages if package in provenance_index
     }
