@@ -165,7 +165,7 @@ editions:
         licensing: user-supplied-windows-vst
   gaming:
     title: HorneroOS Gaming
-    maturity: planned
+    maturity: preview
     role: gaming-workstation
     extends: desktop
     packageSets: [gaming]
