@@ -173,7 +173,15 @@ def test_studio_resolution_exposes_provenance_without_changing_packages():
     assert result["packageProvenance"]["ardour"]["licenses"]
     assert {item["id"] for item in result["optionalIntegrations"]} == {"reaper", "yabridge"}
     desktop = resolver.resolve_edition(catalogue, "desktop")
-    assert desktop["packageProvenance"] == {}
+    # The base desktop set carries the PipeWire audio stack; its packages
+    # expose provenance like any other catalogued package.
+    assert set(desktop["packageProvenance"]) == {
+        "pipewire",
+        "pipewire-audio",
+        "pipewire-alsa",
+        "pipewire-pulse",
+        "wireplumber",
+    }
     assert desktop["optionalIntegrations"] == []
 
 
