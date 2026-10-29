@@ -87,3 +87,26 @@ def test_provenance_is_edition_scoped_for_shared_packages():
     )
     assert gaming["packageProvenance"]["obs-studio"]["optional"] is True
     assert studio["packageProvenance"]["obs-studio"]["optional"] is False
+
+
+# Vendor GPU driver packages must never enter a Gaming plan: the
+# catalogue is hardware-neutral for AMD, Intel, NVIDIA, hybrid and
+# unknown topologies alike, so every topology receives the same safe
+# Vulkan loader set and doctor reports capability only.
+VENDOR_DRIVER_PACKAGES = {
+    "nvidia", "nvidia-dkms", "nvidia-open", "nvidia-open-dkms",
+    "lib32-nvidia-utils", "nvidia-utils", "xf86-video-amdgpu",
+    "xf86-video-intel", "xf86-video-nouveau", "vulkan-radeon",
+    "lib32-vulkan-radeon", "vulkan-intel", "lib32-vulkan-intel",
+    "vulkan-nouveau", "lib32-vulkan-nouveau",
+}
+
+
+def test_gaming_plans_are_hardware_neutral_for_every_specialization():
+    catalogue = resolver.load_catalogue()
+    for specialization in catalogue["gamingSpecializations"]:
+        plan = resolver.resolve_gaming_selection(catalogue, [specialization])
+        packages = set(plan["packages"])
+        assert packages.isdisjoint(VENDOR_DRIVER_PACKAGES), specialization
+        assert "vulkan-icd-loader" in packages, specialization
+        assert "lib32-vulkan-icd-loader" in packages, specialization
