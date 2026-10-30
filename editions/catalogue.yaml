@@ -38,6 +38,8 @@ packageSets:
       - sddm
       - hornero-greeter
       - hornero-greeter-media-base
+      - zsh
+      - nano
       - pipewire
       - pipewire-audio
       - pipewire-alsa
