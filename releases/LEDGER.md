@@ -41,3 +41,4 @@ files, not this ledger; regenerate when a release is cut.
 | v0.2.0-preview23 | 2026-10-28 | — | `manifests/v0.2.0-preview23.yaml` | `ca8f5ca` | `811ecd7` | `releases/v0.2.0-preview23-checklist.md` |
 | v0.2.0-preview24 | 2026-10-29 | — | `manifests/v0.2.0-preview24.yaml` | `ca8f5ca` | `811ecd7` | `releases/v0.2.0-preview24-checklist.md` |
 | v0.2.0-preview25 | 2026-10-29 | — | `manifests/v0.2.0-preview25.yaml` | `ca8f5ca` | `811ecd7` | `releases/v0.2.0-preview25-checklist.md` |
+| v0.2.0-preview28 | 2026-10-30 | — | `manifests/v0.2.0-preview28.yaml` | `3fff466` | `17b9f61` | `releases/v0.2.0-preview28-checklist.md` |
