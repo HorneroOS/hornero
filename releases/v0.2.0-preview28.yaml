@@ -1,0 +1,32 @@
+# Hornero OS release: v0.2.0-preview28
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview28
+version: 0.2.0-preview28
+status: pre-release
+manifest: hornero-0.2.0-preview28
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview28-checklist.md
+summary: >-
+  Sixth Desktop + Studio + Gaming Preview ISO. Product c2f2ad7
+  (hornero#336) adds zsh and nano to the factory desktop set;
+  hornero-config 0.3.14-1 ships the factory Zsh baseline; installer
+  d02e877 (installer#47-#55) fixes the installed-target mirrorlist and
+  [multilib] restore, disables live-session idle locking, and writes
+  the HorneroOS os-release identity (ID=horneroos) on installed
+  targets. A clean Studio (Hyprland, UEFI, unencrypted) install from
+  this exact ISO passed in a disposable VM: /etc/os-release reports
+  ID=horneroos, the login shell is /usr/bin/zsh, EDITOR=nano,
+  `horneroctl studio doctor` 5/5, PipeWire and WirePlumber active,
+  core/extra/multilib synchronize, and an OBS 32.2.2 GUI recording
+  finalized a playable H.264/AAC file (ffprobe-verified). preview26
+  (live idle-lock failure) and preview27 (installed ID=arch) were
+  built and tested but never published. Desktop, Studio and Gaming
+  remain Preview; no physical-hardware, NVENC, camera or streaming
+  qualification is claimed.
+tag: v0.2.0-preview28
+published: true
