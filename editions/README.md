@@ -103,6 +103,41 @@ each installable composition. Its `/usr/lib/hornero/system-profile.json` file
 records the resolved profile and catalogue revision for post-install
 introspection; it does not define or duplicate package composition.
 
+## Kernels, bootloaders, and capabilities
+
+`kernels`, `bootloaders`, and `capabilities` are sibling catalogue maps and
+the only source for installation choices; no installer or CLI duplicates
+their package lists. Kernels are `linux` (the only default), `linux-lts`,
+`linux-zen`, and `linux-hardened`; each auto-adds exactly its matching
+`-headers` package, and a second installed kernel can be named fallback.
+Bootloaders are `grub` (UEFI and legacy BIOS) and `systemd-boot` (UEFI
+only — never offered on BIOS, since it cannot boot there). The resolver
+computes `espRecommendedMiB` as the bootloader base plus a per-kernel
+allowance per additional kernel. Capabilities are composable optional
+entries (packages plus systemd services): `bluetooth` (BlueZ stack and
+`bluetooth.service`, on by default for desktop-derived editions, reusing
+the `horneroctl hardware bluetooth doctor` contract), `printing`
+(CUPS/SANE), `openssh` (on by default for Server/Agents), and `developer`.
+
+Resolve a full installation plan (`schemaVersion: 2`) without installing:
+
+```sh
+python3 scripts/resolve-edition.py desktop --installation \
+  --kernel linux --kernel linux-lts --primary-kernel linux \
+  --fallback-kernel linux-lts --bootloader systemd-boot \
+  --capability printing --capability developer
+```
+
+Incompatibilities fail before any package list is produced: an empty or
+duplicated kernel set, a primary/fallback kernel outside the installed
+set, systemd-boot on BIOS, a capability on an edition it does not apply
+to, and unknown kernel/bootloader/capability IDs. Proprietary NVIDIA on
+`linux-hardened` (or with multiple kernels) resolves to the DKMS module
+rule and emits a `planWarnings` entry instead of failing. LUKS
+(`--encryption luks`) stays orthogonal to bootloader choice. The legacy
+`resolve_edition()` presets (Desktop/Studio/Gaming) are unchanged;
+`resolve_installation()` layers these choices on top of them.
+
 ## Studio audio and performance modes
 
 `studioAudioModes` defines Balanced (the only default), Low Latency, and

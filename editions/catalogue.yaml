@@ -129,6 +129,114 @@ compositors:
     maturity: planned
     packageSet: null
     capabilities: []
+# Installable kernels. Every kernel auto-adds exactly its matching headers
+# package in the resolver; headers are never offered without their kernel.
+# `linux` stays the only default. Fallback is a second installed kernel the
+# bootloader can boot when the primary fails, never a separate concept.
+kernels:
+  linux:
+    packages: [linux]
+    headers: linux-headers
+    image: vmlinuz-linux
+    maturity: supported
+    default: true
+  linux-lts:
+    packages: [linux-lts]
+    headers: linux-lts-headers
+    image: vmlinuz-linux-lts
+    maturity: supported
+    default: false
+  linux-zen:
+    packages: [linux-zen]
+    headers: linux-zen-headers
+    image: vmlinuz-linux-zen
+    maturity: supported
+    default: false
+  linux-hardened:
+    packages: [linux-hardened]
+    headers: linux-hardened-headers
+    image: vmlinuz-linux-hardened
+    maturity: supported
+    default: false
+# Bootloaders. A bootloader is only offered on firmware it can boot from:
+# systemd-boot is UEFI-only, GRUB covers UEFI and legacy BIOS. ESP sizing is
+# resolver-computed: espBaseMiB + perKernelMiB per additional kernel.
+bootloaders:
+  grub:
+    packages: [grub, efibootmgr]
+    firmwares: [uefi, bios]
+    espBaseMiB: 512
+    perKernelMiB: 256
+    default: true
+  systemd-boot:
+    packages: []
+    firmwares: [uefi]
+    requiresUefi: true
+    espBaseMiB: 1024
+    perKernelMiB: 256
+    default: false
+# Optional, composable system capabilities. A capability is a catalogue
+# entry (packages + systemd services + edition applicability), never a
+# package list duplicated in an installer or CLI. `bluetooth` reuses the
+# Bluetooth workstream contract: packages bluez/bluez-utils and unit
+# bluetooth.service (see horneroctl hardware bluetooth doctor).
+capabilities:
+  bluetooth:
+    title: Bluetooth
+    packages: [bluez, bluez-utils]
+    services: [bluetooth.service]
+    appliesTo: [desktop, studio, gaming]
+    defaultByEdition: {desktop: true, server: false, agents: false, studio: true, gaming: true}
+    conflicts: []
+    requires: []
+  printing:
+    title: Printing & Scanning
+    packages: [cups, system-config-printer, sane, simple-scan]
+    services: [cups.service]
+    appliesTo: [desktop, studio, gaming]
+    defaultByEdition: {desktop: false, server: false, agents: false, studio: false, gaming: false}
+    conflicts: []
+    requires: []
+  openssh:
+    title: OpenSSH server
+    packages: [openssh]
+    services: [sshd.service]
+    appliesTo: [desktop, server, agents, studio, gaming]
+    defaultByEdition: {desktop: false, server: true, agents: true, studio: false, gaming: false}
+    conflicts: []
+    requires: []
+  developer:
+    title: Developer profile
+    packages: [base-devel, git, gdb, strace]
+    services: []
+    appliesTo: [desktop, server, agents, studio, gaming]
+    defaultByEdition: {desktop: false, server: false, agents: false, studio: false, gaming: false}
+    conflicts: []
+    requires: []
+# Provenance for every kernel, bootloader, and capability package above,
+# in the same auditable shape as studioProvenance/gamingProvenance.
+installationProvenance:
+  linux: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/linux/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: false, support: supported}
+  linux-headers: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/linux-headers/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: false, support: supported}
+  linux-lts: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/linux-lts/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  linux-lts-headers: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/linux-lts-headers/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  linux-zen: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/linux-zen/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  linux-zen-headers: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/linux-zen-headers/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  linux-hardened: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/linux-hardened/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  linux-hardened-headers: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/linux-hardened-headers/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  grub: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/grub/", licenses: [GPL-3.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: false, support: supported}
+  efibootmgr: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/efibootmgr/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: false, support: supported}
+  bluez: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/bluez/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  bluez-utils: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/bluez-utils/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  cups: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/cups/", licenses: [Apache-2.0], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  system-config-printer: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/system-config-printer/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  sane: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/sane/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  simple-scan: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/simple-scan/", licenses: [GPL-3.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  openssh: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/openssh/", licenses: [BSD-2-Clause], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  base-devel: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/base-devel/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  git: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/git/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  gdb: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/gdb/", licenses: [GPL-3.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  strace: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/strace/", licenses: [LGPL-2.1-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
 editions:
   desktop:
     title: HorneroOS Desktop
