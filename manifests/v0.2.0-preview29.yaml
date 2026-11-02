@@ -1,6 +1,6 @@
 # Hornero OS composition manifest: hornero-0.2.0-preview29
 #
-# Candidate pre-release, not yet built or published.
+# Published signed pre-release (2026-11-02).
 
 apiVersion: hornero.os/v1
 kind: CompositionManifest
@@ -12,11 +12,9 @@ description: >-
   (hornero#342 gaming doctor GPU coherence) with the signed AUR
   horneroctl-bin 0.2.0_preview37-1 and hornero-config 0.3.15-1
   (hardware-neutral VA-API); installer
-  7a22148f2b31ce319ce81e0646a1956dae6f8ea3 renders Desktop, Studio and
+  42567e06cd26e61a789da486cfd4c4eff0311f6a renders Desktop, Studio and
   Gaming base choices (Hyprland plus experimental Niri) from that
-  catalogue and adds the verify-install success gate. Candidate only:
-  build, signature, and VM evidence are recorded in the release
-  checklist once executed. All editions remain Preview, not supported.
+  catalogue and adds the verify-install success gate. Build, signature, and VM evidence are recorded in the release checklist. All editions remain Preview, not supported.
 
 components:
   shell:
@@ -41,9 +39,9 @@ components:
   installer:
     repo: https://github.com/HorneroOS/installer
     status: future
-    notes: Reserved slot. The provisional Calamares installer (installer revision 7a22148f2b31ce319ce81e0646a1956dae6f8ea3, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the ISO below; it is not yet a pinned component of this composition.
+    notes: Reserved slot. The provisional Calamares installer (installer revision 42567e06cd26e61a789da486cfd4c4eff0311f6a, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the ISO below; it is not yet a pinned component of this composition.
   iso:
     repo: https://github.com/HorneroOS/hornero
     path: releases/
     status: future
-    notes: "Reserved slot. Artifact: horneroos-2026.10-preview29-x86_64.iso; SHA-256 and signature to be recorded in releases/v0.2.0-preview29-checklist.md after the disposable-VM build. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."
+    notes: "Reserved slot. Artifact: horneroos-2026.10-preview29-x86_64.iso; SHA-256 c64a8e13e0b5ee2109df60882dccaaa688913cbd2cd74e65c5d164af6ef2b1db recorded in releases/v0.2.0-preview29-checklist.md. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."
