@@ -70,10 +70,11 @@ jobs:
       - name: AUR GPG fresh-install regression
         run: |
           # makepkg refuses to run as root; the container starts as root.
+          # Clone the AUR git tree instead of the snapshot tarball: the
+          # tarball is CDN-cached and can lag the published PKGBUILD.
           useradd -m builder
-          mkdir -p /tmp/aur-snapshot
-          curl -fsSL https://aur.archlinux.org/cgit/aur.git/snapshot/horneroctl-bin.tar.gz \
-            | tar xz -C /tmp/aur-snapshot
+          git clone --depth 1 https://aur.archlinux.org/horneroctl-bin.git \
+            /tmp/aur-snapshot/horneroctl-bin
           chown -R builder:builder /tmp/aur-snapshot
           runuser -u builder -- \
             bash scripts/test-aur-gpg.sh /tmp/aur-snapshot/horneroctl-bin
