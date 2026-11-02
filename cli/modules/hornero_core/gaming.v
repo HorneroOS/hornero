@@ -222,6 +222,78 @@ pub fn gaming_selection_set_result(specializations []string, applications []stri
 		gaming_selection_data(sel, true, path))
 }
 
+// GpuCoherence carries probed facts about the NVIDIA/kernel state so
+// the diagnosis logic stays pure and unit-testable (pelicano P0-08/P1-13:
+// nvidia-utils present with no kernel module must be an actionable
+// failure, and a kernel updated-but-not-rebooted must not be diagnosed
+// as a broken driver).
+pub struct GpuCoherence {
+pub:
+	has_nvidia        bool
+	module_version    string
+	has_userspace     bool
+	running_kernel    string
+	installed_kernels []string
+}
+
+// gpu_coherence_check turns probed GPU/kernel facts into one actionable
+// diagnosis. It never claims NVENC, Vulkan, or hardware qualification.
+pub fn gpu_coherence_check(p GpuCoherence) DoctorCheck {
+	name := 'gpu-driver-coherence'
+	if !p.has_nvidia {
+		return DoctorCheck{
+			name:   name
+			ok:     true
+			detail: 'no NVIDIA GPU detected (PCI vendor 10de); graphics stack stays hardware-neutral'
+		}
+	}
+	if p.installed_kernels.len > 0 && p.running_kernel !in p.installed_kernels {
+		return DoctorCheck{
+			name:   name
+			ok:     false
+			detail: 'kernel updated but not rebooted: running ${p.running_kernel}, installed kernels: ${p.installed_kernels.join(', ')}; reboot before diagnosing the NVIDIA driver'
+		}
+	}
+	if p.module_version.len == 0 && p.has_userspace {
+		return DoctorCheck{
+			name:   name
+			ok:     false
+			detail: 'NVIDIA GPU present and userspace installed, but the kernel module is not loaded: install the module matching your kernel (nvidia-open for linux, nvidia-open-lts for linux-lts, or nvidia-open-dkms) and reboot; never use the NVIDIA .run installer'
+		}
+	}
+	if p.module_version.len == 0 {
+		return DoctorCheck{
+			name:   name
+			ok:     false
+			detail: 'NVIDIA GPU present but no NVIDIA driver installed: install nvidia-utils plus the module matching your kernel (nvidia-open, nvidia-open-lts, or nvidia-open-dkms), then reboot'
+		}
+	}
+	return DoctorCheck{
+		name:   name
+		ok:     true
+		detail: 'NVIDIA kernel module ${p.module_version} loaded on kernel ${p.running_kernel} (module presence is not NVENC/Vulkan qualification; validate encoding separately)'
+	}
+}
+
+fn gaming_gpu_probe() GpuCoherence {
+	mut has_nvidia := false
+	for entry in os.ls('/sys/bus/pci/devices') or { []string{} } {
+		vendor := os.read_file('/sys/bus/pci/devices/${entry}/vendor') or { '' }
+		if vendor.trim_space() == '0x10de' {
+			has_nvidia = true
+			break
+		}
+	}
+	module_version := (os.read_file('/sys/module/nvidia/version') or { '' }).trim_space()
+	return GpuCoherence{
+		has_nvidia:        has_nvidia
+		module_version:    module_version
+		has_userspace:     os.is_file('/usr/bin/nvidia-smi')
+		running_kernel:    os.uname().release
+		installed_kernels: os.ls('/usr/lib/modules') or { []string{} }
+	}
+}
+
 // gaming_selection_state never fails: it returns the selection, whether
 // a file was present, and the load error (empty when readable). Doctor
 // uses it so one broken state file cannot hide independent checks.
@@ -277,6 +349,7 @@ pub fn gaming_doctor_checks() []DoctorCheck {
 	}
 	checks << file_check('vulkan-32bit-loader', '/usr/lib32/libvulkan.so.1',
 		'32-bit Vulkan loader present (driver qualification is a hardware decision, not checked here)')
+	checks << gpu_coherence_check(gaming_gpu_probe())
 	// Steam is proprietary opt-in: missing Steam only fails readiness
 	// when the recorded selection actually selected it.
 	mut steam_check := bin_check('steam', 'steam')

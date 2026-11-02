@@ -81,6 +81,7 @@ fn test_gaming_doctor_reports_selection_and_capability_checks() {
 	assert 'vulkan-icd' in names
 	assert 'controllers' in names
 	assert 'recovery-readiness' in names
+	assert 'gpu-driver-coherence' in names
 	controllers := checks.filter(it.name == 'controllers')[0]
 	assert controllers.ok
 	assert controllers.detail.contains('not Handheld qualification') || controllers.detail.contains('Handheld')
@@ -107,6 +108,53 @@ fn test_gaming_doctor_continues_after_invalid_selection() {
 	// present one is fine: either way the check must not fail.
 	steam := checks.filter(it.name == 'steam')[0]
 	assert steam.ok
+}
+
+fn test_gpu_coherence_no_nvidia_is_neutral_ok() {
+	c := gpu_coherence_check(GpuCoherence{
+		has_nvidia:        false
+		running_kernel:    '6.1.0'
+		installed_kernels: ['6.1.0']
+	})
+	assert c.ok
+	assert c.detail.contains('hardware-neutral')
+}
+
+fn test_gpu_coherence_userspace_without_module_is_actionable() {
+	// pelicano P0-08: nvidia-utils installed, no kernel module package.
+	c := gpu_coherence_check(GpuCoherence{
+		has_nvidia:        true
+		has_userspace:     true
+		running_kernel:    '6.1.0'
+		installed_kernels: ['6.1.0']
+	})
+	assert !c.ok
+	assert c.detail.contains('nvidia-open')
+	assert c.detail.contains('.run')
+}
+
+fn test_gpu_coherence_kernel_not_rebooted_wins_over_driver() {
+	// P1-13: do not diagnose a broken driver before reboot.
+	c := gpu_coherence_check(GpuCoherence{
+		has_nvidia:        true
+		has_userspace:     true
+		running_kernel:    '6.1.0'
+		installed_kernels: ['6.2.0']
+	})
+	assert !c.ok
+	assert c.detail.contains('not rebooted')
+}
+
+fn test_gpu_coherence_loaded_module_ok_without_claiming_nvenc() {
+	c := gpu_coherence_check(GpuCoherence{
+		has_nvidia:        true
+		module_version:    '570.0'
+		has_userspace:     true
+		running_kernel:    '6.1.0'
+		installed_kernels: ['6.1.0']
+	})
+	assert c.ok
+	assert c.detail.contains('not NVENC')
 }
 
 fn test_gaming_selection_set_roundtrip_and_dry_run() {
