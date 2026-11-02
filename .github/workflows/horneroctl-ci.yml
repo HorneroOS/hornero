@@ -56,3 +56,32 @@ jobs:
       # is a human custody step (docs/RELEASE_SIGNING.md).
       - name: Signing smoke test
         run: bash scripts/test-signing.sh
+
+  aur-gpg-regression:
+    name: AUR GPG fresh-install regression
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    permissions:
+      contents: read
+    steps:
+      # persist-credentials: false — the regression script sources the
+      # AUR PKGBUILD, so no GitHub token may remain in the workspace.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+      # AUR end-user regression: a fresh keyring with an unreachable
+      # keyserver must still build the published horneroctl-bin by
+      # importing the shipped keys/pgp key; missing/unrelated keys and
+      # tampered downloads must fail. Tests the AUR snapshot users get.
+      - name: AUR GPG fresh-install regression
+        run: |
+          # makepkg refuses to run as root; the container starts as root.
+          # Clone the AUR git tree instead of the snapshot tarball: the
+          # tarball is CDN-cached and can lag the published PKGBUILD.
+          useradd -m builder
+          pacman -Sy --noconfirm git >/dev/null
+          git clone --depth 1 https://aur.archlinux.org/horneroctl-bin.git \
+            /tmp/aur-snapshot/horneroctl-bin
+          chown -R builder:builder /tmp/aur-snapshot
+          runuser -u builder -- \
+            bash scripts/test-aur-gpg.sh /tmp/aur-snapshot/horneroctl-bin
