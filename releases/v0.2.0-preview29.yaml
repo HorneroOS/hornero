@@ -16,11 +16,11 @@ summary: >-
   16f43a5 (hornero#342) adds the gaming doctor NVIDIA module/kernel
   coherence check to horneroctl-bin 0.2.0_preview37-1; hornero-config
   0.3.15-1 (config#114) stops forcing the NVIDIA VA-API driver on all
-  GPUs; installer 7a22148 adds the live terminal fix (installer#57),
+  GPUs; installer 42567e0 adds the live terminal fix (installer#57),
   the systemd-firstboot live mask (installer#59), and the
-  verify-install success gate (installer#60). Candidate: not yet
-  built or published; the checklist records executed evidence only.
+  verify-install success gate (installer#60). Signed and published after exact-artifact VM validation;
+  the checklist records the executed evidence.
   Desktop, Studio and Gaming remain Preview; no NVENC, camera,
   streaming, or >=16 GiB copytoram qualification is claimed.
 tag: v0.2.0-preview29
-published: false
+published: true
