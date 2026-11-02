@@ -12,6 +12,11 @@
 #   4. a tampered download is rejected.
 # The user's real keyring is never touched. Network is used only to
 # download the release assets named by the PKGBUILD sources.
+# Scope note: case 1 proves the manual-import path that always works.
+# Automatic helper retrieval (yay/paru fetching validpgpkeys from
+# keyservers) is a separate channel, covered by publishing the key to
+# public keyservers and verified with a fresh keyring at release time
+# (see docs/RELEASE_SIGNING.md); it is not re-proven here.
 #
 # Usage: scripts/test-aur-gpg.sh [stamped-package-dir]
 set -euo pipefail
@@ -32,12 +37,16 @@ fi
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
-pinned_fpr() {
+pinned_fprs() {
   # shellcheck disable=SC1091
-  ( source "${pkg_src}/PKGBUILD" >/dev/null 2>&1; printf '%s' "${validpgpkeys[0]:-}" )
+  ( source "${pkg_src}/PKGBUILD" >/dev/null 2>&1; printf '%s\n' "${validpgpkeys[@]}" )
 }
-FPR="$(pinned_fpr)"
-[[ "${FPR}" =~ ^[0-9A-F]{40}$ ]] || { echo "FAIL: pinned fingerprint not parsed: '${FPR}'" >&2; exit 1; }
+mapfile -t PINNED_FPRS < <(pinned_fprs)
+[[ ${#PINNED_FPRS[@]} -ge 1 ]] || { echo "FAIL: no validpgpkeys parsed" >&2; exit 1; }
+for fpr in "${PINNED_FPRS[@]}"; do
+  [[ "${fpr}" =~ ^[0-9A-F]{40}$ ]] || { echo "FAIL: pinned fingerprint not parsed: '${fpr}'" >&2; exit 1; }
+done
+FPR="${PINNED_FPRS[0]}"
 # The key ships as a declared package source (included in every AUR
 # snapshot tarball) and, for git clones, also under keys/pgp/.
 key_file="${pkg_src}/hornero-release.pub"
@@ -66,14 +75,23 @@ build() { # <gnupghome> <pkgdir>
     >"$2/build.log" 2>&1
 }
 
-echo "== case 1: fresh install, broken keyserver, shipped keys/pgp key =="
+echo "== case 1: fresh install, broken keyserver, shipped key =="
 home1="$(new_home fresh)"
 export GNUPGHOME="${home1}"
-actual_fpr="$(gpg --batch --with-colons --show-keys "${key_file}" \
-  | awk -F: '$1 == "fpr" { print $10; exit }')"
-[[ "${actual_fpr}" == "${FPR}" ]] || {
-  echo "FAIL: shipped key fingerprint ${actual_fpr} != pinned ${FPR}" >&2; exit 1; }
+# Import EVERY pinned key (key rotation keeps old + replacement in
+# validpgpkeys for a full cycle; the signing key may be any of them).
+# The shipped file may be a bundle; verify each pinned fingerprint is
+# actually present after import instead of trusting the first key.
 gpg --batch --quiet --import "${key_file}"
+for fpr in "${PINNED_FPRS[@]}"; do
+  per_key="${pkg_src}/keys/pgp/${fpr}.asc"
+  if [[ -s "${per_key}" ]]; then
+    gpg --batch --quiet --import "${per_key}"
+  fi
+  gpg --batch --list-keys "${fpr}" >/dev/null 2>&1 || {
+    echo "FAIL: pinned fingerprint ${fpr} not importable from shipped key material" >&2
+    exit 1; }
+done
 unset GNUPGHOME
 pkg1="$(copy_pkg fresh)"
 if ! build "${home1}" "${pkg1}"; then

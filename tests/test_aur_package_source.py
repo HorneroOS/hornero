@@ -107,7 +107,10 @@ def test_release_workflow_publishes_keys_pgp_assets_to_aur():
         for step in workflow["jobs"]["aur-publish"]["steps"]
         if step.get("name") == "Publish AUR package"
     )
-    assert "packaging/horneroctl-bin/keys/pgp/*.asc" in aur["with"]["assets"]
+    # The publish action copies assets into the AUR repo root, so the
+    # keys directory itself (not a keys/pgp/*.asc glob) must be passed
+    # to preserve the keys/pgp/ layout.
+    assert "packaging/horneroctl-bin/keys\n" in aur["with"]["assets"]
     assert "packaging/horneroctl-bin/hornero-release.pub" in aur["with"]["assets"]
 
 
