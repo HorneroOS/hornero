@@ -64,6 +64,7 @@ capture record start
 capture record stop
 capture screenshot
 config gui
+config snapshot restore
 hardware battery monitor
 hardware brightness down
 hardware brightness up
