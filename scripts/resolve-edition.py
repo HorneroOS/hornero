@@ -129,6 +129,7 @@ def validate_catalogue(doc: object) -> list[str]:
     if isinstance(gaming, dict) and gaming.get("extends") != "desktop":
         errors.append("Gaming must derive from Desktop")
     errors.extend(_validate_gaming_provenance(doc, sets))
+    errors.extend(_validate_installation_model(doc, editions))
     desktop_names = {"hornero-shell", "hornero-config", "horneroctl-bin", "quickshell", "hyprland", "niri"}
     server_sets = ["server"]
     for set_name in server_sets:
@@ -426,6 +427,301 @@ def _gaming_application_is_proprietary(doc: dict, app_id: str) -> bool:
     )
 
 
+REQUIRED_KERNELS = {"linux", "linux-lts", "linux-zen", "linux-hardened"}
+REQUIRED_BOOTLOADERS = {"grub", "systemd-boot"}
+REQUIRED_CAPABILITIES = {"bluetooth", "printing", "openssh", "developer"}
+FIRMWARES = {"uefi", "bios"}
+
+
+def _validate_installation_model(doc: dict, editions: object) -> list[str]:
+    errors: list[str] = []
+    kernels = doc.get("kernels")
+    bootloaders = doc.get("bootloaders")
+    capabilities = doc.get("capabilities")
+    provenance = doc.get("installationProvenance")
+    if not isinstance(kernels, dict) or set(kernels) != REQUIRED_KERNELS:
+        errors.append("kernels must define exactly linux, linux-lts, linux-zen, and linux-hardened")
+        kernels = kernels if isinstance(kernels, dict) else {}
+    if not isinstance(bootloaders, dict) or set(bootloaders) != REQUIRED_BOOTLOADERS:
+        errors.append("bootloaders must define exactly grub and systemd-boot")
+        bootloaders = bootloaders if isinstance(bootloaders, dict) else {}
+    if not isinstance(capabilities, dict) or set(capabilities) != REQUIRED_CAPABILITIES:
+        errors.append("capabilities must define exactly bluetooth, printing, openssh, and developer")
+        capabilities = capabilities if isinstance(capabilities, dict) else {}
+    if not isinstance(provenance, dict) or not provenance:
+        errors.append("installationProvenance must be a non-empty mapping")
+        provenance = {}
+    needed: set[str] = set()
+    for name, kernel in kernels.items():
+        if not isinstance(kernel, dict):
+            errors.append(f"kernel '{name}' must be a mapping")
+            continue
+        packages = kernel.get("packages")
+        if packages != [name]:
+            errors.append(f"kernel '{name}' packages must be ['{name}']")
+        if kernel.get("headers") != f"{name}-headers":
+            errors.append(f"kernel '{name}' headers must be '{name}-headers'")
+        if kernel.get("maturity") not in MATURITIES:
+            errors.append(f"kernel '{name}' has invalid maturity")
+        if isinstance(packages, list):
+            needed.update(p for p in packages if isinstance(p, str))
+        if isinstance(kernel.get("headers"), str):
+            needed.add(kernel["headers"])
+    if [n for n, k in kernels.items() if isinstance(k, dict) and k.get("default") is True] != ["linux"]:
+        errors.append("linux must be the only default kernel")
+    for name, loader in bootloaders.items():
+        if not isinstance(loader, dict):
+            errors.append(f"bootloader '{name}' must be a mapping")
+            continue
+        packages = loader.get("packages")
+        if not isinstance(packages, list) or any(not isinstance(p, str) or not p for p in packages):
+            errors.append(f"bootloader '{name}' packages must be a list of package names")
+        else:
+            needed.update(packages)
+        firmwares = loader.get("firmwares")
+        if not isinstance(firmwares, list) or not firmwares or not set(firmwares) <= FIRMWARES:
+            errors.append(f"bootloader '{name}' firmwares must be a non-empty subset of uefi/bios")
+        if loader.get("requiresUefi") is True and firmwares != ["uefi"]:
+            errors.append(f"bootloader '{name}' requires UEFI and must list firmwares [uefi] only")
+        for key in ("espBaseMiB", "perKernelMiB"):
+            if not isinstance(loader.get(key), int) or loader[key] <= 0:
+                errors.append(f"bootloader '{name}' {key} must be a positive integer")
+    if [n for n, b in bootloaders.items() if isinstance(b, dict) and b.get("default") is True] != ["grub"]:
+        errors.append("grub must be the only default bootloader")
+    for name, capability in capabilities.items():
+        if not isinstance(capability, dict):
+            errors.append(f"capability '{name}' must be a mapping")
+            continue
+        packages = capability.get("packages")
+        if not isinstance(packages, list) or not packages or any(not isinstance(p, str) or not p for p in packages):
+            errors.append(f"capability '{name}' must contain package names")
+        else:
+            needed.update(packages)
+        services = capability.get("services")
+        if not isinstance(services, list) or any(not isinstance(s, str) or not (s.endswith(".service") or s.endswith(".socket")) for s in services):
+            errors.append(f"capability '{name}' services must be systemd unit names")
+        applies = capability.get("appliesTo")
+        if not isinstance(applies, list) or not applies or (isinstance(editions, dict) and not set(applies) <= set(editions)):
+            errors.append(f"capability '{name}' appliesTo must list known editions")
+        defaults = capability.get("defaultByEdition")
+        if not isinstance(defaults, dict) or (isinstance(editions, dict) and set(defaults) != set(editions)) or any(not isinstance(v, bool) for v in (defaults or {}).values()):
+            errors.append(f"capability '{name}' defaultByEdition must give a boolean for every edition")
+        for key in ("conflicts", "requires"):
+            refs = capability.get(key)
+            if not isinstance(refs, list) or any(not isinstance(r, str) for r in refs):
+                errors.append(f"capability '{name}' {key} must be a list of capability ids")
+                continue
+            for ref in refs:
+                if ref not in capabilities:
+                    errors.append(f"capability '{name}' {key} references unknown capability '{ref}'")
+                if ref == name:
+                    errors.append(f"capability '{name}' must not reference itself in {key}")
+    for package in sorted(needed):
+        entry = provenance.get(package)
+        if not isinstance(entry, dict):
+            errors.append(f"installation package '{package}' is missing installationProvenance metadata")
+            continue
+        if entry.get("source") not in PROVENANCE_SOURCES:
+            errors.append(f"installationProvenance entry '{package}' has invalid source '{entry.get('source')}'")
+        if not isinstance(entry.get("sourceUrl"), str) or not entry["sourceUrl"].startswith("https://"):
+            errors.append(f"installationProvenance entry '{package}' needs an https sourceUrl")
+        if not isinstance(entry.get("licenses"), list) or not entry["licenses"]:
+            errors.append(f"installationProvenance entry '{package}' needs a non-empty licenses list")
+        if entry.get("licenseClass") not in LICENSE_CLASSES:
+            errors.append(f"installationProvenance entry '{package}' has invalid licenseClass")
+        if entry.get("installMethod") not in INSTALL_METHODS:
+            errors.append(f"installationProvenance entry '{package}' has invalid installMethod")
+        if not isinstance(entry.get("optional"), bool):
+            errors.append(f"installationProvenance entry '{package}' optional must be a boolean")
+        if entry.get("support") not in MATURITIES:
+            errors.append(f"installationProvenance entry '{package}' has invalid support maturity")
+        if entry.get("licenseClass") == "proprietary" and entry.get("optional") is not True:
+            errors.append(f"proprietary installationProvenance entry '{package}' must be optional and opt-in")
+    for package in provenance:
+        if package not in needed:
+            errors.append(f"installationProvenance entry '{package}' does not match a kernel, bootloader, or capability package")
+    return errors
+
+
+def resolve_installation(
+    doc: dict,
+    edition_name: str,
+    compositor_name: str | None = None,
+    kernels: list[str] | tuple[str, ...] | None = None,
+    primary_kernel: str | None = None,
+    fallback_kernel: str | None = None,
+    bootloader: str | None = None,
+    firmware: str = "uefi",
+    encryption: str = "none",
+    capabilities: list[str] | tuple[str, ...] | None = None,
+    disabled_capabilities: list[str] | tuple[str, ...] = (),
+    proprietary_nvidia: bool = False,
+) -> dict:
+    """Resolve an edition plus kernel/bootloader/capability selection.
+
+    Deterministic: identical selections produce identical plans. Legacy
+    resolve_edition() output is untouched; this layers the installation
+    choices on top of it, substituting kernels and bootloader packages
+    exactly once instead of appending duplicates.
+    """
+    kernel_map = doc.get("kernels") or {}
+    bootloader_map = doc.get("bootloaders") or {}
+    capability_map = doc.get("capabilities") or {}
+    if kernels is None:
+        kernels = [name for name, k in kernel_map.items() if isinstance(k, dict) and k.get("default") is True]
+    kernels = list(kernels)
+    if not kernels:
+        raise ValueError(f"select at least one kernel (valid: {', '.join(sorted(kernel_map))})")
+    if len(kernels) != len(set(kernels)):
+        raise ValueError("kernels must not contain duplicates")
+    for name in kernels:
+        if name not in kernel_map:
+            raise ValueError(f"unknown kernel '{name}' (valid: {', '.join(sorted(kernel_map))})")
+    primary_kernel = primary_kernel or kernels[0]
+    if primary_kernel not in kernels:
+        raise ValueError("the primary kernel must be one of the installed kernels")
+    if fallback_kernel is not None:
+        if fallback_kernel not in kernels:
+            raise ValueError("the fallback kernel must be one of the installed kernels")
+        if fallback_kernel == primary_kernel:
+            raise ValueError("the fallback kernel must differ from the primary kernel")
+    if bootloader is None:
+        bootloader = next((n for n, b in bootloader_map.items() if isinstance(b, dict) and b.get("default") is True), "grub")
+    if bootloader not in bootloader_map:
+        raise ValueError(f"unknown bootloader '{bootloader}' (valid: {', '.join(sorted(bootloader_map))})")
+    if firmware not in FIRMWARES:
+        raise ValueError(f"unknown firmware '{firmware}' (valid: {', '.join(sorted(FIRMWARES))})")
+    loader = bootloader_map[bootloader]
+    if firmware not in loader.get("firmwares", []):
+        if bootloader == "systemd-boot" and firmware == "bios":
+            raise ValueError("systemd-boot needs UEFI - this machine booted in legacy BIOS mode. Choose GRUB or reboot the installer in UEFI mode.")
+        raise ValueError(f"bootloader '{bootloader}' does not support firmware '{firmware}' (valid: {', '.join(loader.get('firmwares', []))})")
+    if encryption not in ("none", "luks"):
+        raise ValueError("encryption must be 'none' or 'luks'")
+    if capabilities is None:
+        selected_caps = [name for name, cap in capability_map.items() if isinstance(cap, dict) and (cap.get("defaultByEdition") or {}).get(edition_name) is True]
+    else:
+        selected_caps = list(dict.fromkeys(capabilities))
+    for name in selected_caps:
+        if name not in capability_map:
+            raise ValueError(f"unknown capability '{name}' (valid: {', '.join(sorted(capability_map))})")
+    for name in disabled_capabilities:
+        if name not in capability_map:
+            raise ValueError(f"unknown capability '{name}' (valid: {', '.join(sorted(capability_map))})")
+        if name in selected_caps:
+            selected_caps.remove(name)
+    # Transitive requires, in catalogue order for determinism.
+    changed = True
+    while changed:
+        changed = False
+        for name in list(selected_caps):
+            for req in capability_map[name].get("requires", []):
+                if req not in selected_caps:
+                    selected_caps.append(req)
+                    changed = True
+    selected_caps = [name for name in capability_map if name in selected_caps]
+    for name in selected_caps:
+        capability = capability_map[name]
+        if edition_name not in capability.get("appliesTo", []):
+            raise ValueError(f"capability '{name}' is not available for edition '{edition_name}'; deselect it or choose another edition")
+        for other in capability.get("conflicts", []):
+            if other in selected_caps:
+                raise ValueError(f"capability '{name}' conflicts with capability '{other}'; select only one")
+    base = resolve_edition(doc, edition_name, compositor_name)
+    kernel_packages: set[str] = set()
+    for kernel in kernel_map.values():
+        if isinstance(kernel, dict):
+            kernel_packages.update(kernel.get("packages") or [])
+            if isinstance(kernel.get("headers"), str):
+                kernel_packages.add(kernel["headers"])
+    bootloader_packages: set[str] = set()
+    for item in bootloader_map.values():
+        if isinstance(item, dict):
+            bootloader_packages.update(item.get("packages") or [])
+    ordered_kernels = [primary_kernel] + [k for k in kernels if k != primary_kernel]
+    new_kernel_packages: list[str] = []
+    for name in ordered_kernels:
+        for package in kernel_map[name].get("packages") or []:
+            if package not in new_kernel_packages:
+                new_kernel_packages.append(package)
+        headers = kernel_map[name].get("headers")
+        if headers and headers not in new_kernel_packages:
+            new_kernel_packages.append(headers)
+    packages: list[str] = []
+    kernel_done = bootloader_done = False
+    for package in base["packages"]:
+        if package in kernel_packages:
+            if not kernel_done:
+                packages.extend(p for p in new_kernel_packages if p not in packages)
+                kernel_done = True
+            continue
+        if package in bootloader_packages:
+            if not bootloader_done:
+                packages.extend(p for p in loader.get("packages") or [] if p not in packages)
+                bootloader_done = True
+            continue
+        if package not in packages:
+            packages.append(package)
+    if not kernel_done:
+        packages = new_kernel_packages + packages
+    services: list[str] = []
+    for name in selected_caps:
+        for package in capability_map[name].get("packages") or []:
+            if package not in packages:
+                packages.append(package)
+        for service in capability_map[name].get("services") or []:
+            if service not in services:
+                services.append(service)
+    warnings: list[str] = []
+    nvidia_module: str | None = None
+    if proprietary_nvidia:
+        if set(kernels) == {"linux"}:
+            nvidia_module = "nvidia-open"
+        elif set(kernels) == {"linux-lts"}:
+            nvidia_module = "nvidia-open-lts"
+        else:
+            nvidia_module = "nvidia-open-dkms"
+        if "linux-hardened" in kernels:
+            warnings.append("linux-hardened with the proprietary NVIDIA driver is unsupported upstream and may fail to build or boot; prefer linux or linux-lts, or use the open kernel module at your own risk")
+        if len(kernels) > 1:
+            warnings.append(f"multiple kernels with NVIDIA use {nvidia_module} only; never combine per-kernel NVIDIA module packages")
+    provenance = doc.get("installationProvenance") or {}
+    merged_provenance = dict(base.get("packageProvenance") or {})
+    for package in packages:
+        if package in provenance:
+            merged_provenance[package] = provenance[package]
+    esp = int(loader["espBaseMiB"]) + int(loader["perKernelMiB"]) * (len(kernels) - 1)
+    return {
+        "schemaVersion": 2,
+        "edition": edition_name,
+        "title": base["title"],
+        "maturity": base["maturity"],
+        "role": base["role"],
+        "compositor": base["compositor"],
+        "selection": {
+            "edition": edition_name,
+            "compositor": base["compositor"],
+            "kernels": ordered_kernels,
+            "primaryKernel": primary_kernel,
+            "fallbackKernel": fallback_kernel,
+            "bootloader": bootloader,
+            "firmware": firmware,
+            "encryption": encryption,
+            "capabilities": selected_caps,
+        },
+        "packages": packages,
+        "packageSets": base["packageSets"],
+        "optionalPackages": base["optionalPackages"],
+        "packageProvenance": {p: merged_provenance[p] for p in packages if p in merged_provenance},
+        "services": services,
+        "espRecommendedMiB": esp,
+        "kernelImages": [kernel_map[k].get("image") for k in ordered_kernels],
+        "nvidiaModule": nvidia_module,
+        "proprietaryOptInRequired": base.get("proprietaryOptInRequired", []),
+        "planWarnings": warnings,
+    }
+
+
 def resolve_gaming_selection(
     doc: dict,
     specialization_ids: list[str] | tuple[str, ...] = (),
@@ -695,8 +991,27 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Print machine-readable composition")
     parser.add_argument("--specialization", action="append", default=[], help="Studio/Gaming specialization id (repeatable, studio and gaming only)")
     parser.add_argument("--application", action="append", default=[], help="Studio/Gaming application id (repeatable, studio and gaming only)")
+    parser.add_argument("--installation", action="store_true", help="Resolve a full installation plan (kernel/bootloader/capabilities)")
+    parser.add_argument("--kernel", action="append", default=[], dest="kernels", help="Kernel id (repeatable, installation only)")
+    parser.add_argument("--primary-kernel", help="Primary kernel id (installation only)")
+    parser.add_argument("--fallback-kernel", help="Fallback kernel id (installation only)")
+    parser.add_argument("--bootloader", choices=("grub", "systemd-boot"), help="Bootloader id (installation only)")
+    parser.add_argument("--firmware", choices=("uefi", "bios"), default="uefi", help="Firmware type (installation only)")
+    parser.add_argument("--encryption", choices=("none", "luks"), default="none", help="Disk encryption (installation only)")
+    parser.add_argument("--capability", action="append", default=[], dest="capabilities", help="Capability id to add (repeatable, installation only)")
+    parser.add_argument("--no-capability", action="append", default=[], dest="no_capabilities", help="Capability id to remove (repeatable, installation only)")
+    parser.add_argument("--proprietary-nvidia", action="store_true", help="Plan for the proprietary NVIDIA driver (installation only)")
     args = parser.parse_args()
     try:
+        installation_requested = args.installation or bool(args.kernels or args.primary_kernel or args.fallback_kernel or args.bootloader or args.capabilities or args.no_capabilities or args.proprietary_nvidia)
+        if installation_requested:
+            if args.specialization or args.application:
+                parser.error("--specialization/--application cannot be combined with installation options in one invocation")
+            doc = load_catalogue()
+            defaults = [name for name, cap in (doc.get("capabilities") or {}).items() if (cap.get("defaultByEdition") or {}).get(args.edition) is True]
+            selected = list(dict.fromkeys(defaults + args.capabilities))
+            print(json.dumps(resolve_installation(doc, args.edition, args.compositor, kernels=args.kernels or None, primary_kernel=args.primary_kernel, fallback_kernel=args.fallback_kernel, bootloader=args.bootloader, firmware=args.firmware, encryption=args.encryption, capabilities=selected, disabled_capabilities=args.no_capabilities, proprietary_nvidia=args.proprietary_nvidia), indent=2))
+            return 0
         if args.specialization or args.application:
             if args.edition == "studio":
                 print(json.dumps(resolve_studio_selection(load_catalogue(), args.specialization, args.application), indent=2))
