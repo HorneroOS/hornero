@@ -1,0 +1,32 @@
+# Hornero OS release: v0.2.0-preview30
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview30
+version: 0.2.0-preview30
+status: pre-release
+manifest: hornero-0.2.0-preview30
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview30-checklist.md
+summary: >-
+  Eighth Desktop + Studio + Gaming Preview ISO. Bluetooth works out
+  of the box: horneroctl bluetooth backend (hornero#350), BlueZ and
+  WirePlumber factory defaults (config#117, hornero-config
+  0.3.17-1), installer service enablement (installer#69) and the
+  Shell pairing UX with hornero-bt-agent (shell#343, hornero-shell
+  1.2.59-1). Also ships the fixes found by dogfooding on pelicano:
+  bare `qs` finds the packaged shell (shell#344), Config loads on
+  current Quickshell (shell#345), shell start never reports an
+  empty PID (hornero#353), the verify gate accepts real
+  bluetooth.target.wants enablement (installer#74), and the
+  greeter preselects the installed desktop instead of the
+  experimental Gaming session (installer#75). Signed and
+  published after exact-artifact VM validation; the checklist
+  records the executed evidence. Desktop, Studio and Gaming
+  remain Preview; no NVENC, camera, streaming, Bluetooth
+  hardware, or >=16 GiB copytoram qualification is claimed.
+tag: v0.2.0-preview30
+published: true
