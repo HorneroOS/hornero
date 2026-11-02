@@ -38,8 +38,12 @@ pinned_fpr() {
 }
 FPR="$(pinned_fpr)"
 [[ "${FPR}" =~ ^[0-9A-F]{40}$ ]] || { echo "FAIL: pinned fingerprint not parsed: '${FPR}'" >&2; exit 1; }
-key_file="${pkg_src}/keys/pgp/${FPR}.asc"
-[[ -s "${key_file}" ]] || { echo "FAIL: shipped key missing: ${key_file}" >&2; exit 1; }
+# The key ships as a declared package source (included in every AUR
+# snapshot tarball) and, for git clones, also under keys/pgp/.
+key_file="${pkg_src}/hornero-release.pub"
+[[ -s "${key_file}" ]] || key_file="${pkg_src}/keys/pgp/${FPR}.asc"
+[[ -s "${key_file}" ]] || {
+  echo "FAIL: shipped key missing: ${pkg_src}/hornero-release.pub" >&2; exit 1; }
 
 new_home() {
   local home="${work}/gnupg-$1"

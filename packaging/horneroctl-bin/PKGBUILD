@@ -20,6 +20,16 @@ optdepends=(
   'minisign: verify signed HorneroOS community plugin registry indexes'
   'hornero-shell: validate community plugin packages with the Shell-owned contract checker'
 )
+# The release public key ships AS A PACKAGE SOURCE on purpose: AUR
+# snapshot tarballs only include the PKGBUILD, .SRCINFO and declared
+# local sources, so this is the only shipped file every install path
+# (git clone, snapshot, AUR helper) is guaranteed to receive. Import it
+# once with `gpg --import hornero-release.pub` (helpers may also
+# fetch the same key from public keyservers); its fingerprint must
+# match validpgpkeys below. The stamp step refreshes this file and its
+# sha256 from packaging/keys/hornero-release.pub.asc at release time.
+source=('hornero-release.pub')
+sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
 source_x86_64=(
   "horneroctl-${pkgver}::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-x86_64"
   "horneroctl-${pkgver}.asc::https://github.com/HorneroOS/hornero/releases/download/${_reltag}/horneroctl-linux-x86_64.asc"

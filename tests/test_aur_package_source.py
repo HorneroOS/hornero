@@ -77,11 +77,19 @@ def test_aur_package_ships_pinned_release_key_in_keys_pgp():
     # obtain the release key was a keyserver lookup. The key must ship
     # next to the PKGBUILD (Arch keys/pgp convention), byte-identical to
     # the canonical committed public key.
+    canonical = (ROOT / "packaging/keys/hornero-release.pub.asc").read_bytes()
     shipped = (
         ROOT / "packaging/horneroctl-bin/keys/pgp" / f"{FPR}.asc"
     ).read_bytes()
-    canonical = (ROOT / "packaging/keys/hornero-release.pub.asc").read_bytes()
     assert shipped == canonical
+    # AUR snapshot tarballs only include declared local sources, so the
+    # key must also be a package source at the package root.
+    source_copy = (
+        ROOT / "packaging/horneroctl-bin/hornero-release.pub"
+    ).read_bytes()
+    assert source_copy == canonical
+    pkgbuild = (ROOT / "packaging/horneroctl-bin/PKGBUILD").read_text()
+    assert "source=('hornero-release.pub')" in pkgbuild
 
 
 def test_stamp_script_regenerates_keys_pgp_from_committed_key():
@@ -100,6 +108,7 @@ def test_release_workflow_publishes_keys_pgp_assets_to_aur():
         if step.get("name") == "Publish AUR package"
     )
     assert "packaging/horneroctl-bin/keys/pgp/*.asc" in aur["with"]["assets"]
+    assert "packaging/horneroctl-bin/hornero-release.pub" in aur["with"]["assets"]
 
 
 def test_pkgbuild_never_weakens_signature_verification():
