@@ -11,13 +11,13 @@ description: >-
   composition is hornero fa91790b4ef1fa000b5cdefb819655b000231d73
   (Bluetooth backend #350/#351, shell start PID honesty #353) with
   the signed AUR horneroctl-bin 0.2.0_preview39-1, hornero-config
-  0.3.17-1 (BlueZ/WirePlumber defaults) and hornero-shell 1.2.59-1
-  (quickshell default config + FileView load fix); installer
-  f204e6e7f778e281ad2b875f952c2e1e7985808e adds Bluetooth service
-  enablement, the bluetooth.target.wants verify fix and the
-  greeter session preseed. Build, signature, and VM evidence are
-  recorded in the release checklist. All editions remain Preview,
-  not supported.
+  0.3.17-1 (BlueZ/WirePlumber factory defaults) and hornero-shell
+  1.2.59-1 (quickshell default config, Config FileView load fix);
+  installer f204e6e7f778e281ad2b875f952c2e1e7985808e adds
+  Bluetooth service enablement, the bluetooth.target.wants
+  verify fix and the greeter session preseed. Build, signature,
+  and VM evidence are recorded in the release checklist. All
+  editions remain Preview, not supported.
 
 components:
   shell:
@@ -34,39 +34,17 @@ components:
     status: pinned
     subject: "config pin shipped in the preview30 ISO lock (hornero-config 0.3.17-1)"
     notes: AUR recipe revision as recorded in the ISO manifest.
-  greeter:
-    repo: https://github.com/HorneroOS/greeter
-    ref: main
-    sha: a15ed4d65870ef7b0029490fd3c344bbf36a8ad5
-    status: pinned
-    subject: "greeter pin shipped via hornero-greeter AUR in the preview30 ISO"
-    notes: AUR recipe revision as recorded in the ISO manifest.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned. The ISO ships the signed AUR horneroctl-bin 0.2.0_preview39-1 (tag horneroctl-v0.2.0-preview39, product revision fa91790b4ef1fa000b5cdefb819655b000231d73).
   installer:
     repo: https://github.com/HorneroOS/installer
-    ref: main
-    sha: f204e6e7f778e281ad2b875f952c2e1e7985808e
-    status: pinned
-    subject: "provisional Calamares installer used to build the preview30 ISO"
-    notes: Panda Foss owns the future official installer; this is the provisional path.
-
-profiles:
-  base:
-    shell: shell
-    config: config
-    greeter: greeter
-    terminal: kitty
-    status: implemented
-
-relationships:
-  preserves:
-    - hornero-0.2.0-preview29
-
-evidence:
-  docs:
-    - docs/ARCHITECTURE.md
-    - docs/OPERATIONS.md
-    - editions/catalogue.yaml
-    - releases/v0.2.0-preview30-checklist.md
-  status: passed
-
-status: published
+    status: future
+    notes: Reserved slot. The provisional Calamares installer (installer revision f204e6e7f778e281ad2b875f952c2e1e7985808e, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the ISO below; it is not yet a pinned component of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: "Reserved slot. Artifact: horneroos-2026.10-preview30-x86_64.iso; SHA-256 474a0405fdc7366848d110b730c65d6f29ac36e66d9b36a9cd1f61e7c6dd1356 recorded in releases/v0.2.0-preview30-checklist.md. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."
