@@ -286,6 +286,23 @@ editions:
     packageSets: [gaming]
     compositor:
       inherit: desktop
+desktopProvenance:
+  bluez:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/bluez/
+    licenses: [GPL-2.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: preview
+  bluez-utils:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/bluez-utils/
+    licenses: [GPL-2.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: preview
 # Provenance and licensing metadata for every package in the Studio set and
 # for the optional Studio integrations above. Verified against the Arch
 # package index on 2026-10-25; package presence never implies HorneroOS

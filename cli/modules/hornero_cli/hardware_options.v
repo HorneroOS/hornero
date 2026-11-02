@@ -577,3 +577,83 @@ pub fn parse_hardware_network(args []string) !HardwareNetworkOptions {
 		dry_run: dry_run
 	}
 }
+
+// HardwareBluetoothOptions covers
+// `hardware bluetooth <status|doctor|devices|power|restart>` (also
+// exposed as top-level `bluetooth ...`).
+pub struct HardwareBluetoothOptions {
+pub:
+	leaf       string // status | doctor | devices | power | restart | agent-respond
+	action     string // on | off (power); confirm | reject | pin (agent-respond)
+	request_id string // agent-respond only
+	pin        string // agent-respond pin only
+	dry_run    bool
+	yes        bool
+}
+
+pub fn parse_hardware_bluetooth(args []string) !HardwareBluetoothOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl hardware bluetooth doctor')
+	}
+	leaf := args[0]
+	if leaf !in ['status', 'doctor', 'devices', 'power', 'restart', 'agent-respond'] {
+		return error('unknown bluetooth subcommand: ${leaf}.\nRun: horneroctl hardware bluetooth --help')
+	}
+	mut action := ''
+	mut dry_run := false
+	mut yes := false
+	mut positional := []string{}
+	for a in args[1..] {
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl hardware bluetooth ${leaf} --dry-run')
+		}
+		positional << a
+	}
+	if leaf == 'agent-respond' {
+		if positional.len < 2 || positional.len > 3 {
+			return error('bluetooth agent-respond needs <id> <confirm|reject|pin> [pin].\nExample: horneroctl hardware bluetooth agent-respond <id> confirm --yes')
+		}
+		if positional[1] !in ['confirm', 'reject', 'pin'] {
+			return error('unknown agent response: ${positional[1]}.\nExample: horneroctl hardware bluetooth agent-respond ${positional[0]} confirm --yes')
+		}
+		if positional[1] == 'pin' && positional.len != 3 {
+			return error('bluetooth agent-respond pin needs the PIN/passkey.\nExample: horneroctl hardware bluetooth agent-respond ${positional[0]} pin 123456 --yes')
+		}
+		if positional[1] != 'pin' && positional.len != 2 {
+			return error('unexpected argument: ${positional[2]}.\nRun: horneroctl hardware bluetooth --help')
+		}
+		return HardwareBluetoothOptions{
+			leaf:       leaf
+			action:     positional[1]
+			request_id: positional[0]
+			pin:        if positional.len == 3 { positional[2] } else { '' }
+			dry_run:    dry_run
+			yes:        yes
+		}
+	}
+	if leaf == 'power' {
+		if positional.len != 1 || positional[0] !in ['on', 'off'] {
+			return error('bluetooth power needs on or off.\nExample: horneroctl hardware bluetooth power on --dry-run')
+		}
+		action = positional[0]
+	} else if positional.len > 0 {
+		return error('unexpected argument: ${positional[0]}.\nRun: horneroctl hardware bluetooth --help')
+	}
+	if leaf in ['status', 'doctor', 'devices'] && yes {
+		return error('bluetooth ${leaf} takes no --yes (it only reads).\nExample: horneroctl hardware bluetooth ${leaf}')
+	}
+	return HardwareBluetoothOptions{
+		leaf:    leaf
+		action:  action
+		dry_run: dry_run
+		yes:     yes
+	}
+}
