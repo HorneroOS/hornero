@@ -66,6 +66,9 @@ capture screenshot
 config gui
 config snapshot restore
 hardware battery monitor
+hardware bluetooth agent-respond
+hardware bluetooth power
+hardware bluetooth restart
 hardware brightness down
 hardware brightness up
 hardware keyboard keys
