@@ -30,6 +30,13 @@ source_aarch64=(
 )
 # Set to the committed release-key fingerprint by the release workflow.
 # An unstamped template intentionally cannot pass makepkg signature checks.
+# The same key ships next to this PKGBUILD in keys/pgp/<fingerprint>.asc
+# (the Arch source-package convention) and on public keyservers, so AUR
+# helpers and makepkg users can obtain it without trusting a keyserver
+# response blindly: the fingerprint below is the pinned trust anchor and
+# makepkg rejects any signature whose key does not match it. Never
+# weaken signature verification to work around a missing key; see
+# docs/RELEASE_SIGNING.md.
 validpgpkeys=('0000000000000000000000000000000000000000')
 sha256sums_x86_64=('0000000000000000000000000000000000000000000000000000000000000000' '0000000000000000000000000000000000000000000000000000000000000000')
 sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000' '0000000000000000000000000000000000000000000000000000000000000000')

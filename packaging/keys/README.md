@@ -1,14 +1,19 @@
 # Release signing key
 
-`hornero-release.pub.asc` belongs here: the armoured **public** key
-that verifies every signed `horneroctl` release asset.
+`hornero-release.pub.asc` is the armoured **public** key that verifies
+every signed HorneroOS release asset, including the `horneroctl`
+binaries published through the AUR `horneroctl-bin` package and the
+signed Preview ISOs.
 
-**Status: not committed yet.** Generating the private key is a human
-maintainer action (see `docs/RELEASE_SIGNING.md`). Until the public
-key and matching GitHub private-key secret are configured:
+- Fingerprint: `FCFBEE43925AB5429362278AE59EAB44AA2498DC`
+- Identity: `HorneroOS releases <releases@horneroos.com>`
 
-- release publication fails closed before publishing unsigned assets, and
-- `scripts/verify-release.sh` fails closed, by design.
+Distribution channels and the full trust model are documented in
+[`docs/RELEASE_SIGNING.md`](../../docs/RELEASE_SIGNING.md). The same
+key also ships with the AUR package under
+`packaging/horneroctl-bin/keys/pgp/` and is published to public
+keyservers; the fingerprint above is the pinned trust anchor in every
+channel.
 
 Never commit private key material here or anywhere in this repo.
 The private key lives only in the maintainer's custody and, for CI

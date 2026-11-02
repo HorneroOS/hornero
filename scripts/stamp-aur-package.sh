@@ -76,4 +76,25 @@ replace_assignment("sha256sums_aarch64", "(" + " ".join(f"'{value}'" for value i
 path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
 
+# Ship the trusted key next to the PKGBUILD (Arch keys/pgp convention) so
+# fresh installs never depend solely on a keyserver: AUR snapshots and the
+# AUR git tree carry keys/pgp/<fingerprint>.asc. Export each pinned
+# fingerprint from the committed public-key bundle into a throwaway
+# keyring and write exactly that key, never unrelated bundle material.
+keys_dir="$(dirname "${pkgbuild}")/keys/pgp"
+mkdir -p "${keys_dir}"
+tmp_home="$(mktemp -d)"
+trap 'rm -rf "${tmp_home}"' EXIT
+export GNUPGHOME="${tmp_home}"
+chmod 700 "${GNUPGHOME}"
+gpg --batch --quiet --import "${pubkey}"
+while IFS= read -r fpr; do
+  [[ -n "${fpr}" ]] || continue
+  gpg --batch --armor --export "${fpr}" > "${keys_dir}/${fpr}.asc"
+  [[ -s "${keys_dir}/${fpr}.asc" ]] || {
+    echo "FAIL: could not export ${fpr} into ${keys_dir}" >&2
+    exit 1
+  }
+done <<< "${fingerprints}"
+
 echo "AUR metadata stamped and both architecture signatures verified for ${tag}"
