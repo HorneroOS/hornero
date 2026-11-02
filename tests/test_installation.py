@@ -166,3 +166,20 @@ def test_cli_installation_plan():
     assert plan["selection"]["bootloader"] == "systemd-boot"
     assert plan["espRecommendedMiB"] == 1280
     assert "cups" in plan["packages"]
+
+
+def test_cli_firmware_and_encryption_alone_trigger_installation_mode():
+    # --firmware/--encryption must not be silently dropped by the
+    # legacy resolve_edition path when --installation is omitted.
+    import subprocess
+    import sys
+
+    out = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().parents[1] / "scripts/resolve-edition.py"),
+         "desktop", "--firmware", "uefi", "--encryption", "luks"],
+        capture_output=True, text=True, check=True,
+    )
+    plan = json.loads(out.stdout)
+    assert plan["schemaVersion"] == 2
+    assert plan["selection"]["firmware"] == "uefi"
+    assert plan["selection"]["encryption"] == "luks"

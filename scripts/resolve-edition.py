@@ -996,21 +996,21 @@ def main() -> int:
     parser.add_argument("--primary-kernel", help="Primary kernel id (installation only)")
     parser.add_argument("--fallback-kernel", help="Fallback kernel id (installation only)")
     parser.add_argument("--bootloader", choices=("grub", "systemd-boot"), help="Bootloader id (installation only)")
-    parser.add_argument("--firmware", choices=("uefi", "bios"), default="uefi", help="Firmware type (installation only)")
-    parser.add_argument("--encryption", choices=("none", "luks"), default="none", help="Disk encryption (installation only)")
+    parser.add_argument("--firmware", choices=("uefi", "bios"), default=None, help="Firmware type (installation only)")
+    parser.add_argument("--encryption", choices=("none", "luks"), default=None, help="Disk encryption (installation only)")
     parser.add_argument("--capability", action="append", default=[], dest="capabilities", help="Capability id to add (repeatable, installation only)")
     parser.add_argument("--no-capability", action="append", default=[], dest="no_capabilities", help="Capability id to remove (repeatable, installation only)")
     parser.add_argument("--proprietary-nvidia", action="store_true", help="Plan for the proprietary NVIDIA driver (installation only)")
     args = parser.parse_args()
     try:
-        installation_requested = args.installation or bool(args.kernels or args.primary_kernel or args.fallback_kernel or args.bootloader or args.capabilities or args.no_capabilities or args.proprietary_nvidia)
+        installation_requested = args.installation or bool(args.kernels or args.primary_kernel or args.fallback_kernel or args.bootloader or args.firmware or args.encryption or args.capabilities or args.no_capabilities or args.proprietary_nvidia)
         if installation_requested:
             if args.specialization or args.application:
                 parser.error("--specialization/--application cannot be combined with installation options in one invocation")
             doc = load_catalogue()
             defaults = [name for name, cap in (doc.get("capabilities") or {}).items() if (cap.get("defaultByEdition") or {}).get(args.edition) is True]
             selected = list(dict.fromkeys(defaults + args.capabilities))
-            print(json.dumps(resolve_installation(doc, args.edition, args.compositor, kernels=args.kernels or None, primary_kernel=args.primary_kernel, fallback_kernel=args.fallback_kernel, bootloader=args.bootloader, firmware=args.firmware, encryption=args.encryption, capabilities=selected, disabled_capabilities=args.no_capabilities, proprietary_nvidia=args.proprietary_nvidia), indent=2))
+            print(json.dumps(resolve_installation(doc, args.edition, args.compositor, kernels=args.kernels or None, primary_kernel=args.primary_kernel, fallback_kernel=args.fallback_kernel, bootloader=args.bootloader, firmware=args.firmware or "uefi", encryption=args.encryption or "none", capabilities=selected, disabled_capabilities=args.no_capabilities, proprietary_nvidia=args.proprietary_nvidia), indent=2))
             return 0
         if args.specialization or args.application:
             if args.edition == "studio":
