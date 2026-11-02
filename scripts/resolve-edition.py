@@ -664,6 +664,21 @@ def resolve_installation(
             packages.append(package)
     if not kernel_done:
         packages = new_kernel_packages + packages
+    # Explicitly disabled capabilities lose their packages even when
+    # they are default-on (resolve_edition applied them above), unless
+    # a still-selected capability also provides the package.
+    if disabled_capabilities:
+        selected_pkgs = {
+            pkg
+            for name in selected_caps
+            for pkg in capability_map[name].get("packages") or []
+        }
+        disabled_pkgs = {
+            pkg
+            for name in disabled_capabilities
+            for pkg in capability_map[name].get("packages") or []
+        } - selected_pkgs
+        packages = [pkg for pkg in packages if pkg not in disabled_pkgs]
     services: list[str] = []
     for name in selected_caps:
         for package in capability_map[name].get("packages") or []:
@@ -951,6 +966,20 @@ def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = 
         for package in package_set.get("optionalPackages", []):
             if package not in packages and package not in optional_packages:
                 optional_packages.append(package)
+    # Default-on capabilities (catalogue `capabilities` with
+    # defaultByEdition) are part of the edition's factory composition:
+    # legacy consumers (installer compositions) must receive them, and
+    # resolve_installation can still turn them off explicitly.
+    for cap_name, cap in (doc.get("capabilities") or {}).items():
+        if not isinstance(cap, dict):
+            continue
+        if edition_name not in cap.get("appliesTo", []):
+            continue
+        if (cap.get("defaultByEdition") or {}).get(edition_name) is not True:
+            continue
+        for package in cap.get("packages") or []:
+            if package not in packages:
+                packages.append(package)
     # Provenance is edition-scoped: a shared package (for example
     # obs-studio) must report the provenance of the edition being
     # resolved, never the other edition's optional/opt-in flags.

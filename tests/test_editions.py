@@ -259,3 +259,20 @@ def test_gaming_provenance_rejects_proprietary_defaults_and_aur_execution():
     del broken["gamingProvenance"]["gamescope"]
     errors = resolver._validate_gaming_provenance(broken, broken["packageSets"])
     assert any("gamescope" in e for e in errors)
+
+
+def test_desktop_composition_contains_bluetooth_stack():
+    packages = set(resolver.resolve_edition(resolver.load_catalogue(), "desktop")["packages"])
+    assert {"bluez", "bluez-utils"} <= packages
+    # Studio/Gaming inherit Desktop, so they inherit Bluetooth too.
+    for edition in ("studio", "gaming"):
+        inherited = set(resolver.resolve_edition(resolver.load_catalogue(), edition)["packages"])
+        assert {"bluez", "bluez-utils"} <= inherited
+    assert not {"bluez", "bluez-utils"} & set(
+        resolver.resolve_edition(resolver.load_catalogue(), "server")["packages"]
+    )
+    catalogue = resolver.load_catalogue()
+    for pkg in ("bluez", "bluez-utils"):
+        entry = catalogue["desktopProvenance"][pkg]
+        assert entry["licenses"] == ["GPL-2.0-or-later"]
+        assert entry["sourceUrl"].startswith("https://archlinux.org/packages/")

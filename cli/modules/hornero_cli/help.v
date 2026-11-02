@@ -20,7 +20,8 @@ Commands:
   lock          Screen lock (now, status)
   hypr          Hyprland controls (animations, layout, monitors, workspace, plugins)
   plugin        Community Shell plugin packages (new, install, remove, list, validate, enable, disable)
-  hardware      Hardware controls (brightness, battery, mic, keyboard, network)
+  hardware      Hardware controls (brightness, battery, mic, keyboard, network, bluetooth)
+  bluetooth     Bluetooth diagnostics (doctor, status, devices, power, restart)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
@@ -1112,6 +1113,15 @@ Examples:
   horneroctl hardware keyboard rebind reset --yes
 '
 		}
+		'hardware bluetooth', 'bluetooth' {
+			return 'Usage: horneroctl hardware bluetooth <doctor|status|devices|power|restart> [options]\n\nBluetooth diagnostics and gated power control. doctor is\nread-only and never changes anything; power/restart need --yes\nand preview with --dry-run. Also available as horneroctl bluetooth.\n\n  doctor [--json|--quiet]\n                      Read-only Bluetooth health checks\n  status [--dry-run]    Adapter/service/power summary (read-only)\n  devices [--dry-run]   Known devices from bluetoothctl (read-only)\n  power <on|off> [--dry-run|--yes]\n                      rfkill unblock/block (persisted user choice)\n  restart [--dry-run|--yes]\n                      Restart bluetooth.service via polkit (pkexec)\n\nExamples:\n  horneroctl hardware bluetooth doctor\n  horneroctl hardware bluetooth doctor --json\n  horneroctl bluetooth doctor\n  horneroctl bluetooth doctor --json\n  horneroctl hardware bluetooth status\n  horneroctl hardware bluetooth devices\n  horneroctl hardware bluetooth power on --dry-run\n  horneroctl hardware bluetooth restart --yes\n'
+		}
+		'bluetooth doctor', 'hardware bluetooth doctor' {
+			return 'Usage: horneroctl bluetooth doctor [--json|--quiet]\n\nRead-only checks: adapter presence (/sys/class/bluetooth),\nbluetooth.service state, rfkill soft/hard block, adapter Powered,\nBlueZ version (bluetoothctl), PipeWire and WirePlumber presence,\nWirePlumber BlueZ audio nodes/profiles where detectable,\nmissing-firmware hints, /etc/bluetooth/main.conf AutoEnable, and\npairing-agent registration. Every failure names an actionable\nfix. Never changes anything, never auto-accepts pairing, and\ndiscoverability stays time-limited.\n\nExamples:\n  horneroctl bluetooth doctor\n  horneroctl bluetooth doctor --json\n  horneroctl hardware bluetooth doctor\n  horneroctl hardware bluetooth doctor --json\n'
+		}
+		'bluetooth status', 'bluetooth devices', 'bluetooth power', 'bluetooth restart' {
+			return 'Usage: horneroctl bluetooth <status|devices|power|restart> [options]\n\nstatus and devices are read-only; power on|off uses rfkill\n(block only for off, so systemd-rfkill persists the choice) and\nrestart uses pkexec systemctl (interactive polkit, never\npasswordless). Mutations need --yes; --dry-run previews.\n\nExamples:\n  horneroctl bluetooth status\n  horneroctl bluetooth devices --json\n  horneroctl bluetooth power off --dry-run\n  horneroctl bluetooth power on --yes\n  horneroctl bluetooth restart --yes\n'
+		}
 		'hardware network' {
 			return 'Usage: horneroctl hardware network status [--timeout 5] [--dry-run]
 
@@ -1478,7 +1488,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware completion welcome wallpaper capture apps system studio gaming help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware bluetooth completion welcome wallpaper capture apps system studio gaming help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1492,7 +1502,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware completion welcome wallpaper capture apps system assistant studio gaming help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome wallpaper capture apps system assistant studio gaming help)
   _describe "command" cmds
 }
 _horneroctl

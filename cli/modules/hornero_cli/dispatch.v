@@ -21,7 +21,7 @@ import hornero_core
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'apps', 'system', 'assistant', 'studio', 'gaming', 'help']
+	'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -114,6 +114,9 @@ pub fn dispatch(args []string) int {
 		}
 		'hardware' {
 			run_hardware(rest[1..], mode)
+		}
+		'bluetooth' {
+			run_bluetooth(rest[1..], mode)
 		}
 		'completion' {
 			run_completion(rest[1..], mode)
@@ -1365,7 +1368,7 @@ fn run_hardware(args []string, mode hornero_core.RenderMode) int {
 			mode)
 	}
 	group := args[0]
-	if group !in ['brightness', 'battery', 'mic', 'keyboard', 'network'] {
+	if group !in ['brightness', 'battery', 'mic', 'keyboard', 'network', 'bluetooth'] {
 		return render_error(hornero_core.err_usage('hardware.usage', 'unknown hardware group: ${group}.\nRun: horneroctl hardware --help'),
 			mode)
 	}
@@ -1386,8 +1389,59 @@ fn run_hardware(args []string, mode hornero_core.RenderMode) int {
 		'keyboard' {
 			return run_hardware_keyboard(args[1..], mode)
 		}
+		'bluetooth' {
+			return run_hardware_bluetooth(args[1..], mode)
+		}
 		else {
 			return run_hardware_network(args[1..], mode)
+		}
+	}
+}
+
+fn run_bluetooth(args []string, mode hornero_core.RenderMode) int {
+	return run_hardware_bluetooth(args, mode)
+}
+
+fn run_hardware_bluetooth(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hardware_bluetooth(args) or {
+		return render_error(hornero_core.err_usage('hardware.bluetooth.usage', err.msg()),
+			mode)
+	}
+	match opts.leaf {
+		'doctor' {
+			return render(hornero_core.bluetooth_doctor_result(), mode)
+		}
+		'status' {
+			return render(hornero_core.bluetooth_status_report(hornero_core.BluetoothStatusOptions{
+				dry_run: opts.dry_run
+			}), mode)
+		}
+		'devices' {
+			return render(hornero_core.bluetooth_devices_report(hornero_core.BluetoothDevicesOptions{
+				dry_run: opts.dry_run
+			}), mode)
+		}
+		'power' {
+			return render(hornero_core.bluetooth_power_report(hornero_core.BluetoothPowerOptions{
+				action:  opts.action
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}), mode)
+		}
+		'agent-respond' {
+			return render(hornero_core.bluetooth_agent_respond_report(hornero_core.BluetoothAgentRespondOptions{
+				id:      opts.request_id
+				action:  opts.action
+				pin:     opts.pin
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}), mode)
+		}
+		else {
+			return render(hornero_core.bluetooth_restart_report(hornero_core.BluetoothRestartOptions{
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}), mode)
 		}
 	}
 }
