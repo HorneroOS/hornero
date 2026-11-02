@@ -129,6 +129,32 @@ fn shell_running_pids() []string {
 	return pids
 }
 
+// shell_running_pids_wait polls the process table briefly: the IPC
+// readiness check can pass a moment before pgrep observes the new
+// quickshell process under its final name.
+fn shell_running_pids_wait(attempts int) []string {
+	for attempt in 0 .. attempts {
+		pids := shell_running_pids()
+		if pids.len > 0 {
+			return pids
+		}
+		if attempt + 1 < attempts {
+			time.sleep(100 * time.millisecond)
+		}
+	}
+	return shell_running_pids()
+}
+
+// shell_started_message renders the start success line. Readiness is
+// proven by the Hornero IPC target, not by the process table, so an
+// empty PID list must never render as "(PID: )".
+fn shell_started_message(pids []string) string {
+	if pids.len == 0 {
+		return 'Quickshell started successfully'
+	}
+	return 'Quickshell started successfully (PID: ${pids.join(',')})'
+}
+
 // SIGKILL delivery and process-table removal are not synchronous. Poll briefly
 // after escalation so a dying Quickshell process is not reported as a failed
 // stop simply because `pgrep` observed it before the kernel reaped it.
@@ -248,8 +274,8 @@ pub fn shell_start_report(opts ShellStartOptions) CommandResult {
 	}
 	os.execute(line)
 	if shell_wait_for_hornero_ipc(bin, 8) {
-		pids := shell_running_pids()
-		return ok_result('shell start', 'Quickshell started successfully (PID: ${pids.join(',')})',
+		pids := shell_running_pids_wait(4)
+		return ok_result('shell start', shell_started_message(pids),
 			{
 				'command_line': line
 				'pids':         pids.join(',')

@@ -77,6 +77,16 @@ fn test_shell_lifecycle_dry_run_needs_no_backend() {
 	shell_lifecycle_test_restore_env(saved)
 }
 
+fn test_shell_started_message_never_claims_empty_pid() {
+	// pelicano report: "Quickshell started successfully (PID: )" — the
+	// IPC-ready success must not render an empty PID list as a PID.
+	assert shell_started_message(['2256']) == 'Quickshell started successfully (PID: 2256)'
+	assert shell_started_message(['2256', '2310']) == 'Quickshell started successfully (PID: 2256,2310)'
+	empty := shell_started_message([]string{})
+	assert empty == 'Quickshell started successfully'
+	assert !empty.contains('(PID:')
+}
+
 fn test_shell_start_missing_config_dir() {
 	// Nothing running (pgrep finds nothing), missing config dir fails
 	// with guidance instead of launching.
