@@ -73,6 +73,7 @@ jobs:
           # Clone the AUR git tree instead of the snapshot tarball: the
           # tarball is CDN-cached and can lag the published PKGBUILD.
           useradd -m builder
+          pacman -Sy --noconfirm git >/dev/null
           git clone --depth 1 https://aur.archlinux.org/horneroctl-bin.git \
             /tmp/aur-snapshot/horneroctl-bin
           chown -R builder:builder /tmp/aur-snapshot
