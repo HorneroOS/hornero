@@ -17,5 +17,5 @@ components:
   - name: horneroctl
     role: System CLI built from this repository.
 notes: >-
-  Installer and iso slots stay future: this edition is defined but
-  not installable or imageable yet.
+  Desktop is a Preview edition: it installs from the signed Preview
+  ISO (VM-validated, not Supported).

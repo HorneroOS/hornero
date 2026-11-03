@@ -18,8 +18,9 @@ components:
   - name: horneroctl
     role: System CLI built from this repository.
 notes: >-
-  Gaming remains planned: this profile records release composition only.
-  It is not installable or imageable yet, and it duplicates no package
+  Gaming is a Preview edition: this profile records release composition
+  only. It installs from the signed Preview ISO (VM-validated, not
+  Supported), and it duplicates no package
   lists, GPU driver decisions, or application selection from the
   edition catalogue. GPU stacks are a hardware decision made by the
   installer and first-boot diagnostics, never by this profile.
