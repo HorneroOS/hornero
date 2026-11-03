@@ -7,6 +7,15 @@ import os
 // pacman-contrib's `checkupdates`; AUR updates use yay or paru when available.
 // Privileged/mutating work lives in package_ops.v.
 
+// snapshot_backend_name is the OS snapshot backend this build can report.
+// No backend ships yet: the selection contract lives in
+// docs/SNAPSHOT_BACKEND_CONTRACT.md (hornero#179) and config snapshots
+// (snapshots.v) are configuration archives, never OS rollback. The Shell
+// keys its rollback-unavailable notice on this field, not on prose.
+pub const snapshot_backend_name = 'none'
+pub const snapshot_unavailable_status = 'unavailable: no OS snapshot backend ships yet (contract: docs/SNAPSHOT_BACKEND_CONTRACT.md)'
+pub const snapshot_unavailable_line = 'Snapshots: no OS snapshot backend shipped yet; config snapshots are not OS rollback'
+
 // resolve_checkupdates_bin locates pacman-contrib's `checkupdates`.
 // Override with HORNERO_CHECKUPDATES_BIN for isolated environments.
 pub fn resolve_checkupdates_bin() string {
@@ -428,9 +437,9 @@ pub fn package_status_report(opts PackageCheckOptions) CommandResult {
 	if opts.dry_run {
 		mut data := package_update_data(snapshot)
 		data['dry_run'] = 'true'
-		data['snapshot_backend'] = 'none'
-		data['snapshot_status'] = 'unavailable: no snapshot backend contract yet (see docs/UPDATE_RECOVERY.md)'
-		message := 'would run: ${snapshot.repository.command_line}\nwould run: ${snapshot.aur.command_line}\n${package_policy_message(snapshot.policy)}\nSnapshots: none available (no snapshot backend contract yet)'
+		data['snapshot_backend'] = snapshot_backend_name
+		data['snapshot_status'] = snapshot_unavailable_status
+		message := 'would run: ${snapshot.repository.command_line}\nwould run: ${snapshot.aur.command_line}\n${package_policy_message(snapshot.policy)}\n${snapshot_unavailable_line}'
 		return ok_result('package status', message, data)
 	}
 	hornero_pending, system_pending := classify_update_lanes(snapshot.repository.output,
@@ -439,15 +448,15 @@ pub fn package_status_report(opts PackageCheckOptions) CommandResult {
 	data['hornero_pending'] = hornero_pending.join(', ')
 	data['hornero_pending_count'] = hornero_pending.len.str()
 	data['system_pending_count'] = system_pending.len.str()
-	data['snapshot_backend'] = 'none'
-	data['snapshot_status'] = 'unavailable: no snapshot backend contract yet (see docs/UPDATE_RECOVERY.md)'
+	data['snapshot_backend'] = snapshot_backend_name
+	data['snapshot_status'] = snapshot_unavailable_status
 	hornero_line := if hornero_pending.len > 0 {
 		'Hornero packages behind (${hornero_pending.len}): ${hornero_pending.join(', ')}'
 	} else {
 		'Hornero packages: up to date'
 	}
 	system_line := 'System updates pending: ${system_pending.len}'
-	snapshot_line := 'Snapshots: none available (no snapshot backend contract yet)'
+	snapshot_line := snapshot_unavailable_line
 	message := '${hornero_line}\n${system_line}\n${package_policy_message(snapshot.policy)}\n${snapshot_line}'
 	return ok_result('package status', message, data)
 }

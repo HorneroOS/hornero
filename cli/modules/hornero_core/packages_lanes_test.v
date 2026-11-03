@@ -20,3 +20,13 @@ fn test_hornero_owned_names_cover_published_packages() {
 	assert 'horneroctl-bin' in names
 	assert 'hornero-greeter' in names
 }
+
+fn test_snapshot_status_is_honest_about_missing_backend() {
+	// The status lane must never imply OS rollback exists: backend stays
+	// 'none' until a backend actually ships (hornero#179), and the prose
+	// must not claim the contract itself is missing (it merged already).
+	assert snapshot_backend_name == 'none'
+	assert snapshot_unavailable_status.contains('SNAPSHOT_BACKEND_CONTRACT')
+	assert !snapshot_unavailable_status.contains('contract yet')
+	assert snapshot_unavailable_line.contains('not OS rollback')
+}
