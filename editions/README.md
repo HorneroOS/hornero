@@ -12,7 +12,7 @@ python3 scripts/resolve-edition.py server --json
 The resolver produces a deterministic Arch package list. A package list is not
 an image or proof of a working system. Desktop is in Preview, Hyprland is
 supported, and Niri is experimental. Desktop and Studio are in Preview:
-Studio installs from the signed v0.2.0-preview22 ISO, is not Supported,
+Studio installs from the signed v0.2.0-preview30 ISO, is not Supported,
 and its hardware evidence is still pending. Server and Agents remain
 planned until their install, runtime, security, and acceptance work is
 complete.
@@ -54,7 +54,8 @@ explicitly by application ID. Experimental applications are flagged, and
 reference-only entries (for example Penpot, which has no Arch package) fail
 with an actionable error instead of falling back to a full workstation.
 
-Gaming extends Desktop and is planned: it has no installable image yet.
+Gaming extends Desktop and is a Preview edition: it installs from the
+same signed Preview ISO (VM-validated only, not Supported).
 Its package layer carries the cross-vendor Mesa/Vulkan baseline, 32-bit
 compat, GameMode and MangoHud; compositor choice and graphics experience
 match Desktop. Steam is not in the gaming package set: it only enters
