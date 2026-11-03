@@ -25,7 +25,7 @@ def test_catalogue_schema_valid_and_required_maps():
     assert resolver.validate_catalogue(doc) == []
     assert set(doc["kernels"]) == {"linux", "linux-lts", "linux-zen", "linux-hardened"}
     assert set(doc["bootloaders"]) == {"grub", "systemd-boot"}
-    assert set(doc["capabilities"]) == {"bluetooth", "printing", "openssh", "developer"}
+    assert set(doc["capabilities"]) == {"bluetooth", "printing", "openssh", "developer", "snapshots"}
 
 
 def test_default_installation_matches_legacy_plus_bluetooth_contract():
@@ -183,3 +183,15 @@ def test_cli_firmware_and_encryption_alone_trigger_installation_mode():
     assert plan["schemaVersion"] == 2
     assert plan["selection"]["firmware"] == "uefi"
     assert plan["selection"]["encryption"] == "luks"
+
+
+def test_snapshots_capability_is_opt_in_and_resolves():
+    doc = catalogue()
+    # Default installs must not pull snapper in silently: the backend is
+    # not VM-proven yet (hornero#179), so absence is the honest default.
+    plan = resolver.resolve_installation(doc, "desktop")
+    assert "snapper" not in plan["packages"]
+    enabled = resolver.resolve_installation(doc, "desktop", capabilities=["snapshots"])
+    for pkg in ("snapper", "snap-pac", "grub-btrfs"):
+        assert pkg in enabled["packages"]
+    assert "snapper-cleanup.timer" in enabled["services"]

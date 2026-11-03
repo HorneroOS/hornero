@@ -429,7 +429,7 @@ def _gaming_application_is_proprietary(doc: dict, app_id: str) -> bool:
 
 REQUIRED_KERNELS = {"linux", "linux-lts", "linux-zen", "linux-hardened"}
 REQUIRED_BOOTLOADERS = {"grub", "systemd-boot"}
-REQUIRED_CAPABILITIES = {"bluetooth", "printing", "openssh", "developer"}
+REQUIRED_CAPABILITIES = {"bluetooth", "printing", "openssh", "developer", "snapshots"}
 FIRMWARES = {"uefi", "bios"}
 
 
@@ -446,7 +446,7 @@ def _validate_installation_model(doc: dict, editions: object) -> list[str]:
         errors.append("bootloaders must define exactly grub and systemd-boot")
         bootloaders = bootloaders if isinstance(bootloaders, dict) else {}
     if not isinstance(capabilities, dict) or set(capabilities) != REQUIRED_CAPABILITIES:
-        errors.append("capabilities must define exactly bluetooth, printing, openssh, and developer")
+        errors.append("capabilities must define exactly bluetooth, printing, openssh, developer, and snapshots")
         capabilities = capabilities if isinstance(capabilities, dict) else {}
     if not isinstance(provenance, dict) or not provenance:
         errors.append("installationProvenance must be a non-empty mapping")
@@ -498,7 +498,7 @@ def _validate_installation_model(doc: dict, editions: object) -> list[str]:
         else:
             needed.update(packages)
         services = capability.get("services")
-        if not isinstance(services, list) or any(not isinstance(s, str) or not (s.endswith(".service") or s.endswith(".socket")) for s in services):
+        if not isinstance(services, list) or any(not isinstance(s, str) or not (s.endswith((".service", ".socket", ".timer"))) for s in services):
             errors.append(f"capability '{name}' services must be systemd unit names")
         applies = capability.get("appliesTo")
         if not isinstance(applies, list) or not applies or (isinstance(editions, dict) and not set(applies) <= set(editions)):
