@@ -1,0 +1,53 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview31
+#
+# Published signed pre-release (2026-11-03).
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview31
+date: "2026-11-03"
+description: >-
+  Ninth Desktop + Studio + Gaming Preview ISO candidate. Fixes the
+  user-reported black Control Center panels on pelicano: shell#347
+  removes the invalid `session:` assignments to SplitPaneLayout in
+  Studio/Gaming panes and adds the missing sibling imports that
+  prevented the Extensions pane from instantiating, and the Panes
+  Loader now logs and surfaces pane load errors instead of rendering
+  a silent black rectangle. Ships hornero-shell 1.2.60-1 with
+  hornero-config 0.3.17-1 and the signed AUR horneroctl-bin
+  0.2.0_preview39-1 unchanged from preview30; installer pin
+  corrections #77/#78 record the AUR recipe revision bc64489.
+  Build, signature, and exact-artifact VM evidence (including
+  Control Center screenshots for all three editions) are recorded
+  in the release checklist. All editions remain Preview, not
+  supported.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: bc644896e8c8bf5b52652533a6ebfdec4434ef0d
+    status: pinned
+    subject: "shell pin shipped in the preview31 ISO lock (hornero-shell 1.2.60-1)"
+    notes: AUR recipe revision as recorded in the ISO manifest.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: f3d7ae3ae020a322597b5e4b74f4421983e41700
+    status: pinned
+    subject: "config pin shipped in the preview31 ISO lock (hornero-config 0.3.17-1)"
+    notes: AUR recipe revision as recorded in the ISO manifest.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned. The ISO ships the signed AUR horneroctl-bin 0.2.0_preview39-1 (tag horneroctl-v0.2.0-preview39, product revision fa91790b4ef1fa000b5cdefb819655b000231d73).
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. The provisional Calamares installer (installer revision 709fefc56312c57adfa24caf3b9a0ef63dd21928, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the ISO below; it is not yet a pinned component of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: "Reserved slot. Artifact: horneroos-2026.10-preview31-x86_64.iso; SHA-256 4200ff28ee4ee42f84bd65d01ec4d0e67b19adc5827e6ff09f7b5c42438c5194 recorded in releases/v0.2.0-preview31-checklist.md. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."

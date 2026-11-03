@@ -1,0 +1,30 @@
+# Hornero OS release: v0.2.0-preview31
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview31
+version: 0.2.0-preview31
+status: pre-release
+manifest: hornero-0.2.0-preview31
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview31-checklist.md
+summary: >-
+  Ninth Desktop + Studio + Gaming Preview ISO. Fixes the black
+  Control Center panels reported on pelicano: Studio and Gaming
+  panes failed to instantiate because they assigned `session:` to
+  SplitPaneLayout, which declares no such property, and the
+  Extensions pane missed the sibling imports its sections require
+  (shell#347, hornero-shell 1.2.60-1). The Control Center Loader
+  now logs pane errors and shows a localized fallback instead of a
+  silent black rectangle, and tests/test_pane_load_contracts.py
+  locks the contract. The exact published ISO was installed in
+  disposable VMs for Desktop, Studio and Gaming, and Extensions,
+  Studio and Gaming were screenshot-verified rendering in all
+  three installed editions. Desktop, Studio and Gaming remain
+  Preview; no NVENC, Vulkan, camera, Bluetooth hardware, or
+  >=16 GiB copytoram qualification is claimed.
+tag: v0.2.0-preview31
+published: true
