@@ -6,6 +6,30 @@ VM proof below passes. The config-level tools in
 `docs/UPDATE_RECOVERY.md` are settings archives, not system
 snapshots.
 
+Implementation progress toward this contract (readiness plumbing
+only; none of it is a restore proof and `snapshot_backend` still
+reports `none` everywhere):
+
+- Installer layout: fresh Btrfs installs create the top-level
+  `/@snapshots` store mounted at `/.snapshots`, outside the root
+  subvolume (HorneroOS/installer#80). Existing installs are not
+  migrated.
+- Catalogue: the opt-in `snapshots` capability (snapper, snap-pac,
+  grub-btrfs; default off for every edition) resolves through the
+  canonical resolver (hornero#360).
+- Installer factory state: when the capability landed on a Btrfs
+  target with the store, the installer seeds a bounded-retention
+  `/etc/snapper/configs/root` and enables the timers
+  non-mandatorily (HorneroOS/installer#81).
+- Diagnostics: `horneroctl recovery doctor` probes backend, root
+  filesystem, store, snapper/config and timer units read-only, and
+  states plainly that readiness is not proof of a restore.
+
+Still missing before any backend claim: the VM proof below, the
+bootloader-specific boot paths (GRUB vs systemd-boot are separate
+implementations; kernel/initramfs live on the ESP outside root
+snapshots), and create/enumerate/restore verbs in `horneroctl`.
+
 ## Decision
 
 **Target backend: Btrfs snapshots (snapper-style timeline), gated on
