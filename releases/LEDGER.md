@@ -38,3 +38,9 @@ files, not this ledger; regenerate when a release is cut.
 | v0.2.0-preview20 | 2026-10-19 | — | `manifests/v0.2.0-preview20.yaml` | `5e14df7` | `10c9477` | `releases/v0.2.0-preview20-checklist.md` |
 | v0.2.0-preview21 | 2026-10-26 | — | `manifests/v0.2.0-preview21.yaml` | `5e14df7` | `75c196f` | `releases/v0.2.0-preview21-checklist.md` |
 | v0.2.0-preview22 | 2026-10-26 | — | `manifests/v0.2.0-preview22.yaml` | `5e14df7` | `75c196f` | `releases/v0.2.0-preview22-checklist.md` |
+| v0.2.0-preview23 | 2026-10-28 | — | `manifests/v0.2.0-preview23.yaml` | `ca8f5ca` | `811ecd7` | `releases/v0.2.0-preview23-checklist.md` |
+| v0.2.0-preview24 | 2026-10-29 | — | `manifests/v0.2.0-preview24.yaml` | `ca8f5ca` | `811ecd7` | `releases/v0.2.0-preview24-checklist.md` |
+| v0.2.0-preview25 | 2026-10-29 | — | `manifests/v0.2.0-preview25.yaml` | `ca8f5ca` | `811ecd7` | `releases/v0.2.0-preview25-checklist.md` |
+| v0.2.0-preview28 | 2026-10-30 | — | `manifests/v0.2.0-preview28.yaml` | `3fff466` | `17b9f61` | `releases/v0.2.0-preview28-checklist.md` |
+| v0.2.0-preview29 | 2026-11-02 | — | `manifests/v0.2.0-preview29.yaml` | `3fff466` | `c6a9602` | `releases/v0.2.0-preview29-checklist.md` |
+| v0.2.0-preview30 | 2026-11-02 | — | `manifests/v0.2.0-preview30.yaml` | `dc756f5` | `f3d7ae3` | `releases/v0.2.0-preview30-checklist.md` |

@@ -68,6 +68,60 @@ def test_release_pin_export_uses_runner_yaml_without_installing_a_package():
     assert "aliases: false" in export_pins["run"]
 
 
+FPR = "FCFBEE43925AB5429362278AE59EAB44AA2498DC"
+
+
+def test_aur_package_ships_pinned_release_key_in_keys_pgp():
+    # Regression: fresh AUR installs failed with
+    # "gpg: keyserver receive failed: No data" because the only way to
+    # obtain the release key was a keyserver lookup. The key must ship
+    # next to the PKGBUILD (Arch keys/pgp convention), byte-identical to
+    # the canonical committed public key.
+    canonical = (ROOT / "packaging/keys/hornero-release.pub.asc").read_bytes()
+    shipped = (
+        ROOT / "packaging/horneroctl-bin/keys/pgp" / f"{FPR}.asc"
+    ).read_bytes()
+    assert shipped == canonical
+    # AUR snapshot tarballs only include declared local sources, so the
+    # key must also be a package source at the package root.
+    source_copy = (
+        ROOT / "packaging/horneroctl-bin/hornero-release.pub"
+    ).read_bytes()
+    assert source_copy == canonical
+    pkgbuild = (ROOT / "packaging/horneroctl-bin/PKGBUILD").read_text()
+    assert "source=('hornero-release.pub')" in pkgbuild
+
+
+def test_stamp_script_regenerates_keys_pgp_from_committed_key():
+    stamp = (ROOT / "scripts/stamp-aur-package.sh").read_text()
+    assert "keys/pgp" in stamp
+    assert "--export" in stamp
+
+
+def test_release_workflow_publishes_keys_pgp_assets_to_aur():
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    )
+    aur = next(
+        step
+        for step in workflow["jobs"]["aur-publish"]["steps"]
+        if step.get("name") == "Publish AUR package"
+    )
+    # The publish action copies assets into the AUR repo root, so the
+    # keys directory itself (not a keys/pgp/*.asc glob) must be passed
+    # to preserve the keys/pgp/ layout.
+    assert "packaging/horneroctl-bin/keys\n" in aur["with"]["assets"]
+    assert "packaging/horneroctl-bin/hornero-release.pub" in aur["with"]["assets"]
+
+
+def test_pkgbuild_never_weakens_signature_verification():
+    pkgbuild = (ROOT / "packaging/horneroctl-bin/PKGBUILD").read_text()
+    assert "skippgpcheck" not in pkgbuild.lower()
+    stamp = (ROOT / "scripts/test-aur-gpg.sh").read_text()
+    assert "invalid.invalid" in stamp  # unavailable-keyserver case
+    assert "tampered" in stamp
+
+
 def test_plugin_management_tools_are_documented_optional_dependencies():
     pkgbuild = (ROOT / "packaging/horneroctl-bin/PKGBUILD").read_text()
 

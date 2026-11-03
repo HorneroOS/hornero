@@ -1,0 +1,25 @@
+# Hornero OS edition profile: gaming
+
+apiVersion: hornero.os/v1
+kind: EditionProfile
+name: gaming
+manifest: hornero-0.2.0-preview23
+description: >-
+  Gaming release profile. Extends desktop with the same pinned
+  components; Gaming package composition, specializations, and
+  application selection live only in editions/catalogue.yaml.
+target: hardware
+extends: desktop
+components:
+  - name: shell
+    role: Desktop shell UX as pinned by the manifest.
+  - name: config
+    role: Full desktop defaults as pinned by the manifest.
+  - name: horneroctl
+    role: System CLI built from this repository.
+notes: >-
+  Gaming remains planned: this profile records release composition only.
+  It is not installable or imageable yet, and it duplicates no package
+  lists, GPU driver decisions, or application selection from the
+  edition catalogue. GPU stacks are a hardware decision made by the
+  installer and first-boot diagnostics, never by this profile.

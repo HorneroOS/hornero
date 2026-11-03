@@ -251,6 +251,16 @@ jobs:
         with:
           pkgname: horneroctl-bin
           pkgbuild: packaging/horneroctl-bin/PKGBUILD
+          # Ship the pinned release key next to the PKGBUILD so fresh
+          # installs can import it locally (Arch keys/pgp convention)
+          # instead of depending on a keyserver at build time. The stamp
+          # step above regenerates these from the committed public key.
+          # The publish action copies each asset into the AUR repo
+          # root, so pass the keys DIRECTORY: a keys/pgp/*.asc glob
+          # would land the key file at the root, not keys/pgp/.
+          assets: |
+            packaging/horneroctl-bin/keys
+            packaging/horneroctl-bin/hornero-release.pub
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}

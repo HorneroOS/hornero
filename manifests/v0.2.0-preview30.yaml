@@ -1,0 +1,50 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview30
+#
+# Published signed pre-release (2026-11-02).
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview30
+date: "2026-11-02"
+description: >-
+  Eighth Desktop + Studio + Gaming Preview ISO candidate. Product
+  composition is hornero fa91790b4ef1fa000b5cdefb819655b000231d73
+  (Bluetooth backend #350/#351, shell start PID honesty #353) with
+  the signed AUR horneroctl-bin 0.2.0_preview39-1, hornero-config
+  0.3.17-1 (BlueZ/WirePlumber factory defaults) and hornero-shell
+  1.2.59-1 (quickshell default config, Config FileView load fix);
+  installer f204e6e7f778e281ad2b875f952c2e1e7985808e adds
+  Bluetooth service enablement, the bluetooth.target.wants
+  verify fix and the greeter session preseed. Build, signature,
+  and VM evidence are recorded in the release checklist. All
+  editions remain Preview, not supported.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: dc756f59e3c86c1df8646d394e21a71953e8ee9c
+    status: pinned
+    subject: "shell pin shipped in the preview30 ISO lock (hornero-shell 1.2.59-1)"
+    notes: AUR recipe revision as recorded in the ISO manifest.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: f3d7ae3ae020a322597b5e4b74f4421983e41700
+    status: pinned
+    subject: "config pin shipped in the preview30 ISO lock (hornero-config 0.3.17-1)"
+    notes: AUR recipe revision as recorded in the ISO manifest.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned. The ISO ships the signed AUR horneroctl-bin 0.2.0_preview39-1 (tag horneroctl-v0.2.0-preview39, product revision fa91790b4ef1fa000b5cdefb819655b000231d73).
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. The provisional Calamares installer (installer revision f204e6e7f778e281ad2b875f952c2e1e7985808e, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the ISO below; it is not yet a pinned component of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: "Reserved slot. Artifact: horneroos-2026.10-preview30-x86_64.iso; SHA-256 474a0405fdc7366848d110b730c65d6f29ac36e66d9b36a9cd1f61e7c6dd1356 recorded in releases/v0.2.0-preview30-checklist.md. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."

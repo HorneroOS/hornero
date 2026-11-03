@@ -45,13 +45,18 @@ for arch in x86_64 aarch64; do
   hashes["${arch}"]="$(sha256sum "${binary}" "${signature}" | awk '{ print $1 }' | paste -sd' ' -)"
 done
 
+pubkey_hash="$(sha256sum "${pubkey}" | awk '{ print $1 }')"
+# Refresh the source-carried copy of the key so AUR snapshots (which
+# only include declared local sources) always ship the current key.
+cp -f "${pubkey}" "$(dirname "${pkgbuild}")/hornero-release.pub"
+
 python3 - "${pkgbuild}" "${tag}" "${aur_version}" "${fingerprints}" \
-  "${hashes[x86_64]}" "${hashes[aarch64]}" <<'PY'
+  "${hashes[x86_64]}" "${hashes[aarch64]}" "${pubkey_hash}" <<'PY'
 from pathlib import Path
 import re
 import sys
 
-pkgbuild, tag, version, fingerprint_text, x86_hashes, arm_hashes = sys.argv[1:]
+pkgbuild, tag, version, fingerprint_text, x86_hashes, arm_hashes, pubkey_hash = sys.argv[1:]
 path = Path(pkgbuild)
 lines = path.read_text(encoding="utf-8").splitlines()
 
@@ -71,9 +76,33 @@ for hashes in (x86_hashes.split(), arm_hashes.split()):
 replace_assignment("_reltag", tag)
 replace_assignment("pkgver", version)
 replace_assignment("validpgpkeys", "(" + " ".join(f"'{fpr}'" for fpr in fingerprints) + ")")
+if len(pubkey_hash) != 64:
+    raise SystemExit("FAIL: expected SHA-256 for the shipped public key")
+replace_assignment("sha256sums", f"('{pubkey_hash}')")
 replace_assignment("sha256sums_x86_64", "(" + " ".join(f"'{value}'" for value in x86_hashes.split()) + ")")
 replace_assignment("sha256sums_aarch64", "(" + " ".join(f"'{value}'" for value in arm_hashes.split()) + ")")
 path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
+
+# Ship the trusted key next to the PKGBUILD (Arch keys/pgp convention) so
+# fresh installs never depend solely on a keyserver: AUR snapshots and the
+# AUR git tree carry keys/pgp/<fingerprint>.asc. Export each pinned
+# fingerprint from the committed public-key bundle into a throwaway
+# keyring and write exactly that key, never unrelated bundle material.
+keys_dir="$(dirname "${pkgbuild}")/keys/pgp"
+mkdir -p "${keys_dir}"
+tmp_home="$(mktemp -d)"
+trap 'rm -rf "${tmp_home}"' EXIT
+export GNUPGHOME="${tmp_home}"
+chmod 700 "${GNUPGHOME}"
+gpg --batch --quiet --import "${pubkey}"
+while IFS= read -r fpr; do
+  [[ -n "${fpr}" ]] || continue
+  gpg --batch --armor --export "${fpr}" > "${keys_dir}/${fpr}.asc"
+  [[ -s "${keys_dir}/${fpr}.asc" ]] || {
+    echo "FAIL: could not export ${fpr} into ${keys_dir}" >&2
+    exit 1
+  }
+done <<< "${fingerprints}"
 
 echo "AUR metadata stamped and both architecture signatures verified for ${tag}"

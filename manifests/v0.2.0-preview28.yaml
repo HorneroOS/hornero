@@ -1,0 +1,53 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview28
+#
+# Published pre-release. Historical manifests are never edited.
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview28
+date: "2026-10-30"
+description: >-
+  Sixth Desktop + Studio + Gaming Preview ISO. Product composition is
+  hornero c2f2ad77bfe50e929b14d4b9874b0b0a71b95149 (hornero#336 adds
+  zsh and nano to the factory desktop set) with the signed AUR
+  horneroctl-bin 0.2.0_preview36-1 and hornero-config 0.3.14-1;
+  installer d02e877e5fe4890dc73b21d743e2fc41d94057f4 renders Desktop,
+  Studio and Gaming base choices (Hyprland plus experimental Niri)
+  from that catalogue. Built only in the disposable build VM; guest
+  and host SHA-256 match and the detached signature verifies (see the
+  release checklist). A clean Studio (Hyprland) install passed in a
+  disposable QEMU/UEFI VM with ID=horneroos on the installed target,
+  `horneroctl studio doctor` 5/5 and an OBS recording that finalized
+  a playable file. All editions remain Preview, not supported. The
+  2.8 GB ISO exceeds GitHub's 2 GB asset limit and is distributed via
+  Vercel Blob with checksum and signature verification.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 3fff4661c5cd284d48e7bbe7dd8c4bcfbcb20afb
+    status: pinned
+    subject: "shell pin shipped in the preview28 ISO lock (hornero-shell 1.2.56-1)"
+    notes: AUR recipe revision as recorded in the ISO manifest.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 17b9f61b5a7713947d1b16d6c8afb4bc8f53fcf4
+    status: pinned
+    subject: "config pin shipped in the preview28 ISO lock (hornero-config 0.3.14-1)"
+    notes: AUR recipe revision as recorded in the ISO manifest. Ships the Lua Hyprland configuration and the factory Zsh baseline.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned. The ISO ships the signed AUR horneroctl-bin 0.2.0_preview36-1 (tag horneroctl-v0.2.0-preview36, product revision 8436a8a97961d9f65a2e866e0584f4e4755741e1).
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. The provisional Calamares installer (installer revision d02e877e5fe4890dc73b21d743e2fc41d94057f4, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the ISO below; it is not yet a pinned component of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: "Reserved slot. Artifact: horneroos-2026.10-preview28-x86_64.iso; SHA-256 aabc45350b1d02e06b5e66c7445de7f9cdff9d08b62e64692a07a475fb7d9883 and signature recorded in releases/v0.2.0-preview28-checklist.md, built in a disposable VM with guest+host checksum verification. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."

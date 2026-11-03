@@ -1,0 +1,30 @@
+# Hornero OS release: v0.2.0-preview24
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview24
+version: 0.2.0-preview24
+status: pre-release
+manifest: hornero-0.2.0-preview24
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview24-checklist.md
+summary: >-
+  Fourth Desktop + Studio Preview ISO and the first ISO that also offers
+  HorneroOS Gaming (Preview, maintainer-delegated promotion in #332) in
+  the installer edition list: Desktop, Studio and Gaming, each with
+  Hyprland and experimental Niri choices. Product 8436a8a ships signed
+  horneroctl-bin 0.2.0_preview36-1 with `horneroctl gaming doctor`;
+  installer 02b17a1 renders the Gaming base choices from the canonical
+  catalogue. A clean Gaming (Hyprland) install from this ISO passed in a
+  disposable QEMU/UEFI VM (edition gaming persisted, gamescope, gamemode
+  and mangohud present, Steam absent by default as an explicit opt-in).
+  Gaming remains a Preview edition: no Proton gameplay, controller or
+  handheld, AMD/Intel/hybrid topology, VRR/HDR or suspend/resume
+  qualification is claimed; a physical NVIDIA RTX 3060 capability fixture
+  is recorded in HorneroOS/qa. Signed with the HorneroOS releases key;
+  SHA-256 recorded in the checklist.
+tag: v0.2.0-preview24
+published: true

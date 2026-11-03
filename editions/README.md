@@ -56,6 +56,35 @@ the ArtCraft Launcher, whose manual runbook is
 `docs/studio-artcraft-launcher.md`) fail
 with an actionable error instead of falling back to a full workstation.
 
+Gaming extends Desktop and is planned: it has no installable image yet.
+Its package layer carries the cross-vendor Mesa/Vulkan baseline, 32-bit
+compat, GameMode and MangoHud; compositor choice and graphics experience
+match Desktop. Steam is not in the gaming package set: it only enters
+when explicitly selected by application ID (see below).
+`gamingApplications` and `gamingSpecializations` mirror Studio's
+composable model with six profiles: Desktop Gaming (the only default),
+Handheld, Streaming, Multi-Launcher, VR (experimental), and Advanced
+Compatibility. Steam is proprietary and opt-in: only an explicit
+`--application steam` selects it. AUR entries stay manual and optional,
+reference-only entries (Heroic, SteamVR) fail actionably, and every package
+carries `gamingProvenance`. Resolve a plan without installing anything:
+
+```sh
+python3 scripts/resolve-edition.py gaming --specialization desktop-gaming
+python3 scripts/resolve-edition.py gaming --application steam
+```
+
+Gaming plans record hardware intent only. No consumer derives a GPU vendor
+driver from a PCI ID, and provenance is never a hardware-compatibility or
+performance claim.
+
+Post-install, `horneroctl gaming selection show|set` records the same
+selection intent in `~/.config/hornero/gaming-selection.json` (validating
+IDs fail-closed; recording installs nothing), and
+`horneroctl gaming doctor [--json]` reports capability and readiness
+only. The Control Center Gaming pane and the QA gaming gate consume
+that single state source.
+
 The shared base carries the filesystem, encryption, and GRUB tools needed by
 the Calamares installation path across editions. Desktop also owns SDDM and the
 Hornero greeter packages so the selected desktop composition can boot to its
@@ -75,6 +104,41 @@ The Calamares image builder generates a small `hornero-profile-*` package for
 each installable composition. Its `/usr/lib/hornero/system-profile.json` file
 records the resolved profile and catalogue revision for post-install
 introspection; it does not define or duplicate package composition.
+
+## Kernels, bootloaders, and capabilities
+
+`kernels`, `bootloaders`, and `capabilities` are sibling catalogue maps and
+the only source for installation choices; no installer or CLI duplicates
+their package lists. Kernels are `linux` (the only default), `linux-lts`,
+`linux-zen`, and `linux-hardened`; each auto-adds exactly its matching
+`-headers` package, and a second installed kernel can be named fallback.
+Bootloaders are `grub` (UEFI and legacy BIOS) and `systemd-boot` (UEFI
+only — never offered on BIOS, since it cannot boot there). The resolver
+computes `espRecommendedMiB` as the bootloader base plus a per-kernel
+allowance per additional kernel. Capabilities are composable optional
+entries (packages plus systemd services): `bluetooth` (BlueZ stack and
+`bluetooth.service`, on by default for desktop-derived editions, reusing
+the `horneroctl hardware bluetooth doctor` contract), `printing`
+(CUPS/SANE), `openssh` (on by default for Server/Agents), and `developer`.
+
+Resolve a full installation plan (`schemaVersion: 2`) without installing:
+
+```sh
+python3 scripts/resolve-edition.py desktop --installation \
+  --kernel linux --kernel linux-lts --primary-kernel linux \
+  --fallback-kernel linux-lts --bootloader systemd-boot \
+  --capability printing --capability developer
+```
+
+Incompatibilities fail before any package list is produced: an empty or
+duplicated kernel set, a primary/fallback kernel outside the installed
+set, systemd-boot on BIOS, a capability on an edition it does not apply
+to, and unknown kernel/bootloader/capability IDs. Proprietary NVIDIA on
+`linux-hardened` (or with multiple kernels) resolves to the DKMS module
+rule and emits a `planWarnings` entry instead of failing. LUKS
+(`--encryption luks`) stays orthogonal to bootloader choice. The legacy
+`resolve_edition()` presets (Desktop/Studio/Gaming) are unchanged;
+`resolve_installation()` layers these choices on top of them.
 
 ## Studio audio and performance modes
 
