@@ -26,17 +26,17 @@ components:
   shell:
     repo: https://github.com/HorneroOS/shell
     ref: main
-    sha: bc644896e8c8bf5b52652533a6ebfdec4434ef0d
+    sha: b75bbddf8c6d9167dc2fd1b45383c44176f4917d
     status: pinned
     subject: "shell pin shipped in the preview31 ISO lock (hornero-shell 1.2.60-1)"
-    notes: AUR recipe revision as recorded in the ISO manifest.
+    notes: Source commit stamped in the AUR PKGBUILD; AUR recipe revision bc644896e8c8bf5b52652533a6ebfdec4434ef0d as recorded in the ISO manifest.
   config:
     repo: https://github.com/HorneroOS/config
     ref: main
-    sha: f3d7ae3ae020a322597b5e4b74f4421983e41700
+    sha: 42cefcc6974fa5ad0900e0e4de4bd0de5dee3963
     status: pinned
     subject: "config pin shipped in the preview31 ISO lock (hornero-config 0.3.17-1)"
-    notes: AUR recipe revision as recorded in the ISO manifest.
+    notes: Source commit stamped in the AUR PKGBUILD; AUR recipe revision f3d7ae3ae020a322597b5e4b74f4421983e41700 as recorded in the ISO manifest.
   horneroctl:
     repo: https://github.com/HorneroOS/hornero
     path: cli/
