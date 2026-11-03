@@ -450,6 +450,11 @@ pub fn package_status_report(opts PackageCheckOptions) CommandResult {
 	data['system_pending_count'] = system_pending.len.str()
 	data['snapshot_backend'] = snapshot_backend_name
 	data['snapshot_status'] = snapshot_unavailable_status
+	needs_reboot, reboot_reason := reboot_required()
+	data['reboot_required'] = needs_reboot.str()
+	if needs_reboot {
+		data['reboot_reason'] = reboot_reason
+	}
 	hornero_line := if hornero_pending.len > 0 {
 		'Hornero packages behind (${hornero_pending.len}): ${hornero_pending.join(', ')}'
 	} else {
@@ -457,6 +462,11 @@ pub fn package_status_report(opts PackageCheckOptions) CommandResult {
 	}
 	system_line := 'System updates pending: ${system_pending.len}'
 	snapshot_line := snapshot_unavailable_line
-	message := '${hornero_line}\n${system_line}\n${package_policy_message(snapshot.policy)}\n${snapshot_line}'
+	reboot_line := if needs_reboot {
+		'Reboot required: ${reboot_reason}'
+	} else {
+		'Reboot: not required for the running kernel'
+	}
+	message := '${hornero_line}\n${system_line}\n${package_policy_message(snapshot.policy)}\n${snapshot_line}\n${reboot_line}'
 	return ok_result('package status', message, data)
 }

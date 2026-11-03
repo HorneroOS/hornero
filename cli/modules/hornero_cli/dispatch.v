@@ -1019,6 +1019,9 @@ fn run_package(args []string, mode hornero_core.RenderMode) int {
 	opts := parse_package_cmd(args) or {
 		return render_error(hornero_core.err_usage('package.usage', err.msg()), mode)
 	}
+	if opts.leaf == 'history' {
+		return render(hornero_core.package_history_report(), mode)
+	}
 	if opts.leaf == 'upgrade' {
 		return render(hornero_core.package_upgrade_report(hornero_core.PackageUpgradeOptions{
 			dry_run: opts.dry_run

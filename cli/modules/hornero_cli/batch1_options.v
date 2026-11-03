@@ -80,7 +80,7 @@ pub fn parse_package_cmd(args []string) !PackageCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl package check')
 	}
 	leaf := args[0]
-	if leaf !in ['check', 'updates', 'status', 'upgrade', 'deps'] {
+	if leaf !in ['check', 'updates', 'status', 'upgrade', 'deps', 'history'] {
 		return error('unknown package subcommand: ${leaf}.\nRun: horneroctl package --help')
 	}
 	mut dry_run := false
