@@ -699,6 +699,7 @@ Examples:
   horneroctl package status --json
   horneroctl package upgrade --dry-run
   horneroctl package upgrade --yes
+  horneroctl package history
   horneroctl package deps
   horneroctl package deps --optional
   horneroctl package deps --compositor niri

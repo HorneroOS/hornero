@@ -91,22 +91,39 @@ pub fn package_upgrade_report(opts PackageUpgradeOptions) CommandResult {
 	pacman := pacman_or_fail('upgrade', opts.dry_run) or {
 		return fail_result('package upgrade', err.msg())
 	}
+	if !opts.dry_run {
+		blocker := upgrade_preflight_blocker()
+		if blocker.len > 0 {
+			return fail_result('package upgrade', 'preflight refused: ${blocker}')
+		}
+	}
 	rep := run_exec(ExecSpec{
 		prog:    pkexec
 		args:    [pacman, '-Syu']
 		dry_run: opts.dry_run
 	})
 	if opts.dry_run {
-		return ok_result('package upgrade', 'would run: ${rep.command_line}\nPrivilege: polkit (pkexec). AUR-helper flows (yay -Syu) stay manual.',
+		warnings := upgrade_preflight_warnings()
+		warning_line := if warnings.len > 0 { '\nWarnings: ${warnings.join('; ')}' } else { '' }
+		return ok_result('package upgrade', 'would run: ${rep.command_line}\nPrivilege: polkit (pkexec). AUR-helper flows (yay -Syu) stay manual.${warning_line}',
 			{
 				'command_line': rep.command_line
 				'dry_run':      'true'
 			})
 	}
+	record_update_history('upgrade', rep.ok, rep.command_line)
 	if rep.ok {
-		return ok_result('package upgrade', rep.output, {
+		needs_reboot, reboot_reason := reboot_required()
+		mut data := {
 			'command_line': rep.command_line
-		})
+		}
+		mut message := rep.output
+		if needs_reboot {
+			data['reboot_required'] = 'true'
+			data['reboot_reason'] = reboot_reason
+			message = '${message}\nReboot required: ${reboot_reason}'
+		}
+		return ok_result('package upgrade', message, data)
 	}
 	return fail_result('package upgrade', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }
