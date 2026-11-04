@@ -1,6 +1,6 @@
 # Hornero OS composition manifest: hornero-0.2.0-preview32
 #
-# Published signed pre-release (2026-11-04).
+# Signed pre-release candidate (2026-11-04), pending publication.
 
 apiVersion: hornero.os/v1
 kind: CompositionManifest
