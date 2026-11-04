@@ -21,7 +21,7 @@ import hornero_core
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'help']
+	'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -141,6 +141,9 @@ pub fn dispatch(args []string) int {
 		}
 		'gaming' {
 			run_gaming(rest[1..], mode)
+		}
+		'recovery' {
+			run_recovery(rest[1..], mode)
 		}
 		'assistant' {
 			run_assistant(rest[1..], mode)
@@ -308,6 +311,28 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			}
 		}
 		else { render(hornero_core.assistant_stop_report(opts.value), mode) }
+	}
+}
+
+fn run_recovery(args []string, mode hornero_core.RenderMode) int {
+	if args.len == 0 {
+		return render_error(hornero_core.err_usage('recovery.usage',
+			'expected a subcommand: doctor.\nExample: horneroctl recovery doctor --json'),
+			mode)
+	}
+	match args[0] {
+		'doctor' {
+			if args.len > 1 {
+				return render_error(hornero_core.err_usage('recovery.usage',
+					'unexpected argument: ${args[1]}.\nExample: horneroctl recovery doctor'), mode)
+			}
+			return render(hornero_core.recovery_doctor_result(), mode)
+		}
+		else {
+			return render_error(hornero_core.err_usage('recovery.usage',
+				'unknown subcommand: ${args[0]} (expected: doctor).\nExample: horneroctl recovery doctor'),
+				mode)
+		}
 	}
 }
 
@@ -1019,6 +1044,9 @@ fn run_package(args []string, mode hornero_core.RenderMode) int {
 	opts := parse_package_cmd(args) or {
 		return render_error(hornero_core.err_usage('package.usage', err.msg()), mode)
 	}
+	if opts.leaf == 'history' {
+		return render(hornero_core.package_history_report(), mode)
+	}
 	if opts.leaf == 'upgrade' {
 		return render(hornero_core.package_upgrade_report(hornero_core.PackageUpgradeOptions{
 			dry_run: opts.dry_run
@@ -1650,6 +1678,9 @@ fn run_capture(args []string, mode hornero_core.RenderMode) int {
 		return render_error(hornero_core.err_usage('capture.usage', err.msg()), mode)
 	}
 	match opts.group {
+		'status' {
+			return render(hornero_core.capture_status_report(), mode)
+		}
 		'screenshot' {
 			return render(hornero_core.screenshot_report(hornero_core.ScreenshotOptions{
 				region:  opts.region

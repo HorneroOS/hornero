@@ -24,6 +24,9 @@ packageSets:
       - hornero-shell
       - hornero-config
       - horneroctl-bin
+      - pacman-contrib
+      - fakeroot
+      - polkit-gnome
       - quickshell
       - exo
       - kitty
@@ -205,6 +208,18 @@ capabilities:
     defaultByEdition: {desktop: false, server: true, agents: true, studio: false, gaming: false}
     conflicts: []
     requires: []
+  # OS snapshots (hornero#179): snapper timeline + snap-pac transaction
+  # hooks + grub-btrfs boot entries. Opt-in everywhere until the
+  # backend is VM-proven; default off must never read as rollback
+  # support. Requires the /@snapshots layout from fresh installs.
+  snapshots:
+    title: System snapshots (Btrfs)
+    packages: [snapper, snap-pac, grub-btrfs, inotify-tools]
+    services: [snapper-timeline.timer, snapper-cleanup.timer, grub-btrfsd.service]
+    appliesTo: [desktop, studio, gaming]
+    defaultByEdition: {desktop: false, server: false, agents: false, studio: false, gaming: false}
+    conflicts: []
+    requires: []
   developer:
     title: Developer profile
     packages: [base-devel, git, gdb, strace]
@@ -236,6 +251,10 @@ installationProvenance:
   base-devel: {source: arch-core, sourceUrl: "https://archlinux.org/packages/core/x86_64/base-devel/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
   git: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/git/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
   gdb: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/gdb/", licenses: [GPL-3.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  snapper: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/snapper/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  snap-pac: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/snap-pac/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  grub-btrfs: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/grub-btrfs/", licenses: [GPL-3.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  inotify-tools: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/inotify-tools/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
   strace: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/strace/", licenses: [LGPL-2.1-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
 editions:
   desktop:

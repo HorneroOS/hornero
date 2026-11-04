@@ -15,6 +15,8 @@ url='https://github.com/HorneroOS/hornero'
 license=('MIT')
 options=('!strip')
 optdepends=(
+  'pacman-contrib: repository update checks via checkupdates (package check/updates/status)'
+  'fakeroot: required by checkupdates when run as a regular user'
   'xdg-terminal-exec: launch terminals using Hornero terminal preferences'
   'git: install community Shell plugin packages from HTTPS repositories'
   'minisign: verify signed HorneroOS community plugin registry indexes'

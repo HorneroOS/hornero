@@ -24,11 +24,12 @@ Commands:
   bluetooth     Bluetooth diagnostics (doctor, status, devices, power, restart)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
-  capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
+  capture       Screenshot, recording, clipboard (screenshot, record, clipboard, status)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   system        Installed edition and active compositor information
   studio        Studio selection state and read-only diagnostics (doctor, selection)
   gaming        Gaming readiness diagnostics (doctor)
+  recovery      OS recovery readiness diagnostics (doctor)
   assistant     Optional Hermes AI assistant (status, enable, disable, tools, knowledge, ask, stop)
   completion    Print shell completions
   help          Show help for a command
@@ -94,6 +95,12 @@ Examples:
 		}
 		'gaming' {
 			return 'Usage: horneroctl gaming <doctor|selection> [options]\n\nGaming readiness diagnostics and selection state. The canonical\nspecialization and application model lives in\neditions/catalogue.yaml; this command validates stable IDs and\nrecords user selection intent. It never installs packages, never\nreports game compatibility, hardware qualification, or measured\nperformance. Gaming remains planned.\n\n  doctor              Read-only Gaming readiness checks\n  selection show      Show the recorded selection (default)\n  selection set       Record a selection (--specialization/--application, --dry-run)\n\nExamples:\n  horneroctl gaming doctor\n  horneroctl gaming doctor --json\n  horneroctl gaming selection set --specialization desktop-gaming --application steam\n'
+		}
+		'recovery' {
+			return 'Usage: horneroctl recovery <doctor> [options]\n\nOS recovery readiness diagnostics for the contracted Btrfs\nsnapshot backend (docs/SNAPSHOT_BACKEND_CONTRACT.md). This is\nabout operating-system rollback readiness only; configuration\nsnapshots under `horneroctl config` are settings archives and\nare never OS rollback. Nothing here creates or restores a\nsnapshot, and readiness is not proof that a restore works.\n\n  doctor              Read-only recovery readiness checks\n\nExamples:\n  horneroctl recovery doctor\n  horneroctl recovery doctor --json\n'
+		}
+		'recovery doctor' {
+			return 'Usage: horneroctl recovery doctor [--json|--quiet]\n\nRead-only checks: shipped snapshot backend, root filesystem\ntype (non-Btrfs installs are plainly unsupported), the\ntop-level /.snapshots store, snapper presence and root config,\nand retention timer units. Detection is not proof of a\nvalidated restore, and config snapshots are not OS rollback.\n\nExamples:\n  horneroctl recovery doctor\n  horneroctl recovery doctor --json\n'
 		}
 		'gaming doctor' {
 			return 'Usage: horneroctl gaming doctor [--json|--quiet]\n\nRead-only checks: recorded selection validity, Vulkan loader and\nICD registration (64-bit loader plus 32-bit loader presence),\nSteam, Feral GameMode, Gamescope and MangoHud availability,\nPipeWire/WirePlumber and portal presence, controller visibility,\nand recovery readiness. Detection is not hardware qualification,\nand nothing here claims a game will run.\n\nExamples:\n  horneroctl gaming doctor\n  horneroctl gaming doctor --json\n'
@@ -699,6 +706,7 @@ Examples:
   horneroctl package status --json
   horneroctl package upgrade --dry-run
   horneroctl package upgrade --yes
+  horneroctl package history
   horneroctl package deps
   horneroctl package deps --optional
   horneroctl package deps --compositor niri
@@ -1139,7 +1147,7 @@ Examples:
 '
 		}
 		'capture' {
-			return 'Usage: horneroctl capture <screenshot|record|clipboard> [options]
+			return 'Usage: horneroctl capture <screenshot|record|clipboard|status> [options]
 
   screenshot [--fullscreen|--region] [--output PATH] [--dry-run]
                       Take a screenshot (needs --yes; backend follows session)
@@ -1147,6 +1155,8 @@ Examples:
                       Drive gpu-screen-recorder (needs --yes)
   clipboard [--backend NAME] [--dry-run]
                       Open the clipboard picker view (read-only, no --yes)
+  status
+                      Report capture backends, recorder state, and output directories (read-only)
 
 Screenshot defaults to fullscreen (\$XDG_PICTURES_DIR, else ~/Pictures,
 screenshot_YYYYMMDD_HHMMSS.png); --region takes an interactive region
@@ -1180,6 +1190,7 @@ Examples:
   horneroctl capture clipboard
   horneroctl capture clipboard --backend copyq --dry-run
   horneroctl capture clipboard --backend minimal
+  horneroctl capture status
 '
 		}
 		'apps' {
@@ -1488,7 +1499,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware bluetooth completion welcome wallpaper capture apps system studio gaming help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware bluetooth completion welcome wallpaper capture apps system studio gaming recovery help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1502,7 +1513,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome wallpaper capture apps system assistant studio gaming help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome wallpaper capture apps system assistant studio gaming recovery help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1530,5 +1541,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"
 complete -c horneroctl -f -n __fish_use_subcommand -a system -d "Installed edition and compositor"
 complete -c horneroctl -f -n __fish_use_subcommand -a studio -d "Studio selection and diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a gaming -d "Gaming readiness diagnostics"
+complete -c horneroctl -f -n __fish_use_subcommand -a recovery -d "OS recovery readiness diagnostics"
 '
 }

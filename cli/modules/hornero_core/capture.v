@@ -164,13 +164,17 @@ fn recorder_paused_file() string {
 	return os.join_path(recorder_state_dir(), 'paused')
 }
 
-fn screenshot_default_path() string {
+fn screenshot_dir() string {
 	mut dir := os.getenv('XDG_PICTURES_DIR')
 	if dir.len == 0 {
 		dir = os.join_path(os.home_dir(), 'Pictures')
 	}
+	return dir
+}
+
+fn screenshot_default_path() string {
 	ts := time.now().strftime('%Y%m%d_%H%M%S')
-	return os.join_path(dir, 'screenshot_${ts}.png')
+	return os.join_path(screenshot_dir(), 'screenshot_${ts}.png')
 }
 
 fn recorder_output_dir() string {
@@ -670,4 +674,63 @@ pub fn clipboard_report(opts ClipboardOptions) CommandResult {
 			'command_line': rep.command_line
 			'backend':      'minimal'
 		})
+}
+
+fn capture_backend_state(resolved string) string {
+	if resolved.len == 0 {
+		return 'not found'
+	}
+	if capture_backend_present(resolved) {
+		return resolved
+	}
+	return 'not found (${resolved})'
+}
+
+// capture_status_report implements `capture status` (read-only): which
+// capture backends are actually available, whether a recording is live or
+// paused, and where screenshots/recordings land. Missing backends are
+// reported as such, never as an error — this is the surface graphical
+// capture settings bind to (shell#237).
+pub fn capture_status_report() CommandResult {
+	niri_session := os.getenv('NIRI_SOCKET').len > 0
+	shot_name := if niri_session { 'niri' } else { 'sss' }
+	shot_bin := if niri_session { resolve_niri_bin() } else { resolve_sss_bin() }
+	shot_present := shot_bin.len > 0 && capture_backend_present(shot_bin)
+	gsr_bin := resolve_gsr_bin()
+	gsr_present := gsr_bin.len > 0 && capture_backend_present(gsr_bin)
+	copyq_bin := resolve_copyq_bin()
+	copyq_present := copyq_bin.len > 0 && capture_backend_present(copyq_bin)
+	cliphist_bin := resolve_cliphist_bin()
+	cliphist_present := cliphist_bin.len > 0 && capture_backend_present(cliphist_bin)
+	wl_paste_bin := resolve_wl_paste_bin()
+	wl_paste_present := wl_paste_bin.len > 0 && capture_backend_present(wl_paste_bin)
+	running := recorder_running()
+	paused := os.is_file(recorder_paused_file())
+	current := (os.read_file(recorder_current_file()) or { '' }).trim_space()
+	recorder_state := if running {
+		if paused { 'recording (paused)' } else { 'recording' }
+	} else {
+		'not recording'
+	}
+	current_line := if current.len > 0 { '\nCurrent recording file: ${current}' } else { '' }
+	clip := fn (name string, present bool) string {
+		return if present { '${name} present' } else { '${name} missing' }
+	}
+	message := 'Screenshot backend (${shot_name}): ${capture_backend_state(shot_bin)}\nRecorder backend (gpu-screen-recorder): ${capture_backend_state(gsr_bin)}\nClipboard backends: ${clip('copyq', copyq_present)}, ${clip('cliphist', cliphist_present)}, ${clip('wl-paste', wl_paste_present)}\nRecorder: ${recorder_state}${current_line}\nPictures directory: ${screenshot_dir()}\nRecordings directory: ${recorder_output_dir()}'
+	return ok_result('capture status', message, {
+		'compositor':                 if niri_session { 'niri' } else { 'other' }
+		'screenshot_backend_name':    shot_name
+		'screenshot_backend':         shot_bin
+		'screenshot_backend_present': shot_present.str()
+		'recorder_backend':           gsr_bin
+		'recorder_backend_present':   gsr_present.str()
+		'recorder_running':           running.str()
+		'recorder_paused':            paused.str()
+		'recorder_current_file':      current
+		'clipboard_copyq_present':    copyq_present.str()
+		'clipboard_cliphist_present': cliphist_present.str()
+		'clipboard_wl_paste_present': wl_paste_present.str()
+		'pictures_dir':               screenshot_dir()
+		'recordings_dir':             recorder_output_dir()
+	})
 }
