@@ -24,7 +24,7 @@ Commands:
   bluetooth     Bluetooth diagnostics (doctor, status, devices, power, restart)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
   wallpaper     Wallpaper image (set, current, reload)
-  capture       Screenshot, recording, clipboard (screenshot, record, clipboard)
+  capture       Screenshot, recording, clipboard (screenshot, record, clipboard, status)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   system        Installed edition and active compositor information
   studio        Studio selection state and read-only diagnostics (doctor, selection)
@@ -1147,7 +1147,7 @@ Examples:
 '
 		}
 		'capture' {
-			return 'Usage: horneroctl capture <screenshot|record|clipboard> [options]
+			return 'Usage: horneroctl capture <screenshot|record|clipboard|status> [options]
 
   screenshot [--fullscreen|--region] [--output PATH] [--dry-run]
                       Take a screenshot (needs --yes; backend follows session)
@@ -1155,6 +1155,8 @@ Examples:
                       Drive gpu-screen-recorder (needs --yes)
   clipboard [--backend NAME] [--dry-run]
                       Open the clipboard picker view (read-only, no --yes)
+  status
+                      Report capture backends, recorder state, and output directories (read-only)
 
 Screenshot defaults to fullscreen (\$XDG_PICTURES_DIR, else ~/Pictures,
 screenshot_YYYYMMDD_HHMMSS.png); --region takes an interactive region
@@ -1188,6 +1190,7 @@ Examples:
   horneroctl capture clipboard
   horneroctl capture clipboard --backend copyq --dry-run
   horneroctl capture clipboard --backend minimal
+  horneroctl capture status
 '
 		}
 		'apps' {

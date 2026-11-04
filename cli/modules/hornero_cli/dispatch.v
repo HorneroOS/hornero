@@ -1678,6 +1678,9 @@ fn run_capture(args []string, mode hornero_core.RenderMode) int {
 		return render_error(hornero_core.err_usage('capture.usage', err.msg()), mode)
 	}
 	match opts.group {
+		'status' {
+			return render(hornero_core.capture_status_report(), mode)
+		}
 		'screenshot' {
 			return render(hornero_core.screenshot_report(hornero_core.ScreenshotOptions{
 				region:  opts.region

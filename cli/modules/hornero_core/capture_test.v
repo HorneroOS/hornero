@@ -57,6 +57,42 @@ fn test_screenshot_needs_yes() {
 	assert r.message.contains('--yes')
 }
 
+fn test_capture_status_reports_missing_backends_and_dirs() {
+	saved := capture_test_save_env(capture_test_keys)
+	capture_test_break_backends()
+	capture_test_isolate_paths()
+	r := capture_status_report()
+	assert r.ok
+	assert r.data['screenshot_backend_name'] == 'sss'
+	assert r.data['screenshot_backend_present'] == 'false'
+	assert r.data['recorder_backend_present'] == 'false'
+	assert r.data['recorder_running'] == 'false'
+	assert r.data['recorder_paused'] == 'false'
+	assert r.data['pictures_dir'] == '/tmp/hx-capture-test/pictures'
+	assert r.data['recordings_dir'] == '/tmp/hx-capture-test/videos/Recordings'
+	assert r.message.contains('not recording')
+	capture_test_restore_env(saved)
+}
+
+fn test_capture_status_reflects_recorder_state_files() {
+	saved := capture_test_save_env(capture_test_keys)
+	capture_test_break_backends()
+	capture_test_isolate_paths()
+	state := '/tmp/hx-capture-test/state/hornero/recorder'
+	os.mkdir_all(state) or { assert false }
+	os.write_file(state + '/current_file', '/tmp/hx-capture-test/videos/Recordings/recording_x.mp4\n') or {
+		assert false
+	}
+	os.write_file(state + '/paused', '') or { assert false }
+	r := capture_status_report()
+	assert r.ok
+	assert r.data['recorder_paused'] == 'true'
+	assert r.data['recorder_current_file'] == '/tmp/hx-capture-test/videos/Recordings/recording_x.mp4'
+	os.rm(state + '/current_file') or {}
+	os.rm(state + '/paused') or {}
+	capture_test_restore_env(saved)
+}
+
 fn test_screenshot_dry_run_needs_no_backend() {
 	saved := capture_test_save_env(capture_test_keys)
 	capture_test_break_backends()
