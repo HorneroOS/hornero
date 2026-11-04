@@ -211,7 +211,7 @@ capabilities:
   # support. Requires the /@snapshots layout from fresh installs.
   snapshots:
     title: System snapshots (Btrfs)
-    packages: [snapper, snap-pac, grub-btrfs]
+    packages: [snapper, snap-pac, grub-btrfs, inotify-tools]
     services: [snapper-timeline.timer, snapper-cleanup.timer, grub-btrfsd.service]
     appliesTo: [desktop, studio, gaming]
     defaultByEdition: {desktop: false, server: false, agents: false, studio: false, gaming: false}
@@ -251,6 +251,7 @@ installationProvenance:
   snapper: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/snapper/", licenses: [GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
   snap-pac: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/snap-pac/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
   grub-btrfs: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/grub-btrfs/", licenses: [GPL-3.0-only], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
+  inotify-tools: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/inotify-tools/", licenses: [GPL-2.0-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
   strace: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/strace/", licenses: [LGPL-2.1-or-later], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: supported}
 editions:
   desktop:
