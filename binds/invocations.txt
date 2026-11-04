@@ -63,6 +63,7 @@ capture record pause
 capture record start
 capture record stop
 capture screenshot
+capture status
 config gui
 config snapshot restore
 hardware battery monitor
