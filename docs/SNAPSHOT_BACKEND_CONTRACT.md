@@ -25,10 +25,12 @@ reports `none` everywhere):
   filesystem, store, snapper/config and timer units read-only, and
   states plainly that readiness is not proof of a restore.
 
-Still missing before any backend claim: the VM proof below, the
-bootloader-specific boot paths (GRUB vs systemd-boot are separate
-implementations; kernel/initramfs live on the ESP outside root
-snapshots), and create/enumerate/restore verbs in `horneroctl`.
+Still missing before any backend claim: a fully passing VM proof
+(first execution recorded below — install/create/snap-pac and the
+`@`-replacement restore pass; GRUB read-only snapshot boot and the
+ESP kernel boundary fail), the bootloader-specific boot paths (GRUB
+vs systemd-boot are separate implementations), and
+create/enumerate/restore verbs in `horneroctl`.
 
 ## Decision
 
@@ -99,6 +101,44 @@ Disposable VM, in order, with the transcript recorded on #179:
 Until all six steps are recorded, release readiness keeps its
 updates/rollback gate at FAIL and docs keep saying there is no
 HorneroOS system rollback.
+
+### First execution (2026-11-03, candidate ISO, partial)
+
+Disposable QEMU VM, UEFI, Btrfs, unencrypted, candidate-only
+`desktop-hyprland-recovery` choice (installer#83). Result per step:
+
+1. **PASS** (after two installer defects were found and fixed by
+   this proof: the undeclared `shellprocess@recovery` instance,
+   installer#84, and the unregistered factory config,
+   installer#85).
+2. **PASS** — manual create and snap-pac pre/post pair around a
+   real `pacman -Syu`.
+3. Executed as marker mutation plus a full `-Syu`; not a
+   deliberately broken package state.
+4. **FAIL** — the GRUB snapshots menu renders (grub-btrfs, needs
+   `inotify-tools`, hornero#362), but booting a read-only snapper
+   snapshot lands in emergency mode: the snapshot subvolume is
+   `ro=true` and its fstab mounts `/` as `subvol=/@`, so local
+   filesystems fail. Booting a snapshot directly is **not** a
+   working recovery path with this stack.
+5. **PASS via `@` replacement** — from the running system: rename
+   `@`, take a writable btrfs snapshot of
+   `@snapshots/<n>/snapshot` as the new `@`, reboot. Mutation
+   reverted, `/home` (`@home`) untouched, desktop login works.
+   **FAIL across a kernel change**: kernel/initramfs live on the
+   ESP outside root snapshots; restoring a root taken before a
+   kernel upgrade boots the new kernel against old
+   `/usr/lib/modules` (observed `7.2.14` vs `7.2.9`) and fails.
+   No rollback-across-kernel-update claim is possible with this
+   layout.
+6. **NOT TESTED** — timers enabled, no GC run observed.
+
+Consequences recorded here so nobody re-derives them later: the
+only restore mechanism with passing evidence today is `@`
+replacement from a running system or live media, within one kernel
+version. That is the flow a future `horneroctl` restore verb must
+wrap (with explicit confirmation); the GRUB snapshot menu alone
+must never be presented as recovery.
 
 ## Non-goals
 
