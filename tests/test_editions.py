@@ -52,6 +52,16 @@ def test_desktop_composition_supports_horneroctl_package_status():
     assert required <= packages
 
 
+def test_desktop_composition_installs_a_polkit_authentication_agent():
+    # hornero#366 VM finding: hornero-config autostarts
+    # /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1, but the
+    # package was never in the catalogue, so fresh installs ran with no
+    # registered polkit agent and every pkexec flow (package upgrade,
+    # bluetooth restart) failed with "No session for cookie".
+    packages = set(resolver.resolve_edition(resolver.load_catalogue(), "desktop")["packages"])
+    assert "polkit-gnome" in packages
+
+
 def test_desktop_composition_contains_a_login_manager_and_hornero_greeter():
     packages = set(resolver.resolve_edition(resolver.load_catalogue(), "desktop")["packages"])
     required = {"sddm", "hornero-greeter", "hornero-greeter-media-base"}

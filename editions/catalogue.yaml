@@ -26,6 +26,7 @@ packageSets:
       - horneroctl-bin
       - pacman-contrib
       - fakeroot
+      - polkit-gnome
       - quickshell
       - exo
       - kitty
