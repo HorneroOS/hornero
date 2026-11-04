@@ -92,6 +92,19 @@ fn test_dispatch_capture_usage() {
 fn test_capture_help_has_examples() {
 	h := command_help('capture')
 	assert h.contains('Examples:')
+	assert h.contains('horneroctl capture status')
+}
+
+fn test_dispatch_capture_status() {
+	saved := cap_dispatch_setup()
+	assert dispatch(['horneroctl', 'capture', 'status']) == 0
+	assert dispatch(['horneroctl', 'capture', 'status', '--yes']) == 2
+	assert dispatch(['horneroctl', 'capture', 'status', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'capture', 'status', '--bogus']) == 2
+	cap_dispatch_break_backends()
+	// Status stays an ok read-only report even with every backend missing.
+	assert dispatch(['horneroctl', 'capture', 'status']) == 0
+	cap_dispatch_teardown(saved)
 }
 
 fn test_dispatch_screenshot() {

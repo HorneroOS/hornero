@@ -1,16 +1,17 @@
 module hornero_cli
 
-// Capture option parser: `capture <screenshot|record|clipboard> ...`.
+// Capture option parser: `capture <screenshot|record|clipboard|status> ...`.
 // Error strings always carry a correct Example (exit-2 contract).
 // screenshot and record leaves mutate (files, recorder processes) and
 // take --dry-run/--yes; clipboard only opens read views and takes
-// --dry-run (no --yes, like `welcome open`).
+// --dry-run (no --yes, like `welcome open`); status is read-only and
+// takes no flags at all.
 
 // CaptureCmdOptions covers the whole capture group. group selects the
 // capture surface; leaf is the record action (start|stop|pause).
 pub struct CaptureCmdOptions {
 pub:
-	group      string // screenshot | record | clipboard
+	group      string // screenshot | record | clipboard | status
 	leaf       string // record action, else ''
 	region     bool
 	fullscreen bool
@@ -24,6 +25,9 @@ pub:
 }
 
 fn capture_opt_example(group string, leaf string) string {
+	if group == 'status' {
+		return 'horneroctl capture status'
+	}
 	if group == 'record' && leaf.len > 0 {
 		return 'horneroctl capture record ${leaf} --dry-run'
 	}
@@ -39,7 +43,7 @@ pub fn parse_capture_cmd(args []string) !CaptureCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl capture screenshot --dry-run')
 	}
 	group := args[0]
-	if group !in ['screenshot', 'record', 'clipboard'] {
+	if group !in ['screenshot', 'record', 'clipboard', 'status'] {
 		return error('unknown capture subcommand: ${group}.\nRun: horneroctl capture --help')
 	}
 	mut leaf := ''
@@ -208,6 +212,9 @@ pub fn parse_capture_cmd(args []string) !CaptureCmdOptions {
 	}
 	if group == 'clipboard' && yes {
 		return error('capture clipboard needs no --yes (it only opens read views).\nExample: horneroctl capture clipboard --dry-run')
+	}
+	if group == 'status' && (yes || dry_run) {
+		return error('capture status is read-only and takes no flags.\nExample: horneroctl capture status')
 	}
 	if sr {
 		region = true
