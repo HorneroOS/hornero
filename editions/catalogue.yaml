@@ -24,6 +24,8 @@ packageSets:
       - hornero-shell
       - hornero-config
       - horneroctl-bin
+      - pacman-contrib
+      - fakeroot
       - quickshell
       - exo
       - kitty
