@@ -14,7 +14,7 @@ Three channels were compared (#325 owns the promotion decision):
 | Manual AppImage (chosen) | Official `artcraft-launcher-*-linux-{x86_64,aarch64}.AppImage` from GitHub releases, SHA256-verified, user-local in `~/Applications` | Chosen: no root, no build, matches the flow the team already smoke-tested |
 | Vendor `.pkg.tar.zst` | Official pacman-compatible tarball per release (x86_64 + aarch64) | Leading candidate for #325: pacman-trackable, but installs to `/usr` (needs root) and stays a prebuilt binary outside any repo |
 
-Source: https://github.com/storytold/craft-launcher/releases
+Source: <https://github.com/storytold/craft-launcher/releases>
 Pinned version: `0.8.1` (revalidate here when moving the pin; upstream
 `getartcraft.com/apps` still linked 0.5.1 at check time).
 
@@ -44,13 +44,17 @@ chmod +x artcraft-launcher-0.8.1-linux-${ARCH}.AppImage
 
 The `grep` pins verification to the downloaded file: a missing or
 mismatched manifest entry fails instead of passing silently
-(`--ignore-missing` would hide that case).
+(`--ignore-missing` would hide that case). This proves consistency with the
+same-origin `SHA256SUMS.txt`; it does not prove release authenticity
+(upstream does not publish a separate signature).
 
 Wayland/Hyprland prerequisites (already on Desktop; if anything is missing):
-`wayland, xdg-desktop-portal[-hyprland], mesa/vulkan-icd-loader, noto-fonts-cjk`
-(CJK optional). The AppImage embeds a static runtime; normal mounting needs
-working host FUSE, but not `libfuse2`. Without FUSE, use
-`APPIMAGE_EXTRACT_AND_RUN=1`.
+`wayland, xdg-desktop-portal, xdg-desktop-portal-hyprland,
+xdg-desktop-portal-gtk, mesa/vulkan-icd-loader, noto-fonts-cjk` (CJK
+optional). The Hyprland package set provides `xdg-desktop-portal-hyprland`
+but not the GTK backend, which `FileChooser` needs. The AppImage embeds a
+static runtime; normal mounting needs working host FUSE, but not `libfuse2`.
+Without FUSE, use `APPIMAGE_EXTRACT_AND_RUN=1`.
 
 Craft apps install/update from inside the launcher, outside pacman: the
 catalogue version is only valid at install time. Never replace a running app
@@ -59,28 +63,38 @@ catalogue version is only valid at install time. Never replace a running app
 ## How to test it
 
 1. Composition (no VM):
+
    ```bash
    python3 scripts/resolve-edition.py studio --application artcraft-launcher
    # must fail with: reference-only and cannot be installed from the catalogue
    python3 -m pytest tests/test_studio_selection.py tests/test_editions.py tests/test_composition.py -q
    ```
+
 2. Manual smoke on a HorneroOS Desktop/Studio Preview VM (Hyprland, then Niri):
+
    - AppImage runs, icon shows in the Hornero Shell launcher.
    - `desktop-file-validate` for the generated `.desktop` if integrated into the menu.
    - Open a file dialog (portal path), create a project, install/update a
      Craft app, take a screenshot.
    - Repeat on Niri (experimental): report only, non-blocking.
+
 3. Evidence: screenshots + manual `run.json`-style record (ISO SHA, launcher
-   version, compositor). No bundle PASS means no promotion to `support`.
-   See `HorneroOS/qa:docs/STUDIO-ACCEPTANCE.md` (fail-closed gate).
+   version, compositor) attached to this PR or a QA bundle. A fail-closed
+   HorneroOS QA bundle PASS is required before any maturity claim; #325
+   targets a selectable `experimental: true` (opt-in) entry, not `support`.
+   See [HorneroOS/qa:docs/STUDIO-ACCEPTANCE.md](https://github.com/HorneroOS/qa/blob/main/docs/STUDIO-ACCEPTANCE.md).
+
+Smoke evidence for this step: [HorneroOS/hornero#324](https://github.com/HorneroOS/hornero/pull/324).
 
 ## Promotion notes for #325
 
 - Upstream marks the launcher and all 13 Craft apps early alpha / in
   development → must land as `experimental: true` (like Graphite), opt-in.
-- Licensing is clean (MIT / Apache-2.0 → `licenseClass: open-source`); no
-  proprietary opt-in machinery needed. Trademark limit: the ArtCraft name,
-  logo and "A" mark are NOT open-licensed (upstream
+- Licensing is clean: upstream metadata says Apache-2.0, and the LICENSE
+  files say `MIT OR Apache-2.0` → future `licenseClass: open-source`; no
+  proprietary opt-in machinery needed. Both `licenseClass` and
+  `studioProvenance` land with #325, not in this PR. Trademark limit: the
+  ArtCraft name, logo and "A" mark are NOT open-licensed (upstream
   `docs/brand/LICENSE-brand.txt`) — the website must not derive assets
   from them.
 - The launcher manages app lifecycle outside pacman (installs from upstream

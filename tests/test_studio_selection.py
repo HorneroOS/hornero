@@ -68,8 +68,18 @@ def test_unknown_and_reference_only_selections_fail_actionably():
         resolver.resolve_studio_selection(catalogue_doc, ["nope"])
     with pytest.raises(ValueError, match="unknown studio application"):
         resolver.resolve_studio_selection(catalogue_doc, [], ["nope"])
-    with pytest.raises(ValueError, match="reference-only"):
-        resolver.resolve_studio_selection(catalogue_doc, [], ["penpot"])
+    for application in ("penpot", "artcraft-launcher"):
+        with pytest.raises(ValueError, match="reference-only"):
+            resolver.resolve_studio_selection(catalogue_doc, [], [application])
+
+
+def test_reference_only_titles_parse_exactly():
+    applications = catalogue()["studioApplications"]
+    assert applications["penpot"]["title"] == "Penpot"
+    assert (
+        applications["artcraft-launcher"]["title"]
+        == "ArtCraft Launcher (AppImage, manual)"
+    )
 
 
 def test_experimental_apps_are_flagged_not_silent():
