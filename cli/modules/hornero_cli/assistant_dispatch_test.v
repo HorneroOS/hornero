@@ -213,3 +213,8 @@ fn test_assistant_tool_dispatch() {
 	// Default read-only policy denies theme_set without executing it.
 	assert dispatch(['horneroctl', 'assistant', 'tool', 'theme_set', 'pampa']) == 1
 }
+
+fn test_assistant_prompt_set_text_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.', '--dry-run']) == 0
+}
