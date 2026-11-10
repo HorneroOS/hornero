@@ -684,10 +684,11 @@ pub fn assistant_sessions_file() string {
 
 pub struct AssistantSession {
 pub:
-	id      string
-	title   string
-	created string
-	mode    string // ask | agent | chat ('' = agent, legacy rows)
+	id        string
+	title     string
+	created   string
+	mode      string // ask | agent | chat ('' = agent, legacy rows)
+	workspace string // workspace id at creation ('' = legacy, unbound)
 }
 
 // assistant_session_effective_mode normalises a stored mode: anything
@@ -716,12 +717,13 @@ pub fn assistant_sessions_load() AssistantSessions {
 		parts := line.split('\t')
 		if parts.len == 2 && parts[0] == 'current' {
 			out.current = parts[1]
-		} else if parts.len in [4, 5] && parts[0] == 'session' {
+		} else if parts.len in [4, 5, 6] && parts[0] == 'session' {
 			out.sessions << AssistantSession{
-				id:      parts[1]
-				title:   parts[2]
-				created: parts[3]
-				mode:    if parts.len == 5 { parts[4] } else { 'agent' }
+				id:        parts[1]
+				title:     parts[2]
+				created:   parts[3]
+				mode:      if parts.len >= 5 { parts[4] } else { 'agent' }
+				workspace: if parts.len == 6 { parts[5] } else { '' }
 			}
 		}
 	}
@@ -734,7 +736,7 @@ fn assistant_sessions_save(s AssistantSessions) ! {
 		lines << 'current\t${s.current}'
 	}
 	for sess in s.sessions {
-		lines << 'session\t${sess.id}\t${sess.title}\t${sess.created}\t${assistant_session_effective_mode(sess.mode)}'
+		lines << 'session\t${sess.id}\t${sess.title}\t${sess.created}\t${assistant_session_effective_mode(sess.mode)}\t${sess.workspace}'
 	}
 	os.mkdir_all(assistant_dir())!
 	os.write_file(assistant_sessions_file(), lines.join('\n') + '\n')!
@@ -756,8 +758,10 @@ pub fn assistant_session_mode(id string) string {
 	return ''
 }
 
-// assistant_session_key is the gateway continuity key for a session
-// id ('' when no session is selected — the gateway default applies).
+// assistant_session_key is the legacy gateway continuity key for a
+// session id ('' when no session is selected — the gateway default
+// applies). Workspace-bound sessions use the scoped key below; legacy
+// rows keep this key so their Hermes conversations are not orphaned.
 pub fn assistant_session_key(id string) string {
 	if id.len == 0 {
 		return ''
@@ -765,13 +769,41 @@ pub fn assistant_session_key(id string) string {
 	return 'hornero:${id}'
 }
 
+// assistant_session_workspace resolves the workspace a session was
+// created in ('' for legacy or unknown sessions).
+pub fn assistant_session_workspace(id string) string {
+	s := assistant_sessions_load()
+	for sess in s.sessions {
+		if sess.id == id {
+			return sess.workspace
+		}
+	}
+	return ''
+}
+
+// assistant_session_continuity_key scopes the Hermes continuity key
+// to the session's workspace, so a conversation (and the per-key
+// memory Hermes attaches to it) cannot silently follow the user into
+// an unrelated workspace. Unknown or legacy sessions keep the legacy
+// key.
+pub fn assistant_session_continuity_key(id string) string {
+	if id.len == 0 {
+		return ''
+	}
+	ws := assistant_session_workspace(id)
+	if ws.len > 0 {
+		return 'hornero:ws-${ws}:${id}'
+	}
+	return assistant_session_key(id)
+}
+
 // assistant_current_session_key resolves the key for ask: explicit
 // id wins, else the registry's current session, else ''.
 pub fn assistant_current_session_key(explicit string) string {
 	if explicit.len > 0 {
-		return assistant_session_key(explicit)
+		return assistant_session_continuity_key(explicit)
 	}
-	return assistant_session_key(assistant_sessions_load().current)
+	return assistant_session_continuity_key(assistant_sessions_load().current)
 }
 
 pub fn assistant_sessions_list_report() CommandResult {
@@ -785,7 +817,8 @@ pub fn assistant_sessions_list_report() CommandResult {
 	mut lines := []string{}
 	for sess in s.sessions {
 		mark := if sess.id == s.current { '*' } else { ' ' }
-		lines << '${mark} ${sess.id} — ${sess.title} [${assistant_session_effective_mode(sess.mode)}] (since ${sess.created})'
+		ws := if sess.workspace.len > 0 { ' @${sess.workspace}' } else { '' }
+		lines << '${mark} ${sess.id} — ${sess.title} [${assistant_session_effective_mode(sess.mode)}]${ws} (since ${sess.created})'
 	}
 	return ok_result('assistant sessions', lines.join('\n'), {
 		'count':   '${s.sessions.len}'
@@ -803,19 +836,22 @@ pub fn assistant_sessions_new_report_mode(title string, mode string) CommandResu
 	}
 	mut s := assistant_sessions_load()
 	id := 's${time.now().unix()}${s.sessions.len + 1}'
+	workspace := assistant_workspace_active().id
 	s.sessions << AssistantSession{
-		id:      id
-		title:   clean
-		created: time.now().format_ss()
-		mode:    effective
+		id:        id
+		title:     clean
+		created:   time.now().format_ss()
+		mode:      effective
+		workspace: workspace
 	}
 	s.current = id
 	assistant_sessions_save(s) or { return fail_result('assistant sessions', err.msg()) }
-	return ok_result('assistant sessions', 'Created and selected ${effective} chat "${clean}" (${id}). Hermes keeps the conversation under its continuity key; only the name and mode live here.', {
-		'id':      id
-		'title':   clean
-		'current': id
-		'mode':    effective
+	return ok_result('assistant sessions', 'Created and selected ${effective} chat "${clean}" (${id}) in workspace ${workspace}. Hermes keeps the conversation under its workspace-scoped continuity key; only the name, mode and workspace live here.', {
+		'id':        id
+		'title':     clean
+		'current':   id
+		'mode':      effective
+		'workspace': workspace
 	})
 }
 
@@ -829,9 +865,16 @@ pub fn assistant_sessions_use_report(id string) CommandResult {
 		if sess.id == id {
 			s.current = id
 			assistant_sessions_save(s) or { return fail_result('assistant sessions', err.msg()) }
-			return ok_result('assistant sessions', 'Selected chat "${sess.title}" (${id}).', {
-				'id':      id
-				'current': id
+			active_ws := assistant_workspace_active().id
+			note := if sess.workspace.len > 0 && sess.workspace != active_ws {
+				' It belongs to workspace ${sess.workspace} (active: ${active_ws}); its history stays scoped to ${sess.workspace}.'
+			} else {
+				''
+			}
+			return ok_result('assistant sessions', 'Selected chat "${sess.title}" (${id}).${note}', {
+				'id':        id
+				'current':   id
+				'workspace': sess.workspace
 			})
 		}
 	}
