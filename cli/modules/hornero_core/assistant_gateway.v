@@ -24,7 +24,74 @@ pub fn assistant_gateway_unit_file() string {
 // failure. The gateway itself binds the loopback endpoint HorneroOS
 // configures; the unit never widens that.
 pub fn assistant_gateway_unit_content(hermes string) string {
-	return '[Unit]\nDescription=Hornero Companion — Hermes gateway (user-level, loopback only)\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=${hermes} gateway run\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n'
+	return assistant_gateway_unit_content_for(hermes, '', '')
+}
+
+// assistant_gateway_isolation reports the kernel boundary the gateway will
+// actually run under. 'systemd-only' is NOT labelled sandboxed: systemd
+// directives harden the unit, but only bubblewrap hides the user's home
+// from the Hermes process (and therefore from execute_code, MCP servers
+// and in-process plugins — see Hermes SECURITY.md §2.2).
+pub fn assistant_gateway_isolation() string {
+	if find_on_path('bwrap').len > 0 {
+		return 'bubblewrap'
+	}
+	return 'systemd-only'
+}
+
+// assistant_gateway_bwrap_argv builds the whole-process bubblewrap view:
+// the host root is read-only, $HOME is masked with tmpfs, and only the
+// Hermes home, the Hermes source venv (read-only) and the active Javi
+// workspace are bound back. Network is shared on purpose: the gateway
+// must stay reachable on loopback and reach the configured provider;
+// egress policy is enforced at the ABAC/tool layer, not the kernel, and
+// status output says so. No Wayland/D-Bus compositor socket is bound.
+pub fn assistant_gateway_bwrap_argv(hermes string, home string, workspace string) []string {
+	hermes_home := os.join_path(home, '.hermes')
+	mut argv := [
+		'bwrap',
+		'--ro-bind',
+		'/',
+		'/',
+		'--dev',
+		'/dev',
+		'--proc',
+		'/proc',
+		'--tmpfs',
+		'/tmp',
+		'--tmpfs',
+		home,
+		'--bind',
+		hermes_home,
+		hermes_home,
+		'--share-net',
+		'--die-with-parent',
+	]
+	// Mask the session runtime dir: the read-only root bind would otherwise
+	// expose the Wayland compositor socket and the session D-Bus socket,
+	// silently bypassing every desktop permission (host-verified).
+	runtime_dir := os.getenv('XDG_RUNTIME_DIR')
+	if runtime_dir.len > 0 {
+		argv << ['--tmpfs', runtime_dir]
+	}
+	if workspace.len > 0 {
+		argv << ['--bind', workspace, workspace]
+	}
+	argv << [hermes, 'gateway', 'run']
+	return argv
+}
+
+fn assistant_gateway_unit_content_for(hermes string, bwrap string, workspace string) string {
+	home := os.home_dir()
+	mut exec := '${hermes} gateway run'
+	mut isolation := 'systemd-only (not sandboxed)'
+	if bwrap.len > 0 {
+		mut argv := assistant_gateway_bwrap_argv(hermes, home, workspace)
+		argv[0] = bwrap
+		exec = argv.join(' ')
+		isolation = 'bubblewrap'
+	}
+	return '[Unit]\nDescription=Hornero Companion — Hermes gateway (user-level, loopback only, isolation: ${isolation})\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=${exec}\nRestart=on-failure\nRestartSec=5\nNoNewPrivileges=true\nPrivateTmp=true\nProtectKernelTunables=true\nProtectControlGroups=true\nRestrictSUIDSGID=true\nLockPersonality=true\nRestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\nCapabilityBoundingSet=\n\n[Install]\nWantedBy=default.target\n'
 }
 
 // assistant_gateway_classify names the five operator states `assistant
@@ -60,7 +127,19 @@ pub fn assistant_gateway_ensure_unit(hermes string) !bool {
 
 fn assistant_gateway_ensure_unit_locked(hermes string) !bool {
 	unit_file := assistant_gateway_unit_file()
-	desired := assistant_gateway_unit_content(hermes)
+	bwrap := find_on_path('bwrap')
+	mut effective_hermes := hermes
+	if bwrap.len > 0 {
+		// The ~/.local/bin/hermes wrapper lives under the masked $HOME, so
+		// the sandboxed unit execs the pinned venv binary directly.
+		venv_hermes := os.join_path(assistant_hermes_src_dir(), '.venv', 'bin', 'hermes')
+		if os.exists(venv_hermes) {
+			effective_hermes = venv_hermes
+		}
+	}
+	workspace := assistant_workspace_active()
+	os.mkdir_all(workspace.root) or {}
+	desired := assistant_gateway_unit_content_for(effective_hermes, bwrap, workspace.root)
 	return assistant_setup_write_owned_file_locked('unit', unit_file, desired,
 		assistant_setup_move_file, assistant_setup_noop_before_publish)
 }
@@ -109,6 +188,8 @@ pub fn assistant_gateway_status_report() CommandResult {
 		'unitState': unit
 		'gateway':   if reachable { 'reachable' } else { 'unreachable' }
 		'protocol':  if compatible { 'compatible' } else { 'incompatible' }
+		'isolation': assistant_gateway_isolation()
+		'workspace': assistant_workspace_active().root
 	}
 	msg := 'gateway state: ${state} (unit ${unit}, endpoint ${settings.endpoint}: ${detail})'
 	return CommandResult{

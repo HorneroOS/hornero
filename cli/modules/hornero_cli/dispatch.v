@@ -248,22 +248,28 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'health' { render(hornero_core.assistant_health_report(), mode) }
 		'enable' { render(hornero_core.assistant_enable_report(opts.dry_run, opts.yes), mode) }
 		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
-		'tools' { render(hornero_core.assistant_tools_report(), mode) }
+		'tools' { render(hornero_core.assistant_broker_tools_report(), mode) }
+		'tool' {
+			render(hornero_core.assistant_broker_exec_report(opts.arg1, opts.arg2, 'agent',
+				opts.yes, opts.dry_run), mode)
+		}
 		'knowledge' { render(hornero_core.assistant_knowledge_report(), mode) }
 		'ask' {
 			if opts.stream {
-				render(hornero_core.assistant_ask_stream_report_traced(opts.value, opts.attach, opts.session, fn [mode] (txt string) {
+				render(hornero_core.assistant_ask_stream_report_traced_mode(opts.value, opts.attach, opts.session, opts.mode, fn [mode] (txt string) {
 					emit_stream_delta(txt, mode)
 				}, fn [mode] (kind string, txt string) {
 					emit_stream_trace(kind, txt, mode)
 				}), mode)
 			} else {
-				render(hornero_core.assistant_ask_report_attached_session(opts.value, opts.attach, opts.session), mode)
+				render(hornero_core.assistant_ask_report_attached_session_mode(opts.value, opts.attach, opts.session, opts.mode), mode)
 			}
 		}
 		'sessions' {
 			match opts.arg1 {
-				'new' { render(hornero_core.assistant_sessions_new_report(opts.arg2), mode) }
+				'new' {
+					render(hornero_core.assistant_sessions_new_report_mode(opts.arg2, opts.mode), mode)
+				}
 				'use' { render(hornero_core.assistant_sessions_use_report(opts.arg2), mode) }
 				else { render(hornero_core.assistant_sessions_list_report(), mode) }
 			}
@@ -288,6 +294,54 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			render(hornero_core.assistant_clarify_report(opts.arg1, opts.arg2), mode)
 		}
 		'log' { render(hornero_core.assistant_log_report(), mode) }
+		'policy' {
+			match opts.arg1 {
+				'preset' {
+					render(hornero_core.assistant_policy_preset_report(opts.arg2, opts.dry_run,
+						opts.yes), mode)
+				}
+				'check' {
+					render(hornero_core.assistant_policy_check_report('javi.main',
+						if opts.parts.len > 1 { opts.parts[1] } else { '' },
+						if opts.parts.len > 2 { opts.parts[2..].join(' ') } else { '' },
+						hornero_core.assistant_workspace_active().root), mode)
+				}
+				'revoke-all' {
+					render(hornero_core.assistant_policy_revoke_all_report(opts.yes), mode)
+				}
+				else { render(hornero_core.assistant_policy_show_report(), mode) }
+			}
+		}
+		'profile' {
+			render(hornero_core.assistant_profile_report(opts.arg1 == 'fix', opts.dry_run,
+				opts.yes), mode)
+		}
+		'prompt' {
+			match opts.arg1 {
+				'set' {
+					render(hornero_core.assistant_prompt_set_file_report(opts.arg2, opts.dry_run,
+						opts.yes), mode)
+				}
+				'history' { render(hornero_core.assistant_prompt_history_report(), mode) }
+				'rollback' {
+					render(hornero_core.assistant_prompt_rollback_report(opts.arg2, opts.yes), mode)
+				}
+				else { render(hornero_core.assistant_prompt_show_report(), mode) }
+			}
+		}
+		'workspace' {
+			match opts.arg1 {
+				'create' {
+					render(hornero_core.assistant_workspace_create_report(opts.arg2, opts.dry_run,
+						opts.yes), mode)
+				}
+				'use' {
+					render(hornero_core.assistant_workspace_use_report(opts.arg2, opts.yes), mode)
+				}
+				'reveal' { render(hornero_core.assistant_workspace_reveal_report(), mode) }
+				else { render(hornero_core.assistant_workspace_list_report(), mode) }
+			}
+		}
 		'setup' {
 			if opts.adopt_dotfiles {
 				render(hornero_core.assistant_setup_adopt_dotfiles_report(opts.dry_run,
