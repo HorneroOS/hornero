@@ -256,18 +256,20 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'knowledge' { render(hornero_core.assistant_knowledge_report(), mode) }
 		'ask' {
 			if opts.stream {
-				render(hornero_core.assistant_ask_stream_report_traced(opts.value, opts.attach, opts.session, fn [mode] (txt string) {
+				render(hornero_core.assistant_ask_stream_report_traced_mode(opts.value, opts.attach, opts.session, opts.mode, fn [mode] (txt string) {
 					emit_stream_delta(txt, mode)
 				}, fn [mode] (kind string, txt string) {
 					emit_stream_trace(kind, txt, mode)
 				}), mode)
 			} else {
-				render(hornero_core.assistant_ask_report_attached_session(opts.value, opts.attach, opts.session), mode)
+				render(hornero_core.assistant_ask_report_attached_session_mode(opts.value, opts.attach, opts.session, opts.mode), mode)
 			}
 		}
 		'sessions' {
 			match opts.arg1 {
-				'new' { render(hornero_core.assistant_sessions_new_report(opts.arg2), mode) }
+				'new' {
+					render(hornero_core.assistant_sessions_new_report_mode(opts.arg2, opts.mode), mode)
+				}
 				'use' { render(hornero_core.assistant_sessions_use_report(opts.arg2), mode) }
 				else { render(hornero_core.assistant_sessions_list_report(), mode) }
 			}

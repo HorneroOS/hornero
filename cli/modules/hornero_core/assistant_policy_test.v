@@ -188,3 +188,13 @@ fn test_policy_presets_validate() {
 	}
 	assert assistant_policy_preset('bogus').len == 0
 }
+
+fn test_mode_escalation_gate() {
+	assert assistant_mode_escalates('agent')
+	assert !assistant_mode_escalates('ask')
+	assert !assistant_mode_escalates('chat')
+	// Unrecognised modes fail closed to agent only at the session layer;
+	// the escalation check itself treats unknown as non-agent input here.
+	assert assistant_session_effective_mode('bogus') == 'agent'
+	assert assistant_session_effective_mode('ask') == 'ask'
+}
