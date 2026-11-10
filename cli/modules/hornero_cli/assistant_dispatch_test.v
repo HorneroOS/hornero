@@ -5,7 +5,7 @@ import time
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log>')
+	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log|policy|workspace|profile|prompt>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -183,4 +183,25 @@ fn test_stream_trace_frame_shapes() {
 	assert frame.contains('checking themes')
 	tool := stream_trace_frame('tool', '▸ terminal')
 	assert tool.contains('\"type\":\"tool\"')
+}
+
+fn test_assistant_policy_workspace_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'policy', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'workspace', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'policy']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'workspace']) == 0
+	// Mutating policy/workspace actions refuse without --yes (exit 1, not usage).
+	assert dispatch(['horneroctl', 'assistant', 'policy', 'preset', 'workspace-agent']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'policy', 'preset', 'workspace-agent', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'policy', 'preset', 'bogus', '--dry-run']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'workspace', 'use', 'ws-nope']) == 1
+	opts := parse_assistant(['policy', 'check', 'filesystem.read', '/tmp/x']) or { panic(err) }
+	assert opts.parts.len == 3 && opts.parts[1] == 'filesystem.read'
+}
+
+fn test_assistant_profile_prompt_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'profile', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'prompt', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'prompt', 'history']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'profile', 'fix']) == 1
 }

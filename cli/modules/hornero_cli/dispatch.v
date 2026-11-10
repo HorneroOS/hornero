@@ -288,6 +288,54 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			render(hornero_core.assistant_clarify_report(opts.arg1, opts.arg2), mode)
 		}
 		'log' { render(hornero_core.assistant_log_report(), mode) }
+		'policy' {
+			match opts.arg1 {
+				'preset' {
+					render(hornero_core.assistant_policy_preset_report(opts.arg2, opts.dry_run,
+						opts.yes), mode)
+				}
+				'check' {
+					render(hornero_core.assistant_policy_check_report('javi.main',
+						if opts.parts.len > 1 { opts.parts[1] } else { '' },
+						if opts.parts.len > 2 { opts.parts[2..].join(' ') } else { '' },
+						hornero_core.assistant_workspace_active().root), mode)
+				}
+				'revoke-all' {
+					render(hornero_core.assistant_policy_revoke_all_report(opts.yes), mode)
+				}
+				else { render(hornero_core.assistant_policy_show_report(), mode) }
+			}
+		}
+		'profile' {
+			render(hornero_core.assistant_profile_report(opts.arg1 == 'fix', opts.dry_run,
+				opts.yes), mode)
+		}
+		'prompt' {
+			match opts.arg1 {
+				'set' {
+					render(hornero_core.assistant_prompt_set_file_report(opts.arg2, opts.dry_run,
+						opts.yes), mode)
+				}
+				'history' { render(hornero_core.assistant_prompt_history_report(), mode) }
+				'rollback' {
+					render(hornero_core.assistant_prompt_rollback_report(opts.arg2, opts.yes), mode)
+				}
+				else { render(hornero_core.assistant_prompt_show_report(), mode) }
+			}
+		}
+		'workspace' {
+			match opts.arg1 {
+				'create' {
+					render(hornero_core.assistant_workspace_create_report(opts.arg2, opts.dry_run,
+						opts.yes), mode)
+				}
+				'use' {
+					render(hornero_core.assistant_workspace_use_report(opts.arg2, opts.yes), mode)
+				}
+				'reveal' { render(hornero_core.assistant_workspace_reveal_report(), mode) }
+				else { render(hornero_core.assistant_workspace_list_report(), mode) }
+			}
+		}
 		'setup' {
 			if opts.adopt_dotfiles {
 				render(hornero_core.assistant_setup_adopt_dotfiles_report(opts.dry_run,

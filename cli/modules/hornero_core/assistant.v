@@ -1058,10 +1058,12 @@ pub fn assistant_status_report() CommandResult {
 	settings := assistant_load_settings()
 	hermes := find_on_path('hermes')
 	mut data := {
-		'enabled':  settings.enabled.str()
-		'endpoint': settings.endpoint
-		'hermes':   if hermes.len > 0 { hermes } else { 'not-found' }
-		'keyFile':  assistant_key_file()
+		'enabled':   settings.enabled.str()
+		'endpoint':  settings.endpoint
+		'hermes':    if hermes.len > 0 { hermes } else { 'not-found' }
+		'keyFile':   assistant_key_file()
+		'isolation': assistant_gateway_isolation()
+		'workspace': assistant_workspace_active().root
 	}
 	if settings.rejected_endpoint.len > 0 {
 		data['endpointRejected'] = settings.rejected_endpoint

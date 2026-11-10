@@ -6,6 +6,7 @@ pub:
 	value          string
 	arg1           string
 	arg2           string
+	parts          []string
 	dry_run        bool
 	yes            bool
 	remove         bool
@@ -21,7 +22,8 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	}
 	leaf := args[0]
 	if leaf !in ['status', 'health', 'enable', 'disable', 'tools', 'knowledge', 'sessions', 'model',
-		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup', 'usage'] {
+		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup', 'usage', 'policy',
+		'workspace', 'profile', 'prompt'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
@@ -134,6 +136,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		value:          value
 		arg1:           if parts.len > 0 { parts[0] } else { '' }
 		arg2:           if parts.len > 1 { parts[1..].join(' ') } else { '' }
+		parts:          parts
 		dry_run:        dry_run
 		yes:            yes
 		remove:         remove
