@@ -23,7 +23,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	leaf := args[0]
 	if leaf !in ['status', 'health', 'enable', 'disable', 'tools', 'knowledge', 'sessions', 'model',
 		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup', 'usage', 'policy',
-		'workspace', 'profile', 'prompt'] {
+		'workspace', 'profile', 'prompt', 'tool'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}

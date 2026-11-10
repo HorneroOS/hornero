@@ -5,7 +5,7 @@ import time
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log|policy|workspace|profile|prompt>')
+	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log|policy|workspace|profile|prompt|tool>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -204,4 +204,12 @@ fn test_assistant_profile_prompt_dispatch() {
 	assert dispatch(['horneroctl', 'assistant', 'prompt', '--help']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'prompt', 'history']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'profile', 'fix']) == 1
+}
+
+fn test_assistant_tool_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'tool', '--help']) == 0
+	// Unknown tools are refused by the broker (exit 1), never executed.
+	assert dispatch(['horneroctl', 'assistant', 'tool', 'rm_rf', '/']) == 1
+	// Default read-only policy denies theme_set without executing it.
+	assert dispatch(['horneroctl', 'assistant', 'tool', 'theme_set', 'pampa']) == 1
 }

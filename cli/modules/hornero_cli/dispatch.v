@@ -248,7 +248,11 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'health' { render(hornero_core.assistant_health_report(), mode) }
 		'enable' { render(hornero_core.assistant_enable_report(opts.dry_run, opts.yes), mode) }
 		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
-		'tools' { render(hornero_core.assistant_tools_report(), mode) }
+		'tools' { render(hornero_core.assistant_broker_tools_report(), mode) }
+		'tool' {
+			render(hornero_core.assistant_broker_exec_report(opts.arg1, opts.arg2, 'agent',
+				opts.yes, opts.dry_run), mode)
+		}
 		'knowledge' { render(hornero_core.assistant_knowledge_report(), mode) }
 		'ask' {
 			if opts.stream {
