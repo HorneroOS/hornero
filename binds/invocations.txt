@@ -49,7 +49,15 @@ assistant enable
 assistant events
 assistant gateway start
 assistant gateway stop
+assistant log
 assistant model list
+assistant policy
+assistant policy preset desktop-assistant
+assistant policy preset read-only
+assistant policy preset workspace-agent
+assistant policy revoke-all
+assistant profile
+assistant profile fix
 assistant sessions
 assistant sessions list
 assistant sessions new
