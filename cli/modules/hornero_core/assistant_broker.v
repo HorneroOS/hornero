@@ -1,5 +1,6 @@
 module hornero_core
 
+import os
 import time
 
 // -- Typed capability broker -------------------------------------------------
@@ -34,6 +35,7 @@ pub fn assistant_broker_catalogue() []AssistantBrokerTool {
 		AssistantBrokerTool{'theme_set', 'appearance.modify', true},
 		AssistantBrokerTool{'window_focus', 'desktop.window.focus', true},
 		AssistantBrokerTool{'notify', 'notifications.send', true},
+		AssistantBrokerTool{'screenshot', 'desktop.screenshot', true},
 	]
 }
 
@@ -50,6 +52,9 @@ pub fn assistant_broker_tool(name string) (AssistantBrokerTool, bool) {
 // anything outside the catalogue or with unsafe arguments.
 pub fn assistant_broker_argv(tool string, arg string) ![]string {
 	match tool {
+		'screenshot' {
+			return ['grim', '<workspace>/screenshot-<timestamp>.png']
+		}
 		'theme_set' {
 			if arg !in ['hornero-dark', 'hornero-light', 'pampa'] {
 				return error('theme_set needs an official theme id (hornero-dark, hornero-light, pampa)')
@@ -85,6 +90,7 @@ pub fn assistant_broker_argv(tool string, arg string) ![]string {
 
 fn assistant_broker_resource(tool string, arg string) string {
 	match tool {
+		'screenshot' { return 'workspace' }
 		'theme_set', 'window_focus' { return arg }
 		'notify' { return 'local' }
 		else { return 'any' }
@@ -138,6 +144,35 @@ pub fn assistant_broker_exec_report(tool string, arg string, mode string, approv
 				'resource': resource
 			}
 		}
+	}
+	if tool == 'screenshot' {
+		ws := assistant_workspace_active().root
+		os.mkdir_all(ws) or {}
+		target := os.join_path(ws, 'screenshot-${time.now().custom_format('YYYYMMDDHHmmss')}.png')
+		if dry_run {
+			return ok_result('assistant tool', 'Dry run (policy allow): would capture the screen to ${target} via grim on the trusted side. The agent process itself has no compositor access.', {
+				'dryRun':   'true'
+				'decision': 'allow'
+				'target':   target
+			})
+		}
+		rep := run_exec(ExecSpec{
+			prog:        'grim'
+			args:        [target]
+			timeout_sec: 30
+		})
+		status := if rep.ok { 'ok' } else { 'error:${rep.exit_code}' }
+		assistant_log_append('tool.screenshot', '', target, status)
+		if !rep.ok {
+			return fail_result('assistant tool', 'Screenshot failed (compositor access outside the agent sandbox): ${rep.output}')
+		}
+		return ok_result('assistant tool', 'Screenshot saved inside the active workspace: ${target}', {
+			'tool':     tool
+			'action':   spec_tool.action
+			'decision': 'allow'
+			'target':   target
+			'audited':  'true'
+		})
 	}
 	if dry_run {
 		return ok_result('assistant tool', 'Dry run (policy allow): would run: ${argv.join(' ')}', {

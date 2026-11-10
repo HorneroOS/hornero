@@ -40,3 +40,11 @@ fn test_broker_policy_gate_denies_without_preset() {
 	ask := assistant_broker_exec_report('theme_set', 'pampa', 'ask', true, false)
 	assert !ask.ok
 }
+
+fn test_broker_screenshot_is_policy_gated() {
+	t, found := assistant_broker_tool('screenshot')
+	assert found && t.action == 'desktop.screenshot'
+	// Read-only preset denies screenshots outright: nothing is captured.
+	denied := assistant_broker_exec_report('screenshot', '', 'agent', false, false)
+	assert !denied.ok
+}
