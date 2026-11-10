@@ -168,18 +168,57 @@ fn test_assistant_knowledge_snapshot() {
 fn test_assistant_sessions_registry_roundtrip() {
 	saved := os.getenv('HORNERO_ASSISTANT_SESSIONS_FILE')
 	os.setenv('HORNERO_ASSISTANT_SESSIONS_FILE', '/tmp/hx-assistant-sessions-test.txt', true)
+	saved_ws := os.getenv('HORNERO_ASSISTANT_WORKSPACES_FILE')
+	os.setenv('HORNERO_ASSISTANT_WORKSPACES_FILE', '/tmp/hx-assistant-workspaces-test.json',
+		true)
 	os.rm('/tmp/hx-assistant-sessions-test.txt') or {}
+	os.rm('/tmp/hx-assistant-workspaces-test.json') or {}
 	created := assistant_sessions_new_report('Trip planning')
 	assert created.ok
 	id := created.data['id']
 	assert id.len > 0
-	assert assistant_current_session_key('') == 'hornero:${id}'
+	// New sessions bind to the active workspace (default here) and the
+	// continuity key is scoped to it; unknown ids keep the legacy key.
+	assert created.data['workspace'] == 'default'
+	assert assistant_session_workspace(id) == 'default'
+	assert assistant_current_session_key('') == 'hornero:ws-default:${id}'
 	assert assistant_current_session_key('other') == 'hornero:other'
+	assert assistant_session_key(id) == 'hornero:${id}'
 	list := assistant_sessions_list_report()
 	assert list.ok
 	assert list.message.contains('Trip planning')
+	assert list.message.contains('@default')
 	assert assistant_sessions_use_report('nope').ok == false
+	assert assistant_sessions_use_report(id).data['workspace'] == 'default'
 	os.rm('/tmp/hx-assistant-sessions-test.txt') or {}
+	os.rm('/tmp/hx-assistant-workspaces-test.json') or {}
+	if saved.len == 0 {
+		os.unsetenv('HORNERO_ASSISTANT_SESSIONS_FILE')
+	} else {
+		os.setenv('HORNERO_ASSISTANT_SESSIONS_FILE', saved, true)
+	}
+	if saved_ws.len == 0 {
+		os.unsetenv('HORNERO_ASSISTANT_WORKSPACES_FILE')
+	} else {
+		os.setenv('HORNERO_ASSISTANT_WORKSPACES_FILE', saved_ws, true)
+	}
+}
+
+fn test_assistant_sessions_legacy_rows_keep_legacy_key() {
+	saved := os.getenv('HORNERO_ASSISTANT_SESSIONS_FILE')
+	path := '/tmp/hx-assistant-sessions-legacy-test.txt'
+	os.setenv('HORNERO_ASSISTANT_SESSIONS_FILE', path, true)
+	os.write_file(path, 'current\tsold\nsession\tsold\tOld chat\t2026-01-01 00:00:00\nsession\tsold2\tMode chat\t2026-01-01 00:00:00\tchat\n') or {
+		panic(err)
+	}
+	s := assistant_sessions_load()
+	assert s.sessions.len == 2
+	assert s.sessions[0].workspace == ''
+	assert s.sessions[1].mode == 'chat'
+	// Legacy rows (4/5 fields) keep the unscoped key: no orphaning.
+	assert assistant_current_session_key('') == 'hornero:sold'
+	assert assistant_session_continuity_key('sold2') == 'hornero:sold2'
+	os.rm(path) or {}
 	if saved.len == 0 {
 		os.unsetenv('HORNERO_ASSISTANT_SESSIONS_FILE')
 	} else {
