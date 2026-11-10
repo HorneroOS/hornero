@@ -39,6 +39,39 @@ pub fn assistant_gateway_isolation() string {
 	return 'systemd-only'
 }
 
+// assistant_gateway_unit_isolation derives the isolation a written unit
+// actually provides from its ExecStart, never from host capability alone:
+// a legacy unit that execs hermes directly is not sandboxed even when
+// bwrap exists on PATH.
+pub fn assistant_gateway_unit_isolation(content string) string {
+	for line in content.split('\n') {
+		trimmed := line.trim_space()
+		if trimmed.starts_with('ExecStart=') {
+			exec := trimmed.after('ExecStart=').trim_space()
+			program := exec.split(' ')[0]
+			if os.base(program) == 'bwrap' {
+				return 'bubblewrap'
+			}
+			return 'systemd-only (not sandboxed)'
+		}
+	}
+	return 'systemd-only (not sandboxed)'
+}
+
+// assistant_gateway_effective_isolation reports the isolation of the
+// installed unit when one exists, and otherwise the isolation a unit
+// written now would provide.
+pub fn assistant_gateway_effective_isolation() string {
+	unit_file := assistant_gateway_unit_file()
+	if os.exists(unit_file) {
+		content := os.read_file(unit_file) or { '' }
+		if content.len > 0 {
+			return assistant_gateway_unit_isolation(content)
+		}
+	}
+	return assistant_gateway_isolation()
+}
+
 // assistant_gateway_bwrap_argv builds the whole-process bubblewrap view:
 // the host root is read-only, $HOME is masked with tmpfs, and only the
 // Hermes home, the Hermes source venv (read-only) and the active Javi
@@ -188,7 +221,7 @@ pub fn assistant_gateway_status_report() CommandResult {
 		'unitState': unit
 		'gateway':   if reachable { 'reachable' } else { 'unreachable' }
 		'protocol':  if compatible { 'compatible' } else { 'incompatible' }
-		'isolation': assistant_gateway_isolation()
+		'isolation': assistant_gateway_effective_isolation()
 		'workspace': assistant_workspace_active().root
 	}
 	msg := 'gateway state: ${state} (unit ${unit}, endpoint ${settings.endpoint}: ${detail})'

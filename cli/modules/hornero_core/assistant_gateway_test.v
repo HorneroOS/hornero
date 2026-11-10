@@ -45,6 +45,18 @@ fn test_assistant_gateway_unit_file_lives_under_user_config() {
 	assert assistant_gateway_unit_name == 'hornero-hermes.service'
 }
 
+fn test_assistant_gateway_unit_isolation_reads_execstart() {
+	legacy := '[Service]\nExecStart=/home/user/.local/bin/hermes gateway run\n'
+	assert assistant_gateway_unit_isolation(legacy) == 'systemd-only (not sandboxed)'
+	sandboxed := assistant_gateway_unit_content_for('/opt/hermes', '/usr/bin/bwrap',
+		'/data/ws')
+	assert assistant_gateway_unit_isolation(sandboxed) == 'bubblewrap'
+	spoof := '[Service]\nExecStart=/home/user/bwrap-notes/hermes gateway run\n'
+	assert assistant_gateway_unit_isolation(spoof) == 'systemd-only (not sandboxed)'
+	assert assistant_gateway_unit_isolation('') == 'systemd-only (not sandboxed)'
+	assert assistant_gateway_unit_isolation('[Service]\n') == 'systemd-only (not sandboxed)'
+}
+
 fn test_assistant_gateway_classify_distinguishes_states() {
 	assert assistant_gateway_classify(false, true, true, true) == 'disabled'
 	assert assistant_gateway_classify(true, false, false, false) == 'not-installed'
