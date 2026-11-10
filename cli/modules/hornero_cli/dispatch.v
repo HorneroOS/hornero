@@ -318,6 +318,10 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		}
 		'prompt' {
 			match opts.arg1 {
+				'set-text' {
+					render(hornero_core.assistant_prompt_set_report(opts.arg2, opts.dry_run,
+						opts.yes), mode)
+				}
 				'set' {
 					render(hornero_core.assistant_prompt_set_file_report(opts.arg2, opts.dry_run,
 						opts.yes), mode)
