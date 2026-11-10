@@ -274,7 +274,16 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 				else { render(hornero_core.assistant_sessions_list_report(), mode) }
 			}
 		}
-		'model' { render(hornero_core.assistant_models_report(), mode) }
+		'model' {
+			match opts.arg1 {
+				'set' {
+					render(hornero_core.assistant_model_set_report(opts.arg2, '', opts.dry_run,
+						opts.yes), mode)
+				}
+				'show' { render(hornero_core.assistant_model_show_report(), mode) }
+				else { render(hornero_core.assistant_models_report(), mode) }
+			}
+		}
 		'usage' { render(hornero_core.assistant_usage_report(), mode) }
 		'approve' {
 			render(hornero_core.assistant_approve_report(opts.arg1, opts.arg2), mode)
