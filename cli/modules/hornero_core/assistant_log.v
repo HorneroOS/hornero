@@ -80,9 +80,23 @@ pub fn assistant_log_append(action string, run_id string, detail string, status 
 	os.chmod(path, 0o600) or {}
 }
 
+// assistant_log_filter_lines keeps lines containing filter
+// (case-insensitive); an empty filter keeps everything. Pure, for tests.
+pub fn assistant_log_filter_lines(lines []string, filter string) []string {
+	needle := filter.trim_space().to_lower()
+	if needle.len == 0 {
+		return lines
+	}
+	return lines.filter(it.to_lower().contains(needle))
+}
+
 // assistant_log_report renders the newest entries for
 // `horneroctl assistant log`.
 pub fn assistant_log_report() CommandResult {
+	return assistant_log_report_filtered('')
+}
+
+pub fn assistant_log_report_filtered(filter string) CommandResult {
 	path := assistant_log_file()
 	raw := os.read_file(path) or {
 		return ok_result('assistant log', 'No assistant activity recorded yet. The log lives at ${path} once the assistant runs.', {
@@ -91,10 +105,17 @@ pub fn assistant_log_report() CommandResult {
 		})
 	}
 	lines := raw.split('\n').filter(it.len > 0)
-	shown := if lines.len > 50 { lines[lines.len - 50..] } else { lines }
-	return ok_result('assistant log', shown.join('\n'), {
+	matched := assistant_log_filter_lines(lines, filter)
+	shown := if matched.len > 50 { matched[matched.len - 50..] } else { matched }
+	msg := if shown.len > 0 {
+		shown.join('\n')
+	} else {
+		'No assistant activity matches "${assistant_log_clean_field(filter)}".'
+	}
+	return ok_result('assistant log', msg, {
 		'file':    path
 		'entries': lines.len.str()
+		'matched': matched.len.str()
 		'shown':   shown.len.str()
 	})
 }

@@ -15,6 +15,7 @@ pub:
 	attach         []string
 	session        string
 	mode           string
+	filter         string
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -36,6 +37,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut attach := []string{}
 	mut session := ''
 	mut mode := ''
+	mut filter := ''
 	mut i := 1
 	for i < args.len {
 		arg := args[i]
@@ -49,6 +51,14 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 			if mode !in ['ask', 'agent', 'chat'] {
 				return error('--mode must be ask, agent or chat.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
 			}
+			continue
+		}
+		if arg == '--filter' {
+			if i >= args.len {
+				return error('--filter needs a search text.\nExample: horneroctl assistant log --filter deny')
+			}
+			filter = args[i]
+			i++
 			continue
 		}
 		if arg == '--session' {
@@ -123,6 +133,9 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if mode.len > 0 && leaf !in ['ask', 'sessions'] {
 		return error('--mode only applies to ask and sessions.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
 	}
+	if filter.len > 0 && leaf != 'log' {
+		return error('--filter only applies to log.\nExample: horneroctl assistant log --filter deny')
+	}
 	if session.len > 0 && leaf != 'ask' {
 		return error('--session only applies to ask.\nExample: horneroctl assistant ask "hi" --session s123')
 	}
@@ -161,5 +174,6 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		attach:         attach
 		session:        session
 		mode:           mode
+		filter:         filter
 	}
 }
