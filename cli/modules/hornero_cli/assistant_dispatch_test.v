@@ -27,6 +27,14 @@ fn test_assistant_parser_rules() {
 	if _ := parse_assistant(['tools', '--session', 's1']) {
 		assert false, '--session only applies to ask'
 	}
+	logf := parse_assistant(['log', '--filter', 'deny']) or { panic(err) }
+	assert logf.leaf == 'log' && logf.filter == 'deny'
+	if _ := parse_assistant(['status', '--filter', 'deny']) {
+		assert false, '--filter only applies to log'
+	}
+	if _ := parse_assistant(['log', '--filter']) {
+		assert false, '--filter needs a value'
+	}
 	ask := parse_assistant(['ask', 'what', 'updates', 'exist?']) or { panic(err) }
 	assert ask.value == 'what updates exist?'
 	if _ := parse_assistant(['enable', '--dry-run', '--yes']) {
