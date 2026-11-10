@@ -137,7 +137,7 @@ pub fn assistant_profile_report(fix bool, dry_run bool, yes bool) CommandResult 
 			message: 'Hermes secure profile at ${path}:\n' + lines.join('\n')
 			data:    {
 				'profileOk': all_ok.str()
-				'isolation': assistant_gateway_isolation()
+				'isolation': assistant_gateway_effective_isolation()
 			}
 		}
 	}

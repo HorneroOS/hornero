@@ -1114,7 +1114,7 @@ pub fn assistant_status_report() CommandResult {
 		'endpoint':  settings.endpoint
 		'hermes':    if hermes.len > 0 { hermes } else { 'not-found' }
 		'keyFile':   assistant_key_file()
-		'isolation': assistant_gateway_isolation()
+		'isolation': assistant_gateway_effective_isolation()
 		'workspace': assistant_workspace_active().root
 	}
 	if settings.rejected_endpoint.len > 0 {
