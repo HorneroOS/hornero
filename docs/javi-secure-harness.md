@@ -99,3 +99,53 @@ scope: roots under `$XDG_DATA_HOME/hornero/javi-workspaces/` (never
 `$HOME`), a registry at `~/.config/hornero/workspaces.json` (outside the
 sandbox), per-workspace `AGENTS.md` instructions, and `reveal` for the
 user. The gateway unit binds exactly the active workspace.
+
+## Capability broker, modes and prompt
+
+`horneroctl assistant tool <name>` is the only mediated host surface:
+typed tools (`system_info`, appearance/theme read, `theme_set`,
+`window_list`, `window_focus`, `notify`, `screenshot`), each mapped to
+one ABAC action/resource, decided before execution, audit-logged either
+way. There is no generic command/shell tool. Screenshot runs in trusted
+horneroctl via `grim`, writes only inside the active workspace, and is
+denied/`require_approval` under the default presets.
+
+Session modes cap authority before policy: Ask is read-only and
+auto-denies approvals, Chat has no machine authority, Agent uses the
+full policy. Switching modes never widens permissions
+(`assistant.v`: `assistant_session_effective_mode`,
+`assistant_mode_escalates`).
+
+The full user-configurable system prompt is Hermes' `SOUL.md`, edited
+through `assistant prompt` with horneroctl-side version snapshots and
+rollback. It changes behaviour only: policy, hard denies and sandbox
+binds are outside prompt text and cannot be overridden by it.
+
+Audit is the append-only, redacted TSV at
+`~/.config/hornero/assistant.log` (0600, bounded rotation): broker
+calls with their policy outcome, approvals, policy preset/revoke,
+prompt/model/workspace changes and ask/stop events. Prompts, answers
+and secrets are never written.
+
+## Threat model (STRIDE + agentic, incremental)
+
+Trust boundaries: user/Control Center ↔ horneroctl (trusted, user
+UID); horneroctl ↔ Hermes gateway (loopback + 0600 Bearer key, same
+UID); Hermes process ↔ host (bubblewrap when the installed unit uses
+it); LLM/tool output ↔ policy (output is data, never authority).
+
+| Threat | IDs | Evidence / mitigation | Acceptance criterion | Residual |
+|---|---|---|---|---|
+| Agent reads user secrets outside workspace | I, E / LLM06, LLM08 | bwrap masks `$HOME`; only `~/.hermes` + active workspace bound; ABAC hard-denies protected paths | Disposable-home negative test: synthetic secret read fails inside the generated bwrap view | Live gateway is unsandboxed until its legacy unit is migrated (status reports `systemd-only (not sandboxed)`) |
+| Prompt/tool-output injection grants authority | T, E / LLM01, AGNT02, AGNT06 | Decisions only in horneroctl `assistant_policy_decide`; prompt (`SOUL.md`) cannot change policy; broker ignores instructions in tool output | Policy `check` unchanged after prompt set/rollback (host-verified) | Malicious content can still mislead the LLM's wording, not its authority |
+| Screenshot/clipboard exfiltration | I / LLM06, AGNT04 | `$XDG_RUNTIME_DIR` masked in sandbox; screenshot only via broker, approval-gated, workspace-only output | `grim`/`wl-paste` fail in sandbox; broker screenshot denied without approval, succeeds scoped with it | Approved screenshots capture what the user approved; review before approving |
+| Approval replay / argument swap | S, T / AGNT01 | Approvals bound to exact action+resource+expiry in policy context; Ask/Chat auto-deny | Policy tests: expired and mismatched-resource approvals denied | Same-UID local processes are inside the user's trust envelope |
+| Isolation overclaim | — / LLM09 | `assistant_gateway_effective_isolation` derives the label from the installed unit's `ExecStart` (basename `bwrap`), not PATH capability (#379) | Legacy unit reports `systemd-only (not sandboxed)` live; spoofed `~/bwrap-notes/hermes` path stays unsandboxed in tests | — |
+| Delegated subagent escalation | E / LLM08, AGNT05 | `assistant_policy_delegate` is intersection-only and carries parent denies | Policy tests: delegate cannot gain an action the parent lacks | — |
+| Credential exposure via UI/logs | I / LLM06 | Provider keys stay in Hermes home; QML never receives them; audit log redacts secrets and stores no prompts/answers | `assistant model show` prints model/provider only; log fields pass `redact_secrets` | A compromised agent can misuse its own provider key over its provider connection |
+| Network egress of protected data | I / AGNT04 | `--share-net` today; `network.request` governed at ABAC/tool layer only | Documented, not kernel-enforced | **Open:** kernel egress filtering is future work |
+
+Not assessed: malicious MCP servers/plugins beyond process confinement
+(they run inside the same bubblewrap view; per-plugin authority is the
+broker/policy layer, and new skills/MCP must not inherit host access
+outside that view).
