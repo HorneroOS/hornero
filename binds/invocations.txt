@@ -58,6 +58,9 @@ assistant policy preset workspace-agent
 assistant policy revoke-all
 assistant profile
 assistant profile fix
+assistant prompt
+assistant prompt history
+assistant prompt set-text
 assistant sessions
 assistant sessions list
 assistant sessions new
