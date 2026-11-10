@@ -252,3 +252,63 @@ pub fn assistant_prompt_history_report() CommandResult {
 		'count': entries.len.str()
 	})
 }
+
+// -- Model selection ---------------------------------------------------------
+// Hermes' own `hermes model` writes model.{provider,default} in
+// config.yaml and applies to NEW sessions. horneroctl mirrors that
+// contract (backup-first) instead of inventing a per-run override the
+// gateway API does not support.
+
+pub fn assistant_model_show_report() CommandResult {
+	path := assistant_hermes_config_file()
+	text := os.read_file(path) or {
+		return fail_result('assistant model', 'No Hermes config at ${path}.')
+	}
+	provider := assistant_yaml_section_value(text, 'model', 'provider')
+	model := assistant_yaml_section_value(text, 'model', 'default')
+	return ok_result('assistant model', 'Current model: ${model} (provider ${provider}). Applies to new sessions; the gateway keeps its running sessions.', {
+		'model':    model
+		'provider': provider
+	})
+}
+
+pub fn assistant_model_set_report(model string, provider string, dry_run bool, yes bool) CommandResult {
+	clean := model.trim_space()
+	if clean.len == 0 || clean.contains_any(' \t\n') {
+		return fail_result('assistant model set', 'Model id must be a single token. Example: horneroctl assistant model set gpt-5 --yes')
+	}
+	path := assistant_hermes_config_file()
+	text := os.read_file(path) or {
+		return fail_result('assistant model set', 'No Hermes config at ${path}.')
+	}
+	if dry_run {
+		return ok_result('assistant model set', 'Dry run: would back up ${path} and set model.default=${clean}${if provider.len > 0 {
+			', model.provider=${provider}'
+		} else {
+			''
+		}}. Nothing written.', {
+			'dryRun': 'true'
+		})
+	}
+	if !yes {
+		return fail_result('assistant model set', 'Changing the model needs --yes. Preview with --dry-run.')
+	}
+	stamp := time.now().custom_format('YYYYMMDDHHmmss')
+	backup := '${path}.hornero-bak-${stamp}'
+	os.cp(path, backup) or {
+		return fail_result('assistant model set', 'Cannot back up ${path}: ${err.msg()}')
+	}
+	mut lines := text.split('\n')
+	lines = assistant_yaml_set_section_value(lines, 'model', 'default', clean)
+	if provider.len > 0 {
+		lines = assistant_yaml_set_section_value(lines, 'model', 'provider', provider.trim_space())
+	}
+	os.write_file(path, lines.join('\n')) or {
+		return fail_result('assistant model set', 'Cannot write ${path}: ${err.msg()} (backup at ${backup})')
+	}
+	assistant_log_append('model.set', '', clean, 'ok')
+	return ok_result('assistant model set', 'Model set to ${clean} (backup: ${backup}). Applies to new Hermes sessions; restart the gateway or start a new chat to use it.', {
+		'model':  clean
+		'backup': backup
+	})
+}

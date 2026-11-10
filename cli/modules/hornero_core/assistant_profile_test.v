@@ -28,3 +28,13 @@ fn test_profile_findings_missing_config_fails_closed() {
 	findings := assistant_profile_findings('')
 	assert findings[0].ok == false
 }
+
+fn test_model_set_edits_only_model_section() {
+	cfg := 'model:\n  provider: custom\n  default: old-model\napprovals:\n  mode: manual\n'
+	mut lines := cfg.split('\n')
+	lines = assistant_yaml_set_section_value(lines, 'model', 'default', 'new-model')
+	out := lines.join('\n')
+	assert assistant_yaml_section_value(out, 'model', 'default') == 'new-model'
+	assert assistant_yaml_section_value(out, 'model', 'provider') == 'custom'
+	assert assistant_yaml_section_value(out, 'approvals', 'mode') == 'manual'
+}

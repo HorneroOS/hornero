@@ -51,6 +51,8 @@ assistant gateway start
 assistant gateway stop
 assistant log
 assistant model list
+assistant model set
+assistant model show
 assistant policy
 assistant policy preset desktop-assistant
 assistant policy preset read-only

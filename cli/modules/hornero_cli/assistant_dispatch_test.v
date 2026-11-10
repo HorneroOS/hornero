@@ -218,3 +218,9 @@ fn test_assistant_prompt_set_text_dispatch() {
 	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.']) == 1
 	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.', '--dry-run']) == 0
 }
+
+fn test_assistant_model_set_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'gpt-5']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'gpt-5', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'bad model', '--dry-run']) == 1
+}
