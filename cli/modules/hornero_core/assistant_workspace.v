@@ -162,6 +162,7 @@ pub fn assistant_workspace_list_report() CommandResult {
 	return ok_result('assistant workspace', lines.join('\n'), {
 		'count':  list.len.str()
 		'active': assistant_workspace_active().id
+		'ids':    list.map(it.id).join(',')
 	})
 }
 
