@@ -149,3 +149,39 @@ Not assessed: malicious MCP servers/plugins beyond process confinement
 (they run inside the same bubblewrap view; per-plugin authority is the
 broker/policy layer, and new skills/MCP must not inherit host access
 outside that view).
+
+## Status report (2026-11-10, host-verified)
+
+Merged: hornero #374 (harness), #375–#377 (prompt/binds), #378 (model show/set), #379 (effective isolation), #380 (threat model), #381 (audit `--filter`), #382 (session↔workspace keys), #383 (workspace ids), #384 (binds, 121 chains); shell #353–#355 (Control Center security/prompt/model), #356 (model chips), #357 (workspace manager); docs #103 (architecture).
+
+Measurements on the development host: horneroctl static binary
+16.2 MB; the (legacy, unsandboxed) Hermes gateway idles at ~246 MB
+RSS — that is Hermes itself; with Javi disabled horneroctl starts
+nothing and the desktop is unaffected (`assistant disable --dry-run`
+touches only `assistant.json`).
+
+Scenario evidence so far: E/F/G/H and the negative set were proven
+with disposable homes/workspaces and synthetic secrets (secret read,
+write-outside, symlink escape, `grim`, `wl-paste`, `sudo` all fail
+inside the generated bwrap view; broker screenshot denied without
+approval and scoped with it; prompt set/rollback leaves policy
+decisions unchanged; preset→revoke flips `policy check` immediately).
+I is implemented (#382) and unit/host verified with isolated
+registries. A/B/C/D/J still need the live gateway: they are blocked
+on the user decision below, not on code.
+
+Open, explicitly:
+
+- **Live gateway migration (user decision).** The running gateway
+  still uses a legacy pre-harness unit; horneroctl honestly reports
+  `systemd-only (not sandboxed)`. Migrating means backing up that
+  unit, `assistant gateway start --yes`, and a brief gateway restart.
+  Not done without the user's go-ahead.
+- **Shell deployment (user decision).** The host's
+  `~/.config/quickshell` checkout predates the Javi shell PRs;
+  updating it is a desktop-wide change plus shell restart.
+- **Kernel network egress.** Still `--share-net`; filtering needs a
+  root-owned mechanism (nft per-UID or a netns proxy) and is future
+  work, governed today only at the ABAC/tool layer.
+- LLM-driven scenarios A/B/C/D/J and a provider-catalogue picker
+  beyond gateway-reported models.
