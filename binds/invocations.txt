@@ -70,6 +70,9 @@ assistant sessions use
 assistant status
 assistant stop
 assistant usage
+assistant workspace create
+assistant workspace list
+assistant workspace use
 backup create
 capture clipboard
 capture record pause
