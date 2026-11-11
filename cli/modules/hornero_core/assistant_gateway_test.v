@@ -36,6 +36,16 @@ fn test_assistant_gateway_bwrap_unit_omits_namespace_breaking_directives() {
 	assert plain.contains('CapabilityBoundingSet=')
 }
 
+fn test_assistant_gateway_bwrap_argv_binds_hermes_tree_under_home() {
+	argv := assistant_gateway_bwrap_argv('/home/user/.local/share/hornero/hermes/src/.venv/bin/hermes',
+		'/home/user', '/data/ws')
+	joined := argv.join(' ')
+	assert joined.contains('--ro-bind /home/user/.local/share/hornero/hermes/src /home/user/.local/share/hornero/hermes/src')
+	// A hermes outside $HOME needs no extra bind.
+	outside := assistant_gateway_bwrap_argv('/opt/hermes', '/home/user', '/data/ws').join(' ')
+	assert !outside.contains('--ro-bind /opt')
+}
+
 fn test_assistant_gateway_bwrap_argv_masks_home() {
 	argv := assistant_gateway_bwrap_argv('/opt/hermes', '/home/user', '/data/ws')
 	joined := argv.join(' ')

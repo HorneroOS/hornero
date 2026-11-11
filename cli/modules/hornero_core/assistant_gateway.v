@@ -100,6 +100,26 @@ pub fn assistant_gateway_bwrap_argv(hermes string, home string, workspace string
 		'--share-net',
 		'--die-with-parent',
 	]
+	// The pinned Hermes tree usually lives under the masked $HOME
+	// (~/.local/share/hornero/hermes/src/.venv/bin/hermes): bind its
+	// source root back read-only or exec fails inside the sandbox
+	// (host-verified during live deployment).
+	if hermes.starts_with(home + '/') {
+		src := hermes.all_before('/.venv/')
+		if src.len < hermes.len && src.starts_with(home + '/') {
+			argv << ['--ro-bind', src, src]
+			// The venv python is usually a symlink to a uv-managed
+			// interpreter, also under the masked $HOME: bind its tree
+			// read-only too or the shebang interpreter is missing.
+			target := os.readlink(os.join_path(src, '.venv', 'bin', 'python')) or { '' }
+			if target.starts_with(home + '/') && target.contains('/bin/') {
+				py_root := target.all_before('/bin/')
+				if py_root != src {
+					argv << ['--ro-bind', py_root, py_root]
+				}
+			}
+		}
+	}
 	// Mask the session runtime dir: the read-only root bind would otherwise
 	// expose the Wayland compositor socket and the session D-Bus socket,
 	// silently bypassing every desktop permission (host-verified).
