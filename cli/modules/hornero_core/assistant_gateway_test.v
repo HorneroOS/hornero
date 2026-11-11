@@ -22,6 +22,20 @@ fn test_assistant_gateway_unit_content_is_hardened() {
 	assert content.contains('systemd-only (not sandboxed)')
 }
 
+fn test_assistant_gateway_bwrap_unit_omits_namespace_breaking_directives() {
+	content := assistant_gateway_unit_content_for('/opt/hermes', '/usr/bin/bwrap',
+		'/data/ws')
+	// These two prevent bubblewrap from creating its namespace under
+	// systemd (host-verified); the sandboxed unit must not carry them.
+	assert !content.contains('RestrictSUIDSGID')
+	assert !content.contains('CapabilityBoundingSet')
+	assert content.contains('NoNewPrivileges=true')
+	assert content.contains('isolation: bubblewrap')
+	plain := assistant_gateway_unit_content('/opt/hermes')
+	assert plain.contains('RestrictSUIDSGID=true')
+	assert plain.contains('CapabilityBoundingSet=')
+}
+
 fn test_assistant_gateway_bwrap_argv_masks_home() {
 	argv := assistant_gateway_bwrap_argv('/opt/hermes', '/home/user', '/data/ws')
 	joined := argv.join(' ')
