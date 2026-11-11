@@ -118,13 +118,20 @@ fn assistant_gateway_unit_content_for(hermes string, bwrap string, workspace str
 	home := os.home_dir()
 	mut exec := '${hermes} gateway run'
 	mut isolation := 'systemd-only (not sandboxed)'
+	// RestrictSUIDSGID and an empty CapabilityBoundingSet prevent
+	// bubblewrap from creating its user/mount namespace (host-verified:
+	// bwrap exits 1, systemd reports 218/CAPABILITIES), so the
+	// bubblewrap variant omits both; bubblewrap itself drops
+	// privileges inside the sandbox and NoNewPrivileges stays on.
+	mut suid_and_caps := 'RestrictSUIDSGID=true\nCapabilityBoundingSet=\n'
 	if bwrap.len > 0 {
 		mut argv := assistant_gateway_bwrap_argv(hermes, home, workspace)
 		argv[0] = bwrap
 		exec = argv.join(' ')
 		isolation = 'bubblewrap'
+		suid_and_caps = ''
 	}
-	return '[Unit]\nDescription=Hornero Companion — Hermes gateway (user-level, loopback only, isolation: ${isolation})\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=${exec}\nRestart=on-failure\nRestartSec=5\nNoNewPrivileges=true\nPrivateTmp=true\nProtectKernelTunables=true\nProtectControlGroups=true\nRestrictSUIDSGID=true\nLockPersonality=true\nRestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\nCapabilityBoundingSet=\n\n[Install]\nWantedBy=default.target\n'
+	return '[Unit]\nDescription=Hornero Companion — Hermes gateway (user-level, loopback only, isolation: ${isolation})\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=${exec}\nRestart=on-failure\nRestartSec=5\nNoNewPrivileges=true\nPrivateTmp=true\nProtectKernelTunables=true\nProtectControlGroups=true\n${suid_and_caps}LockPersonality=true\nRestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\n\n[Install]\nWantedBy=default.target\n'
 }
 
 // assistant_gateway_classify names the five operator states `assistant
