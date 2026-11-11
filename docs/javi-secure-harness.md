@@ -152,12 +152,12 @@ outside that view).
 
 ## Status report (2026-11-10, host-verified)
 
-Merged: hornero #374 (harness), #375–#377 (prompt/binds),
-#378 (model show/set), #379 (effective isolation), #380 (threat
-model), #381 (audit `--filter`), #382 (session↔workspace keys),
-#383 (workspace ids), #384 (binds, 121 chains); shell #353–#355
-(Control Center security/prompt/model), #356 (model chips),
-#357 (workspace manager); docs #103 (architecture).
+Merged: hornero #374 (harness), #375–#377 (prompt/binds), #378
+(model show/set), #379 (effective isolation), #380 (threat model),
+#381 (audit `--filter`), #382 (session↔workspace keys), #383
+(workspace ids), #384 (binds, 121 chains); shell #353–#355 (Control
+Center security/prompt/model), #356 (model chips), #357 (workspace
+manager); docs #103 (architecture).
 
 Measurements on the development host: horneroctl static binary
 16.2 MB; the (legacy, unsandboxed) Hermes gateway idles at ~246 MB
