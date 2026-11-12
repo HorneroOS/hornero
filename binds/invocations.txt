@@ -49,7 +49,20 @@ assistant enable
 assistant events
 assistant gateway start
 assistant gateway stop
+assistant log
 assistant model list
+assistant model set
+assistant model show
+assistant policy
+assistant policy preset desktop-assistant
+assistant policy preset read-only
+assistant policy preset workspace-agent
+assistant policy revoke-all
+assistant profile
+assistant profile fix
+assistant prompt
+assistant prompt history
+assistant prompt set-text
 assistant sessions
 assistant sessions list
 assistant sessions new
@@ -57,6 +70,9 @@ assistant sessions use
 assistant status
 assistant stop
 assistant usage
+assistant workspace create
+assistant workspace list
+assistant workspace use
 backup create
 capture clipboard
 capture record pause

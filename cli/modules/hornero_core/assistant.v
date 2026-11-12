@@ -684,9 +684,24 @@ pub fn assistant_sessions_file() string {
 
 pub struct AssistantSession {
 pub:
-	id      string
-	title   string
-	created string
+	id        string
+	title     string
+	created   string
+	mode      string // ask | agent | chat ('' = agent, legacy rows)
+	workspace string // workspace id at creation ('' = legacy, unbound)
+}
+
+// assistant_session_effective_mode normalises a stored mode: anything
+// unrecognised fails closed to the least-privileged conversational mode.
+pub fn assistant_session_effective_mode(mode string) string {
+	return if mode in ['ask', 'agent', 'chat'] { mode } else { 'agent' }
+}
+
+// assistant_mode_escalates reports whether a mode may surface an
+// approval to the human. Ask and Chat never escalate: horneroctl
+// denies the pending approval server-side instead.
+pub fn assistant_mode_escalates(mode string) bool {
+	return assistant_session_effective_mode(mode) == 'agent'
 }
 
 pub struct AssistantSessions {
@@ -702,11 +717,13 @@ pub fn assistant_sessions_load() AssistantSessions {
 		parts := line.split('\t')
 		if parts.len == 2 && parts[0] == 'current' {
 			out.current = parts[1]
-		} else if parts.len == 4 && parts[0] == 'session' {
+		} else if parts.len in [4, 5, 6] && parts[0] == 'session' {
 			out.sessions << AssistantSession{
-				id:      parts[1]
-				title:   parts[2]
-				created: parts[3]
+				id:        parts[1]
+				title:     parts[2]
+				created:   parts[3]
+				mode:      if parts.len >= 5 { parts[4] } else { 'agent' }
+				workspace: if parts.len == 6 { parts[5] } else { '' }
 			}
 		}
 	}
@@ -719,15 +736,32 @@ fn assistant_sessions_save(s AssistantSessions) ! {
 		lines << 'current\t${s.current}'
 	}
 	for sess in s.sessions {
-		lines << 'session\t${sess.id}\t${sess.title}\t${sess.created}'
+		lines << 'session\t${sess.id}\t${sess.title}\t${sess.created}\t${assistant_session_effective_mode(sess.mode)}\t${sess.workspace}'
 	}
 	os.mkdir_all(assistant_dir())!
 	os.write_file(assistant_sessions_file(), lines.join('\n') + '\n')!
 	os.chmod(assistant_sessions_file(), 0o600) or {}
 }
 
-// assistant_session_key is the gateway continuity key for a session
-// id ('' when no session is selected — the gateway default applies).
+// assistant_session_mode resolves the mode of a session id ('' when
+// unknown; callers fail closed via assistant_session_effective_mode).
+pub fn assistant_session_mode(id string) string {
+	if id.len == 0 {
+		return ''
+	}
+	s := assistant_sessions_load()
+	for sess in s.sessions {
+		if sess.id == id {
+			return assistant_session_effective_mode(sess.mode)
+		}
+	}
+	return ''
+}
+
+// assistant_session_key is the legacy gateway continuity key for a
+// session id ('' when no session is selected — the gateway default
+// applies). Workspace-bound sessions use the scoped key below; legacy
+// rows keep this key so their Hermes conversations are not orphaned.
 pub fn assistant_session_key(id string) string {
 	if id.len == 0 {
 		return ''
@@ -735,13 +769,41 @@ pub fn assistant_session_key(id string) string {
 	return 'hornero:${id}'
 }
 
+// assistant_session_workspace resolves the workspace a session was
+// created in ('' for legacy or unknown sessions).
+pub fn assistant_session_workspace(id string) string {
+	s := assistant_sessions_load()
+	for sess in s.sessions {
+		if sess.id == id {
+			return sess.workspace
+		}
+	}
+	return ''
+}
+
+// assistant_session_continuity_key scopes the Hermes continuity key
+// to the session's workspace, so a conversation (and the per-key
+// memory Hermes attaches to it) cannot silently follow the user into
+// an unrelated workspace. Unknown or legacy sessions keep the legacy
+// key.
+pub fn assistant_session_continuity_key(id string) string {
+	if id.len == 0 {
+		return ''
+	}
+	ws := assistant_session_workspace(id)
+	if ws.len > 0 {
+		return 'hornero:ws-${ws}:${id}'
+	}
+	return assistant_session_key(id)
+}
+
 // assistant_current_session_key resolves the key for ask: explicit
 // id wins, else the registry's current session, else ''.
 pub fn assistant_current_session_key(explicit string) string {
 	if explicit.len > 0 {
-		return assistant_session_key(explicit)
+		return assistant_session_continuity_key(explicit)
 	}
-	return assistant_session_key(assistant_sessions_load().current)
+	return assistant_session_continuity_key(assistant_sessions_load().current)
 }
 
 pub fn assistant_sessions_list_report() CommandResult {
@@ -755,7 +817,8 @@ pub fn assistant_sessions_list_report() CommandResult {
 	mut lines := []string{}
 	for sess in s.sessions {
 		mark := if sess.id == s.current { '*' } else { ' ' }
-		lines << '${mark} ${sess.id} — ${sess.title} (since ${sess.created})'
+		ws := if sess.workspace.len > 0 { ' @${sess.workspace}' } else { '' }
+		lines << '${mark} ${sess.id} — ${sess.title} [${assistant_session_effective_mode(sess.mode)}]${ws} (since ${sess.created})'
 	}
 	return ok_result('assistant sessions', lines.join('\n'), {
 		'count':   '${s.sessions.len}'
@@ -764,25 +827,36 @@ pub fn assistant_sessions_list_report() CommandResult {
 	})
 }
 
-pub fn assistant_sessions_new_report(title string) CommandResult {
+pub fn assistant_sessions_new_report_mode(title string, mode string) CommandResult {
+	effective := assistant_session_effective_mode(mode)
+
 	clean := title.replace('\t', ' ').replace('\n', ' ').trim_space()
 	if clean.len == 0 {
 		return fail_result('assistant sessions', 'Missing chat title. Example: horneroctl assistant sessions new "Trip planning"')
 	}
 	mut s := assistant_sessions_load()
 	id := 's${time.now().unix()}${s.sessions.len + 1}'
+	workspace := assistant_workspace_active().id
 	s.sessions << AssistantSession{
-		id:      id
-		title:   clean
-		created: time.now().format_ss()
+		id:        id
+		title:     clean
+		created:   time.now().format_ss()
+		mode:      effective
+		workspace: workspace
 	}
 	s.current = id
 	assistant_sessions_save(s) or { return fail_result('assistant sessions', err.msg()) }
-	return ok_result('assistant sessions', 'Created and selected chat "${clean}" (${id}). Hermes keeps the conversation under its continuity key; only the name lives here.', {
-		'id':      id
-		'title':   clean
-		'current': id
+	return ok_result('assistant sessions', 'Created and selected ${effective} chat "${clean}" (${id}) in workspace ${workspace}. Hermes keeps the conversation under its workspace-scoped continuity key; only the name, mode and workspace live here.', {
+		'id':        id
+		'title':     clean
+		'current':   id
+		'mode':      effective
+		'workspace': workspace
 	})
+}
+
+pub fn assistant_sessions_new_report(title string) CommandResult {
+	return assistant_sessions_new_report_mode(title, 'agent')
 }
 
 pub fn assistant_sessions_use_report(id string) CommandResult {
@@ -791,9 +865,16 @@ pub fn assistant_sessions_use_report(id string) CommandResult {
 		if sess.id == id {
 			s.current = id
 			assistant_sessions_save(s) or { return fail_result('assistant sessions', err.msg()) }
-			return ok_result('assistant sessions', 'Selected chat "${sess.title}" (${id}).', {
-				'id':      id
-				'current': id
+			active_ws := assistant_workspace_active().id
+			note := if sess.workspace.len > 0 && sess.workspace != active_ws {
+				' It belongs to workspace ${sess.workspace} (active: ${active_ws}); its history stays scoped to ${sess.workspace}.'
+			} else {
+				''
+			}
+			return ok_result('assistant sessions', 'Selected chat "${sess.title}" (${id}).${note}', {
+				'id':        id
+				'current':   id
+				'workspace': sess.workspace
 			})
 		}
 	}
@@ -933,6 +1014,10 @@ fn assistant_stream_events(settings AssistantSettings, run_id string, on_event f
 // assistant_events_outcome applies the shared pending/text outcome
 // rules for a collected event list (buffered or streamed).
 fn assistant_events_outcome(command string, run_id string, events []AssistantEvent) CommandResult {
+	return assistant_events_outcome_mode(command, run_id, events, 'agent')
+}
+
+fn assistant_events_outcome_mode(command string, run_id string, events []AssistantEvent, mode string) CommandResult {
 	pending := assistant_pending_request(events)
 	text := assistant_collect_text(events)
 	mut data := {
@@ -946,6 +1031,12 @@ fn assistant_events_outcome(command string, run_id string, events []AssistantEve
 	}
 	if pending.kind == 'approval' {
 		data['detail'] = pending.detail
+		if !assistant_mode_escalates(mode) {
+			assistant_approve_report(run_id, 'deny')
+			assistant_log_append('mode-deny', run_id, pending.detail, mode)
+			data['pending'] = 'denied-by-mode'
+			return fail_result(command, 'Approval denied by ${mode} mode on run ${run_id}: ${pending.detail}. Ask/Chat modes never escalate; switch to an Agent session to act.')
+		}
 		return fail_result(command, 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
 	}
 	if pending.kind == 'clarify' {
@@ -967,6 +1058,10 @@ pub fn assistant_events_stream_report(run_id string, emit fn (string)) CommandRe
 }
 
 pub fn assistant_events_stream_report_traced(run_id string, emit fn (string), on_trace fn (string, string)) CommandResult {
+	return assistant_events_stream_report_traced_mode(run_id, emit, on_trace, 'agent')
+}
+
+pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string), on_trace fn (string, string), mode string) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant events', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -994,7 +1089,7 @@ pub fn assistant_events_stream_report_traced(run_id string, emit fn (string), on
 		return fail_result('assistant events', 'Hermes returned no events for run ${run_id} (HTTP ${resp.status_code}). The run id may be wrong or expired.')
 	}
 	events := parse_sse_events(resp.body)
-	outcome := assistant_events_outcome('assistant events', run_id, events)
+	outcome := assistant_events_outcome_mode('assistant events', run_id, events, mode)
 	if outcome.ok {
 		text := assistant_collect_text(events)
 		if text.len > 0 {
@@ -1058,10 +1153,12 @@ pub fn assistant_status_report() CommandResult {
 	settings := assistant_load_settings()
 	hermes := find_on_path('hermes')
 	mut data := {
-		'enabled':  settings.enabled.str()
-		'endpoint': settings.endpoint
-		'hermes':   if hermes.len > 0 { hermes } else { 'not-found' }
-		'keyFile':  assistant_key_file()
+		'enabled':   settings.enabled.str()
+		'endpoint':  settings.endpoint
+		'hermes':    if hermes.len > 0 { hermes } else { 'not-found' }
+		'keyFile':   assistant_key_file()
+		'isolation': assistant_gateway_effective_isolation()
+		'workspace': assistant_workspace_active().root
 	}
 	if settings.rejected_endpoint.len > 0 {
 		data['endpointRejected'] = settings.rejected_endpoint
@@ -1314,6 +1411,10 @@ pub fn assistant_ask_report_attached(prompt string, attach []string) CommandResu
 }
 
 pub fn assistant_ask_report_attached_session(prompt string, attach []string, session_id string) CommandResult {
+	return assistant_ask_report_attached_session_mode(prompt, attach, session_id, '')
+}
+
+pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string, session_id string, explicit_mode string) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant ask', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -1356,6 +1457,16 @@ pub fn assistant_ask_report_attached_session(prompt string, attach []string, ses
 	events := parse_sse_events(events_resp.body)
 	pending := assistant_pending_request(events)
 	if pending.kind == 'approval' {
+		mode := if explicit_mode.len > 0 {
+			assistant_session_effective_mode(explicit_mode)
+		} else {
+			assistant_session_effective_mode(assistant_session_mode(session_id))
+		}
+		if !assistant_mode_escalates(mode) {
+			assistant_approve_report(run_id, 'deny')
+			assistant_log_append('mode-deny', run_id, pending.detail, mode)
+			return fail_result('assistant ask', 'Approval denied by ${mode} mode on run ${run_id}: ${pending.detail}. Ask/Chat modes never escalate; switch to an Agent session to act.')
+		}
 		assistant_log_append('ask', run_id, 'pending approval: ${pending.detail}', 'pending')
 		return fail_result('assistant ask', 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
 	}
@@ -1393,6 +1504,10 @@ pub fn assistant_ask_stream_report_attached_session(prompt string, attach []stri
 }
 
 pub fn assistant_ask_stream_report_traced(prompt string, attach []string, session_id string, emit fn (string), on_trace fn (string, string)) CommandResult {
+	return assistant_ask_stream_report_traced_mode(prompt, attach, session_id, '', emit, on_trace)
+}
+
+pub fn assistant_ask_stream_report_traced_mode(prompt string, attach []string, session_id string, explicit_mode string, emit fn (string), on_trace fn (string, string)) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant ask', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -1429,7 +1544,11 @@ pub fn assistant_ask_stream_report_traced(prompt string, attach []string, sessio
 	if run_id.len == 0 {
 		return fail_result('assistant ask', 'Hermes did not return a run id.')
 	}
-	result := assistant_events_stream_report_traced(run_id, emit, on_trace)
+	result := assistant_events_stream_report_traced_mode(run_id, emit, on_trace, if explicit_mode.len > 0 {
+		assistant_session_effective_mode(explicit_mode)
+	} else {
+		assistant_session_effective_mode(assistant_session_mode(session_id))
+	})
 	if !result.ok {
 		return result
 	}

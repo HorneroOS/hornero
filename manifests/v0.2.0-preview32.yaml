@@ -1,0 +1,56 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview32
+#
+# Published signed pre-release (2026-11-04).
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview32
+date: "2026-11-04"
+description: >-
+  Tenth Desktop + Studio + Gaming Preview ISO candidate. The
+  Reliability & Recovery release: fresh installs now register a
+  session polkit agent out of the box (the desktop catalogue ships
+  polkit-gnome, #367, closing #366; existing installs receive the
+  same agent through hornero-config 0.3.18-1), graphical package
+  upgrades authenticate and stop safely on a locked pacman
+  database, horneroctl gains the read-only `recovery doctor` and
+  `capture status` commands plus reboot-required reporting in
+  `package status` (signed AUR horneroctl-bin 0.2.0_preview40-1),
+  and unencrypted installs no longer print the initramfs
+  encryption-mapping error (installer#89). Ships hornero-config
+  0.3.18-1 and hornero-shell 1.2.60-1 unchanged from preview31.
+  No OS snapshot backend ships yet: `recovery doctor` reports that
+  explicitly and config snapshots are not OS rollback. Build,
+  signature, and exact-artifact VM evidence for all three
+  editions are recorded in the release checklist. All editions
+  remain Preview, not supported.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: b75bbddf8c6d9167dc2fd1b45383c44176f4917d
+    status: pinned
+    subject: "shell pin shipped in the preview32 ISO lock (hornero-shell 1.2.60-1)"
+    notes: Source commit stamped in the AUR PKGBUILD; AUR recipe revision bc644896e8c8bf5b52652533a6ebfdec4434ef0d as recorded in the ISO manifest. Unchanged from preview31.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 8754a454ac02a8aee49aac2856fbfdb0efb73f63
+    status: pinned
+    subject: "config pin shipped in the preview32 ISO lock (hornero-config 0.3.18-1)"
+    notes: Source commit stamped in the AUR PKGBUILD; AUR recipe revision a5428ad98368c89f1149757c019539dc21f87a73 as recorded in the ISO manifest.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: System CLI built from this repository at release time, not pinned. The ISO ships the signed AUR horneroctl-bin 0.2.0_preview40-1 (tag horneroctl-v0.2.0-preview40, product revision a44964197c456fa44faeaff675206705c7bbdf1b).
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. The provisional Calamares installer (installer revision 329e66831ad5a31e48c466771f015ef05568e571, Calamares 3.4.3, Arch snapshot 2026/10/10) produced the ISO below; it is not yet a pinned component of this composition.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: "Reserved slot. Artifact: horneroos-2026.10-preview32-x86_64.iso; SHA-256 b8cd0f8604bc69f7d2112fb8bccd97115d32d197e9c92c62e02faf5de6345aec recorded in releases/v0.2.0-preview32-checklist.md. Detached signature: HorneroOS releases key FCFBEE43925AB5429362278AE59EAB44AA2498DC."

@@ -5,7 +5,7 @@ import time
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log>')
+	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log|policy|workspace|profile|prompt|tool>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -26,6 +26,14 @@ fn test_assistant_parser_rules() {
 	assert ask_sess.session == 's1'
 	if _ := parse_assistant(['tools', '--session', 's1']) {
 		assert false, '--session only applies to ask'
+	}
+	logf := parse_assistant(['log', '--filter', 'deny']) or { panic(err) }
+	assert logf.leaf == 'log' && logf.filter == 'deny'
+	if _ := parse_assistant(['status', '--filter', 'deny']) {
+		assert false, '--filter only applies to log'
+	}
+	if _ := parse_assistant(['log', '--filter']) {
+		assert false, '--filter needs a value'
 	}
 	ask := parse_assistant(['ask', 'what', 'updates', 'exist?']) or { panic(err) }
 	assert ask.value == 'what updates exist?'
@@ -183,4 +191,44 @@ fn test_stream_trace_frame_shapes() {
 	assert frame.contains('checking themes')
 	tool := stream_trace_frame('tool', '▸ terminal')
 	assert tool.contains('\"type\":\"tool\"')
+}
+
+fn test_assistant_policy_workspace_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'policy', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'workspace', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'policy']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'workspace']) == 0
+	// Mutating policy/workspace actions refuse without --yes (exit 1, not usage).
+	assert dispatch(['horneroctl', 'assistant', 'policy', 'preset', 'workspace-agent']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'policy', 'preset', 'workspace-agent', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'policy', 'preset', 'bogus', '--dry-run']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'workspace', 'use', 'ws-nope']) == 1
+	opts := parse_assistant(['policy', 'check', 'filesystem.read', '/tmp/x']) or { panic(err) }
+	assert opts.parts.len == 3 && opts.parts[1] == 'filesystem.read'
+}
+
+fn test_assistant_profile_prompt_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'profile', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'prompt', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'prompt', 'history']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'profile', 'fix']) == 1
+}
+
+fn test_assistant_tool_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'tool', '--help']) == 0
+	// Unknown tools are refused by the broker (exit 1), never executed.
+	assert dispatch(['horneroctl', 'assistant', 'tool', 'rm_rf', '/']) == 1
+	// Default read-only policy denies theme_set without executing it.
+	assert dispatch(['horneroctl', 'assistant', 'tool', 'theme_set', 'pampa']) == 1
+}
+
+fn test_assistant_prompt_set_text_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.', '--dry-run']) == 0
+}
+
+fn test_assistant_model_set_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'gpt-5']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'gpt-5', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'bad model', '--dry-run']) == 1
 }

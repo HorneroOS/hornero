@@ -6,6 +6,7 @@ pub:
 	value          string
 	arg1           string
 	arg2           string
+	parts          []string
 	dry_run        bool
 	yes            bool
 	remove         bool
@@ -13,6 +14,8 @@ pub:
 	stream         bool
 	attach         []string
 	session        string
+	mode           string
+	filter         string
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -21,7 +24,8 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	}
 	leaf := args[0]
 	if leaf !in ['status', 'health', 'enable', 'disable', 'tools', 'knowledge', 'sessions', 'model',
-		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup', 'usage'] {
+		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup', 'usage', 'policy',
+		'workspace', 'profile', 'prompt', 'tool'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
@@ -32,10 +36,31 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut stream := false
 	mut attach := []string{}
 	mut session := ''
+	mut mode := ''
+	mut filter := ''
 	mut i := 1
 	for i < args.len {
 		arg := args[i]
 		i++
+		if arg == '--mode' {
+			if i >= args.len {
+				return error('--mode needs ask, agent or chat.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
+			}
+			mode = args[i]
+			i++
+			if mode !in ['ask', 'agent', 'chat'] {
+				return error('--mode must be ask, agent or chat.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
+			}
+			continue
+		}
+		if arg == '--filter' {
+			if i >= args.len {
+				return error('--filter needs a search text.\nExample: horneroctl assistant log --filter deny')
+			}
+			filter = args[i]
+			i++
+			continue
+		}
 		if arg == '--session' {
 			if i >= args.len {
 				return error('--session needs a chat id.\nExample: horneroctl assistant ask "hi" --session s123')
@@ -105,6 +130,12 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf in ['status', 'tools', 'knowledge', 'usage'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')
 	}
+	if mode.len > 0 && leaf !in ['ask', 'sessions'] {
+		return error('--mode only applies to ask and sessions.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
+	}
+	if filter.len > 0 && leaf != 'log' {
+		return error('--filter only applies to log.\nExample: horneroctl assistant log --filter deny')
+	}
 	if session.len > 0 && leaf != 'ask' {
 		return error('--session only applies to ask.\nExample: horneroctl assistant ask "hi" --session s123')
 	}
@@ -134,6 +165,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		value:          value
 		arg1:           if parts.len > 0 { parts[0] } else { '' }
 		arg2:           if parts.len > 1 { parts[1..].join(' ') } else { '' }
+		parts:          parts
 		dry_run:        dry_run
 		yes:            yes
 		remove:         remove
@@ -141,5 +173,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		stream:         stream
 		attach:         attach
 		session:        session
+		mode:           mode
+		filter:         filter
 	}
 }

@@ -24,7 +24,134 @@ pub fn assistant_gateway_unit_file() string {
 // failure. The gateway itself binds the loopback endpoint HorneroOS
 // configures; the unit never widens that.
 pub fn assistant_gateway_unit_content(hermes string) string {
-	return '[Unit]\nDescription=Hornero Companion — Hermes gateway (user-level, loopback only)\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=${hermes} gateway run\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n'
+	return assistant_gateway_unit_content_for(hermes, '', '')
+}
+
+// assistant_gateway_isolation reports the kernel boundary the gateway will
+// actually run under. 'systemd-only' is NOT labelled sandboxed: systemd
+// directives harden the unit, but only bubblewrap hides the user's home
+// from the Hermes process (and therefore from execute_code, MCP servers
+// and in-process plugins — see Hermes SECURITY.md §2.2).
+pub fn assistant_gateway_isolation() string {
+	if find_on_path('bwrap').len > 0 {
+		return 'bubblewrap'
+	}
+	return 'systemd-only'
+}
+
+// assistant_gateway_unit_isolation derives the isolation a written unit
+// actually provides from its ExecStart, never from host capability alone:
+// a legacy unit that execs hermes directly is not sandboxed even when
+// bwrap exists on PATH.
+pub fn assistant_gateway_unit_isolation(content string) string {
+	for line in content.split('\n') {
+		trimmed := line.trim_space()
+		if trimmed.starts_with('ExecStart=') {
+			exec := trimmed.after('ExecStart=').trim_space()
+			program := exec.split(' ')[0]
+			if os.base(program) == 'bwrap' {
+				return 'bubblewrap'
+			}
+			return 'systemd-only (not sandboxed)'
+		}
+	}
+	return 'systemd-only (not sandboxed)'
+}
+
+// assistant_gateway_effective_isolation reports the isolation of the
+// installed unit when one exists, and otherwise the isolation a unit
+// written now would provide.
+pub fn assistant_gateway_effective_isolation() string {
+	unit_file := assistant_gateway_unit_file()
+	if os.exists(unit_file) {
+		content := os.read_file(unit_file) or { '' }
+		if content.len > 0 {
+			return assistant_gateway_unit_isolation(content)
+		}
+	}
+	return assistant_gateway_isolation()
+}
+
+// assistant_gateway_bwrap_argv builds the whole-process bubblewrap view:
+// the host root is read-only, $HOME is masked with tmpfs, and only the
+// Hermes home, the Hermes source venv (read-only) and the active Javi
+// workspace are bound back. Network is shared on purpose: the gateway
+// must stay reachable on loopback and reach the configured provider;
+// egress policy is enforced at the ABAC/tool layer, not the kernel, and
+// status output says so. No Wayland/D-Bus compositor socket is bound.
+pub fn assistant_gateway_bwrap_argv(hermes string, home string, workspace string) []string {
+	hermes_home := os.join_path(home, '.hermes')
+	mut argv := [
+		'bwrap',
+		'--ro-bind',
+		'/',
+		'/',
+		'--dev',
+		'/dev',
+		'--proc',
+		'/proc',
+		'--tmpfs',
+		'/tmp',
+		'--tmpfs',
+		home,
+		'--bind',
+		hermes_home,
+		hermes_home,
+		'--share-net',
+		'--die-with-parent',
+	]
+	// The pinned Hermes tree usually lives under the masked $HOME
+	// (~/.local/share/hornero/hermes/src/.venv/bin/hermes): bind its
+	// source root back read-only or exec fails inside the sandbox
+	// (host-verified during live deployment).
+	if hermes.starts_with(home + '/') {
+		src := hermes.all_before('/.venv/')
+		if src.len < hermes.len && src.starts_with(home + '/') {
+			argv << ['--ro-bind', src, src]
+			// The venv python is usually a symlink to a uv-managed
+			// interpreter, also under the masked $HOME: bind its tree
+			// read-only too or the shebang interpreter is missing.
+			target := os.readlink(os.join_path(src, '.venv', 'bin', 'python')) or { '' }
+			if target.starts_with(home + '/') && target.contains('/bin/') {
+				py_root := target.all_before('/bin/')
+				if py_root != src {
+					argv << ['--ro-bind', py_root, py_root]
+				}
+			}
+		}
+	}
+	// Mask the session runtime dir: the read-only root bind would otherwise
+	// expose the Wayland compositor socket and the session D-Bus socket,
+	// silently bypassing every desktop permission (host-verified).
+	runtime_dir := os.getenv('XDG_RUNTIME_DIR')
+	if runtime_dir.len > 0 {
+		argv << ['--tmpfs', runtime_dir]
+	}
+	if workspace.len > 0 {
+		argv << ['--bind', workspace, workspace]
+	}
+	argv << [hermes, 'gateway', 'run']
+	return argv
+}
+
+fn assistant_gateway_unit_content_for(hermes string, bwrap string, workspace string) string {
+	home := os.home_dir()
+	mut exec := '${hermes} gateway run'
+	mut isolation := 'systemd-only (not sandboxed)'
+	// RestrictSUIDSGID and an empty CapabilityBoundingSet prevent
+	// bubblewrap from creating its user/mount namespace (host-verified:
+	// bwrap exits 1, systemd reports 218/CAPABILITIES), so the
+	// bubblewrap variant omits both; bubblewrap itself drops
+	// privileges inside the sandbox and NoNewPrivileges stays on.
+	mut suid_and_caps := 'RestrictSUIDSGID=true\nCapabilityBoundingSet=\n'
+	if bwrap.len > 0 {
+		mut argv := assistant_gateway_bwrap_argv(hermes, home, workspace)
+		argv[0] = bwrap
+		exec = argv.join(' ')
+		isolation = 'bubblewrap'
+		suid_and_caps = ''
+	}
+	return '[Unit]\nDescription=Hornero Companion — Hermes gateway (user-level, loopback only, isolation: ${isolation})\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=${exec}\nRestart=on-failure\nRestartSec=5\nNoNewPrivileges=true\nPrivateTmp=true\nProtectKernelTunables=true\nProtectControlGroups=true\n${suid_and_caps}LockPersonality=true\nRestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\n\n[Install]\nWantedBy=default.target\n'
 }
 
 // assistant_gateway_classify names the five operator states `assistant
@@ -60,7 +187,19 @@ pub fn assistant_gateway_ensure_unit(hermes string) !bool {
 
 fn assistant_gateway_ensure_unit_locked(hermes string) !bool {
 	unit_file := assistant_gateway_unit_file()
-	desired := assistant_gateway_unit_content(hermes)
+	bwrap := find_on_path('bwrap')
+	mut effective_hermes := hermes
+	if bwrap.len > 0 {
+		// The ~/.local/bin/hermes wrapper lives under the masked $HOME, so
+		// the sandboxed unit execs the pinned venv binary directly.
+		venv_hermes := os.join_path(assistant_hermes_src_dir(), '.venv', 'bin', 'hermes')
+		if os.exists(venv_hermes) {
+			effective_hermes = venv_hermes
+		}
+	}
+	workspace := assistant_workspace_active()
+	os.mkdir_all(workspace.root) or {}
+	desired := assistant_gateway_unit_content_for(effective_hermes, bwrap, workspace.root)
 	return assistant_setup_write_owned_file_locked('unit', unit_file, desired,
 		assistant_setup_move_file, assistant_setup_noop_before_publish)
 }
@@ -109,6 +248,8 @@ pub fn assistant_gateway_status_report() CommandResult {
 		'unitState': unit
 		'gateway':   if reachable { 'reachable' } else { 'unreachable' }
 		'protocol':  if compatible { 'compatible' } else { 'incompatible' }
+		'isolation': assistant_gateway_effective_isolation()
+		'workspace': assistant_workspace_active().root
 	}
 	msg := 'gateway state: ${state} (unit ${unit}, endpoint ${settings.endpoint}: ${detail})'
 	return CommandResult{
