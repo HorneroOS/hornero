@@ -192,6 +192,21 @@ fn test_community_plugin_install_local_dry_run_consent_symlink_and_success() {
 		yes:   true
 	}).ok
 	os.rmdir_all(os.join_path(fixture, '.git')) or { panic(err) }
+	// A nested .git directory is also refused.
+	os.mkdir_all(os.join_path(fixture, 'sub', '.git')) or { panic(err) }
+	assert !community_plugin_install_local_report(CommunityPluginOptions{
+		value: fixture
+		yes:   true
+	}).ok
+	os.rmdir_all(os.join_path(fixture, 'sub')) or { panic(err) }
+	// A symlinked parent component is refused.
+	parent_link := os.join_path(root, 'parent-link')
+	os.symlink(os.dir(fixture), parent_link) or { panic(err) }
+	assert !community_plugin_install_local_report(CommunityPluginOptions{
+		value: os.join_path(parent_link, os.base(fixture))
+		yes:   true
+	}).ok
+	os.rm(parent_link) or { panic(err) }
 	// Success copies files, writes a payload-pinned receipt, stays disabled.
 	installed := community_plugin_install_local_report(CommunityPluginOptions{
 		value: fixture

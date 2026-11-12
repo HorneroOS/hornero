@@ -314,12 +314,49 @@ fn community_plugin_find_symlink(path string) string {
 	return ''
 }
 
+fn community_plugin_find_vcs(path string) string {
+	if !os.is_dir(path) || os.is_link(path) {
+		return ''
+	}
+	entries := os.ls(path) or { return '' }
+	for entry in entries {
+		full := os.join_path(path, entry)
+		if entry == '.git' {
+			return full
+		}
+		found := community_plugin_find_vcs(full)
+		if found.len > 0 {
+			return found
+		}
+	}
+	return ''
+}
+
+// community_plugin_symlink_component returns the first symlinked path
+// component of an absolute path (including parents), or ''.
+fn community_plugin_symlink_component(path string) string {
+	mut cur := ''
+	for part in path.split('/') {
+		if part.len == 0 {
+			continue
+		}
+		cur += '/' + part
+		if os.is_link(cur) {
+			return cur
+		}
+	}
+	return ''
+}
+
 fn community_plugin_copy_local_dir(src string, dst string) ! {
 	if os.is_link(src) {
 		return error('refusing to copy a symbolic link in the local plugin package: ${src}')
 	}
 	os.mkdir_all(dst)!
 	for entry in os.ls(src)! {
+		if entry == '.git' {
+			return error('refusing to copy VCS metadata in the local plugin package: ${os.join_path(src, entry)}')
+		}
 		s := os.join_path(src, entry)
 		d := os.join_path(dst, entry)
 		if os.is_link(s) {
@@ -342,14 +379,16 @@ pub fn community_plugin_install_local_report(opts CommunityPluginOptions) Comman
 		return fail_result('plugin install-local', 'refusing to install without --yes (preview with --dry-run).\nExample: horneroctl plugin install-local ./my-plugin --dry-run')
 	}
 	source := os.abs_path(opts.value)
-	if os.is_link(source) {
-		return fail_result('plugin install-local', 'refusing to install from a symlinked source directory: ${source}')
+	symlink_component := community_plugin_symlink_component(source)
+	if symlink_component.len > 0 {
+		return fail_result('plugin install-local', 'refusing to install from a path with a symlinked component: ${symlink_component}')
 	}
 	if !os.is_dir(source) {
 		return fail_result('plugin install-local', 'local package directory not found: ${source}')
 	}
-	if os.exists(os.join_path(source, '.git')) || os.is_link(os.join_path(source, '.git')) {
-		return fail_result('plugin install-local', 'refusing to install a local package with a top-level .git directory; remove VCS metadata and retry: ${os.join_path(source, '.git')}')
+	vcs := community_plugin_find_vcs(source)
+	if vcs.len > 0 {
+		return fail_result('plugin install-local', 'refusing to install a local package containing VCS metadata; remove .git directories and retry: ${vcs}')
 	}
 	link := community_plugin_find_symlink(source)
 	if link.len > 0 {
