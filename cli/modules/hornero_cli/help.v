@@ -31,6 +31,7 @@ Commands:
   gaming        Gaming readiness diagnostics (doctor)
   recovery      OS recovery readiness diagnostics (doctor)
   assistant     Optional Hermes AI assistant (status, enable, disable, tools, knowledge, ask, stop)
+  agent         Agent registry (list, status, doctor, default, launch proposal)
   completion    Print shell completions
   help          Show help for a command
 
@@ -95,6 +96,24 @@ Examples:
 		}
 		'gaming' {
 			return 'Usage: horneroctl gaming <doctor|selection> [options]\n\nGaming readiness diagnostics and selection state. The canonical\nspecialization and application model lives in\neditions/catalogue.yaml; this command validates stable IDs and\nrecords user selection intent. It never installs packages, never\nreports game compatibility, hardware qualification, or measured\nperformance. Gaming remains planned.\n\n  doctor              Read-only Gaming readiness checks\n  selection show      Show the recorded selection (default)\n  selection set       Record a selection (--specialization/--application, --dry-run)\n\nExamples:\n  horneroctl gaming doctor\n  horneroctl gaming doctor --json\n  horneroctl gaming selection set --specialization desktop-gaming --application steam\n'
+		}
+		'agent' {
+			return 'Usage: horneroctl agent <list|status|doctor|default|launch> [options]\n\nDeclarative registry of external agent CLIs (javi-hermes, codex,\nclaude-code, muse, opencode) as data: executable, discovery,\ninstall source, config/instruction/skills paths, MCP format, ACP,\nsession, approval, sandbox, usage and uninstall semantics.\nlist/status/doctor/default show are read-only; auth detection is\nfile-presence only and credential contents are never read. Nothing\nhere installs, uninstalls, or executes an agent, and no\nauto-approval (YOLO) flag is ever added.\n\n  list                All registered agents and probe state\n  status [id]         One agent (all when id omitted)\n  doctor              Read-only registry/default health checks\n  default show        Recorded default agent (default)\n  default set <id>    Record a default (--dry-run, or --yes to write)\n  launch <id>         Dry-run launch proposal only (never executes)\n\nExamples:\n  horneroctl agent list\n  horneroctl agent status codex --json\n  horneroctl agent doctor\n  horneroctl agent default set codex --dry-run\n  horneroctl agent launch codex\n'
+		}
+		'agent list' {
+			return 'Usage: horneroctl agent list [--json|--quiet]\n\nRead-only: list every registered agent with its executable probe\nstate. Nothing is installed or launched.\n\nExamples:\n  horneroctl agent list\n  horneroctl agent list --json\n'
+		}
+		'agent status' {
+			return 'Usage: horneroctl agent status [id] [--json|--quiet]\n\nRead-only: show one registered agent as data (executable,\ndiscovery, install source, config/instruction/skills paths, MCP\nformat, ACP, session, approval, sandbox, usage, uninstall) plus\nlive PATH/config/auth file-presence probes. Credential contents\nare never read.\n\nExamples:\n  horneroctl agent status\n  horneroctl agent status codex --json\n'
+		}
+		'agent doctor' {
+			return 'Usage: horneroctl agent doctor [--json|--quiet]\n\nRead-only checks: probe every registered agent and verify the\nrecorded default (if any) resolves to an installed executable. A\nmissing optional agent is reported, not failed; only an unusable\nrecorded default fails. Nothing is changed.\n\nExamples:\n  horneroctl agent doctor\n  horneroctl agent doctor --json\n'
+		}
+		'agent default' {
+			return 'Usage: horneroctl agent default <show|set> [id] [options]\n\nshow (default) prints the recorded default from\n~/.config/hornero/agent-default.json. set records a new default\nafter validating the id against the registry; it needs --yes\n(--dry-run previews without writing). Recording a default installs\nand launches nothing.\n\nExamples:\n  horneroctl agent default show\n  horneroctl agent default set codex --dry-run\n  horneroctl agent default set codex --yes\n'
+		}
+		'agent launch' {
+			return 'Usage: horneroctl agent launch <id> [--json|--quiet]\n\nDry-run proposal only: prints the exact command line that would\nlaunch the agent and executes nothing. No approval is granted and\nno auto-approve/YOLO flag is ever added. Run the printed command\nyourself when you want the agent.\n\nExamples:\n  horneroctl agent launch codex\n  horneroctl agent launch opencode --json\n'
 		}
 		'recovery' {
 			return 'Usage: horneroctl recovery <doctor> [options]\n\nOS recovery readiness diagnostics for the contracted Btrfs\nsnapshot backend (docs/SNAPSHOT_BACKEND_CONTRACT.md). This is\nabout operating-system rollback readiness only; configuration\nsnapshots under `horneroctl config` are settings archives and\nare never OS rollback. Nothing here creates or restores a\nsnapshot, and readiness is not proof that a restore works.\n\n  doctor              Read-only recovery readiness checks\n\nExamples:\n  horneroctl recovery doctor\n  horneroctl recovery doctor --json\n'
@@ -1517,7 +1536,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware bluetooth completion welcome wallpaper capture apps system studio gaming recovery help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware bluetooth completion welcome wallpaper capture apps system studio gaming recovery agent help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1531,7 +1550,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome wallpaper capture apps system assistant studio gaming recovery help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome wallpaper capture apps system assistant studio gaming recovery agent help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1560,5 +1579,6 @@ complete -c horneroctl -f -n __fish_use_subcommand -a system -d "Installed editi
 complete -c horneroctl -f -n __fish_use_subcommand -a studio -d "Studio selection and diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a gaming -d "Gaming readiness diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a recovery -d "OS recovery readiness diagnostics"
+complete -c horneroctl -f -n __fish_use_subcommand -a agent -d "Agent registry"
 '
 }
