@@ -21,6 +21,7 @@ import x.json2
 
 pub const agent_config_schema_version = 1
 pub const agent_config_entry_kinds = ['instruction', 'skill', 'mcp', 'acp']
+pub const agent_config_projection_note = 'Projection scope: only skills are written to native, auto-discovered agent skill paths. Instruction, MCP, and ACP outputs are Hornero-owned companion fragments that the agents do not load automatically (ACP is inspection-only).'
 
 pub struct AgentConfigEntry {
 pub:
@@ -81,18 +82,45 @@ fn json_str(m map[string]json2.Any, key string) string {
 	return ''
 }
 
-fn json_str_arr(m map[string]json2.Any, key string) []string {
+// json_str_arr_strict decodes an optional array-of-strings field. A present
+// field that is not an array, or an array with non-string elements, is an
+// error: malformed scope must never silently widen to "all agents".
+fn json_str_arr_strict(m map[string]json2.Any, key string, entry_id string) ![]string {
 	mut out := []string{}
 	if key !in m {
 		return out
 	}
 	v := m[key]
-	if v is []json2.Any {
-		for item in v.as_array() {
-			out << item.str()
+	if v !is []json2.Any {
+		return error('entry ${entry_id}: "${key}" must be an array of strings')
+	}
+	for item in v.as_array() {
+		if item !is string {
+			return error('entry ${entry_id}: "${key}" must contain only strings')
 		}
+		value := item.str().trim_space()
+		if value.len == 0 {
+			return error('entry ${entry_id}: "${key}" must not contain empty strings')
+		}
+		out << value
 	}
 	return out
+}
+
+// is_safe_path_segment accepts exactly one path segment that cannot escape a
+// directory: letters, digits, '.', '_' and '-', excluding '.' and '..'.
+fn is_safe_path_segment(value string) bool {
+	if value.len == 0 || value == '.' || value == '..' {
+		return false
+	}
+	for b in value.bytes() {
+		safe := (b >= `a` && b <= `z`) || (b >= `A` && b <= `Z`) || (b >= `0` && b <= `9`)
+			|| b == `_` || b == `-` || b == `.`
+		if !safe {
+			return false
+		}
+	}
+	return true
 }
 
 // parse_agent_config_registry decodes the canonical registry. It is strict:
@@ -124,6 +152,9 @@ pub fn parse_agent_config_registry(raw string) !AgentConfigRegistry {
 		if id.len == 0 {
 			return error('entry id must not be empty')
 		}
+		if !is_safe_path_segment(id) {
+			return error('entry id must be a single safe path segment (letters, digits, ".", "_", "-"; not "." or ".."): ${id}')
+		}
 		if seen[id] {
 			return error('duplicate entry id: ${id}')
 		}
@@ -133,7 +164,10 @@ pub fn parse_agent_config_registry(raw string) !AgentConfigRegistry {
 		}
 		content := json_str(em, 'content')
 		skill_id := json_str(em, 'skillId').trim_space()
-		targets := json_str_arr(em, 'targets').map(it.trim_space()).filter(it.len > 0)
+		if skill_id.len > 0 && !is_safe_path_segment(skill_id) {
+			return error('entry ${id}: skillId must be a single safe path segment (letters, digits, ".", "_", "-"; not "." or ".."): ${skill_id}')
+		}
+		targets := json_str_arr_strict(em, 'targets', id)!
 		// validate target ids against known agents when specified
 		for t in targets {
 			if t == 'all' {
@@ -216,6 +250,55 @@ pub:
 	reason   string // for unsupported/skip
 }
 
+// agent_config_canonical resolves '.'/'..' lexically, then resolves symlinks
+// for the longest existing prefix so a symlink cannot make a projected path
+// escape its base. Nonexistent tails are appended lexically.
+fn agent_config_canonical(path string) string {
+	if path.len == 0 {
+		return ''
+	}
+	mut p := path
+	if !os.is_abs_path(p) {
+		p = os.join_path(os.getwd(), p)
+	}
+	parts := p.split('/')
+	mut stack := []string{}
+	for part in parts {
+		if part == '' || part == '.' {
+			continue
+		}
+		if part == '..' {
+			if stack.len > 0 {
+				stack.delete(stack.len - 1)
+			}
+			continue
+		}
+		stack << part
+	}
+	norm := '/' + stack.join('/')
+	mut existing := norm
+	mut tail := []string{}
+	for existing.len > 1 && !os.exists(existing) {
+		tail.insert(0, os.base(existing))
+		existing = os.dir(existing)
+	}
+	resolved := os.real_path(existing)
+	mut out := resolved
+	for t in tail {
+		out = os.join_path(out, t)
+	}
+	return out
+}
+
+fn agent_config_path_within(base string, path string) bool {
+	if base.len == 0 || path.len == 0 {
+		return false
+	}
+	b := agent_config_canonical(base)
+	p := agent_config_canonical(path)
+	return p == b || p.starts_with(b + '/')
+}
+
 fn entry_applies_to(entry AgentConfigEntry, agent_id string) bool {
 	if entry.targets.len == 0 {
 		return true
@@ -228,14 +311,19 @@ fn entry_applies_to(entry AgentConfigEntry, agent_id string) bool {
 	return false
 }
 
+fn agent_opencode_config_dir() string {
+	// OpenCode follows XDG: honor $XDG_CONFIG_HOME instead of hardcoding ~/.config.
+	return os.join_path(resolve_paths().config_dir, 'opencode')
+}
+
 fn agent_instruction_target(spec AgentSpec) (string, string) {
-	// Return (path, format). Path is the primary user-scope instruction file we own.
-	// Formats are render hints; "unsupported" means we record but cannot safely write.
+	// Return (path, format). Path is the Hornero-owned companion instruction
+	// file we write; agents do not auto-discover it (see help/status wording).
 	return match spec.id {
 		'javi-hermes' { agent_expand(spec, '~/.hermes/HORNERO.md'), 'markdown' }
-		'codex' { os.join_path(os.home_dir(), '.codex', 'AGENTS.hornero.md'), 'markdown' }
-		'claude-code' { os.join_path(os.home_dir(), '.claude', 'HORNERO.md'), 'markdown' }
-		'opencode' { os.join_path(os.home_dir(), '.config', 'opencode', 'HORNERO.md'), 'markdown' }
+		'codex' { agent_expand(spec, '~/.codex/AGENTS.hornero.md'), 'markdown' }
+		'claude-code' { agent_expand(spec, '~/.claude/HORNERO.md'), 'markdown' }
+		'opencode' { os.join_path(agent_opencode_config_dir(), 'HORNERO.md'), 'markdown' }
 		'muse' { '', 'unsupported' }
 		else { '', 'unsupported' }
 	}
@@ -246,24 +334,23 @@ fn agent_skills_base(spec AgentSpec) (string, string) {
 		'javi-hermes' { agent_expand(spec, spec.skills_path), 'skill-dir' }
 		'codex' { agent_expand(spec, spec.skills_path), 'skill-dir' }
 		'claude-code' { agent_expand(spec, spec.skills_path), 'skill-dir' }
-		'opencode' { agent_expand(spec, spec.skills_path), 'skill-dir' }
+		'opencode' { os.join_path(agent_opencode_config_dir(), 'skills'), 'skill-dir' }
 		'muse' { agent_expand(spec, spec.skills_path), 'skill-dir' }
 		else { '', 'unsupported' }
 	}
 }
 
 fn agent_mcp_target(spec AgentSpec) (string, string) {
-	// Hornero-managed MCP projection files, kept separate from the agent's
+	// Hornero-managed MCP companion fragments, kept separate from the agent's
 	// primary config to avoid clobbering user-owned formats we cannot fully
-	// merge (e.g. TOML config.toml). We render canonical MCP intent into a
-	// Hornero-owned companion JSON/TOML fragment where the format is known.
+	// merge (e.g. TOML config.toml). The agents do not auto-discover these.
 	return match spec.id {
-		'codex' { os.join_path(os.home_dir(), '.codex', 'mcp.hornero.toml'), 'toml-mcp' }
+		'codex' { agent_expand(spec, '~/.codex/mcp.hornero.toml'), 'toml-mcp' }
 		'claude-code' {
-			os.join_path(os.home_dir(), '.claude', 'mcp.hornero.json'), 'json-mcp-servers'
+			agent_expand(spec, '~/.claude/mcp.hornero.json'), 'json-mcp-servers'
 		}
 		'opencode' {
-			os.join_path(os.home_dir(), '.config', 'opencode', 'mcp.hornero.json'), 'json-mcp'
+			os.join_path(agent_opencode_config_dir(), 'mcp.hornero.json'), 'json-mcp'
 		}
 		else { '', 'unsupported' }
 	}
@@ -272,10 +359,10 @@ fn agent_mcp_target(spec AgentSpec) (string, string) {
 fn agent_acp_target(spec AgentSpec) (string, string) {
 	// ACP adapter intent is data-only; no agent has a verified native ACP
 	// config file we can safely own. Record/render to a Hornero-owned JSON
-	// projection for inspection.
+	// projection for inspection only.
 	return match spec.id {
 		'codex', 'claude-code', 'opencode' {
-			os.join_path(os.home_dir(), '.config', 'hornero', 'agent-acp', '${spec.id}.json'), 'json-acp'
+			os.join_path(resolve_paths().config_dir, 'hornero', 'agent-acp', '${spec.id}.json'), 'json-acp'
 		}
 		else { '', 'unsupported' }
 	}
@@ -321,6 +408,21 @@ fn toml_quote(s string) string {
 	return '"${out}"'
 }
 
+// toml_key emits a safe bare key when possible, otherwise a quoted key.
+fn toml_key(s string) string {
+	if s.len == 0 {
+		return '""'
+	}
+	for b in s.bytes() {
+		bare := (b >= `a` && b <= `z`) || (b >= `A` && b <= `Z`) || (b >= `0` && b <= `9`)
+			|| b == `_` || b == `-`
+		if !bare {
+			return toml_quote(s)
+		}
+	}
+	return s
+}
+
 fn render_mcp_toml(entries []AgentConfigEntry) !string {
 	// Render into [mcp_servers.<name>] tables (Codex TOML convention) as a
 	// Hornero-owned fragment file. Duplicate server names are an error.
@@ -345,12 +447,14 @@ fn render_mcp_toml(entries []AgentConfigEntry) !string {
 			out += 'args = [${args}]\n'
 		}
 		if 'env' in obj && obj['env'] is map[string]json2.Any {
-			mut keys := obj['env'].as_map().keys()
+			env := obj['env'].as_map()
+			mut keys := env.keys()
 			keys.sort()
-			for k in keys {
+			if keys.len > 0 {
 				out += '[mcp_servers.${toml_quote(name)}.env]\n'
-				out += '${k} = ${toml_quote(obj['env'].as_map()[k].str())}\n'
-				break
+			}
+			for k in keys {
+				out += '${toml_key(k)} = ${toml_quote(env[k].str())}\n'
 			}
 		}
 		out += '\n'
@@ -461,13 +565,24 @@ pub fn agent_config_render_targets(reg AgentConfigRegistry, only_agent string) [
 				}
 			} else {
 				sid := if e.skill_id.len > 0 { e.skill_id } else { e.id }
-				targets << AgentRenderTarget{
-					agent_id: spec.id
-					entry_id: e.id
-					kind:     'skill'
-					path:     os.join_path(base, sid, 'SKILL.md')
-					format:   format
-					content:  render_skill_content(e)
+				skill_path := os.join_path(base, sid, 'SKILL.md')
+				if !agent_config_path_within(base, skill_path) {
+					targets << AgentRenderTarget{
+						agent_id: spec.id
+						entry_id: e.id
+						kind:     'skill'
+						format:   'unsupported'
+						reason:   'skill path escapes the agent skills directory: ${skill_path}'
+					}
+				} else {
+					targets << AgentRenderTarget{
+						agent_id: spec.id
+						entry_id: e.id
+						kind:     'skill'
+						path:     skill_path
+						format:   format
+						content:  render_skill_content(e)
+					}
 				}
 			}
 		}
@@ -642,13 +757,24 @@ fn write_agent_config_receipt(target AgentRenderTarget) ! {
 fn backup_foreign_file(path string) !string {
 	bdir := agent_config_backups_dir()
 	os.mkdir_all(bdir)!
-	stamp := time.now().unix().str()
-	base := os.file_name(path)
-	backup := os.join_path(bdir, '${base}.${stamp}.bak')
-	// preserve content
 	content := os.read_file(path) or { return error('cannot read ${path} for backup: ${err.msg()}') }
-	os.write_file(backup, content)!
-	os.chmod(backup, 0o600)!
+	base := os.file_name(path)
+	// Include a hash of the full target path so same-named files in different
+	// directories never collide, plus nanosecond time. Never overwrite.
+	path_hash := sha256.hexhash(path)
+	stamp := time.now().unix_nano().str()
+	backup := os.join_path(bdir, '${base}.${path_hash}.${stamp}.bak')
+	if os.exists(backup) {
+		return error('backup already exists, refusing to overwrite: ${backup}')
+	}
+	tmp := os.join_path(bdir, '.${base}.${path_hash}.${stamp}.tmp')
+	os.write_file(tmp, content)!
+	os.chmod(tmp, 0o600)!
+	os.cp(tmp, backup, fail_if_exists: true) or {
+		os.rm(tmp) or {}
+		return error('cannot create unique backup ${backup}: ${err.msg()}')
+	}
+	os.rm(tmp) or {}
 	return backup
 }
 
@@ -799,7 +925,7 @@ pub fn agent_config_status_result(only_agent string) CommandResult {
 		return fail_result('agent config status', 'Cannot load agent config registry: ${err.msg()}')
 	}
 	if reg.entries.len == 0 {
-		return ok_result('agent config status', 'No canonical agent config entries at ${agent_config_file()}. Registry is empty; nothing to project.', {
+		return ok_result('agent config status', 'No canonical agent config entries at ${agent_config_file()}. Registry is empty; nothing to project.\n${agent_config_projection_note}', {
 			'registry':   agent_config_file()
 			'entries':    '0'
 			'targets':    '0'
@@ -823,6 +949,7 @@ pub fn agent_config_status_result(only_agent string) CommandResult {
 		lines << 'duplicate target path: ${d}'
 		issues++
 	}
+	lines << agent_config_projection_note
 	lines << 'Registry ${agent_config_file()}: ${reg.entries.len} entries, ${targets.len} targets, ${issues} issue(s).'
 	return ok_result('agent config status', lines.join('\n'), {
 		'registry':   agent_config_file()
@@ -835,8 +962,18 @@ pub fn agent_config_status_result(only_agent string) CommandResult {
 
 pub fn agent_config_check_result(only_agent string) CommandResult {
 	res := agent_config_status_result(only_agent)
+	// Fail closed on registry load/parse errors: status returns a failed result
+	// with no issues key, which must never be read as "0 issues".
+	if !res.ok || 'issues' !in res.data {
+		return CommandResult{
+			ok:      false
+			command: 'agent config check'
+			message: res.message
+			data:    res.data
+		}
+	}
 	// check fails on issues (like doctor semantics for config drift/dups/unsupported)
-	if (res.data['issues'] or { '0' }).int() > 0 {
+	if res.data['issues'].int() > 0 {
 		return CommandResult{
 			ok:      false
 			command: 'agent config check'
@@ -870,6 +1007,18 @@ pub fn agent_config_apply_result(only_agent string, dry_run bool, yes bool) Comm
 	if dups.len > 0 {
 		return fail_result('agent config apply', 'Duplicate target paths detected; refusing to apply:\n- ${dups.join('\n- ')}')
 	}
+	// Preflight: refuse before any write when a target cannot be rendered.
+	// This prevents a failed apply from leaving a partially mutated state.
+	mut blockers := []string{}
+	for t in targets {
+		if t.format == 'unsupported' || (t.reason.len > 0 && t.content.len == 0) {
+			reason := if t.reason.len > 0 { t.reason } else { 'unsupported target' }
+			blockers << '${t.agent_id} ${t.kind} [${t.entry_id}]: ${reason}'
+		}
+	}
+	if blockers.len > 0 && !dry_run {
+		return fail_result('agent config apply', 'Refusing to apply before any write: ${blockers.len} unsupported/error target(s) must be resolved first (preview with --dry-run, or narrow scope with --agent):\n- ${blockers.join('\n- ')}')
+	}
 	if !dry_run && !yes {
 		return fail_result('agent config apply', 'Applying agent config writes Hornero-owned files (with backups for unmanaged existing files). Preview with --dry-run or confirm with --yes. Nothing written.')
 	}
@@ -881,6 +1030,7 @@ pub fn agent_config_apply_result(only_agent string, dry_run bool, yes bool) Comm
 	}
 	verb := if dry_run { 'Dry run' } else { 'Apply' }
 	lines << '${verb}: ${summary.applied} applied, ${summary.changed} changed/pending, ${summary.issues} issue(s).'
+	lines << agent_config_projection_note
 	data := {
 		'registry': agent_config_file()
 		'entries':  '${reg.entries.len}'
