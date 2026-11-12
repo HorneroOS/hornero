@@ -303,16 +303,16 @@ pub fn studio_app_status_result(app_id string) CommandResult {
 	installed := desktop_path.len > 0
 	state := if installed { 'installed' } else { 'not-installed' }
 	return ok_result('studio app show', 'ArtCraft Launcher: ${state} (experimental, early-alpha; managed by ArtCraft Launcher, outside pacman repositories; launcher version and update state are reported by the launcher itself).', {
-		'app':             app_id
-		'desktop_id':      artcraft_launcher_desktop_id
-		'state':           state
-		'selected':        '${selected}'
-		'desktop_file':    desktop_path
-		'version':         'unknown'
-		'update_state':    'unknown'
-		'managed_by':      'artcraft-launcher'
-		'install_method':  'manual'
-		'maturity':        'experimental'
+		'app':            app_id
+		'desktop_id':     artcraft_launcher_desktop_id
+		'state':          state
+		'selected':       '${selected}'
+		'desktop_file':   desktop_path
+		'version':        'unknown'
+		'update_state':   'unknown'
+		'managed_by':     'artcraft-launcher'
+		'install_method': 'manual'
+		'maturity':       'experimental'
 	})
 }
 
