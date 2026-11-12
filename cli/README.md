@@ -29,6 +29,16 @@ Run `horneroctl --help` for the installed command list and
   compositor session;
 - `lock`, `capture`, `hypr`, `hardware`, `apps`, and `welcome` for their
   corresponding platform and desktop capabilities.
+- `agent list|status|doctor|default|launch` for the declarative Agent
+  Registry (javi-hermes, codex, claude-code, muse, opencode) as data:
+  executable/discovery/install-source/arch, config, instruction and
+  skills paths, MCP format, ACP, session, approval, sandbox, usage and
+  uninstall semantics. The read-only commands probe PATH and file
+  presence only (credential contents are never read); `agent default
+  set <id>` records the user default under XDG config only with
+  `--yes` (or `--dry-run` to preview), and `agent launch <id>` returns
+  a dry-run proposal only — it never executes an agent and never adds
+  an auto-approval flag.
 - `plugin new|install|remove|list|validate` for community Shell packages.
   `new` writes a static scaffold to a new path with an explicitly selected MIT
   license template; install/list/remove operate on receipt-owned data, and
