@@ -163,7 +163,14 @@ def test_studio_provenance_covers_every_studio_package_and_integration():
     studio_packages = set(catalogue["packageSets"]["studio"]["packages"])
     assert studio_packages <= set(provenance)
     assert {"reaper", "yabridge", "yabridgectl"} <= set(provenance)
-    for entry in provenance.values():
+    for name, entry in provenance.items():
+        if name == "ai.storyteller.artcraft-launcher":
+            # Single vendor exception: manual, experimental, opt-in only.
+            assert entry["source"] == "vendor"
+            assert entry["installMethod"] == "manual"
+            assert entry["optional"] is True
+            assert entry["support"] == "experimental"
+            continue
         assert entry["source"] == "arch-extra"
         assert entry["sourceUrl"].startswith("https://archlinux.org/packages/extra/x86_64/")
         assert entry["licenses"]

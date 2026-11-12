@@ -78,6 +78,43 @@ def test_experimental_apps_are_flagged_not_silent():
     assert "graphite" in plan["packages"]
 
 
+def test_artcraft_is_single_manual_opt_in_never_in_packages():
+    catalogue_doc = catalogue()
+    for spec_id in catalogue_doc["studioSpecializations"]:
+        plan = resolver.resolve_studio_selection(catalogue_doc, [spec_id])
+        assert "ai.storyteller.artcraft-launcher" not in plan["packages"]
+        assert "artcraft-launcher" not in plan["applications"]
+    explicit = resolver.resolve_studio_selection(
+        catalogue_doc, ["custom-selection"], ["artcraft-launcher"]
+    )
+    assert explicit["applications"] == ["artcraft-launcher"]
+    assert explicit["manualOptInRequired"] == ["artcraft-launcher"]
+    assert "ai.storyteller.artcraft-launcher" not in explicit["packages"]
+    provenance = explicit["manualProvenance"]["ai.storyteller.artcraft-launcher"]
+    assert provenance["source"] == "vendor"
+    assert provenance["installMethod"] == "manual"
+    assert provenance["optional"] is True
+    assert provenance["support"] == "experimental"
+    assert provenance["desktopId"] == "ai.storyteller.artcraft-launcher"
+    assert provenance["pinnedVersion"] == "0.19.0"
+    assert provenance["signingFingerprint"] == "2B76741B414AAD6CD33E631213A005C0B9D7C3ED"
+    assert explicit["experimental"] == ["artcraft-launcher"]
+
+
+def test_artcraft_never_enters_plan_via_specialization_membership():
+    import copy
+
+    changed = copy.deepcopy(catalogue())
+    changed["studioSpecializations"]["maker-cad"]["applications"].append("artcraft-launcher")
+    changed["studioSpecializations"]["complete-creative-workstation"]["applications"].append(
+        "artcraft-launcher"
+    )
+    plan = resolver.resolve_studio_selection(changed, ["complete-creative-workstation"])
+    assert "ai.storyteller.artcraft-launcher" not in plan["packages"]
+    assert "artcraft-launcher" not in plan["applications"]
+    assert plan["manualOptInRequired"] == ["artcraft-launcher"]
+
+
 def test_selection_plan_is_deterministic_and_provenance_complete():
     catalogue_doc = catalogue()
     first = resolver.resolve_studio_selection(

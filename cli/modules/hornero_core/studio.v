@@ -45,11 +45,18 @@ pub const studio_application_ids = [
 	'scribus',
 	'freecad',
 	'godot',
+	'artcraft-launcher',
 ]
 
-// Proprietary or reference-only applications that a specialization must
-// never pull in silently; they need an explicit application selection.
-pub const studio_opt_in_application_ids = ['reaper', 'penpot']
+// Proprietary, reference-only or manual-install applications that a
+// specialization must never pull in silently; they need an explicit
+// application selection.
+pub const studio_opt_in_application_ids = ['reaper', 'penpot', 'artcraft-launcher']
+
+// Upstream desktop ID of the ArtCraft Launcher (verified from the vendor
+// package metadata). The launcher, not pacman repositories, manages its
+// own Craft applications and self-updates.
+pub const artcraft_launcher_desktop_id = 'ai.storyteller.artcraft-launcher'
 
 pub struct StudioSelection {
 pub:
@@ -267,6 +274,46 @@ pub fn studio_doctor_checks() []DoctorCheck {
 		detail: 'not executed by horneroctl studio yet; selections are recorded intent only'
 	}
 	return checks
+}
+
+// studio_app_status_result reports truthful, read-only state for one
+// manual opt-in application. For the ArtCraft Launcher, installation is
+// detected from its upstream desktop file in XDG application dirs; the
+// launcher reports its own version and updates, so HorneroOS reports
+// `unknown` instead of inventing them. Nothing is installed or removed.
+pub fn studio_app_status_result(app_id string) CommandResult {
+	if app_id != 'artcraft-launcher' {
+		return fail_result('studio app show', 'no app status probe for studio application ${app_id}; only artcraft-launcher is supported')
+	}
+	sel, present := load_studio_selection() or {
+		return fail_result('studio app show', err.msg())
+	}
+	selected := present && 'artcraft-launcher' in sel.applications
+	desktop_name := '${artcraft_launcher_desktop_id}.desktop'
+	mut desktop_path := ''
+	home := os.home_dir()
+	for dir in [os.join_path(home, '.local', 'share', 'applications'), '/usr/local/share/applications',
+		'/usr/share/applications'] {
+		candidate := os.join_path(dir, desktop_name)
+		if os.exists(candidate) {
+			desktop_path = candidate
+			break
+		}
+	}
+	installed := desktop_path.len > 0
+	state := if installed { 'installed' } else { 'not-installed' }
+	return ok_result('studio app show', 'ArtCraft Launcher: ${state} (experimental, early-alpha; managed by ArtCraft Launcher, outside pacman repositories; launcher version and update state are reported by the launcher itself).', {
+		'app':             app_id
+		'desktop_id':      artcraft_launcher_desktop_id
+		'state':           state
+		'selected':        '${selected}'
+		'desktop_file':    desktop_path
+		'version':         'unknown'
+		'update_state':    'unknown'
+		'managed_by':      'artcraft-launcher'
+		'install_method':  'manual'
+		'maturity':        'experimental'
+	})
 }
 
 pub fn studio_doctor_result() CommandResult {

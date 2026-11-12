@@ -211,6 +211,8 @@ def _validate_studio_provenance(doc: dict, sets: object, studio: object) -> list
             errors.append(f"proprietary studioProvenance entry '{name}' must be optional and opt-in")
         if entry.get("source") == "aur" and (entry.get("installMethod") != "manual" or entry.get("optional") is not True):
             errors.append(f"AUR studioProvenance entry '{name}' must be optional with manual install; AUR recipes are never executed")
+        if entry.get("installMethod") == "manual" and entry.get("optional") is not True:
+            errors.append(f"manual studioProvenance entry '{name}' must be optional; manual installs are explicit opt-ins only")
         if name in integration_ids and entry.get("optional") is not True:
             errors.append(f"integration '{name}' must be optional in studioProvenance")
         if name in application_packages and name not in studio_packages and entry.get("optional") is not True:
@@ -296,6 +298,20 @@ def _application_is_proprietary(doc: dict, app_id: str) -> bool:
     application = (doc.get("studioApplications") or {}).get(app_id) or {}
     return any(
         (provenance.get(package) or {}).get("licenseClass") == "proprietary"
+        for package in application.get("packages", [])
+    )
+
+
+def _application_requires_manual_opt_in(doc: dict, app_id: str) -> bool:
+    """Manual-install packages (vendor/AUR) are never pacman plan entries.
+
+    They need an explicit application-level selection, and even then the
+    resolver only records the opt-in with full provenance; a human or a
+    dedicated lifecycle tool performs the verified manual install."""
+    provenance = doc.get("studioProvenance") or {}
+    application = (doc.get("studioApplications") or {}).get(app_id) or {}
+    return any(
+        (provenance.get(package) or {}).get("installMethod") == "manual"
         for package in application.get("packages", [])
     )
 
@@ -836,8 +852,13 @@ def resolve_studio_selection(
         )
     selected: list[str] = []
     opt_in_required: list[str] = []
+    manual_opt_in_required: list[str] = []
     for spec_id in specialization_ids:
         for app_id in specializations[spec_id].get("applications", []):
+            if _application_requires_manual_opt_in(doc, app_id):
+                if app_id not in manual_opt_in_required:
+                    manual_opt_in_required.append(app_id)
+                continue
             if _application_is_proprietary(doc, app_id):
                 if app_id not in opt_in_required:
                     opt_in_required.append(app_id)
@@ -852,6 +873,7 @@ def resolve_studio_selection(
         if package not in packages:
             packages.append(package)
     experimental: list[str] = []
+    manual_provenance: dict = {}
     for app_id in selected:
         application = applications[app_id]
         if application.get("availability") == "reference-only" or not application.get("packages"):
@@ -861,6 +883,13 @@ def resolve_studio_selection(
             )
         if application.get("experimental") and app_id not in experimental:
             experimental.append(app_id)
+        if _application_requires_manual_opt_in(doc, app_id):
+            if app_id not in manual_opt_in_required:
+                manual_opt_in_required.append(app_id)
+            for package in application["packages"]:
+                if package in provenance:
+                    manual_provenance[package] = provenance[package]
+            continue
         for package in application["packages"]:
             if package not in packages:
                 packages.append(package)
@@ -871,6 +900,8 @@ def resolve_studio_selection(
         "packages": packages,
         "packageProvenance": {package: provenance[package] for package in packages if package in provenance},
         "proprietaryOptInRequired": opt_in_required,
+        "manualOptInRequired": manual_opt_in_required,
+        "manualProvenance": manual_provenance,
         "experimental": experimental,
     }
 

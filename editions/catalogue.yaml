@@ -557,6 +557,27 @@ studioProvenance:
     installMethod: pacman-repository-opt-in
     optional: true
     support: planned
+  ai.storyteller.artcraft-launcher:
+    source: vendor
+    sourceUrl: https://github.com/storytold/craft-launcher/releases/tag/v0.19.0
+    licenses: [MIT, Apache-2.0]
+    licenseClass: open-source
+    installMethod: manual
+    optional: true
+    support: experimental
+    desktopId: ai.storyteller.artcraft-launcher
+    pinnedVersion: 0.19.0
+    signingFingerprint: 2B76741B414AAD6CD33E631213A005C0B9D7C3ED
+    notes: >-
+      Experimental, early-alpha ArtCraft Launcher distributed by the vendor
+      as a signed Arch package. Manual opt-in only: verify the pinned
+      release-signing fingerprint and SHA256SUMS before any manual
+      `pacman -U`; never installed by specialization or group selection.
+      The launcher self-updates outside pacman and manages its Craft
+      applications itself; HorneroOS does not pin or roll back those
+      updates. The ArtCraft name and A mark are trademarks of the ArtCraft
+      Team, not licensed under MIT or Apache-2.0, and are used only
+      unmodified as part of the unmodified launcher.
 # User-selectable Studio applications. Inclusion is a reviewed catalogue
 # entry, not an installability or support claim. `packages` are resolved
 # through studioProvenance; an entry with no packages is reference-only and
@@ -581,6 +602,7 @@ studioApplications:
   scribus: {title: Scribus, packages: [scribus]}
   freecad: {title: FreeCAD, packages: [freecad]}
   godot: {title: Godot, packages: [godot]}
+  artcraft-launcher: {title: "ArtCraft Launcher", packages: [ai.storyteller.artcraft-launcher], experimental: true, notes: "Experimental, early-alpha launcher; explicit application opt-in only, manual vendor install, managed by ArtCraft Launcher outside pacman repositories. Never installed by specialization selection."}
 # Shared creative platform every Studio selection builds on (pro audio stack
 # and session management). Application packages are added per selection.
 studioPlatformPackages: [pipewire, pipewire-audio, pipewire-alsa, pipewire-pulse, pipewire-jack, wireplumber, qpwgraph]

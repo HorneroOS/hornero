@@ -53,6 +53,11 @@ Proprietary applications in a specialization are reported under
 explicitly by application ID. Experimental applications are flagged, and
 reference-only entries (for example Penpot, which has no Arch package) fail
 with an actionable error instead of falling back to a full workstation.
+Manual-install applications (for example the experimental ArtCraft
+Launcher) are reported under `manualOptInRequired` with their full
+`manualProvenance`; they never enter the package list, not even when
+selected explicitly, because no HorneroOS consumer installs them.
+See `docs/studio-artcraft.md` for that entry's lifecycle.
 
 Gaming extends Desktop and is a Preview edition: it installs from the
 same signed Preview ISO (VM-validated only, not Supported).
