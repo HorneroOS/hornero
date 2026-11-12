@@ -127,7 +127,7 @@ fn is_safe_path_segment(value string) bool {
 // unknown schema, malformed entries, duplicate ids, or unknown kinds are
 // errors (fail closed) rather than silently ignored.
 pub fn parse_agent_config_registry(raw string) !AgentConfigRegistry {
-	decoded := json2.decode[json2.Any](raw) or { return error('invalid JSON: ${err.msg()}') }
+	decoded := json2.decode[json2.Any](raw) or { return error('invalid JSON (parse error; registry content withheld)') }
 	if decoded !is map[string]json2.Any {
 		return error('agent config must be a JSON object')
 	}
@@ -178,7 +178,7 @@ pub fn parse_agent_config_registry(raw string) !AgentConfigRegistry {
 		// basic kind payload validation / duplicate/format preflight hints
 		if kind == 'mcp' && content.trim_space().len > 0 {
 			decoded_mcp := json2.decode[json2.Any](content) or {
-				return error('entry ${id}: MCP content must be a JSON object string: ${err.msg()}')
+				return error('entry ${id}: MCP content must be a JSON object string (parse error; content withheld)')
 			}
 			if decoded_mcp !is map[string]json2.Any {
 				return error('entry ${id}: MCP content must be a JSON object')
@@ -191,7 +191,7 @@ pub fn parse_agent_config_registry(raw string) !AgentConfigRegistry {
 		}
 		if kind == 'acp' && content.trim_space().len > 0 {
 			decoded_acp := json2.decode[json2.Any](content) or {
-				return error('entry ${id}: ACP content must be a JSON object string: ${err.msg()}')
+				return error('entry ${id}: ACP content must be a JSON object string (parse error; content withheld)')
 			}
 			if decoded_acp !is map[string]json2.Any {
 				return error('entry ${id}: ACP content must be a JSON object')
@@ -392,7 +392,7 @@ fn render_skill_content(e AgentConfigEntry) string {
 }
 
 fn mcp_entry_obj(e AgentConfigEntry) !map[string]json2.Any {
-	decoded := json2.decode[json2.Any](e.content) or { return error('invalid MCP JSON: ${err.msg()}') }
+	decoded := json2.decode[json2.Any](e.content) or { return error('invalid MCP JSON (parse error; content withheld)') }
 	if decoded !is map[string]json2.Any {
 		return error('MCP content must be a JSON object')
 	}
@@ -492,7 +492,7 @@ fn render_acp_json(entries []AgentConfigEntry) !string {
 	mut seen_name := map[string]string{}
 	mut items := []string{}
 	for e in entries {
-		decoded := json2.decode[json2.Any](e.content) or { return error('invalid ACP JSON: ${err.msg()}') }
+		decoded := json2.decode[json2.Any](e.content) or { return error('invalid ACP JSON (parse error; content withheld)') }
 		if decoded !is map[string]json2.Any {
 			return error('ACP content must be a JSON object')
 		}

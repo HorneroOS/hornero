@@ -208,6 +208,12 @@ fn test_agent_config_check_fails_closed_on_bad_registry() {
 	}
 	malformed := agent_config_check_result('')
 	assert !malformed.ok
+
+	// Parse errors must not echo registry content (secret hygiene, P3-12).
+	os.write_file(env.cfg, '{broken SECRET_TOKEN_12345') or { assert false }
+	leaky := agent_config_check_result('')
+	assert !leaky.ok
+	assert !leaky.message.contains('SECRET_TOKEN_12345')
 }
 
 fn test_agent_config_apply_dry_run_and_idempotent_with_receipts() {
