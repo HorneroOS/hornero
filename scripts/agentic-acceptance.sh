@@ -33,19 +33,10 @@ else
   mkdir -p "${BIN_DIR}"
   step "building horneroctl into temp dir"
   if [ -n "${HORNERO_VBIN:-}" ]; then VCMD="${HORNERO_VBIN}"; elif command -v v >/dev/null 2>&1; then VCMD="$(command -v v)"; else fail "v toolchain not found (set HORNERO_VBIN or HORNEROS_HORNEROCTL_BIN)"; fi
-  # Build with the repo's own task runner; fall back to a direct v build.
-  if [ -f "${REPO_ROOT}/cli/make.vsh" ]; then
-    (cd "${REPO_ROOT}/cli" && VJOBS="${VJOBS:-1}" "${VCMD}" run make.vsh build-cli >/dev/null) \
-      || fail "make.vsh build-cli failed"
-    BIN="${REPO_ROOT}/cli/build/horneroctl"
-    # Copy into temp so cleanup removes our artifact copy, not the repo build.
-    cp "${BIN}" "${BIN_DIR}/horneroctl" || fail "cannot copy built horneroctl"
-    BIN="${BIN_DIR}/horneroctl"
-  else
-    (cd "${REPO_ROOT}/cli" && "${VCMD}" build -o "${BIN_DIR}/horneroctl" ./cmd/horneroctl) \
-      || fail "v build failed"
-    BIN="${BIN_DIR}/horneroctl"
-  fi
+  # Build directly into the temp dir; no repo build artifacts are left.
+  (cd "${REPO_ROOT}/cli" && VJOBS="${VJOBS:-1}" VMODULES="${REPO_ROOT}/cli/modules" "${VCMD}" -o "${BIN_DIR}/horneroctl" cmd/horneroctl >/dev/null) \
+    || fail "v build failed"
+  BIN="${BIN_DIR}/horneroctl"
   [ -x "${BIN}" ] || fail "built horneroctl missing at ${BIN}"
 fi
 echo "horneroctl: ${BIN}"
@@ -103,17 +94,22 @@ grep -q "hello acceptance" "${SKILL_FILE}" || fail "applied skill lacks registry
 ls "${STATE_DIR}/receipts/"*.json >/dev/null 2>&1 \
   || fail "config apply --yes wrote no ownership receipt"
 
+SNAP_BEFORE="$(sha256sum "${SKILL_FILE}" "${STATE_DIR}/receipts/"*.json | awk '{print $1}'; stat -c%Y "${SKILL_FILE}" "${STATE_DIR}/receipts/"*.json)"
 OUT="$(run agent config apply --yes)" || fail "second agent config apply failed"
 must_contain "${OUT}" "unchanged" "config apply idempotent"
 must_contain "${OUT}" "0 changed" "config apply idempotent counts"
+SNAP_AFTER="$(sha256sum "${SKILL_FILE}" "${STATE_DIR}/receipts/"*.json | awk '{print $1}'; stat -c%Y "${SKILL_FILE}" "${STATE_DIR}/receipts/"*.json)"
+[ "${SNAP_BEFORE}" = "${SNAP_AFTER}" ] \
+  || fail "second apply changed skill/receipt bytes or mtimes (not idempotent)"
 
 echo "hand edit by acceptance" >> "${SKILL_FILE}"
 OUT="$(run agent config status)" || fail "agent config status (after edit) failed"
 must_contain "${OUT}" "drifted" "config status drift"
 
-# Rollback scenario: a pre-existing unmanaged skill is backed up on apply,
-# and the original content is recoverable from the newest backup.
-step "agent config backup / rollback"
+# Manual backup-restore rollback (the documented recovery procedure; there
+# is no product restore command): a pre-existing unmanaged skill is backed
+# up on apply, and the original content is restored from the newest backup.
+step "agent config backup / manual rollback procedure"
 cat > "${REGISTRY}" <<'EOF'
 {"schemaVersion":1,"entries":[{"id":"acc-skill2","kind":"skill","name":"Second Skill","targets":["codex"],"skillId":"acc-skill2","content":"managed body\n"}]}
 EOF
@@ -151,9 +147,13 @@ if OUT="$(run assistant delegate nope --workspace "${TMP_ROOT}" "do a thing" 2>&
   fail "assistant delegate with unknown agent unexpectedly succeeded"
 fi
 must_contain "${OUT}" "Unknown agent id" "delegate unknown agent"
+WS_BEFORE="$(find "${TMP_ROOT}" -type f | sort)"
 OUT="$(run assistant delegate codex --workspace "${TMP_ROOT}" "review the parser")" \
   || fail "assistant delegate codex failed"
 must_contain "${OUT}" "does NOT inherit Hornero ABAC" "delegate ABAC truth"
+WS_AFTER="$(find "${TMP_ROOT}" -type f | sort)"
+[ "${WS_BEFORE}" = "${WS_AFTER}" ] \
+  || fail "delegate launched something or wrote into the workspace (proposal must be inert)"
 
 # --- 6. plugin install-local dry-run writes nothing -------------------------
 step "plugin install-local --dry-run"
