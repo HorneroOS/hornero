@@ -53,7 +53,7 @@ and ran it with an isolated HOME:
   `agent list` elapsed 4 ms, `assistant shell-proposal` elapsed 4 ms,
   max RSS unavailable from the script on this host (`/usr/bin/time`
   not installed; the script uses it when present), `horneroctl`
-  binary size 9,853,928 bytes. All lifecycle assertions held:
+  binary size 9,853,700 bytes. All lifecycle assertions held:
   default set/show round-trip, config dry-run writes nothing, apply
   writes a skill plus receipt, second apply unchanged, hand edit
   reports drift, original unmanaged skill recovered from the newest
