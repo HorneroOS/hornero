@@ -40,6 +40,27 @@ and ran it with an isolated HOME:
 - Focused V/pytest suites and full CI (`horneroctl`) passed for #393,
   #394, #395; shell `tests`, `qml`, `lint`, `build` passed for shell#364.
 
+## Wave 4 — host acceptance script and user doc
+
+- Script: `scripts/agentic-acceptance.sh` — builds `horneroctl` into a
+  temp dir (or reuses `$HORNEROS_HORNEROCTL_BIN`), runs all assertions
+  against an isolated temp HOME/XDG with real exit codes, cleans up,
+  and exits non-zero on the first failed assertion. User doc:
+  [agentic-workstation.md](agentic-workstation.md).
+- Run on this dev workstation (AMD Ryzen 9 5900X, Linux
+  7.2.14-arch1-1) under `systemd-run --user --scope
+  -p MemoryMax=2G -p MemorySwapMax=0 -p CPUQuota=200%`, script exit 0:
+  `agent list` elapsed 4 ms, `assistant shell-proposal` elapsed 4 ms,
+  max RSS unavailable from the script on this host (`/usr/bin/time`
+  not installed; the script uses it when present), `horneroctl`
+  binary size 9,853,700 bytes. All lifecycle assertions held:
+  default set/show round-trip, config dry-run writes nothing, apply
+  writes a skill plus receipt, second apply unchanged, hand edit
+  reports drift, original unmanaged skill recovered from the newest
+  backup, shell-proposal marker never created, protected
+  classification, delegate unknown-id failure and no-ABAC-inheritance
+  statement, plugin install-local dry-run writes nothing.
+
 ## Acceptance matrix — still pending real evidence (not PASS)
 
 - Real Preview VM/session: Agent Center in a live shell session, Javi
