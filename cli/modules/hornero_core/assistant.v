@@ -923,6 +923,10 @@ pub fn assistant_models_report() CommandResult {
 // aggregates from Hermes' own state database
 // (session_model_usage). Only totals are read — never prompts, message
 // bodies, or credentials — and the database is only ever SELECTed from.
+// Stable JSON data contract (for hornero-ai-usage): sessions, apiCalls,
+// inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens,
+// reasoningTokens, totalTokens (= input+output), models ("name:tokens"
+// joined by ","). No quota/limit/remaining field exists or is invented.
 pub fn assistant_usage_report() CommandResult {
 	hermes_home := os.getenv('HERMES_HOME')
 	base := if hermes_home.len > 0 {
