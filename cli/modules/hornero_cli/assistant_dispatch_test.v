@@ -5,7 +5,7 @@ import time
 
 fn test_assistant_help_has_examples() {
 	help := command_help('assistant')
-	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log|policy|workspace|profile|prompt|tool>')
+	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log|policy|workspace|profile|prompt|tool|shell-proposal|delegate>')
 	assert help.contains('Examples:')
 	assert help.contains('horneroctl assistant enable --yes')
 	assert dispatch(['horneroctl', 'assistant', '--help']) == 0
@@ -234,6 +234,42 @@ fn test_assistant_tool_dispatch() {
 fn test_assistant_prompt_set_text_dispatch() {
 	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.']) == 1
 	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.', '--dry-run']) == 0
+}
+
+fn test_assistant_shell_proposal_dispatch() {
+	assert command_help('assistant shell-proposal').contains('Examples:')
+	assert command_help('assistant delegate').contains('Examples:')
+	assert dispatch(['horneroctl', 'assistant', 'shell-proposal', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'delegate', '--help']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'shell-proposal', '--command', 'ls -la']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'shell-proposal', '--command', 'ls -la', '--json']) == 0
+	// Missing --command is a usage error; an empty command fails closed.
+	assert dispatch(['horneroctl', 'assistant', 'shell-proposal']) == 2
+	assert dispatch(['horneroctl', 'assistant', 'shell-proposal', '--command', '']) == 1
+	sp := parse_assistant(['shell-proposal', '--command', 'ls -la']) or { panic(err) }
+	assert sp.leaf == 'shell-proposal' && sp.command == 'ls -la' && sp.has_command
+	if _ := parse_assistant(['status', '--command', 'ls']) {
+		assert false, '--command only applies to shell-proposal'
+	}
+}
+
+fn test_assistant_delegate_dispatch() {
+	assert dispatch(['horneroctl', 'assistant', 'delegate', 'codex', '--workspace', os.temp_dir(),
+		'review the parser']) == 0
+	assert dispatch(['horneroctl', 'assistant', 'delegate', 'nope', '--workspace', os.temp_dir(),
+		'task']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'delegate', 'codex', '--workspace',
+		'/tmp/hx-no-such-workspace-xyz-123', 'task']) == 1
+	assert dispatch(['horneroctl', 'assistant', 'delegate', 'codex', '--workspace', os.temp_dir()]) == 1
+	assert dispatch(['horneroctl', 'assistant', 'delegate']) == 2
+	dl := parse_assistant(['delegate', 'codex', '--workspace', '/tmp', 'review', 'parser']) or {
+		panic(err)
+	}
+	assert dl.leaf == 'delegate' && dl.arg1 == 'codex' && dl.workspace == '/tmp'
+	assert dl.arg2 == 'review parser'
+	if _ := parse_assistant(['status', '--workspace', '/tmp']) {
+		assert false, '--workspace only applies to delegate'
+	}
 }
 
 fn test_assistant_model_set_dispatch() {
