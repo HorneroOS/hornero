@@ -46,24 +46,29 @@ Shipped before this mission and retained unchanged:
 | Website catalog 20 | Extensions catalog synced to the 20 batch-3 plugins: plugins pinned to 9900f1c, `extensions.json` regenerated via `data:sync` (never hand-edited) | website#215 | verified (140-page build, `data:check` PASS, review APPROVE, per PR) |
 | Audio facade | PluginKit `Audio` singleton over shell Audio service: read-only `volume`, `muted`, `sourceVolume`, `sourceMuted`, `hasSink`, `hasSource`; user-initiated `setVolume` (clamped via service)/increment/decrement/toggleMute/toggleSourceMute only (nothing changes on load); no PwNode leak | shell#368 | verified (54 tests, qmllint PASS, review APPROVE, per PR); live values pending (below) |
 | Plugins batch 4 | `hornero-volume`, `hornero-microphone` (muted/volume only, never records), `hornero-system-health` (honest unavailable states); catalog regenerated to 23 plugins | plugins#16 | verified (validators pass, review APPROVE, per PR) |
+| Audio in DEVELOPING | `Audio` facade documented in `docs/DEVELOPING.md`: exact props/functions from shell `Audio.qml`, clamped user-initiated controls only; catalog regenerated | plugins#17 | verified (review APPROVE, per PR) |
+| Website catalog 23 | Extensions catalog synced to the 23 batch-4 plugins: plugins pinned to caa8bcf, `extensions.json` regenerated via sync (never hand-edited) | website#216 | verified (build, `data:check` PASS, review APPROVE, per PR) |
+| Ledger batch 4 | This ledger extended with batch 4 (shell#368, plugins#16), developer guide (plugins#15) and website 20 (website#215); counts 23 plugins / 43 inventory / 7 data facades; pending live evidence not PASS | hornero#400 | verified (merged 2026-11-12) |
+| Plugins batch 5 | `hornero-quick-notes` (persistent note via PluginKit Settings: declared `note`, loaded on completion, saved debounced 600 ms, truncated at 4096 chars), `hornero-calculator` (safe tokenizer/parser, no eval), `hornero-agenda` (ISO week, pure Date math), `hornero-sun-card` (honest not-configured/error states), `hornero-metronome` (persistent BPM via PluginKit Settings: declared `bpm`, default 96, clamped 40–208); Settings persistence noted for quick-notes and metronome; catalog regenerated to 28 plugins | plugins#18 | verified (validators pass, executed probes, ISO-week cross-checked vs Python `isocalendar`, review APPROVE, per PR) |
 
 ## Counts (recounted on plugins main, 2026-11-12)
 
-- 23 plugins in `catalog.json`, all under `plugins/<id>/`:
-  `hornero-ai-usage`, `hornero-battery`, `hornero-calendar`,
-  `hornero-countdown`, `hornero-disk-usage`, `hornero-dual-clock`,
-  `hornero-focus-card`, `hornero-microphone`, `hornero-moon-phase`,
+- 28 plugins in `catalog.json`, all under `plugins/<id>/`:
+  `hornero-agenda`, `hornero-ai-usage`, `hornero-battery`,
+  `hornero-calculator`, `hornero-calendar`, `hornero-countdown`,
+  `hornero-disk-usage`, `hornero-dual-clock`, `hornero-focus-card`,
+  `hornero-metronome`, `hornero-microphone`, `hornero-moon-phase`,
   `hornero-network-monitor`, `hornero-now-playing`, `hornero-pomodoro`,
-  `hornero-quiet-notes`, `hornero-stopwatch`, `hornero-studio-audio`,
-  `hornero-studio-jobs`, `hornero-system-health`,
-  `hornero-system-monitor`, `hornero-unit-converter`, `hornero-uptime`,
-  `hornero-volume`, `hornero-weather`, `hornero-world-clock`.
+  `hornero-quick-notes`, `hornero-quiet-notes`, `hornero-stopwatch`,
+  `hornero-studio-audio`, `hornero-studio-jobs`, `hornero-sun-card`,
+  `hornero-system-health`, `hornero-system-monitor`,
+  `hornero-unit-converter`, `hornero-uptime`, `hornero-volume`,
+  `hornero-weather`, `hornero-world-clock`.
   Growth: 6 baseline → 12 (batch 1) → 17 (batch 2) → 20 (batch 3) →
-  23 (batch 4).
-- 43 inventory entries recounted on plugins main, 2026-11-12:
-  20 researched competitive entries + 23 implemented (supersedes the
-  38-entry batch-3 snapshot in plugins#14; recount before citing a
-  live total).
+  23 (batch 4) → 28 (batch 5).
+- 48 inventory entries recounted on plugins main, 2026-11-12:
+  20 researched competitive entries + 28 implemented (supersedes the
+  43-entry batch-4 snapshot; recount before citing a live total).
 - 7 PluginKit data facades: System, Network, Media, Weather, Time
   (shell#365), Power (shell#367) and Audio (shell#368). System,
   Network, Weather, Time and Power are read-only; Media and Audio
@@ -93,17 +98,18 @@ Shipped before this mission and retained unchanged:
 
 - Live shell runtime/visual: the facades (including Power's and
   Audio's live singleton values and Audio's user-initiated volume/mic
-  controls), batch 1–4 plugins (including `hornero-volume`,
-  `hornero-microphone` muted/volume-only behaviour and
-  `hornero-system-health` honest unavailable states), and the
-  marketplace pane have host test and lint evidence only; none has
-  been exercised visually in a running shell session.
+  controls), batch 1–5 plugins (including `hornero-volume`,
+  `hornero-microphone` muted/volume-only behaviour,
+  `hornero-system-health` honest unavailable states, and batch-5
+  Settings persistence in `hornero-quick-notes`/`hornero-metronome`),
+  and the marketplace pane have host test and lint evidence only;
+  none has been exercised visually in a running shell session.
 - Preview QA: no Preview VM/session run yet for installing, enabling,
   placing and disabling a batch plugin end-to-end, nor for the
   marketplace search/filter/detail flow (shell#366 records GUI
   runtime as pending Preview QA).
-- Website catalog beyond the 20-plugin sync (website#215) to the
-  full 23, and any live click-through from catalog to Control Center
+- Website catalog beyond the 23-plugin sync (website#216) to the
+  full 28, and any live click-through from catalog to Control Center
   install, are likewise unevidenced.
 - `hornero-ai-usage` against a live assistant backend (real
   tokens/calls/sessions/models, and the quota-unknown state observed
