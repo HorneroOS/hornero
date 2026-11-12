@@ -396,12 +396,13 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 }
 
 // run_agent: read-only registry commands plus `default set` (explicit
-// --yes) and `launch`, which is a dry-run proposal only — it never
-// executes an agent and never adds an auto-approval flag.
+// --yes), `config apply` (explicit --yes), and `launch`, which is a
+// dry-run proposal only — it never executes an agent and never adds an
+// auto-approval flag.
 fn run_agent(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('agent.usage',
-			'expected a subcommand: list, status, doctor, default, launch.\nExample: horneroctl agent list --json'),
+			'expected a subcommand: list, status, doctor, default, launch, config.\nExample: horneroctl agent list --json'),
 			mode)
 	}
 	match args[0] {
@@ -462,9 +463,60 @@ fn run_agent(args []string, mode hornero_core.RenderMode) int {
 			}
 			return render(hornero_core.agent_launch_result(args[1]), mode)
 		}
+		'config' {
+			action := if args.len >= 2 { args[1] } else { 'status' }
+			if action !in ['status', 'check', 'apply'] {
+				return render_error(hornero_core.err_usage('agent.usage',
+					'unknown agent config action: ${action} (expected: status, check, apply).\nExample: horneroctl agent config status'),
+					mode)
+			}
+			mut only_agent := ''
+			mut dry_run := false
+			mut yes := false
+			mut i := 2
+			for i < args.len {
+				a := args[i]
+				if a == '--agent' {
+					if i + 1 >= args.len {
+						return render_error(hornero_core.err_usage('agent.usage',
+							'--agent needs an id.\nExample: horneroctl agent config status --agent codex'),
+							mode)
+					}
+					only_agent = args[i + 1]
+					i += 2
+					continue
+				}
+				if a == '--dry-run' {
+					dry_run = true
+					i++
+					continue
+				}
+				if a == '--yes' {
+					yes = true
+					i++
+					continue
+				}
+				return render_error(hornero_core.err_usage('agent.usage',
+					'unexpected argument: ${a}.\nExample: horneroctl agent config apply --dry-run'), mode)
+			}
+			if only_agent.len > 0 {
+				hornero_core.agent_by_id(only_agent) or {
+					return render_error(hornero_core.err_usage('agent.usage',
+						'unknown agent id: ${only_agent}.\nExample: horneroctl agent config status --agent codex'),
+						mode)
+				}
+			}
+			return match action {
+				'status' { render(hornero_core.agent_config_status_result(only_agent), mode) }
+				'check' { render(hornero_core.agent_config_check_result(only_agent), mode) }
+				else {
+					render(hornero_core.agent_config_apply_result(only_agent, dry_run, yes), mode)
+				}
+			}
+		}
 		else {
 			return render_error(hornero_core.err_usage('agent.usage',
-				'unknown subcommand: ${args[0]} (expected: list, status, doctor, default, launch).\nExample: horneroctl agent list'),
+				'unknown subcommand: ${args[0]} (expected: list, status, doctor, default, launch, config).\nExample: horneroctl agent list'),
 				mode)
 		}
 	}
