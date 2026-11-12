@@ -24,7 +24,8 @@ fn proposal_tokens(command string) []string {
 
 fn proposal_has(tokens []string, words []string) bool {
 	for t in tokens {
-		if t in words {
+		// Match by basename too so /usr/bin/sudo counts as sudo.
+		if t in words || t.split('/').last() in words {
 			return true
 		}
 	}
@@ -93,13 +94,27 @@ pub fn assistant_shell_risk(command string) string {
 		}
 		return 'privileged'
 	}
+	// Device writes are destructive even without dd.
+	if lower.contains('> /dev/') || lower.contains('>/dev/')
+		|| lower.contains('of=/dev/') {
+		return 'protected'
+	}
 	system_paths := ['/etc/', '/usr/', '/boot/', '/etc', '/usr', '/boot']
-	if proposal_has_prefix(tokens, system_paths) {
+	if proposal_has_prefix(tokens, system_paths) || lower.contains('/etc/')
+		|| lower.contains('/usr/') || lower.contains('/boot/') {
+		// Any write-shaped verb, in-place edit, interpreter, or
+		// redirection touching a system path is at least privileged.
 		if proposal_has(tokens, ['chmod', 'chown', 'rm', 'mv', 'cp', 'tee', 'install', 'dd', 'ln',
-			'mkdir', 'touch', 'truncate'])
-			|| lower.contains('>') {
+			'mkdir', 'touch', 'truncate', 'sed', 'python3', 'python', 'perl', 'ruby', 'node',
+			'bash', 'sh'])
+			|| lower.contains('>') || lower.contains('-i') {
 			return 'privileged'
 		}
+	}
+	if proposal_has_prefix(tokens, ['/dev/'])
+		&& proposal_has(tokens, ['rm', 'mv', 'cp', 'tee', 'install', 'dd', 'touch', 'truncate',
+			'sed']) {
+		return 'protected'
 	}
 	// Mutating: known write verbs, redirection, in-place edits.
 	if proposal_has(tokens, ['rm', 'mv', 'cp', 'mkdir', 'touch', 'install', 'tee', 'chmod', 'chown',
