@@ -37,7 +37,7 @@ fn test_shell_proposal_risk_classification() {
 	assert assistant_shell_proposal_result('/bin/rm -rf /tmp/x').data['risk'] == 'mutating'
 	assert assistant_shell_proposal_result('sed -i s/a/b/ /etc/hosts').data['risk'] == 'privileged'
 	assert assistant_shell_proposal_result('echo hi > /dev/sda').data['risk'] == 'protected'
-	assert assistant_shell_proposal_result("python3 -c \"open('/etc/passwd','w')\"").data['risk'] == 'privileged'
+	assert assistant_shell_proposal_result('python3 -c "open(\'/etc/passwd\',\'w\')"').data['risk'] == 'privileged'
 	assert assistant_shell_proposal_result('cat /etc/passwd').data['risk'] == 'read-only'
 }
 

@@ -105,8 +105,8 @@ pub fn assistant_shell_risk(command string) string {
 		// Any write-shaped verb, in-place edit, interpreter, or
 		// redirection touching a system path is at least privileged.
 		if proposal_has(tokens, ['chmod', 'chown', 'rm', 'mv', 'cp', 'tee', 'install', 'dd', 'ln',
-			'mkdir', 'touch', 'truncate', 'sed', 'python3', 'python', 'perl', 'ruby', 'node',
-			'bash', 'sh'])
+			'mkdir', 'touch', 'truncate', 'sed', 'python3', 'python', 'perl', 'ruby', 'node', 'bash',
+			'sh'])
 			|| lower.contains('>') || lower.contains('-i') {
 			return 'privileged'
 		}
