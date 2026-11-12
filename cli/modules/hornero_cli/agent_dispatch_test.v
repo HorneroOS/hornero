@@ -1,5 +1,7 @@
 module hornero_cli
 
+import os
+
 fn test_agent_help_is_discoverable() {
 	assert command_help('agent').contains('horneroctl agent list')
 	assert command_help('agent').contains('Examples:')
@@ -36,4 +38,29 @@ fn test_agent_unknown_and_usage_fail() {
 	assert dispatch(['horneroctl', 'agent', 'default', 'set']) != 0
 	assert dispatch(['horneroctl', 'agent', 'default', 'set', 'codex']) != 0
 	assert dispatch(['horneroctl', 'agent', 'default', 'set', 'codex', '--dry-run']) == 0
+}
+
+fn test_agent_config_help_and_read_only_commands() {
+	assert command_help('agent config').contains('Canonical instructions/skills/MCP/ACP')
+	assert command_help('agent config').contains('ownership receipts')
+	assert command_help('agent').contains('config apply')
+	// isolated registry with one entry to exercise consent/dry-run paths
+	tmp := '/tmp/hx-agent-config-dispatch-test'
+	os.rmdir_all(tmp) or {}
+	os.mkdir_all(tmp) or { assert false }
+	cfg := tmp + '/agent-config.json'
+	os.write_file(cfg, '{"schemaVersion":1,"entries":[{"id":"i1","kind":"instruction","name":"Base","targets":["codex"],"content":"hi"}]}') or { assert false }
+	os.setenv('HORNERO_AGENT_CONFIG_FILE', cfg, true)
+	os.setenv('HORNERO_AGENT_CONFIG_STATE_DIR', tmp + '/state', true)
+	os.setenv('HOME', tmp + '/home', true)
+	defer {
+		os.unsetenv('HORNERO_AGENT_CONFIG_FILE')
+		os.unsetenv('HORNERO_AGENT_CONFIG_STATE_DIR')
+		os.unsetenv('HOME')
+		os.rmdir_all(tmp) or {}
+	}
+	assert dispatch(['horneroctl', 'agent', 'config', 'status']) == 0
+	assert dispatch(['horneroctl', 'agent', 'config', 'apply']) != 0
+	assert dispatch(['horneroctl', 'agent', 'config', 'apply', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'agent', 'config', 'nope']) != 0
 }
