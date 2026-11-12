@@ -253,9 +253,14 @@ pub fn knowledge_vault_generate_at(dir string, sources KnowledgeVaultSources, ge
 		path := os.join_path(generated_dir, name)
 		if os.is_file(path) {
 			old := os.read_file(path) or { '' }
-			if name in old_hashes && sha256.hexhash(old) != old_hashes[name] {
+			// Preserve anything we cannot prove is an untouched generated
+			// file: edited since the manifest, or untracked because the
+			// manifest is missing/corrupt. Losing user edits is worse
+			// than keeping an extra preserved copy.
+			untouched := name in old_hashes && sha256.hexhash(old) == old_hashes[name]
+			if old.len > 0 && !untouched {
 				mut dest := os.join_path(notes_dir, '${section}.user.md')
-				if os.exists(dest) {
+				if os.exists(dest) && os.read_file(dest) or { '' } != old {
 					dest = os.join_path(notes_dir, '${section}.user-${sha256.hexhash(old)[..8]}.md')
 				}
 				if !os.exists(dest) {
@@ -266,7 +271,7 @@ pub fn knowledge_vault_generate_at(dir string, sources KnowledgeVaultSources, ge
 		}
 		content := knowledge_vault_render_section(section, sources, generated_by, generated_at)
 		os.write_file(path, content)!
-		os.chmod(path, 0o600) or {}
+		os.chmod(path, 0o600)!
 		files[name] = sha256.hexhash(content)
 		names << name
 	}
@@ -283,7 +288,7 @@ pub fn knowledge_vault_generate_at(dir string, sources KnowledgeVaultSources, ge
 		escape_unicode: true
 	)},\n  "files": {\n${file_entries.join(',\n')}\n  }\n}\n'
 	os.write_file(knowledge_vault_manifest_path(dir), manifest)!
-	os.chmod(knowledge_vault_manifest_path(dir), 0o600) or {}
+	os.chmod(knowledge_vault_manifest_path(dir), 0o600)!
 	return KnowledgeVaultWrite{
 		dir:          dir
 		files:        names

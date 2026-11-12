@@ -91,6 +91,21 @@ fn test_knowledge_vault_preserves_user_notes_and_edited_generated() {
 	assert fresh.fresh
 }
 
+fn test_knowledge_vault_preserves_untracked_generated_when_manifest_missing() {
+	dir := vault_test_dir('preserve-no-manifest')
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	knowledge_vault_generate_at(dir, vault_test_sources(), 'b', 't1') or { panic(err) }
+	edited := os.join_path(dir, 'generated', 'system.md')
+	os.write_file(edited, 'edited without a manifest\n') or { panic(err) }
+	os.rm(knowledge_vault_manifest_path(dir)) or { panic(err) }
+	write := knowledge_vault_generate_at(dir, vault_test_sources(), 'b', 't2') or { panic(err) }
+	assert write.preserved.len >= 1
+	preserved := os.read_file(os.join_path(dir, 'notes', 'system.user.md')) or { panic(err) }
+	assert preserved == 'edited without a manifest\n'
+}
+
 fn test_knowledge_vault_change_detection_on_source_change() {
 	dir := vault_test_dir('change')
 	defer {
