@@ -69,6 +69,23 @@ fn test_plugin_parser_and_dry_run_dispatch() {
 	assert dispatch(['horneroctl', 'plugin', 'validate', '--bogus']) == 2
 }
 
+fn test_plugin_install_local_parser_help_and_dry_run_dispatch() {
+	opts := parse_plugin(['install-local', './my-plugin', '--dry-run']) or {
+		assert false, err.msg()
+		return
+	}
+	assert opts.leaf == 'install-local'
+	assert opts.value == './my-plugin'
+	assert opts.dry_run
+	assert command_help('plugin install-local').contains('Examples:')
+	assert command_help('plugin install-local').contains('horneroctl plugin install-local ./my-plugin --yes')
+	assert command_help('plugin').contains('plugin install-local ./my-plugin --dry-run')
+	assert dispatch(['horneroctl', 'plugin', 'install-local', '--help']) == 0
+	assert dispatch(['horneroctl', 'plugin', 'install-local', '/nonexistent-hornero-plugin', '--dry-run']) == 1
+	assert dispatch(['horneroctl', 'plugin', 'install-local', '/tmp']) == 1
+	assert dispatch(['horneroctl', 'plugin', 'install-local']) == 2
+}
+
 fn test_plugin_catalog_action_parser_accepts_expected_revision_only_for_install_update() {
 	opts := parse_plugin(['catalog', 'install', 'hornero-pomodoro', '--revision',
 		'0123456789abcdef0123456789abcdef01234567', '--yes']) or {

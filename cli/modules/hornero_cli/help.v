@@ -216,7 +216,7 @@ Examples:
 		}
 		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate',
 		'plugin catalog' {
-			return 'Usage: horneroctl plugin <new|install|remove|list|validate|enable|disable|trust|catalog|community> [value] [options]
+			return 'Usage: horneroctl plugin <new|install|install-local|remove|list|validate|enable|disable|trust|catalog|community> [value] [options]
 
   new <id> --name NAME --author AUTHOR --description TEXT --license MIT --dir PATH [--dry-run|--yes]
                       Create a static community plugin scaffold (MIT template)
@@ -232,6 +232,10 @@ Examples:
                       the highest accepted index version under XDG state)
   install <https-url> [--dry-run|--yes]
                       Validate and install an inert community plugin package
+  install-local <dir> [--dry-run|--yes]
+                      Validate and install an inert plugin package from a local
+                      directory (no network, symlinks and top-level .git refused;
+                      receipt revision is the payload SHA-256)
   remove <id> [--dry-run|--yes]
                       Remove only a package owned by a Hornero receipt
   list                List receipt-owned community packages
@@ -260,9 +264,14 @@ Examples:
   horneroctl plugin validate ./my-plugin
   horneroctl plugin install https://github.com/example/my-plugin.git --dry-run
   horneroctl plugin install https://github.com/example/my-plugin.git --yes
+  horneroctl plugin install-local ./my-plugin --dry-run
+  horneroctl plugin install-local ./my-plugin --yes
   horneroctl plugin remove example-plugin --dry-run
   horneroctl plugin remove example-plugin --yes
 '
+		}
+		'plugin install-local' {
+			return 'Usage: horneroctl plugin install-local <dir> [--dry-run|--yes]\n\nValidate and install an inert plugin package from an existing local\ndirectory. No network is used and no plugin code is executed or\nenabled. Symlinked source directories, symlinked entries inside the\npackage, and a top-level .git directory are refused. The receipt\nrecords the absolute local path as source and the payload SHA-256 as\nrevision. Third-party QML is inert data: it is not loaded or sandboxed.\n\nExamples:\n  horneroctl plugin install-local ./my-plugin --dry-run\n  horneroctl plugin install-local ./my-plugin --yes\n'
 		}
 		'plugin enable' {
 			return 'Usage: horneroctl plugin enable <id> [--dry-run|--yes]\n\nMark a receipt-owned, installed plugin as runnable. The installed\npayload must still pass the static contract validator, or enabling\nfails and the plugin stays disabled. Plugins are disabled by\ndefault when installed. Enabled QML runs with your user privileges;\nit is not sandboxed.\n\nExamples:\n  horneroctl plugin enable example-clock --dry-run\n  horneroctl plugin enable example-clock --yes\n'
