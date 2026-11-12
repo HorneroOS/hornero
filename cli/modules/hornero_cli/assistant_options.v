@@ -127,8 +127,14 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf == 'gateway' && parts.len > 1 {
 		return error('gateway ${parts[0]} takes no extra argument.\nExample: horneroctl assistant gateway ${parts[0]}')
 	}
-	if leaf in ['status', 'tools', 'knowledge', 'usage'] && value.len > 0 {
+	if leaf in ['status', 'tools', 'usage'] && value.len > 0 {
 		return error('unexpected argument: ${value}.\nExample: horneroctl assistant ${leaf}')
+	}
+	if leaf == 'knowledge' && parts.len > 0 {
+		if parts[0] != 'vault' || parts.len > 2
+			|| (parts.len == 2 && parts[1] !in ['generate', 'check', 'status']) {
+			return error('unknown knowledge action: ${value}.\nExample: horneroctl assistant knowledge vault generate --yes')
+		}
 	}
 	if mode.len > 0 && leaf !in ['ask', 'sessions'] {
 		return error('--mode only applies to ask and sessions.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
