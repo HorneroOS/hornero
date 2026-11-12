@@ -20,6 +20,15 @@ fn test_assistant_parser_rules() {
 	if _ := parse_assistant(['knowledge', 'extra']) {
 		assert false, 'knowledge takes no value'
 	}
+	vault := parse_assistant(['knowledge', 'vault', 'generate', '--yes']) or { panic(err) }
+	assert vault.arg1 == 'vault' && vault.arg2 == 'generate' && vault.yes
+	check := parse_assistant(['knowledge', 'vault', 'check']) or { panic(err) }
+	assert check.arg1 == 'vault' && check.arg2 == 'check'
+	if _ := parse_assistant(['knowledge', 'vault', 'fly']) {
+		assert false, 'unknown vault action must be rejected'
+	}
+	assert command_help('assistant knowledge').contains('knowledge vault generate --yes')
+	assert dispatch(['horneroctl', 'assistant', 'knowledge', '--help']) == 0
 	sess := parse_assistant(['sessions', 'new', 'Trip']) or { panic(err) }
 	assert sess.leaf == 'sessions' && sess.arg1 == 'new'
 	ask_sess := parse_assistant(['ask', 'hi', '--session', 's1']) or { panic(err) }
