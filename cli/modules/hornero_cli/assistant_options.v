@@ -16,6 +16,9 @@ pub:
 	session        string
 	mode           string
 	filter         string
+	command        string
+	has_command    bool
+	workspace      string
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -25,7 +28,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	leaf := args[0]
 	if leaf !in ['status', 'health', 'enable', 'disable', 'tools', 'knowledge', 'sessions', 'model',
 		'ask', 'stop', 'approve', 'clarify', 'events', 'log', 'gateway', 'setup', 'usage', 'policy',
-		'workspace', 'profile', 'prompt', 'tool'] {
+		'workspace', 'profile', 'prompt', 'tool', 'shell-proposal', 'delegate'] {
 		return error('unknown assistant subcommand: ${leaf}.\nRun: horneroctl assistant --help')
 	}
 	mut parts := []string{}
@@ -38,6 +41,9 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut session := ''
 	mut mode := ''
 	mut filter := ''
+	mut command := ''
+	mut has_command := false
+	mut workspace := ''
 	mut i := 1
 	for i < args.len {
 		arg := args[i]
@@ -51,6 +57,23 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 			if mode !in ['ask', 'agent', 'chat'] {
 				return error('--mode must be ask, agent or chat.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
 			}
+			continue
+		}
+		if arg == '--command' {
+			if i >= args.len {
+				return error('--command needs a command string.\nExample: horneroctl assistant shell-proposal --command "ls -la"')
+			}
+			command = args[i]
+			has_command = true
+			i++
+			continue
+		}
+		if arg == '--workspace' {
+			if i >= args.len {
+				return error('--workspace needs a directory.\nExample: horneroctl assistant delegate codex --workspace /tmp "task"')
+			}
+			workspace = args[i]
+			i++
 			continue
 		}
 		if arg == '--filter' {
@@ -166,6 +189,23 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf == 'setup' && value.len > 0 {
 		return error('setup takes no argument.\nExample: horneroctl assistant setup --dry-run')
 	}
+	if has_command && leaf != 'shell-proposal' {
+		return error('--command only applies to shell-proposal.\nExample: horneroctl assistant shell-proposal --command "ls -la"')
+	}
+	if workspace.len > 0 && leaf != 'delegate' {
+		return error('--workspace only applies to delegate.\nExample: horneroctl assistant delegate codex --workspace /tmp "task"')
+	}
+	if leaf == 'shell-proposal' {
+		if !has_command {
+			return error('missing --command.\nExample: horneroctl assistant shell-proposal --command "ls -la"')
+		}
+		if value.len > 0 {
+			return error('shell-proposal takes no positional argument; use --command.\nExample: horneroctl assistant shell-proposal --command "ls -la"')
+		}
+	}
+	if leaf == 'delegate' && parts.len == 0 {
+		return error('missing agent id.\nExample: horneroctl assistant delegate codex --workspace /tmp "task"')
+	}
 	return AssistantCmdOptions{
 		leaf:           leaf
 		value:          value
@@ -181,5 +221,8 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		session:        session
 		mode:           mode
 		filter:         filter
+		command:        command
+		has_command:    has_command
+		workspace:      workspace
 	}
 }

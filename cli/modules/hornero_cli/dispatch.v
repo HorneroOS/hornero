@@ -252,6 +252,13 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		'enable' { render(hornero_core.assistant_enable_report(opts.dry_run, opts.yes), mode) }
 		'disable' { render(hornero_core.assistant_disable_report(opts.dry_run, opts.yes), mode) }
 		'tools' { render(hornero_core.assistant_broker_tools_report(), mode) }
+		'shell-proposal' {
+			render(hornero_core.assistant_shell_proposal_result(opts.command), mode)
+		}
+		'delegate' {
+			render(hornero_core.assistant_delegate_result(opts.arg1, opts.workspace,
+				opts.arg2), mode)
+		}
 		'tool' {
 			render(hornero_core.assistant_broker_exec_report(opts.arg1, opts.arg2, 'agent',
 				opts.yes, opts.dry_run), mode)
