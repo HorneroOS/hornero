@@ -256,7 +256,18 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			render(hornero_core.assistant_broker_exec_report(opts.arg1, opts.arg2, 'agent',
 				opts.yes, opts.dry_run), mode)
 		}
-		'knowledge' { render(hornero_core.assistant_knowledge_report(), mode) }
+		'knowledge' {
+			if opts.arg1 == 'vault' {
+				if opts.arg2 == 'generate' {
+					render(hornero_core.assistant_knowledge_vault_generate_report(opts.dry_run,
+						opts.yes), mode)
+				} else {
+					render(hornero_core.assistant_knowledge_vault_status_report(), mode)
+				}
+			} else {
+				render(hornero_core.assistant_knowledge_report(), mode)
+			}
+		}
 		'ask' {
 			if opts.stream {
 				render(hornero_core.assistant_ask_stream_report_traced_mode(opts.value, opts.attach, opts.session, opts.mode, fn [mode] (txt string) {
