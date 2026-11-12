@@ -428,6 +428,9 @@ pub fn agent_default_set_result(id string, dry_run bool, yes bool) CommandResult
 	os.write_file(tmp, agent_encode_default(id)) or {
 		return fail_result('agent default set', 'cannot write ${tmp}: ${err.msg()}')
 	}
+	os.chmod(tmp, 0o600) or {
+		return fail_result('agent default set', 'cannot restrict permissions on ${tmp}: ${err.msg()}')
+	}
 	os.mv(tmp, path) or { return fail_result('agent default set', 'cannot move ${tmp} to ${path}: ${err.msg()}') }
 	return ok_result('agent default set', 'Recorded default agent ${id} at ${path}. Nothing was installed or launched.', {
 		'state':   'recorded'
