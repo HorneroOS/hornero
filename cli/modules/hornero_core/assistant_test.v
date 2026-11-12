@@ -368,12 +368,22 @@ fn test_assistant_usage_report_aggregates() {
 	db.close()
 	result := assistant_usage_report_at(db_path)
 	assert result.ok
+	assert result.command == 'assistant usage'
+	assert result.data.len == 9
 	assert result.data['sessions'] == '2'
 	assert result.data['apiCalls'] == '3'
 	assert result.data['inputTokens'] == '150'
 	assert result.data['outputTokens'] == '15'
+	assert result.data['cacheReadTokens'] == '3'
+	assert result.data['cacheWriteTokens'] == '1'
+	assert result.data['reasoningTokens'] == '4'
 	assert result.data['totalTokens'] == '165'
 	assert result.data['models'] == 'gpt-5:165'
+	// Stable contract for hornero-ai-usage: no quota/limit/remaining
+	// (Hermes state has no such data) and no shorthand aliases.
+	for forbidden in ['quota', 'limit', 'remaining', 'cacheRead', 'cacheWrite', 'reasoning'] {
+		assert forbidden !in result.data
+	}
 	missing := assistant_usage_report_at(os.join_path(dir, 'nope.db'))
 	assert !missing.ok
 }
