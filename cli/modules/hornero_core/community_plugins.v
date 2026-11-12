@@ -297,6 +297,177 @@ pub fn community_plugin_install_report(opts CommunityPluginOptions) CommandResul
 	})
 }
 
+fn community_plugin_find_symlink(path string) string {
+	if os.is_link(path) {
+		return path
+	}
+	if !os.is_dir(path) {
+		return ''
+	}
+	entries := os.ls(path) or { return '' }
+	for entry in entries {
+		found := community_plugin_find_symlink(os.join_path(path, entry))
+		if found.len > 0 {
+			return found
+		}
+	}
+	return ''
+}
+
+fn community_plugin_find_vcs(path string) string {
+	if !os.is_dir(path) || os.is_link(path) {
+		return ''
+	}
+	entries := os.ls(path) or { return '' }
+	for entry in entries {
+		full := os.join_path(path, entry)
+		if entry == '.git' {
+			return full
+		}
+		found := community_plugin_find_vcs(full)
+		if found.len > 0 {
+			return found
+		}
+	}
+	return ''
+}
+
+// community_plugin_symlink_component returns the first symlinked path
+// component of an absolute path (including parents), or ''.
+fn community_plugin_symlink_component(path string) string {
+	mut cur := ''
+	for part in path.split('/') {
+		if part.len == 0 {
+			continue
+		}
+		cur += '/' + part
+		if os.is_link(cur) {
+			return cur
+		}
+	}
+	return ''
+}
+
+fn community_plugin_copy_local_dir(src string, dst string) ! {
+	if os.is_link(src) {
+		return error('refusing to copy a symbolic link in the local plugin package: ${src}')
+	}
+	os.mkdir_all(dst)!
+	for entry in os.ls(src)! {
+		if entry == '.git' {
+			return error('refusing to copy VCS metadata in the local plugin package: ${os.join_path(src, entry)}')
+		}
+		s := os.join_path(src, entry)
+		d := os.join_path(dst, entry)
+		if os.is_link(s) {
+			return error('refusing to copy a symbolic link in the local plugin package: ${s}')
+		} else if os.is_dir(s) {
+			community_plugin_copy_local_dir(s, d)!
+		} else if os.is_file(s) {
+			os.cp(s, d)!
+		} else {
+			return error('refusing to copy a non-regular entry in the local plugin package: ${s}')
+		}
+	}
+}
+
+pub fn community_plugin_install_local_report(opts CommunityPluginOptions) CommandResult {
+	if opts.value.len == 0 {
+		return fail_result('plugin install-local', 'missing local package directory.\nExample: horneroctl plugin install-local ./my-plugin --dry-run')
+	}
+	if !opts.dry_run && !opts.yes {
+		return fail_result('plugin install-local', 'refusing to install without --yes (preview with --dry-run).\nExample: horneroctl plugin install-local ./my-plugin --dry-run')
+	}
+	source := os.abs_path(opts.value)
+	symlink_component := community_plugin_symlink_component(source)
+	if symlink_component.len > 0 {
+		return fail_result('plugin install-local', 'refusing to install from a path with a symlinked component: ${symlink_component}')
+	}
+	if !os.is_dir(source) {
+		return fail_result('plugin install-local', 'local package directory not found: ${source}')
+	}
+	vcs := community_plugin_find_vcs(source)
+	if vcs.len > 0 {
+		return fail_result('plugin install-local', 'refusing to install a local package containing VCS metadata; remove .git directories and retry: ${vcs}')
+	}
+	link := community_plugin_find_symlink(source)
+	if link.len > 0 {
+		return fail_result('plugin install-local', 'refusing to install a local package containing a symbolic link: ${link}')
+	}
+	root, _ := community_plugin_roots()
+	if opts.dry_run {
+		return ok_result('plugin install-local', 'would validate and copy the inert plugin package from ${source} under ${root}. Third-party QML is not loaded or sandboxed.', {
+			'dry_run': 'true'
+			'source':  source
+		})
+	}
+	os.mkdir_all(root) or {
+		return fail_result('plugin install-local', 'cannot create plugin data directory: ${err.msg()}')
+	}
+	stage := os.join_path(root, '.staging-${os.getpid()}-${time.now().unix_milli()}')
+	community_plugin_copy_local_dir(source, stage) or {
+		os.rmdir_all(stage) or {}
+		return fail_result('plugin install-local', 'cannot copy local plugin package: ${err.msg()}')
+	}
+	community_plugin_run_validator(stage) or {
+		os.rmdir_all(stage) or {}
+		return fail_result('plugin install-local', err.msg())
+	}
+	manifest := community_plugin_manifest(stage) or {
+		os.rmdir_all(stage) or {}
+		return fail_result('plugin install-local', err.msg())
+	}
+	id := community_plugin_string(manifest['id'] or { json2.Any('') }) or { '' }
+	name := community_plugin_string(manifest['name'] or { json2.Any('') }) or { '' }
+	version := community_plugin_string(manifest['version'] or { json2.Any('') }) or { '' }
+	if !community_plugin_valid_id(id) || name.len == 0 || version.len == 0 {
+		os.rmdir_all(stage) or {}
+		return fail_result('plugin install-local', 'validated manifest is missing a usable id, name, or version')
+	}
+	revision := plugin_payload_sha256(stage, manifest)
+	destination := os.join_path(root, id)
+	if os.exists(destination) || os.is_link(destination) {
+		os.rmdir_all(stage) or {}
+		return fail_result('plugin install-local', 'plugin ${id} already has a data directory; remove it explicitly before reinstalling')
+	}
+	os.rename(stage, destination) or {
+		os.rmdir_all(stage) or {}
+		return fail_result('plugin install-local', 'cannot install validated package: ${err.msg()}')
+	}
+	receipt := CommunityPluginReceipt{
+		schema_version: 1
+		id:             id
+		name:           name
+		version:        version
+		source:         source
+		revision:       revision
+		installed_at:   time.now().unix_milli().str()
+	}
+	_, receipts := community_plugin_roots()
+	os.mkdir_all(receipts) or {
+		os.rmdir_all(destination) or {}
+		return fail_result('plugin install-local', 'cannot create plugin receipt directory: ${err.msg()}')
+	}
+	receipt_path := os.join_path(receipts, '${id}.json')
+	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
+	os.write_file(tmp, json2.encode(receipt, escape_unicode: true) + '\n') or {
+		os.rmdir_all(destination) or {}
+		return fail_result('plugin install-local', 'cannot write plugin receipt: ${err.msg()}')
+	}
+	os.chmod(tmp, 0o600) or {}
+	os.rename(tmp, receipt_path) or {
+		os.rm(tmp) or {}
+		os.rmdir_all(destination) or {}
+		return fail_result('plugin install-local', 'cannot save plugin receipt: ${err.msg()}')
+	}
+	return ok_result('plugin install-local', 'installed ${name} ${version} as inert package data. Third-party QML is not loaded or sandboxed.', {
+		'id':       id
+		'path':     destination
+		'revision': revision
+		'source':   source
+	})
+}
+
 // community_plugin_new_report creates a reviewable static package scaffold.
 // It deliberately does not install or load the generated QML.
 pub fn community_plugin_new_report(opts CommunityPluginOptions, name string, author string, description string, license string, output_dir string) CommandResult {

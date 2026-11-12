@@ -146,6 +146,125 @@ fn test_community_plugin_mutations_require_yes_and_sources_are_restricted() {
 	assert !community_plugin_remove_report(CommunityPluginOptions{ value: 'example-clock' }).ok
 }
 
+fn test_community_plugin_install_local_dry_run_consent_symlink_and_success() {
+	root := community_plugins_test_new_root('install-local')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	fixture := community_plugins_test_fixture(root)
+	validator := os.join_path(root, 'validator')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	// Missing consent is refused.
+	assert !community_plugin_install_local_report(CommunityPluginOptions{ value: fixture }).ok
+	// Dry-run writes nothing.
+	dry := community_plugin_install_local_report(CommunityPluginOptions{
+		value:   fixture
+		dry_run: true
+	})
+	assert dry.ok, dry.message
+	assert dry.message.contains('not loaded or sandboxed')
+	assert !os.exists('${root}/data/hornero/plugins/example-clock')
+	assert !os.exists('${root}/state/hornero/plugins/receipts/example-clock.json')
+	// Symlinked source directory is refused.
+	link_source := os.join_path(root, 'linked-source')
+	os.symlink(fixture, link_source) or { panic(err) }
+	assert !community_plugin_install_local_report(CommunityPluginOptions{
+		value: link_source
+		yes:   true
+	}).ok
+	// A symlinked entry inside the package is refused.
+	os.symlink(os.join_path(fixture, 'Main.qml'), os.join_path(fixture, 'Linked.qml')) or {
+		panic(err)
+	}
+	linked := community_plugin_install_local_report(CommunityPluginOptions{
+		value: fixture
+		yes:   true
+	})
+	assert !linked.ok && linked.message.contains('symbolic link'), linked.message
+	os.rm(os.join_path(fixture, 'Linked.qml')) or { panic(err) }
+	// A top-level .git directory is refused (documented choice).
+	os.mkdir_all(os.join_path(fixture, '.git')) or { panic(err) }
+	assert !community_plugin_install_local_report(CommunityPluginOptions{
+		value: fixture
+		yes:   true
+	}).ok
+	os.rmdir_all(os.join_path(fixture, '.git')) or { panic(err) }
+	// A nested .git directory is also refused.
+	os.mkdir_all(os.join_path(fixture, 'sub', '.git')) or { panic(err) }
+	assert !community_plugin_install_local_report(CommunityPluginOptions{
+		value: fixture
+		yes:   true
+	}).ok
+	os.rmdir_all(os.join_path(fixture, 'sub')) or { panic(err) }
+	// A symlinked parent component is refused.
+	parent_link := os.join_path(root, 'parent-link')
+	os.symlink(os.dir(fixture), parent_link) or { panic(err) }
+	assert !community_plugin_install_local_report(CommunityPluginOptions{
+		value: os.join_path(parent_link, os.base(fixture))
+		yes:   true
+	}).ok
+	os.rm(parent_link) or { panic(err) }
+	// Success copies files, writes a payload-pinned receipt, stays disabled.
+	installed := community_plugin_install_local_report(CommunityPluginOptions{
+		value: fixture
+		yes:   true
+	})
+	assert installed.ok, installed.message
+	assert installed.message.contains('not loaded or sandboxed')
+	assert os.is_file('${root}/data/hornero/plugins/example-clock/Main.qml')
+	receipt_raw := os.read_file('${root}/state/hornero/plugins/receipts/example-clock.json') or {
+		panic(err)
+	}
+	record := json2.decode[CommunityPluginReceipt](receipt_raw) or { panic(err) }
+	assert record.source == os.abs_path(fixture), record.source
+	assert record.revision.len == 64
+	assert record.revision == installed.data['revision']
+	assert !record.enabled
+	manifest := community_plugin_manifest('${root}/data/hornero/plugins/example-clock') or {
+		panic(err)
+	}
+	assert record.revision == plugin_payload_sha256('${root}/data/hornero/plugins/example-clock',
+		manifest)
+	listed := community_plugin_list_report()
+	assert listed.data['plugins'].contains('"enabled":false'), listed.data['plugins']
+	// Existing destination is refused.
+	assert !community_plugin_install_local_report(CommunityPluginOptions{
+		value: fixture
+		yes:   true
+	}).ok
+}
+
+fn test_community_plugin_install_local_invalid_manifest_and_validator_failure() {
+	root := community_plugins_test_new_root('install-local-invalid')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	fixture := community_plugins_test_fixture(root)
+	validator := os.join_path(root, 'validator')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\necho contract violation >&2\nexit 1\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	rejected := community_plugin_install_local_report(CommunityPluginOptions{
+		value: fixture
+		yes:   true
+	})
+	assert !rejected.ok && rejected.message.contains('contract violation'), rejected.message
+	assert !os.exists('${root}/data/hornero/plugins/example-clock')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	bad := os.join_path(root, 'bad')
+	os.mkdir_all(bad) or { panic(err) }
+	os.write_file(os.join_path(bad, 'manifest.json'), 'not json') or { panic(err) }
+	assert !community_plugin_install_local_report(CommunityPluginOptions{
+		value: bad
+		yes:   true
+	}).ok
+	assert !os.exists('${root}/data/hornero/plugins/example-clock')
+}
+
 fn test_community_plugin_new_writes_complete_mit_scaffold_and_refuses_overwrite() {
 	base := community_plugins_test_new_root('new-scaffold')
 	defer {

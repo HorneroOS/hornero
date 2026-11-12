@@ -235,6 +235,13 @@ fn run_plugin(args []string, mode hornero_core.RenderMode) int {
 			yes:     opts.yes
 		}), mode)
 	}
+	if opts.leaf == 'install-local' {
+		return render(hornero_core.community_plugin_install_local_report(hornero_core.CommunityPluginOptions{
+			value:   opts.value
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
 	return render(hornero_core.community_plugin_remove_report(hornero_core.CommunityPluginOptions{
 		value:   opts.value
 		dry_run: opts.dry_run

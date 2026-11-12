@@ -19,8 +19,8 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		return error('missing subcommand.\nExample: horneroctl plugin list')
 	}
 	leaf := args[0]
-	if leaf !in ['install', 'remove', 'list', 'validate', 'new', 'enable', 'disable', 'trust',
-		'catalog', 'community'] {
+	if leaf !in ['install', 'install-local', 'remove', 'list', 'validate', 'new', 'enable', 'disable',
+		'trust', 'catalog', 'community'] {
 		return error('unknown plugin subcommand: ${leaf}.\nRun: horneroctl plugin --help')
 	}
 	mut value := ''
@@ -109,7 +109,7 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 	if leaf == 'community' && (value != 'list' || dry_run || yes) {
 		return error('plugin community supports only the read/list command.\nExample: horneroctl plugin community list --json')
 	}
-	if leaf in ['install', 'remove', 'validate'] && value.len == 0 {
+	if leaf in ['install', 'install-local', 'remove', 'validate'] && value.len == 0 {
 		return error('missing value.\nExample: horneroctl plugin ${leaf} <source-or-id>')
 	}
 	if leaf in ['validate', 'list'] && (dry_run || yes) {
