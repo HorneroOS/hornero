@@ -1,34 +1,59 @@
-# Agentic execution ledger — Wave 0+1
+# Agentic execution ledger — Waves 1–4
 
-Updated: 2026-11-12. Base: hornero `origin/main` c9aed3d.
+Updated: 2026-11-12. Tracking issue: hornero#391.
 Contracts: [adr-agentic-wave1.md](adr-agentic-wave1.md).
-Status key: verified = code on main + host-validated; contract = this
-wave's docs only; missing = no code; blocked = needs a named decision.
+Status key: verified = code on main + host-validated; pending = no real
+evidence yet (never reported as PASS).
 
-| Workflow | Definition (source) | Issues / PRs | Status | Next gate |
-|---|---|---|---|---|
-| A — Multi-agent registry | `AssistantAgent` registry + selector (core audit) | hornero#154 (M3); no dedicated issue yet — file one before code | contract (ADR §1) | Sandbox-home decision (per-agent unit vs shared gateway) blocks `launch` |
-| B — Knowledge vault | Extend `assistant_knowledge_*` snapshot to broker catalogue (core audit) | hornero#191 OPEN (needs-triage; slice 1 merged, tracking stale) | partial: 7-tool snapshot verified; 12-tool vault contract (ADR §3) | Triage #191 against ADR §3 doc set |
-| C — Typed horneroctl JSON contract | `schemaVersion` + documented `data.<key>` JSON-string convention (derived: shell audit prerequisite) | none yet — file with A | contract (ADR §2) | Owner confirms C is a standalone workflow |
-| D — Per-agent sandbox homes | One unit/home per agent vs shared gateway (derived: ADR §1 open decision) | hornero#374/#386/#387 merged (single-Hermes harness — do not rebuild) | blocked (decision) | User picks (a) per-agent units or (b) shared gateway |
-| E — Agent Center UI | Shell pane over horneroctl JSON (shell audit, conditional mapping) | shell: no agent pane on main (28 panes, none agent/workflow) | not started; do not build this wave | A+C shipped with versioned JSON; no fake buttons |
-| F — Plugin/extension ecosystem | Shell-surface widgets only; no agent tools/principals (shell audit, conditional mapping) | plugins catalog on main; hornero#154 M2 | verified for widgets; agent-extension claims prohibited (ADR §4) | Registry production key `/etc/hornero/registry.pub` not shipped |
+## Shipped workflows
 
-## Already verified on main (Wave 0 — do not rebuild)
+| Workflow | What shipped | PRs | Status |
+|---|---|---|---|
+| A — Multi-agent registry | `horneroctl agent list/status/doctor/default/launch` (launch is dry-run proposal); >=5 runtimes with truthful capability-limited adapters | hornero#390 | verified |
+| B — Knowledge vault | `assistant knowledge` bounded, provenance-stamped snapshot; generated vs user-authored separation; no secret/private ingestion | hornero#389 | verified |
+| C — Canonical instructions/skills/MCP/ACP | `horneroctl agent config status/check/apply`: one canonical registry, native renderers, ownership receipts, collision-proof backups, duplicate + unsupported detection, idempotent apply; fail-closed on unsafe ids, symlinked skills bases, malformed targets; parse errors never echo registry content | hornero#393 | verified |
+| D — Javi orchestration | Pre-existing Ask/Chat/Agent modes (#374/#386/#387, not rebuilt) + `assistant shell-proposal` (never executes; conservative risk classifier) + `assistant delegate` (truthful external-runtime handoff, no ABAC inheritance claim) | hornero#394 | verified |
+| E — Agent Center UI | Control Center `agents` pane over real `horneroctl` JSON only; honest not-reported states, Launch = proposal; VM panel screenshot matrix covers 29 panes | shell#364 | verified (host tests); real session QA pending |
+| F — Extensions/workflows | Existing plugin lifecycle retained + `plugin install-local`: staged, validator-gated, symlink/VCS fail-closed, payload-SHA receipt, inert (never loaded/enabled) | hornero#395 | verified |
 
-ABAC (`assistant_policy_decide/delegate`), bubblewrap gateway
-(`assistant_gateway_bwrap_argv`), broker (12 typed tools), workspaces,
-SOUL/profile, sessions, models, audit log, setup receipts, 7-tool
-knowledge snapshot — hornero#374/#386/#387, `docs/javi-secure-harness.md`.
+Wave 1 contracts and this ledger's first version: hornero#392.
 
-Not deployed (user decision, not code): live gateway migration from the
-legacy systemd-only unit, shell rollout, provider-catalogue picker.
+## Host acceptance evidence (merged main, 2026-11-12)
 
-## Open items needing owner confirmation
+Built `horneroctl` from main `a35f20b` under
+`systemd-run --user --scope -p MemoryMax=2G -p MemorySwapMax=0 -p CPUQuota=200%`
+and ran it with an isolated HOME:
 
-1. Workflows C and D are derived from the audits, not named in the
-   mission input; E/F mapping is conditional (Agent Center / plugins).
-2. hornero#191 and #154 remain OPEN despite merged slices — close or
-   re-scope during Wave 1 triage, do not treat as blockers for ADR work.
-3. No V tests were run for this docs-only change; implementation waves
-   must run `v test` under the workspace V rules.
+- `agent list` discovers javi-hermes/codex/claude-code/muse/opencode on
+  this host; `agent default show` reports `not-selected` truthfully.
+- `agent config status` on an empty registry reports nothing to project
+  and prints the projection-scope note (only skills are native).
+- `assistant shell-proposal --command "touch <marker>"` returns
+  `executed=false`; the marker file does not exist afterwards.
+- `assistant shell-proposal --command "/usr/bin/sudo rm -rf /"` classifies
+  `risk: protected`.
+- `assistant delegate nope` fails closed; `assistant delegate codex`
+  returns a proposal stating the external runtime keeps its own security
+  model and does not inherit Hornero ABAC/bubblewrap policy.
+- `plugin install-local <dir> --dry-run` writes nothing and states QML is
+  inert, not loaded or sandboxed.
+- Focused V/pytest suites and full CI (`horneroctl`) passed for #393,
+  #394, #395; shell `tests`, `qml`, `lint`, `build` passed for shell#364.
+
+## Acceptance matrix — still pending real evidence (not PASS)
+
+- Real Preview VM/session: Agent Center in a live shell session, Javi
+  gateway round-trip, ArtCraft scenarios (qa#36, installer#36, shell#333
+  remain open for this evidence by design).
+- Cancellation of a running backend process from the UI, delegation to a
+  live external harness session, and idle resource measurements.
+- Sandbox-home decision for per-agent units vs shared gateway (Workflow D
+  residual in the Wave 1 ADR) — unchanged, needs an owner decision.
+
+## Already verified before this mission (do not rebuild)
+
+ABAC (`assistant_policy_decide/delegate`), bubblewrap gateway, typed
+broker tools, workspaces, SOUL/profile, sessions, models, audit log,
+setup receipts — hornero#374/#386/#387, `docs/javi-secure-harness.md`.
+External runtimes keep their own security models; ACP/MCP are transports,
+not security boundaries.
