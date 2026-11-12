@@ -574,6 +574,14 @@ fn run_studio(args []string, mode hornero_core.RenderMode) int {
 				}
 			}
 		}
+		'app' {
+			if args.len == 3 && args[1] == 'show' {
+				return render(hornero_core.studio_app_status_result(args[2]), mode)
+			}
+			return render_error(hornero_core.err_usage('studio.usage',
+				'expected show <application-id>.\nExample: horneroctl studio app show artcraft-launcher'),
+				mode)
+		}
 		'selection' {
 			if args.len == 1 || args[1] == 'show' {
 				return render(hornero_core.studio_selection_result(), mode)

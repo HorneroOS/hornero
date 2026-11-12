@@ -93,6 +93,24 @@ fn test_studio_selection_set_dry_run_writes_nothing() {
 	assert !os.is_file(path)
 }
 
+fn test_studio_artcraft_status_is_truthful_and_opt_in() {
+	studio_set_file('artcraft')
+	defer {
+		studio_unset_file()
+	}
+	assert 'artcraft-launcher' in studio_application_ids
+	assert 'artcraft-launcher' in studio_opt_in_application_ids
+	result := studio_app_status_result('artcraft-launcher')
+	assert result.ok
+	assert result.data['app'] == 'artcraft-launcher'
+	assert result.data['desktop_id'] == 'ai.storyteller.artcraft-launcher'
+	assert result.data['version'] == 'unknown'
+	assert result.data['update_state'] == 'unknown'
+	assert result.data['install_method'] == 'manual'
+	unknown := studio_app_status_result('krita')
+	assert !unknown.ok
+}
+
 fn test_studio_doctor_reports_selection_and_audio_default() {
 	studio_set_file('doctor')
 	defer {
