@@ -42,27 +42,35 @@ Shipped before this mission and retained unchanged:
 | Plugins batch 2 | `hornero-world-clock` (per-row DST labels), `hornero-disk-usage`, `hornero-stopwatch`, `hornero-countdown`, `hornero-uptime`; catalog regenerated to 17 plugins | plugins#13 | verified (validators + 20 tests, per PR) |
 | Power facade | PluginKit `Power` singleton over UPower: `hasBattery`, `percentage`, `charging`, `onBattery`, `stateText`; read-only scalars, no UPower object leak, no setters/Process | shell#367 | verified (53 tests, qmllint PASS, review APPROVE); live values pending (below) |
 | Plugins batch 3 | `hornero-battery` (honest "No battery" state), `hornero-unit-converter`, `hornero-moon-phase` (labelled approximate); catalog regenerated to 20 plugins; inventory completed | plugins#14 | verified (validators + node probes, review APPROVE, per PR) |
+| Developer guide | `docs/DEVELOPING.md` (472 lines, linked from README): manifest schema, placements, exact PluginKit facades/props, allowed imports + both validators, `horneroctl` lifecycle, starter template, catalog two-commit flow; verified sources only, security truth included | plugins#15 | verified (tests pass, review APPROVE, per PR) |
+| Website catalog 20 | Extensions catalog synced to the 20 batch-3 plugins: plugins pinned to 9900f1c, `extensions.json` regenerated via `data:sync` (never hand-edited) | website#215 | verified (140-page build, `data:check` PASS, review APPROVE, per PR) |
+| Audio facade | PluginKit `Audio` singleton over shell Audio service: read-only `volume`, `muted`, `sourceVolume`, `sourceMuted`, `hasSink`, `hasSource`; user-initiated `setVolume` (clamped via service)/increment/decrement/toggleMute/toggleSourceMute only (nothing changes on load); no PwNode leak | shell#368 | verified (54 tests, qmllint PASS, review APPROVE, per PR); live values pending (below) |
+| Plugins batch 4 | `hornero-volume`, `hornero-microphone` (muted/volume only, never records), `hornero-system-health` (honest unavailable states); catalog regenerated to 23 plugins | plugins#16 | verified (validators pass, review APPROVE, per PR) |
 
 ## Counts (recounted on plugins main, 2026-11-12)
 
-- 20 plugins in `catalog.json`, all under `plugins/<id>/`:
+- 23 plugins in `catalog.json`, all under `plugins/<id>/`:
   `hornero-ai-usage`, `hornero-battery`, `hornero-calendar`,
   `hornero-countdown`, `hornero-disk-usage`, `hornero-dual-clock`,
-  `hornero-focus-card`, `hornero-moon-phase`,
+  `hornero-focus-card`, `hornero-microphone`, `hornero-moon-phase`,
   `hornero-network-monitor`, `hornero-now-playing`, `hornero-pomodoro`,
   `hornero-quiet-notes`, `hornero-stopwatch`, `hornero-studio-audio`,
-  `hornero-studio-jobs`, `hornero-system-monitor`,
-  `hornero-unit-converter`, `hornero-uptime`, `hornero-weather`,
-  `hornero-world-clock`. Growth: 6 baseline → 12 (batch 1) → 17
-  (batch 2) → 20 (batch 3).
-- 38 inventory entries as reported at batch-3 completion in
-  plugins#14 (20 researched competitive entries + 18 implemented).
-  Note: `inventory.yaml` on plugins main currently carries 40 `id:`
-  entries (20 researched + 20 implemented) because the 2 pre-existing
-  Studio plugins are also inventoried; cite 38 only for the batch-3
-  snapshot, and recount before citing a live total.
-- 6 PluginKit facades, all read-only: System, Network, Media, Weather,
-  Time (shell#365) and Power (shell#367).
+  `hornero-studio-jobs`, `hornero-system-health`,
+  `hornero-system-monitor`, `hornero-unit-converter`, `hornero-uptime`,
+  `hornero-volume`, `hornero-weather`, `hornero-world-clock`.
+  Growth: 6 baseline → 12 (batch 1) → 17 (batch 2) → 20 (batch 3) →
+  23 (batch 4).
+- 43 inventory entries recounted on plugins main, 2026-11-12:
+  20 researched competitive entries + 23 implemented (supersedes the
+  38-entry batch-3 snapshot in plugins#14; recount before citing a
+  live total).
+- 7 PluginKit data facades: System, Network, Media, Weather, Time
+  (shell#365), Power (shell#367) and Audio (shell#368). System,
+  Network, Weather, Time and Power are read-only; Media and Audio
+  expose only guarded, user-initiated controls. The full PluginKit
+  module also carries the pre-existing Theme, Notifications, Desktop
+  and Settings entries (11 entries in `qmldir`), which are not data
+  facades and are not counted in the 7.
 
 ## Security truths (stated everywhere, not footnotes)
 
@@ -83,16 +91,19 @@ Shipped before this mission and retained unchanged:
 
 ## Pending real evidence (not PASS)
 
-- Live shell runtime/visual: the facades (including Power's live
-  singleton values), batch 1–3 plugins, and the marketplace pane have
-  host test and lint evidence only; none has been exercised visually
-  in a running shell session.
+- Live shell runtime/visual: the facades (including Power's and
+  Audio's live singleton values and Audio's user-initiated volume/mic
+  controls), batch 1–4 plugins (including `hornero-volume`,
+  `hornero-microphone` muted/volume-only behaviour and
+  `hornero-system-health` honest unavailable states), and the
+  marketplace pane have host test and lint evidence only; none has
+  been exercised visually in a running shell session.
 - Preview QA: no Preview VM/session run yet for installing, enabling,
   placing and disabling a batch plugin end-to-end, nor for the
   marketplace search/filter/detail flow (shell#366 records GUI
   runtime as pending Preview QA).
-- Website catalog beyond the batch-1 sync (12 plugins) to the full
-  20, and any live click-through from catalog to Control Center
+- Website catalog beyond the 20-plugin sync (website#215) to the
+  full 23, and any live click-through from catalog to Control Center
   install, are likewise unevidenced.
 - `hornero-ai-usage` against a live assistant backend (real
   tokens/calls/sessions/models, and the quota-unknown state observed
