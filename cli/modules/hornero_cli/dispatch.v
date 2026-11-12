@@ -21,7 +21,7 @@ import hornero_core
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery', 'help']
+	'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery', 'agent', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -147,6 +147,9 @@ pub fn dispatch(args []string) int {
 		}
 		'assistant' {
 			run_assistant(rest[1..], mode)
+		}
+		'agent' {
+			run_agent(rest[1..], mode)
 		}
 		'help' {
 			print(root_help())
@@ -389,6 +392,81 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 			}
 		}
 		else { render(hornero_core.assistant_stop_report(opts.value), mode) }
+	}
+}
+
+// run_agent: read-only registry commands plus `default set` (explicit
+// --yes) and `launch`, which is a dry-run proposal only — it never
+// executes an agent and never adds an auto-approval flag.
+fn run_agent(args []string, mode hornero_core.RenderMode) int {
+	if args.len == 0 {
+		return render_error(hornero_core.err_usage('agent.usage',
+			'expected a subcommand: list, status, doctor, default, launch.\nExample: horneroctl agent list --json'),
+			mode)
+	}
+	match args[0] {
+		'list' {
+			if args.len > 1 {
+				return render_error(hornero_core.err_usage('agent.usage',
+					'unexpected argument: ${args[1]}.\nExample: horneroctl agent list'), mode)
+			}
+			return render(hornero_core.agent_list_result(), mode)
+		}
+		'status' {
+			if args.len > 2 {
+				return render_error(hornero_core.err_usage('agent.usage',
+					'unexpected argument: ${args[2]}.\nExample: horneroctl agent status codex'), mode)
+			}
+			id := if args.len == 2 { args[1] } else { '' }
+			return render(hornero_core.agent_status_result(id), mode)
+		}
+		'doctor' {
+			if args.len > 1 {
+				return render_error(hornero_core.err_usage('agent.usage',
+					'unexpected argument: ${args[1]}.\nExample: horneroctl agent doctor'), mode)
+			}
+			return render(hornero_core.agent_doctor_result(), mode)
+		}
+		'default' {
+			if args.len == 1 || args[1] == 'show' {
+				return render(hornero_core.agent_default_show_result(), mode)
+			}
+			if args[1] == 'set' {
+				if args.len < 3 {
+					return render_error(hornero_core.err_usage('agent.usage',
+						'expected an agent id.\nExample: horneroctl agent default set codex --yes'),
+						mode)
+				}
+				mut dry_run := false
+				mut yes := false
+				for a in args[3..] {
+					if a == '--dry-run' {
+						dry_run = true
+					} else if a == '--yes' {
+						yes = true
+					} else {
+						return render_error(hornero_core.err_usage('agent.usage',
+							'unexpected argument: ${a}.\nExample: horneroctl agent default set codex --yes'),
+							mode)
+					}
+				}
+				return render(hornero_core.agent_default_set_result(args[2], dry_run, yes), mode)
+			}
+			return render_error(hornero_core.err_usage('agent.usage',
+				'expected show or set.\nExample: horneroctl agent default show'), mode)
+		}
+		'launch' {
+			if args.len != 2 {
+				return render_error(hornero_core.err_usage('agent.usage',
+					'expected exactly one agent id.\nExample: horneroctl agent launch codex'), mode)
+			}
+			return render(hornero_core.agent_launch_result(args[1]), mode)
+		}
+		else {
+			return render_error(hornero_core.err_usage('agent.usage',
+				'unknown subcommand: ${args[0]} (expected: list, status, doctor, default, launch).\nExample: horneroctl agent list'),
+				mode)
+		}
 	}
 }
 
