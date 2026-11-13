@@ -166,6 +166,21 @@ fn run_plugin(args []string, mode hornero_core.RenderMode) int {
 	opts := parse_plugin(args) or {
 		return render_error(hornero_core.err_usage('plugin.usage', err.msg()), mode)
 	}
+	if opts.leaf == 'action' {
+		return match opts.value {
+			'list' {
+				render(hornero_core.plugin_broker_list_report(opts.action_plugin), mode)
+			}
+			'check' {
+				render(hornero_core.plugin_broker_check_report(opts.action_plugin,
+					opts.action_name, opts.action_arg), mode)
+			}
+			else {
+				render(hornero_core.plugin_broker_exec_report(opts.action_plugin,
+					opts.action_name, opts.action_arg, opts.yes, opts.dry_run), mode)
+			}
+		}
+	}
 	if opts.leaf == 'list' {
 		return render(hornero_core.community_plugin_list_report(), mode)
 	}

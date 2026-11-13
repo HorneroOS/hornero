@@ -357,6 +357,14 @@ pub fn assistant_policy_preset(name string) []AssistantPolicyRule {
 				AssistantPolicyRule{'javi.main', 'memory.read', 'workspace', 'allow'},
 				AssistantPolicyRule{'javi.main', 'desktop.screenshot', 'any', 'deny'},
 				AssistantPolicyRule{'javi.main', 'clipboard.read', 'any', 'deny'},
+				// Plugin broker baseline (hornero#408): the `plugin`
+				// principal may observe the desktop and read inside its
+				// own payload (the broker passes the payload as the
+				// workspace root). Every plugin mutation stays default-
+				// denied until the user writes an explicit rule.
+				AssistantPolicyRule{'plugin', 'desktop.observe', 'any', 'allow'},
+				AssistantPolicyRule{'plugin', 'desktop.window.list', 'any', 'allow'},
+				AssistantPolicyRule{'plugin', 'filesystem.read', 'workspace', 'allow'},
 			]
 		}
 		'workspace-agent' {

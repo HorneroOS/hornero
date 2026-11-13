@@ -12,6 +12,10 @@ pub:
 	license           string
 	dir               string
 	expected_revision string
+	// plugin action <list|check|run> positionals (hornero#408).
+	action_plugin string
+	action_name   string
+	action_arg    string
 }
 
 pub fn parse_plugin(args []string) !PluginCmdOptions {
@@ -20,10 +24,13 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 	}
 	leaf := args[0]
 	if leaf !in ['install', 'install-local', 'remove', 'list', 'validate', 'new', 'enable', 'disable',
-		'trust', 'catalog', 'community'] {
+		'trust', 'catalog', 'community', 'action'] {
 		return error('unknown plugin subcommand: ${leaf}.\nRun: horneroctl plugin --help')
 	}
 	mut value := ''
+	mut action_plugin := ''
+	mut action_name := ''
+	mut action_arg := ''
 	mut name := ''
 	mut author := ''
 	mut desc := ''
@@ -79,6 +86,24 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 				i++
 				continue
 			}
+			if leaf == 'action' {
+				// plugin action <list|check|run> <plugin> [action] [arg]
+				if action_plugin.len == 0 {
+					action_plugin = arg
+					i++
+					continue
+				}
+				if action_name.len == 0 {
+					action_name = arg
+					i++
+					continue
+				}
+				if action_arg.len == 0 {
+					action_arg = arg
+					i++
+					continue
+				}
+			}
 			return error('unexpected argument: ${arg}.\nRun: horneroctl plugin --help')
 		}
 		value = arg
@@ -115,6 +140,26 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 	if leaf in ['validate', 'list'] && (dry_run || yes) {
 		return error('plugin ${leaf} is read-only and takes no mutation flags.\nExample: horneroctl plugin ${leaf}')
 	}
+	if leaf == 'action' {
+		if value !in ['list', 'check', 'run'] {
+			return error('plugin action needs list, check, or run.\nExample: horneroctl plugin action list')
+		}
+		if name.len > 0 || author.len > 0 || desc.len > 0 || license.len > 0 || dir.len > 0 {
+			return error('plugin metadata flags are only valid with plugin new.\nRun: horneroctl plugin new --help')
+		}
+		if value == 'list' && (action_name.len > 0 || action_arg.len > 0 || dry_run || yes) {
+			return error('plugin action list is read-only.\nExample: horneroctl plugin action list example-clock')
+		}
+		if value == 'check' && (dry_run || yes) {
+			return error('plugin action check only simulates a policy decision and takes no mutation flags.\nExample: horneroctl plugin action check example-clock system_info')
+		}
+		if value in ['check', 'run'] && (action_plugin.len == 0 || action_name.len == 0) {
+			return error('plugin action ${value} needs a plugin id and an action name.\nExample: horneroctl plugin action ${value} example-clock system_info')
+		}
+		if value == 'run' && dry_run && yes {
+			return error('plugin action run accepts at most one of --dry-run or --yes.\nExample: horneroctl plugin action run example-clock system_info')
+		}
+	}
 	return PluginCmdOptions{
 		leaf:              leaf
 		value:             value
@@ -126,5 +171,8 @@ pub fn parse_plugin(args []string) !PluginCmdOptions {
 		license:           license
 		dir:               dir
 		expected_revision: expected_revision
+		action_plugin:     action_plugin
+		action_name:       action_name
+		action_arg:        action_arg
 	}
 }
