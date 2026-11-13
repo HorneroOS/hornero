@@ -838,3 +838,242 @@ fn test_catalog_rollback_restores_kept_payload() {
 	community_plugins_test_restore(saved)
 	os.rmdir_all(root) or {}
 }
+
+// Extensions 2.0 manifest acceptance (shell#373/#374/#375, hornero#408).
+// horneroctl delegates strict manifest validation to the packaged shell
+// validator (community_plugin_run_validator); the V layer only needs a
+// usable id/name/version plus payload hashing. These tests pin that the
+// V layer does not reject the evolved manifest shapes on its own: with
+// a validator that accepts (as the current shell validator does for
+// v2/surfaces, typed settings and translations), install-local, trust,
+// enable and list must behave identically to a v1 package. Malformed
+// manifests still fail at the V layer, and a rejecting validator still
+// fails closed (existing tests cover the rejection plumbing).
+
+fn manifest_v2_test_package(root string, dir string, manifest string, files map[string]string) string {
+	pkg := os.join_path(root, dir)
+	os.mkdir_all(pkg) or { panic(err) }
+	os.write_file(os.join_path(pkg, 'manifest.json'), manifest) or { panic(err) }
+	for name, body in files {
+		target := os.join_path(pkg, name)
+		os.mkdir_all(os.dir(target)) or { panic(err) }
+		os.write_file(target, body) or { panic(err) }
+	}
+	return pkg
+}
+
+fn manifest_v2_test_install_trust_enable(id string) {
+	installed_payloaddir := os.join_path(os.getenv('XDG_DATA_HOME'), 'hornero', 'plugins',
+		id)
+	assert os.is_dir(installed_payloaddir), 'payload missing for ${id}'
+	trusted := community_plugin_trust_report(CommunityPluginOptions{
+		value: id
+		yes:   true
+	})
+	assert trusted.ok, trusted.message
+	enabled := community_plugin_enable_report(CommunityPluginOptions{
+		value: id
+		yes:   true
+	})
+	assert enabled.ok, enabled.message
+	listed := community_plugin_list_report()
+	assert listed.ok, listed.message
+	assert listed.data['plugins'].contains('"id":"${id}"'), listed.data['plugins']
+	assert listed.data['plugins'].contains('"enabled":true'), listed.data['plugins']
+}
+
+fn test_manifest_v2_surfaces_install_enable_round_trip() {
+	root := community_plugins_test_new_root('manifest-v2-surfaces')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	validator := os.join_path(root, 'validator')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	pkg := manifest_v2_test_package(root, 'pkg', '{"schemaVersion":2,"id":"example-two-surface","name":"Example Two Surface","version":"1.0.0","description":"Two surfaces.","author":"Probe","license":"MIT","placement":"bar","entrypoint":"Main.qml","files":["Main.qml","Dashboard.qml","README.md","LICENSE"],"surfaces":{"dashboard":{"entrypoint":"Dashboard.qml"}},"capabilities":{"processCommands":[],"networkHosts":[],"settings":{}}}',
+		{
+			'Main.qml':      'import QtQuick\nItem {}\n'
+			'Dashboard.qml': 'import QtQuick\nItem {}\n'
+			'README.md':     '# Example\n'
+			'LICENSE':       'MIT\n'
+		})
+	installed := community_plugin_install_local_report(CommunityPluginOptions{
+		value: pkg
+		yes:   true
+	})
+	assert installed.ok, installed.message
+	assert os.is_file('${root}/data/hornero/plugins/example-two-surface/Dashboard.qml')
+	manifest_v2_test_install_trust_enable('example-two-surface')
+	// The payload hash covers every files[] entry, surface entrypoints
+	// included: tampering with the dashboard surface breaks trust.
+	payload := '${root}/data/hornero/plugins/example-two-surface'
+	before := community_plugin_payload_hash(payload)
+	assert before.len == 64
+	os.write_file(os.join_path(payload, 'Dashboard.qml'), 'import QtQuick\nItem { /* changed */ }\n') or {
+		panic(err)
+	}
+	assert community_plugin_payload_hash(payload) != before
+	disabled := community_plugin_disable_report(CommunityPluginOptions{
+		value: 'example-two-surface'
+		yes:   true
+	})
+	assert disabled.ok, disabled.message
+	stale := community_plugin_enable_report(CommunityPluginOptions{
+		value: 'example-two-surface'
+		yes:   true
+	})
+	assert !stale.ok && stale.message.contains('stale-trust'), stale.message
+}
+
+fn test_manifest_typed_settings_enum_constraints_round_trip() {
+	root := community_plugins_test_new_root('manifest-typed-settings')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	validator := os.join_path(root, 'validator')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	pkg := manifest_v2_test_package(root, 'pkg', '{"schemaVersion":1,"id":"example-typed-settings","name":"Example Typed Settings","version":"1.0.0","description":"Typed settings.","author":"Probe","license":"MIT","entrypoint":"Main.qml","files":["Main.qml","README.md","LICENSE"],"capabilities":{"processCommands":[],"networkHosts":[],"settings":{"mode":{"type":"enum","default":"auto","options":["auto","manual"]},"count":{"type":"integer","default":3,"minimum":1,"maximum":10},"label":{"type":"string","default":"hi","minLength":1,"maxLength":16},"ratio":{"type":"number","default":0.5,"minimum":0,"maximum":1},"flag":{"type":"boolean","default":true}}}}',
+		{
+			'Main.qml':  'import QtQuick\nItem {}\n'
+			'README.md': '# Example\n'
+			'LICENSE':   'MIT\n'
+		})
+	installed := community_plugin_install_local_report(CommunityPluginOptions{
+		value: pkg
+		yes:   true
+	})
+	assert installed.ok, installed.message
+	manifest_v2_test_install_trust_enable('example-typed-settings')
+	// Declared capabilities pass through to `plugin list` verbatim so
+	// the shell settings UI sees the enum options and constraints.
+	listed := community_plugin_list_report()
+	plugins := listed.data['plugins']
+	assert plugins.contains('"mode"'), plugins
+	assert plugins.contains('"enum"'), plugins
+	assert plugins.contains('"auto"'), plugins
+	assert plugins.contains('"manual"'), plugins
+	assert plugins.contains('"minimum"'), plugins
+	assert plugins.contains('"maxLength"'), plugins
+	caps := community_plugin_declared_capabilities(CommunityPluginReceipt{
+		source: os.abs_path(pkg)
+	}, '${root}/data/hornero/plugins/example-typed-settings')
+	assert json2.encode(caps).contains('"options"')
+}
+
+fn test_manifest_translations_block_and_catalog_round_trip() {
+	root := community_plugins_test_new_root('manifest-translations')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	validator := os.join_path(root, 'validator')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	pkg := manifest_v2_test_package(root, 'pkg', '{"schemaVersion":1,"id":"example-i18n","name":"Example I18n","version":"1.0.0","description":"Translated.","author":"Probe","license":"MIT","entrypoint":"Main.qml","files":["Main.qml","README.md","LICENSE","translations/es.json"],"translations":{"sourceLocale":"en","locales":["es"],"directory":"translations"},"capabilities":{"processCommands":[],"networkHosts":[],"settings":{}}}',
+		{
+			'Main.qml':             'import QtQuick\nItem {}\n'
+			'README.md':            '# Example\n'
+			'LICENSE':              'MIT\n'
+			'translations/es.json': '{"Hello":"Hola"}\n'
+		})
+	installed := community_plugin_install_local_report(CommunityPluginOptions{
+		value: pkg
+		yes:   true
+	})
+	assert installed.ok, installed.message
+	catalog := '${root}/data/hornero/plugins/example-i18n/translations/es.json'
+	assert os.is_file(catalog)
+	assert (os.read_file(catalog) or { '' }).contains('Hola')
+	manifest_v2_test_install_trust_enable('example-i18n')
+	// Catalogs listed in files[] are inside the payload hash, so a
+	// catalog edit is a payload change and invalidates trust.
+	payload := '${root}/data/hornero/plugins/example-i18n'
+	before := community_plugin_payload_hash(payload)
+	os.write_file(catalog, '{"Hello":"Che"}\n') or { panic(err) }
+	assert community_plugin_payload_hash(payload) != before
+}
+
+fn test_manifest_capabilities_actions_v_layer_accepts() {
+	root := community_plugins_test_new_root('manifest-actions')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	validator := os.join_path(root, 'validator')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	// capabilities.actions is the hornero broker declaration (#408).
+	// The V layer parses and preserves it; whether a given packaged
+	// shell validator accepts the field is the shell contract's call,
+	// surfaced unchanged through the delegation error when it does not.
+	pkg := manifest_v2_test_package(root, 'pkg', '{"schemaVersion":1,"id":"example-actions","name":"Example Actions","version":"1.0.0","description":"Broker actions.","author":"Probe","license":"MIT","entrypoint":"Main.qml","files":["Main.qml","README.md","LICENSE"],"capabilities":{"processCommands":[],"networkHosts":[],"settings":{},"actions":["system_info"]}}',
+		{
+			'Main.qml':  'import QtQuick\nItem {}\n'
+			'README.md': '# Example\n'
+			'LICENSE':   'MIT\n'
+		})
+	installed := community_plugin_install_local_report(CommunityPluginOptions{
+		value: pkg
+		yes:   true
+	})
+	assert installed.ok, installed.message
+	manifest_v2_test_install_trust_enable('example-actions')
+	manifest := community_plugin_manifest('${root}/data/hornero/plugins/example-actions') or {
+		panic(err)
+	}
+	declared := plugin_broker_declared_actions(manifest) or { panic(err) }
+	assert declared == ['system_info']
+	listed := community_plugin_list_report()
+	assert listed.data['plugins'].contains('"actions"'), listed.data['plugins']
+}
+
+fn test_manifest_v2_malformed_still_fails_at_v_layer() {
+	root := community_plugins_test_new_root('manifest-v2-malformed')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	// Even a permissive validator cannot rescue a manifest the V layer
+	// cannot identify: bad JSON, unusable id, missing name/version.
+	validator := os.join_path(root, 'validator')
+	community_plugins_test_write_executable(validator, '#!/bin/sh\nexit 0\n')
+	os.setenv('HORNERO_PLUGIN_VALIDATOR', validator, true)
+	cases := [
+		'not json',
+		'{"schemaVersion":2,"id":"Bad Id","name":"X","version":"1.0.0"}',
+		'{"schemaVersion":2,"id":"example-x","version":"1.0.0"}',
+		'{"schemaVersion":2,"id":"example-x","name":"X"}',
+	]
+	for i, body in cases {
+		pkg := manifest_v2_test_package(root, 'bad${i}', body, {
+			'Main.qml': 'import QtQuick\nItem {}\n'
+		})
+		result := community_plugin_install_local_report(CommunityPluginOptions{
+			value: pkg
+			yes:   true
+		})
+		assert !result.ok, 'malformed case ${i} must fail: ${body}'
+	}
+	assert !os.exists('${root}/data/hornero/plugins/example-x')
+	// And a rejecting validator (the shell contract) still fails closed
+	// for an otherwise well-formed v2 package.
+	community_plugins_test_write_executable(validator, '#!/bin/sh\necho schemaVersion must be 1 or 2 >&2\nexit 1\n')
+	pkg := manifest_v2_test_package(root, 'good', '{"schemaVersion":2,"id":"example-good","name":"Example Good","version":"1.0.0","files":["Main.qml"],"capabilities":{"processCommands":[],"networkHosts":[],"settings":{}}}',
+		{
+			'Main.qml': 'import QtQuick\nItem {}\n'
+		})
+	rejected := community_plugin_install_local_report(CommunityPluginOptions{
+		value: pkg
+		yes:   true
+	})
+	assert !rejected.ok && rejected.message.contains('schemaVersion'), rejected.message
+	assert !os.exists('${root}/data/hornero/plugins/example-good')
+}
