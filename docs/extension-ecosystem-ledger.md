@@ -94,6 +94,21 @@ Shipped before this mission and retained unchanged:
   review; the production trust key is still not provisioned, so the
   community client fails closed (see PLUGIN_REGISTRY.md).
 
+## Verified live evidence
+
+- Host lifecycle round-trip (2026-11-12, horneroctl
+  v0.2.0-preview32-26-gc9aed3d on the development host):
+  `plugin catalog` listed 28 plugins from the live remote;
+  `catalog install hornero-uptime --yes` installed it as inert data;
+  `enable` succeeded (official trust); `list` reported
+  `hornero-uptime enabled=true`; `disable` and receipt-owned
+  `remove` succeeded; final `list` returned to the 6 baseline
+  official plugins. Note: horneroctl resolves the data home from
+  the passwd entry, not `$HOME`, so the probe ran against the real
+  (revertible) receipt set and restored it exactly.
+- The same host already had the 6 baseline official plugins
+  installed and enabled before this mission's batches.
+
 ## Pending real evidence (not PASS)
 
 - Live shell runtime/visual: the facades (including Power's and
