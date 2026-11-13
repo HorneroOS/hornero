@@ -1,6 +1,6 @@
 # Extension ecosystem ledger
 
-Updated: 2026-11-12.
+Updated: 2026-11-13.
 Style follows [agentic-execution-ledger.md](agentic-execution-ledger.md).
 Status key: verified = code merged on the owning repo's main plus the
 tests/review recorded in the PR; pending = no real evidence yet (never
@@ -50,25 +50,29 @@ Shipped before this mission and retained unchanged:
 | Website catalog 23 | Extensions catalog synced to the 23 batch-4 plugins: plugins pinned to caa8bcf, `extensions.json` regenerated via sync (never hand-edited) | website#216 | verified (build, `data:check` PASS, review APPROVE, per PR) |
 | Ledger batch 4 | This ledger extended with batch 4 (shell#368, plugins#16), developer guide (plugins#15) and website 20 (website#215); counts 23 plugins / 43 inventory / 7 data facades; pending live evidence not PASS | hornero#400 | verified (merged 2026-11-12) |
 | Plugins batch 5 | `hornero-quick-notes` (persistent note via PluginKit Settings: declared `note`, loaded on completion, saved debounced 600 ms, truncated at 4096 chars), `hornero-calculator` (safe tokenizer/parser, no eval), `hornero-agenda` (ISO week, pure Date math), `hornero-sun-card` (honest not-configured/error states), `hornero-metronome` (persistent BPM via PluginKit Settings: declared `bpm`, default 96, clamped 40–208); Settings persistence noted for quick-notes and metronome; catalog regenerated to 28 plugins | plugins#18 | verified (validators pass, executed probes, ISO-week cross-checked vs Python `isocalendar`, review APPROVE, per PR) |
+| Plugins batch 6 | `hornero-text-tools` (Uppercase/Lowercase/Title Case/Reverse transforms with live character, word and line counts), `hornero-color-converter` (validated `#RGB`/`#RRGGBB` hex to RGB and HSL, and RGB inputs back to hex; invalid hex shows an error), `hornero-json-tools` (Format with 2-space indentation and Minify using JSON parse/stringify only; parser errors shown), `hornero-base-converter` (validated decimal integer within safe range to binary, octal and hex, and hex back to decimal; invalid digits show errors), `hornero-date-calculator` (validated `YYYY-MM-DD` real dates, days-between and add-days results using UTC math to avoid DST drift); pure QML/JS, no eval/Process/network; catalog regenerated to 33 plugins | plugins#19 | verified (validators + 20 passed/1 skipped, qmllint clean, executed node probes for color/JSON/base/date/DST, review APPROVE, per PR; merged 2026-11-13, merge commit `adf3d2d`) |
+| Website catalog 33 | Extensions catalog sync to the 33 batch-6 plugins: plugins pinned to `adf3d2d`, `extensions.json` regenerated via `data:sync` (never hand-edited) | website#218 | follow-up (PR open, not yet merged; 140-page build and `data:check` PASS recorded on the PR, not counted as verified until merged) |
 
-## Counts (recounted on plugins main, 2026-11-12)
+## Counts (recounted on plugins main, 2026-11-13)
 
-- 28 plugins in `catalog.json`, all under `plugins/<id>/`:
-  `hornero-agenda`, `hornero-ai-usage`, `hornero-battery`,
-  `hornero-calculator`, `hornero-calendar`, `hornero-countdown`,
-  `hornero-disk-usage`, `hornero-dual-clock`, `hornero-focus-card`,
-  `hornero-metronome`, `hornero-microphone`, `hornero-moon-phase`,
-  `hornero-network-monitor`, `hornero-now-playing`, `hornero-pomodoro`,
-  `hornero-quick-notes`, `hornero-quiet-notes`, `hornero-stopwatch`,
-  `hornero-studio-audio`, `hornero-studio-jobs`, `hornero-sun-card`,
-  `hornero-system-health`, `hornero-system-monitor`,
+- 33 plugins in `catalog.json`, all under `plugins/<id>/`:
+  `hornero-agenda`, `hornero-ai-usage`, `hornero-base-converter`,
+  `hornero-battery`, `hornero-calculator`, `hornero-calendar`,
+  `hornero-color-converter`, `hornero-countdown`,
+  `hornero-date-calculator`, `hornero-disk-usage`, `hornero-dual-clock`,
+  `hornero-focus-card`, `hornero-json-tools`, `hornero-metronome`,
+  `hornero-microphone`, `hornero-moon-phase`, `hornero-network-monitor`,
+  `hornero-now-playing`, `hornero-pomodoro`, `hornero-quick-notes`,
+  `hornero-quiet-notes`, `hornero-stopwatch`, `hornero-studio-audio`,
+  `hornero-studio-jobs`, `hornero-sun-card`, `hornero-system-health`,
+  `hornero-system-monitor`, `hornero-text-tools`,
   `hornero-unit-converter`, `hornero-uptime`, `hornero-volume`,
   `hornero-weather`, `hornero-world-clock`.
   Growth: 6 baseline → 12 (batch 1) → 17 (batch 2) → 20 (batch 3) →
-  23 (batch 4) → 28 (batch 5).
-- 48 inventory entries recounted on plugins main, 2026-11-12:
-  20 researched competitive entries + 28 implemented (supersedes the
-  43-entry batch-4 snapshot; recount before citing a live total).
+  23 (batch 4) → 28 (batch 5) → 33 (batch 6).
+- 53 inventory entries recounted on plugins main, 2026-11-13:
+  20 researched competitive entries + 33 implemented (supersedes the
+  48-entry batch-5 snapshot; recount before citing a live total).
 - 7 PluginKit data facades: System, Network, Media, Weather, Time
   (shell#365), Power (shell#367) and Audio (shell#368). System,
   Network, Weather, Time and Power are read-only; Media and Audio
@@ -113,19 +117,22 @@ Shipped before this mission and retained unchanged:
 
 - Live shell runtime/visual: the facades (including Power's and
   Audio's live singleton values and Audio's user-initiated volume/mic
-  controls), batch 1–5 plugins (including `hornero-volume`,
+  controls), batch 1–6 plugins (including `hornero-volume`,
   `hornero-microphone` muted/volume-only behaviour,
-  `hornero-system-health` honest unavailable states, and batch-5
-  Settings persistence in `hornero-quick-notes`/`hornero-metronome`),
-  and the marketplace pane have host test and lint evidence only;
-  none has been exercised visually in a running shell session.
+  `hornero-system-health` honest unavailable states, batch-5
+  Settings persistence in `hornero-quick-notes`/`hornero-metronome`,
+  and batch-6 `hornero-text-tools`, `hornero-color-converter`,
+  `hornero-json-tools`, `hornero-base-converter` and
+  `hornero-date-calculator`), and the marketplace pane have host
+  test and lint evidence only; none has been exercised visually in
+  a running shell session.
 - Preview QA: no Preview VM/session run yet for installing, enabling,
   placing and disabling a batch plugin end-to-end, nor for the
   marketplace search/filter/detail flow (shell#366 records GUI
   runtime as pending Preview QA).
-- Website catalog beyond the 23-plugin sync (website#216) to the
-  full 28, and any live click-through from catalog to Control Center
-  install, are likewise unevidenced.
+- Website catalog 33 sync (website#218) is an open follow-up, not
+  yet merged; any live click-through from catalog to Control Center
+  install is likewise unevidenced.
 - `hornero-ai-usage` against a live assistant backend (real
   tokens/calls/sessions/models, and the quota-unknown state observed
   live rather than in contract tests).
