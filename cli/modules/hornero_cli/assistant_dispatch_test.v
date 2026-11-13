@@ -104,6 +104,30 @@ fn test_assistant_stream_flag_rules() {
 	assert help.contains('--stream')
 }
 
+fn test_assistant_ask_mode_parser_rules() {
+	// hornero#414: --mode on ask accepts exactly the session modes.
+	for m in ['ask', 'agent', 'chat'] {
+		opts := parse_assistant(['ask', 'hi', '--mode', m]) or { panic(err) }
+		assert opts.leaf == 'ask' && opts.mode == m && opts.value == 'hi'
+	}
+	plain := parse_assistant(['ask', 'hi']) or { panic(err) }
+	assert plain.mode == '', 'no --mode must stay empty (legacy default)'
+	if _ := parse_assistant(['ask', 'hi', '--mode', 'yolo']) {
+		assert false, 'unknown mode must be rejected'
+	}
+	if _ := parse_assistant(['ask', 'hi', '--mode']) {
+		assert false, '--mode without a value must be rejected'
+	}
+	if _ := parse_assistant(['status', '--mode', 'ask']) {
+		assert false, '--mode outside ask/sessions must be rejected'
+	}
+	assert dispatch(['horneroctl', 'assistant', 'ask', 'hi', '--mode', 'yolo']) == 2
+	assert dispatch(['horneroctl', 'assistant', 'ask', 'hi', '--mode']) == 2
+	help := command_help('assistant ask')
+	assert help.contains('--mode ask|agent|chat')
+	assert help.contains('horneroctl assistant ask "what is 2+2?" --mode ask')
+}
+
 fn test_assistant_setup_parser_rules() {
 	setup_help := command_help('assistant setup')
 	assert setup_help.contains('horneroctl assistant setup --adopt-dotfiles --dry-run')

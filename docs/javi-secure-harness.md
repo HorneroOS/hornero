@@ -116,6 +116,19 @@ full policy. Switching modes never widens permissions
 (`assistant.v`: `assistant_session_effective_mode`,
 `assistant_mode_escalates`).
 
+`assistant ask --mode ask|agent|chat` (hornero#414) applies the same
+modes per run; without `--mode` the session mode, else the legacy
+agent default, applies, so existing callers are unchanged. Residual:
+the Hermes gateway contract (`POST /v1/runs` at the studied commit)
+has no per-run tool-suppression field — enabled toolsets come from
+gateway config — so horneroctl cannot prevent a tool Hermes executes
+without an approval gate. It auto-denies approvals in Ask/Chat,
+sends the mode as `hornero_mode` at the gateway boundary (not yet
+honoured upstream), and stops and fails any Ask/Chat run whose
+events show tool execution (`assistant_mode_tool_violation`).
+Gateway-side suppression requires a Hermes per-run toolset/mode
+field or a `run_mode` capability in `/v1/capabilities`.
+
 The full user-configurable system prompt is Hermes' `SOUL.md`, edited
 through `assistant prompt` with horneroctl-side version snapshots and
 rollback. It changes behaviour only: policy, hard denies and sandbox
