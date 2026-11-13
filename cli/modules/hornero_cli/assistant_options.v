@@ -50,12 +50,12 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		i++
 		if arg == '--mode' {
 			if i >= args.len {
-				return error('--mode needs ask, agent or chat.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
+				return error('--mode needs ask, agent or chat.\nExample: horneroctl assistant ask "hi" --mode ask')
 			}
 			mode = args[i]
 			i++
 			if mode !in ['ask', 'agent', 'chat'] {
-				return error('--mode must be ask, agent or chat.\nExample: horneroctl assistant sessions new "Quick" --mode ask')
+				return error('--mode must be ask, agent or chat (ask is read-only).\nExample: horneroctl assistant ask "hi" --mode ask')
 			}
 			continue
 		}

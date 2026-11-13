@@ -273,6 +273,57 @@ fn test_contract_run_submission_shape() {
 	assert reqs[0].auth == 'Bearer contract-test-key'
 }
 
+fn test_contract_readonly_ask_stops_run_when_model_requests_tool() {
+	// hornero#414 negative test: in --mode ask the model requests a
+	// terminal tool; the run must be stopped and must not succeed.
+	sse := 'data: {"type":"tool.started","tool":"terminal","preview":"echo hi"}\n\ndata: {"delta":"4"}\n\n'
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':              '{"run_id":"run_ro","status":"queued"}'
+		'GET /v1/runs/run_ro/events': sse
+		'POST /v1/runs/run_ro/stop':  '{}'
+	})
+	defer { mock_restore_env(saved) }
+	result := assistant_ask_report_attached_session_mode('What is 2+2?', [], '', 'ask')
+	assert !result.ok
+	assert result.message.contains('Tool execution denied by ask mode')
+	reqs := mock_wait_requests(mock, 3)
+	assert reqs.len == 3
+	assert reqs[0].path == '/v1/runs'
+	assert reqs[0].body.contains('"hornero_mode":"ask"')
+	assert reqs[2].method == 'POST'
+	assert reqs[2].path == '/v1/runs/run_ro/stop'
+}
+
+fn test_contract_default_ask_body_and_agent_tool_behaviour_unchanged() {
+	// No explicit mode: wire body stays exactly {"input":...}.
+	sse := 'data: {"type":"tool.started","tool":"terminal"}\n\ndata: {"delta":"done"}\n\n'
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':               '{"run_id":"run_def","status":"queued"}'
+		'GET /v1/runs/run_def/events': sse
+	})
+	defer { mock_restore_env(saved) }
+	result := assistant_ask_report_attached_session('What is 2+2?', [], '')
+	assert result.ok
+	assert result.data['text'] == 'done' || result.message.contains('done')
+	reqs := mock_wait_requests(mock, 2)
+	assert reqs[0].body == '{"input":"What is 2+2?"}'
+	assert !reqs[0].body.contains('hornero_mode')
+}
+
+fn test_contract_ask_mode_without_tool_succeeds() {
+	sse := 'data: {"delta":"4"}\n\n'
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':              '{"run_id":"run_ok","status":"queued"}'
+		'GET /v1/runs/run_ok/events': sse
+	})
+	defer { mock_restore_env(saved) }
+	result := assistant_ask_report_attached_session_mode('What is 2+2?', [], '', 'ask')
+	assert result.ok
+	assert result.message.contains('4')
+	reqs := mock_wait_requests(mock, 2)
+	assert reqs.len == 2, 'no stop may be issued for a tool-free ask run'
+}
+
 fn test_contract_ask_approve_stop_write_redacted_audit_log() {
 	mock, saved := start_mock_gateway({
 		'POST /v1/runs':                '{"run_id":"run_9","status":"queued"}'

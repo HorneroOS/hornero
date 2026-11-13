@@ -704,6 +704,37 @@ pub fn assistant_mode_escalates(mode string) bool {
 	return assistant_session_effective_mode(mode) == 'agent'
 }
 
+// assistant_mode_allows_tools reports whether a mode may execute
+// tools at all. Only agent does: ask is read-only and chat has no
+// machine authority (javi-secure-harness.md, hornero#414).
+pub fn assistant_mode_allows_tools(mode string) bool {
+	return assistant_mode_escalates(mode)
+}
+
+// assistant_resolve_ask_mode resolves the effective mode of one ask:
+// an explicit --mode wins, else the selected session's stored mode,
+// else the legacy default (agent), so callers that pass no --mode
+// keep byte-identical behaviour (hornero#414).
+pub fn assistant_resolve_ask_mode(explicit_mode string, session_id string) string {
+	if explicit_mode.len > 0 {
+		return assistant_session_effective_mode(explicit_mode)
+	}
+	return assistant_session_effective_mode(assistant_session_mode(session_id))
+}
+
+// assistant_tool_execution_attempted returns (true, tool) when the
+// run's events show a tool lifecycle event (started/completed/failed
+// or non-thinking progress). Thinking previews are not tools.
+pub fn assistant_tool_execution_attempted(events []AssistantEvent) (bool, string) {
+	for event in events {
+		kind, text := assistant_event_trace(event)
+		if kind == 'tool' {
+			return true, text
+		}
+	}
+	return false, ''
+}
+
 pub struct AssistantSessions {
 pub mut:
 	current  string
@@ -1021,6 +1052,27 @@ fn assistant_events_outcome(command string, run_id string, events []AssistantEve
 	return assistant_events_outcome_mode(command, run_id, events, 'agent')
 }
 
+// assistant_mode_tool_violation enforces a non-tool mode at the
+// run-control layer: when ask/chat events show tool execution, the
+// run is stopped, the attempt is audit-logged, and the outcome fails
+// instead of presenting tool-produced text as a read-only answer.
+// Returns (result, true) on violation. See the residual note on
+// assistant_run_body: this cannot un-execute a tool Hermes already
+// ran without an approval gate.
+pub fn assistant_mode_tool_violation(command string, run_id string, events []AssistantEvent, mode string) (CommandResult, bool) {
+	effective := assistant_session_effective_mode(mode)
+	if assistant_mode_allows_tools(effective) {
+		return CommandResult{}, false
+	}
+	attempted, tool := assistant_tool_execution_attempted(events)
+	if !attempted {
+		return CommandResult{}, false
+	}
+	assistant_stop_report(run_id)
+	assistant_log_append('mode-deny', run_id, tool, effective)
+	return fail_result(command, 'Tool execution denied by ${effective} mode on run ${run_id}: ${tool}. ${effective} mode never executes tools; switch to an Agent session to act.'), true
+}
+
 fn assistant_events_outcome_mode(command string, run_id string, events []AssistantEvent, mode string) CommandResult {
 	pending := assistant_pending_request(events)
 	text := assistant_collect_text(events)
@@ -1046,6 +1098,10 @@ fn assistant_events_outcome_mode(command string, run_id string, events []Assista
 	if pending.kind == 'clarify' {
 		data['detail'] = pending.detail
 		return fail_result(command, 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
+	}
+	violation, denied := assistant_mode_tool_violation(command, run_id, events, mode)
+	if denied {
+		return violation
 	}
 	if text.len == 0 {
 		return ok_result(command, 'Run ${run_id}: ${events.len} events, no text output yet.', data)
@@ -1397,6 +1453,38 @@ fn assistant_run_headers(session_key string, idempotency_key string) map[string]
 	return headers
 }
 
+// assistant_run_body builds the POST /v1/runs body. With no explicit
+// --mode it is exactly {"input":...}, byte-identical to the pre-#414
+// wire shape for existing callers (e.g. shell InlineAsk). With an
+// explicit mode it also carries `hornero_mode`, the session-mode
+// plumbing at the gateway boundary.
+//
+// Residual (hornero#414): the Hermes gateway contract at the studied
+// commit (assistant_studied_hermes_commit, POST /v1/runs in
+// api_server_runs.py) accepts only input/model/session/history/
+// instructions and per-request model options; enabled toolsets come
+// from gateway config, so there is NO per-run field that suppresses
+// tool execution gateway-side and `hornero_mode` is not honoured
+// upstream today. Enforcement therefore lives at the horneroctl
+// run-control layer below: Ask/Chat auto-deny approvals, and a run
+// that nevertheless shows tool execution is stopped and failed.
+// That stops further work and never presents the answer as success,
+// but a tool Hermes already executed without an approval gate cannot
+// be un-executed client-side; true gateway-side suppression needs a
+// Hermes per-run toolset/mode field (or a `run_mode` capability in
+// /v1/capabilities) that horneroctl can then require and send.
+pub fn assistant_run_body(input json2.Any, explicit_mode string) string {
+	if explicit_mode.len == 0 {
+		return json2.encode({
+			'input': input
+		}, escape_unicode: true)
+	}
+	return json2.encode({
+		'input':        input
+		'hornero_mode': json2.Any(assistant_session_effective_mode(explicit_mode))
+	}, escape_unicode: true)
+}
+
 fn assistant_run_create(settings AssistantSettings, body string, session_id string) !http.Response {
 	key := assistant_current_session_key(session_id)
 	headers := assistant_run_headers(key, assistant_new_idempotency_key())
@@ -1429,9 +1517,7 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 	input, _ := assistant_build_input(prompt, attach) or {
 		return fail_result('assistant ask', err.msg())
 	}
-	body := json2.encode({
-		'input': input
-	}, escape_unicode: true)
+	body := assistant_run_body(input, explicit_mode)
 	resp := assistant_run_create(settings, body, session_id) or {
 		return fail_result('assistant ask', 'Cannot reach the Hermes gateway at ${settings.endpoint}: ${err.msg()}. Start Hermes, then retry.')
 	}
@@ -1461,11 +1547,7 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 	events := parse_sse_events(events_resp.body)
 	pending := assistant_pending_request(events)
 	if pending.kind == 'approval' {
-		mode := if explicit_mode.len > 0 {
-			assistant_session_effective_mode(explicit_mode)
-		} else {
-			assistant_session_effective_mode(assistant_session_mode(session_id))
-		}
+		mode := assistant_resolve_ask_mode(explicit_mode, session_id)
 		if !assistant_mode_escalates(mode) {
 			assistant_approve_report(run_id, 'deny')
 			assistant_log_append('mode-deny', run_id, pending.detail, mode)
@@ -1477,6 +1559,10 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 	if pending.kind == 'clarify' {
 		assistant_log_append('ask', run_id, 'pending clarify: ${pending.detail}', 'pending')
 		return fail_result('assistant ask', 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
+	}
+	violation, denied := assistant_mode_tool_violation('assistant ask', run_id, events, assistant_resolve_ask_mode(explicit_mode, session_id))
+	if denied {
+		return violation
 	}
 	text := assistant_collect_text(events)
 	if text.len == 0 {
@@ -1522,9 +1608,7 @@ pub fn assistant_ask_stream_report_traced_mode(prompt string, attach []string, s
 	input, _ := assistant_build_input(prompt, attach) or {
 		return fail_result('assistant ask', err.msg())
 	}
-	body := json2.encode({
-		'input': input
-	}, escape_unicode: true)
+	body := assistant_run_body(input, explicit_mode)
 	resp := assistant_run_create(settings, body, session_id) or {
 		return fail_result('assistant ask', 'Cannot reach the Hermes gateway at ${settings.endpoint}: ${err.msg()}. Start Hermes, then retry.')
 	}
@@ -1548,11 +1632,8 @@ pub fn assistant_ask_stream_report_traced_mode(prompt string, attach []string, s
 	if run_id.len == 0 {
 		return fail_result('assistant ask', 'Hermes did not return a run id.')
 	}
-	result := assistant_events_stream_report_traced_mode(run_id, emit, on_trace, if explicit_mode.len > 0 {
-		assistant_session_effective_mode(explicit_mode)
-	} else {
-		assistant_session_effective_mode(assistant_session_mode(session_id))
-	})
+	result := assistant_events_stream_report_traced_mode(run_id, emit, on_trace, assistant_resolve_ask_mode(explicit_mode,
+		session_id))
 	if !result.ok {
 		return result
 	}
