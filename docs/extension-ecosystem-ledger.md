@@ -51,7 +51,8 @@ Shipped before this mission and retained unchanged:
 | Ledger batch 4 | This ledger extended with batch 4 (shell#368, plugins#16), developer guide (plugins#15) and website 20 (website#215); counts 23 plugins / 43 inventory / 7 data facades; pending live evidence not PASS | hornero#400 | verified (merged 2026-11-12) |
 | Plugins batch 5 | `hornero-quick-notes` (persistent note via PluginKit Settings: declared `note`, loaded on completion, saved debounced 600 ms, truncated at 4096 chars), `hornero-calculator` (safe tokenizer/parser, no eval), `hornero-agenda` (ISO week, pure Date math), `hornero-sun-card` (honest not-configured/error states), `hornero-metronome` (persistent BPM via PluginKit Settings: declared `bpm`, default 96, clamped 40–208); Settings persistence noted for quick-notes and metronome; catalog regenerated to 28 plugins | plugins#18 | verified (validators pass, executed probes, ISO-week cross-checked vs Python `isocalendar`, review APPROVE, per PR) |
 | Plugins batch 6 | `hornero-text-tools` (Uppercase/Lowercase/Title Case/Reverse transforms with live character, word and line counts), `hornero-color-converter` (validated `#RGB`/`#RRGGBB` hex to RGB and HSL, and RGB inputs back to hex; invalid hex shows an error), `hornero-json-tools` (Format with 2-space indentation and Minify using JSON parse/stringify only; parser errors shown), `hornero-base-converter` (validated decimal integer within safe range to binary, octal and hex, and hex back to decimal; invalid digits show errors), `hornero-date-calculator` (validated `YYYY-MM-DD` real dates, days-between and add-days results using UTC math to avoid DST drift); pure QML/JS, no eval/Process/network; catalog regenerated to 33 plugins | plugins#19 | verified (validators + 20 passed/1 skipped, qmllint clean, executed node probes for color/JSON/base/date/DST, review APPROVE, per PR; merged 2026-11-13, merge commit `adf3d2d`) |
-| Website catalog 33 | Extensions catalog sync to the 33 batch-6 plugins: plugins pinned to `adf3d2d`, `extensions.json` regenerated via `data:sync` (never hand-edited) | website#218 | follow-up (PR open, not yet merged; 140-page build and `data:check` PASS recorded on the PR, not counted as verified until merged) |
+| Website catalog 33 | Extensions catalog sync to the 33 batch-6 plugins: plugins pinned to `b49d976` (after the plugins#20 catalog-freshness fix), `extensions.json` regenerated via `data:sync` (never hand-edited) | website#218 | verified (merged 2026-11-13; build, `data:check` PASS, review pin finding fixed and re-verified) |
+| Catalog freshness fix | `gen_catalog.py --check` no longer byte-compares the `generatedFrom` stamp (squash merges rewrite the stamped commit, so every squash-merged catalog landed red on main); freshness now compares plugin entries and validates the stamp shape, with `tests/test_gen_catalog.py` | plugins#20 | verified (24 passed/1 skipped locally, `validate` green on plugins main `b49d976`) |
 
 ## Counts (recounted on plugins main, 2026-11-13)
 
@@ -130,9 +131,8 @@ Shipped before this mission and retained unchanged:
   placing and disabling a batch plugin end-to-end, nor for the
   marketplace search/filter/detail flow (shell#366 records GUI
   runtime as pending Preview QA).
-- Website catalog 33 sync (website#218) is an open follow-up, not
-  yet merged; any live click-through from catalog to Control Center
-  install is likewise unevidenced.
+- Any live click-through from the website catalog to Control Center
+  install is unevidenced.
 - `hornero-ai-usage` against a live assistant backend (real
   tokens/calls/sessions/models, and the quota-unknown state observed
   live rather than in contract tests).
