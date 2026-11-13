@@ -416,7 +416,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 fn run_agent(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('agent.usage',
-			'expected a subcommand: list, status, doctor, default, launch, config.\nExample: horneroctl agent list --json'),
+			'expected a subcommand: list, status, doctor, usage, default, launch, config.\nExample: horneroctl agent list --json'),
 			mode)
 	}
 	match args[0] {
@@ -477,6 +477,21 @@ fn run_agent(args []string, mode hornero_core.RenderMode) int {
 			}
 			return render(hornero_core.agent_launch_result(args[1]), mode)
 		}
+		'usage' {
+			if args.len > 2 {
+				return render_error(hornero_core.err_usage('agent.usage',
+					'unexpected argument: ${args[2]}.\nExample: horneroctl agent usage codex --json'), mode)
+			}
+			id := if args.len == 2 { args[1] } else { '' }
+			if id.len > 0 {
+				hornero_core.agent_by_id(id) or {
+					return render_error(hornero_core.err_usage('agent.usage',
+						'unknown agent id: ${id}.\nExample: horneroctl agent usage codex --json'),
+						mode)
+				}
+			}
+			return render(hornero_core.agent_usage_result(id), mode)
+		}
 		'config' {
 			action := if args.len >= 2 { args[1] } else { 'status' }
 			if action !in ['status', 'check', 'apply'] {
@@ -530,7 +545,7 @@ fn run_agent(args []string, mode hornero_core.RenderMode) int {
 		}
 		else {
 			return render_error(hornero_core.err_usage('agent.usage',
-				'unknown subcommand: ${args[0]} (expected: list, status, doctor, default, launch, config).\nExample: horneroctl agent list'),
+				'unknown subcommand: ${args[0]} (expected: list, status, doctor, usage, default, launch, config).\nExample: horneroctl agent list'),
 				mode)
 		}
 	}

@@ -40,6 +40,42 @@ fn test_agent_unknown_and_usage_fail() {
 	assert dispatch(['horneroctl', 'agent', 'default', 'set', 'codex', '--dry-run']) == 0
 }
 
+fn test_agent_usage_help_and_empty_env() {
+	assert command_help('agent usage').contains('normalized')
+	assert command_help('agent usage').contains('Examples:')
+	assert command_help('agent').contains('usage [id]')
+	assert dispatch(['horneroctl', 'agent', 'usage', '--help']) == 0
+	// Empty isolated homes: every collector reports unavailable and the
+	// command fails (exit 1) instead of printing zeroed counters.
+	tmp := '/tmp/hx-agent-usage-dispatch-test'
+	os.rmdir_all(tmp) or {}
+	os.mkdir_all(tmp) or { assert false }
+	saved := ['HERMES_HOME', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'MUSE_DATA_DIR', 'OPENCODE_DB']
+	mut saved_vals := map[string]string{}
+	for k in saved {
+		saved_vals[k] = os.getenv(k)
+	}
+	os.setenv('HERMES_HOME', tmp + '/hermes', true)
+	os.setenv('CODEX_HOME', tmp + '/codex', true)
+	os.setenv('CLAUDE_CONFIG_DIR', tmp + '/claude', true)
+	os.setenv('MUSE_DATA_DIR', tmp + '/muse', true)
+	os.setenv('OPENCODE_DB', tmp + '/opencode.db', true)
+	defer {
+		for k in saved {
+			if saved_vals[k].len == 0 {
+				os.unsetenv(k)
+			} else {
+				os.setenv(k, saved_vals[k], true)
+			}
+		}
+		os.rmdir_all(tmp) or {}
+	}
+	assert dispatch(['horneroctl', 'agent', 'usage']) != 0
+	assert dispatch(['horneroctl', 'agent', 'usage', 'codex']) != 0
+	// Unknown id is a usage error, not an empty record set.
+	assert dispatch(['horneroctl', 'agent', 'usage', 'nope']) == 2
+}
+
 fn test_agent_config_help_and_read_only_commands() {
 	assert command_help('agent config').contains('Canonical instructions/skills/MCP/ACP')
 	assert command_help('agent config').contains('ownership receipts')

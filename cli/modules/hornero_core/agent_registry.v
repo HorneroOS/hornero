@@ -60,7 +60,7 @@ pub fn agent_registry() []AgentSpec {
 			session:          '`horneroctl assistant sessions` names continuity keys; Hermes owns conversations'
 			approval:         'manual only via `horneroctl assistant approve`; never auto-approved'
 			sandbox:          'Hornero Javi harness (bubblewrap gateway unit, ABAC broker) — owned by assistant_*.v, not this registry'
-			usage:            '`horneroctl assistant usage` (Hermes local state aggregates)'
+			usage:            '`horneroctl assistant usage` (Hermes local state aggregates); normalized via `horneroctl agent usage javi-hermes`'
 			uninstall:        '`horneroctl assistant setup --remove --yes` removes Hornero-owned files only; the Hermes install itself is untouched'
 		},
 		AgentSpec{
@@ -81,7 +81,7 @@ pub fn agent_registry() []AgentSpec {
 			session:          '`codex resume` (upstream-owned session store under Codex home)'
 			approval:         'upstream approval modes (--ask-for-approval); horneroctl never passes an auto-approve flag'
 			sandbox:          'upstream Codex sandbox (OS-enforced where supported); not a Hornero boundary'
-			usage:            'unknown (no local usage command verified by Hornero)'
+			usage:            'normalized local usage via `horneroctl agent usage codex` (rollout token_count events; quota only as Codex recorded it)'
 			uninstall:        'remove the upstream package/binary yourself; ~/.codex config and sessions remain until you delete them'
 		},
 		AgentSpec{
@@ -102,7 +102,7 @@ pub fn agent_registry() []AgentSpec {
 			session:          '`claude --continue` / `claude --resume` (upstream-owned store)'
 			approval:         'upstream permission modes; horneroctl never passes a skip-permissions flag'
 			sandbox:          'upstream settings-level sandbox only; not a Hornero boundary'
-			usage:            'unknown (no local usage command verified by Hornero)'
+			usage:            'normalized local usage via `horneroctl agent usage claude-code` (CLI stats-cache.json aggregates; quota unknown)'
 			uninstall:        'remove the upstream package/binary yourself; ~/.claude config and sessions remain until you delete them'
 		},
 		AgentSpec{
@@ -123,7 +123,7 @@ pub fn agent_registry() []AgentSpec {
 			session:          '`muse resume` (upstream-owned session store)'
 			approval:         'upstream approval flow; horneroctl never passes an auto-approve flag'
 			sandbox:          'upstream `muse sandbox` OS sandbox support; not a Hornero boundary'
-			usage:            'unknown (no local usage command verified by Hornero)'
+			usage:            'normalized local usage via `horneroctl agent usage muse` (session-store usage records; quota unknown, key endpoint never probed)'
 			uninstall:        'remove the upstream binary yourself; ~/.config/muse config and sessions remain until you delete them'
 		},
 		AgentSpec{
@@ -144,7 +144,7 @@ pub fn agent_registry() []AgentSpec {
 			session:          '`opencode --continue` / `--session <id>` (upstream-owned store)'
 			approval:         'upstream permission config; horneroctl never passes --auto'
 			sandbox:          'permission-based only (no OS sandbox verified); not a Hornero boundary'
-			usage:            'unknown (no local usage command verified by Hornero)'
+			usage:            'normalized local usage via `horneroctl agent usage opencode` (opencode.db session aggregates; quota unknown)'
 			uninstall:        'remove the upstream package/binary yourself; ~/.config/opencode and ~/.local/share/opencode remain until you delete them'
 		},
 	]
