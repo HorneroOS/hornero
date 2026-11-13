@@ -87,7 +87,11 @@ fn test_gaming_doctor_reports_selection_and_capability_checks() {
 	assert controllers.detail.contains('not Handheld qualification') || controllers.detail.contains('Handheld')
 	selection := checks.filter(it.name == 'gaming-selection')[0]
 	assert selection.ok
-	assert selection.detail.contains('planned')
+	assert selection.detail.contains('Preview')
+	assert 'gpu-topology' in names
+	topology := checks.filter(it.name == 'gpu-topology')[0]
+	assert topology.ok
+	assert topology.detail.contains('detection is not qualification')
 }
 
 fn test_gaming_doctor_continues_after_invalid_selection() {
@@ -155,6 +159,114 @@ fn test_gpu_coherence_loaded_module_ok_without_claiming_nvenc() {
 	})
 	assert c.ok
 	assert c.detail.contains('not NVENC')
+}
+
+fn test_gpu_topology_single_dgpu() {
+	c := gpu_topology_check(GpuTopology{
+		devices: [GpuPciDevice{
+			vendor_id: '0x10de'
+			class_id:  '0x030200'
+			boot_vga:  true
+		}]
+	})
+	assert c.ok
+	assert gpu_topology_class(GpuTopology{
+		devices: [GpuPciDevice{
+			vendor_id: '1002'
+			class_id:  '0x030000'
+		}]
+	}) == 'single-dGPU'
+	assert c.detail.contains('single-dGPU')
+	assert c.detail.contains('nvidia=1')
+	assert c.detail.contains('boot_vga=1')
+	assert c.detail.contains('detection is not qualification')
+}
+
+fn test_gpu_topology_hybrid() {
+	p := GpuTopology{
+		devices: [
+			GpuPciDevice{
+				vendor_id: '0x8086'
+				class_id:  '0x030000'
+				boot_vga:  true
+			},
+			GpuPciDevice{
+				vendor_id: '0x10de'
+				class_id:  '0x030200'
+			},
+		]
+	}
+	c := gpu_topology_check(p)
+	assert c.ok
+	assert gpu_topology_class(p) == 'hybrid'
+	assert c.detail.contains('hybrid')
+	assert c.detail.contains('2 display-class')
+	assert c.detail.contains('intel=1')
+	assert c.detail.contains('nvidia=1')
+	assert c.detail.contains('detection is not qualification')
+}
+
+fn test_gpu_topology_integrated_only() {
+	p := GpuTopology{
+		devices: [GpuPciDevice{
+			vendor_id: '8086'
+			class_id:  '0x030000'
+			boot_vga:  true
+		}]
+	}
+	c := gpu_topology_check(p)
+	assert c.ok
+	assert gpu_topology_class(p) == 'integrated-only'
+	assert c.detail.contains('integrated-only')
+	assert c.detail.contains('detection is not qualification')
+}
+
+fn test_gpu_topology_virtual() {
+	p := GpuTopology{
+		devices: [GpuPciDevice{
+			vendor_id: '0x1234'
+			class_id:  '0x030000'
+			boot_vga:  true
+		}]
+	}
+	c := gpu_topology_check(p)
+	assert c.ok
+	assert gpu_topology_class(p) == 'virtual'
+	assert c.detail.contains('virtual=1')
+	assert c.detail.contains('detection is not qualification')
+}
+
+fn test_gpu_topology_unknown_and_non_display_ignored() {
+	empty := gpu_topology_check(GpuTopology{})
+	assert empty.ok
+	assert gpu_topology_class(GpuTopology{}) == 'unknown'
+	assert empty.detail.contains('unknown')
+	assert empty.detail.contains('detection is not qualification')
+	other := GpuTopology{
+		devices: [GpuPciDevice{
+			vendor_id: '0x9999'
+			class_id:  '0x030000'
+		}]
+	}
+	assert gpu_topology_class(other) == 'unknown'
+	assert gpu_topology_check(other).detail.contains('other=1')
+	// A non-display NVIDIA function (e.g. audio, class 0x04) must not
+	// turn an integrated-only machine into a hybrid.
+	mixed := GpuTopology{
+		devices: [
+			GpuPciDevice{
+				vendor_id: '0x8086'
+				class_id:  '0x030000'
+				boot_vga:  true
+			},
+			GpuPciDevice{
+				vendor_id: '0x10de'
+				class_id:  '0x040300'
+			},
+		]
+	}
+	assert gpu_topology_class(mixed) == 'integrated-only'
+	assert gpu_topology_check(mixed).detail.contains('1 display-class')
 }
 
 fn test_gaming_selection_set_roundtrip_and_dry_run() {

@@ -275,6 +275,143 @@ pub fn gpu_coherence_check(p GpuCoherence) DoctorCheck {
 	}
 }
 
+// GpuPciDevice is one injected PCI fact for topology classification.
+// vendor_id/class_id accept sysfs spellings ('0x10de', '0x030200') or
+// bare hex; the pure logic below normalizes them.
+pub struct GpuPciDevice {
+pub:
+	vendor_id string
+	class_id  string
+	boot_vga  bool
+}
+
+// GpuTopology carries probed PCI display facts so topology diagnosis
+// stays pure and unit-testable, mirroring GpuCoherence. The sysfs read
+// lives only in gaming_gpu_topology_probe.
+pub struct GpuTopology {
+pub:
+	devices []GpuPciDevice
+}
+
+fn gpu_normalize_hex(value string) string {
+	normalized := value.trim_space().to_lower()
+	if normalized.starts_with('0x') {
+		return normalized[2..]
+	}
+	return normalized
+}
+
+fn gpu_vendor_key(vendor_id string) string {
+	return gpu_normalize_hex(vendor_id)
+}
+
+// gpu_is_display_class reports PCI base class 0x03 (display controller).
+fn gpu_is_display_class(class_id string) bool {
+	normalized := gpu_normalize_hex(class_id)
+	return normalized.len >= 2 && normalized[0..2] == '03'
+}
+
+fn gpu_vendor_label(vendor_id string) string {
+	return match gpu_vendor_key(vendor_id) {
+		'10de' { 'nvidia' }
+		'1002' { 'amd' }
+		'8086' { 'intel' }
+		'1234', '1af4', '1b36', '15ad', '80ee', '1414' { 'virtual' }
+		else { 'other' }
+	}
+}
+
+// gpu_topology_class classifies display-class devices by vendor only:
+// Intel counts as integrated and NVIDIA/AMD as discrete, which cannot
+// distinguish e.g. an AMD APU or Intel Arc by vendor alone. It is an
+// observation for diagnostics, never a qualification.
+pub fn gpu_topology_class(p GpuTopology) string {
+	mut integrated := 0
+	mut discrete := 0
+	mut virtual := 0
+	mut display := 0
+	for d in p.devices {
+		if !gpu_is_display_class(d.class_id) {
+			continue
+		}
+		display++
+		match gpu_vendor_label(d.vendor_id) {
+			'intel' { integrated++ }
+			'nvidia', 'amd' { discrete++ }
+			'virtual' { virtual++ }
+			else {}
+		}
+	}
+	if display == 0 {
+		return 'unknown'
+	}
+	if virtual == display {
+		return 'virtual'
+	}
+	if integrated > 0 && discrete > 0 {
+		return 'hybrid'
+	}
+	if integrated > 0 {
+		return 'integrated-only'
+	}
+	if discrete == 1 {
+		return 'single-dGPU'
+	}
+	return 'unknown'
+}
+
+// gpu_topology_check is always ok: topology is an observation, and no
+// package, env, PRIME, or session decision is made from it here.
+pub fn gpu_topology_check(p GpuTopology) DoctorCheck {
+	mut nvidia := 0
+	mut amd := 0
+	mut intel := 0
+	mut virtual := 0
+	mut other := 0
+	mut display := 0
+	mut boot_vga := 0
+	for d in p.devices {
+		if !gpu_is_display_class(d.class_id) {
+			continue
+		}
+		display++
+		if d.boot_vga {
+			boot_vga++
+		}
+		match gpu_vendor_label(d.vendor_id) {
+			'nvidia' { nvidia++ }
+			'amd' { amd++ }
+			'intel' { intel++ }
+			'virtual' { virtual++ }
+			else { other++ }
+		}
+	}
+	return DoctorCheck{
+		name:   'gpu-topology'
+		ok:     true
+		detail: '${gpu_topology_class(p)}: ${display} display-class device(s) (nvidia=${nvidia} amd=${amd} intel=${intel} virtual=${virtual} other=${other}), boot_vga=${boot_vga} (detection is not qualification; topology observation only, no PRIME/session change)'
+	}
+}
+
+fn gaming_gpu_topology_probe() GpuTopology {
+	mut devices := []GpuPciDevice{}
+	for entry in os.ls('/sys/bus/pci/devices') or { []string{} } {
+		base := '/sys/bus/pci/devices/${entry}'
+		class_id := (os.read_file('${base}/class') or { '' }).trim_space()
+		if !gpu_is_display_class(class_id) {
+			continue
+		}
+		devices << GpuPciDevice{
+			vendor_id: (os.read_file('${base}/vendor') or { '' }).trim_space()
+			class_id:  class_id
+			boot_vga:  (os.read_file('${base}/boot_vga') or { '' }).trim_space() == '1'
+		}
+	}
+	return GpuTopology{
+		devices: devices
+	}
+}
+
 fn gaming_gpu_probe() GpuCoherence {
 	mut has_nvidia := false
 	for entry in os.ls('/sys/bus/pci/devices') or { []string{} } {
@@ -350,6 +487,7 @@ pub fn gaming_doctor_checks() []DoctorCheck {
 	checks << file_check('vulkan-32bit-loader', '/usr/lib32/libvulkan.so.1',
 		'32-bit Vulkan loader present (driver qualification is a hardware decision, not checked here)')
 	checks << gpu_coherence_check(gaming_gpu_probe())
+	checks << gpu_topology_check(gaming_gpu_topology_probe())
 	// Steam is proprietary opt-in: missing Steam only fails readiness
 	// when the recorded selection actually selected it.
 	mut steam_check := bin_check('steam', 'steam')
