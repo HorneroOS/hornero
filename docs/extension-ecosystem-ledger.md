@@ -53,6 +53,7 @@ Shipped before this mission and retained unchanged:
 | Plugins batch 6 | `hornero-text-tools` (Uppercase/Lowercase/Title Case/Reverse transforms with live character, word and line counts), `hornero-color-converter` (validated `#RGB`/`#RRGGBB` hex to RGB and HSL, and RGB inputs back to hex; invalid hex shows an error), `hornero-json-tools` (Format with 2-space indentation and Minify using JSON parse/stringify only; parser errors shown), `hornero-base-converter` (validated decimal integer within safe range to binary, octal and hex, and hex back to decimal; invalid digits show errors), `hornero-date-calculator` (validated `YYYY-MM-DD` real dates, days-between and add-days results using UTC math to avoid DST drift); pure QML/JS, no eval/Process/network; catalog regenerated to 33 plugins | plugins#19 | verified (validators + 20 passed/1 skipped, qmllint clean, executed node probes for color/JSON/base/date/DST, review APPROVE, per PR; merged 2026-11-13, merge commit `adf3d2d`) |
 | Website catalog 33 | Extensions catalog sync to the 33 batch-6 plugins: plugins pinned to `b49d976` (after the plugins#20 catalog-freshness fix), `extensions.json` regenerated via `data:sync` (never hand-edited) | website#218 | verified (merged 2026-11-13; build, `data:check` PASS, review pin finding fixed and re-verified) |
 | Catalog freshness fix | `gen_catalog.py --check` no longer byte-compares the `generatedFrom` stamp (squash merges rewrite the stamped commit, so every squash-merged catalog landed red on main); freshness now compares plugin entries and validates the stamp shape, with `tests/test_gen_catalog.py` | plugins#20 | verified (24 passed/1 skipped locally, `validate` green on plugins main `b49d976`) |
+| Offscreen render evidence | 8 plugins rendered offscreen (Qt offscreen platform, unmodified `Main.qml` files, driven inputs/buttons, PNG-inspected): `hornero-text-tools` (counts 19/3/1 and `HELLO HORNERO WORLD` after clicking Uppercase), `hornero-json-tools` (Format pretty-prints driven JSON), `hornero-color-converter` (`#336699` → RGB 51/102/153, HSL 210/50%/40%, swatch + outline border), `hornero-base-converter`, `hornero-date-calculator`, `hornero-calculator`, `hornero-pomodoro` and `hornero-countdown` bar items; screenshots in `docs/extension-renders/`. Caveats: `Theme` was a test double mirroring the real facade's property set with the shell's real dark palette values (facade/member audit confirms every member used by all 33 plugins exists on shell main), Qt Controls used the Basic style, and baseline bar widgets colour via the system palette, so this is **not** live-shell evidence | hornero (this ledger) | verified as offscreen renders only; live shell session still pending (see below) |
 
 ## Counts (recounted on plugins main, 2026-11-13)
 
@@ -126,7 +127,10 @@ Shipped before this mission and retained unchanged:
   `hornero-json-tools`, `hornero-base-converter` and
   `hornero-date-calculator`), and the marketplace pane have host
   test and lint evidence only; none has been exercised visually in
-  a running shell session.
+  a running shell session. (The batch-5/6 pure-QML tools and two
+  baseline bar widgets do have offscreen rendered-and-inspected
+  evidence — see the render-evidence row above — which does not
+  substitute for the live session.)
 - Preview QA: no Preview VM/session run yet for installing, enabling,
   placing and disabling a batch plugin end-to-end, nor for the
   marketplace search/filter/detail flow (shell#366 records GUI
