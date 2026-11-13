@@ -19,7 +19,7 @@ Commands:
   power         Session power actions (lock, suspend, reboot, shutdown, logout, status)
   lock          Screen lock (now, status)
   hypr          Hyprland controls (animations, layout, monitors, workspace, plugins)
-  plugin        Community Shell plugin packages (new, install, remove, list, validate, enable, disable)
+  plugin        Community Shell plugin packages (new, install, remove, list, validate, enable, disable, action)
   hardware      Hardware controls (brightness, battery, mic, keyboard, network, bluetooth)
   bluetooth     Bluetooth diagnostics (doctor, status, devices, power, restart)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
@@ -219,7 +219,7 @@ Examples:
 		}
 		'plugin', 'plugin install', 'plugin remove', 'plugin list', 'plugin validate',
 		'plugin catalog' {
-			return 'Usage: horneroctl plugin <new|install|install-local|remove|list|validate|enable|disable|trust|catalog|community> [value] [options]
+			return 'Usage: horneroctl plugin <new|install|install-local|remove|list|validate|enable|disable|trust|catalog|community|action> [value] [options]
 
   new <id> --name NAME --author AUTHOR --description TEXT --license MIT --dir PATH [--dry-run|--yes]
                       Create a static community plugin scaffold (MIT template)
@@ -253,6 +253,8 @@ Examples:
                       Record explicit trust for the current payload hash of a
                       non-official plugin (never enables; payload changes
                       invalidate it)
+  action <list|check|run>
+                      Typed plugin action broker (see plugin action --help)
 
 New/install/remove/enable/disable need --yes to mutate; --dry-run never creates files or clones.
 Packages are stored below XDG data, with ownership receipts under XDG
@@ -272,6 +274,9 @@ Examples:
   horneroctl plugin remove example-plugin --dry-run
   horneroctl plugin remove example-plugin --yes
 '
+		}
+		'plugin action' {
+			return 'Usage: horneroctl plugin action list [plugin-id] [--json|--quiet]\n       horneroctl plugin action check <plugin-id> <action> [arg] [--json|--quiet]\n       horneroctl plugin action run <plugin-id> <action> [arg] [--dry-run|--yes] [--json|--quiet]\n\nTyped capability broker for installed extensions: a closed\ncatalogue of narrow horneroctl actions, read-only separated from\nmutating. There is no generic or privileged shell action. A call\nruns only when the plugin is receipt-owned, enabled, and trusted,\nits manifest declares the action in capabilities.actions, and the\nABAC policy allows principal "plugin" (read-only preset: observe\nand read inside the plugin\'s own payload; mutations need an\nexplicit user policy rule). list and check never execute;\nmutating run calls also require --yes. Every run decision is\naudit-logged under XDG state (hornero/plugins/action.log).\n\nQML plugins are not sandboxed and manifest capabilities are\ndeclarations, not enforcement; this broker governs only calls\nmade through it.\n\nExamples:\n  horneroctl plugin action list\n  horneroctl plugin action list example-clock\n  horneroctl plugin action check example-clock system_info\n  horneroctl plugin action run example-clock plugin_file_read notes.txt\n  horneroctl plugin action run example-clock theme_set pampa --dry-run\n'
 		}
 		'plugin install-local' {
 			return 'Usage: horneroctl plugin install-local <dir> [--dry-run|--yes]\n\nValidate and install an inert plugin package from an existing local\ndirectory. No network is used and no plugin code is executed or\nenabled. Any symlinked path component or entry, and any .git directory at\nany depth, are refused. The receipt\nrecords the absolute local path as source and the payload SHA-256 as\nrevision. Third-party QML is inert data: it is not loaded or sandboxed.\n\nExamples:\n  horneroctl plugin install-local ./my-plugin --dry-run\n  horneroctl plugin install-local ./my-plugin --yes\n'
