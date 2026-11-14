@@ -821,6 +821,48 @@ pub fn parse_shell_preset(args []string) !PresetCmdOptions {
 	}
 }
 
+// LockProcessCmdOptions covers `shell lock-process <status|enable|disable>`.
+pub struct LockProcessCmdOptions {
+pub:
+	leaf    string // status | enable | disable
+	dry_run bool
+	yes     bool
+}
+
+pub fn parse_shell_lock_process(args []string) !LockProcessCmdOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl shell lock-process status')
+	}
+	leaf := args[0]
+	if leaf !in ['status', 'enable', 'disable'] {
+		return error('unknown lock-process subcommand: ${leaf}.\nRun: horneroctl shell lock-process --help')
+	}
+	mut dry_run := false
+	mut yes := false
+	for a in args[1..] {
+		if a == '--dry-run' {
+			dry_run = true
+			continue
+		}
+		if a == '--yes' {
+			yes = true
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl shell lock-process ${leaf} --dry-run')
+		}
+		return error('unexpected argument: ${a}.\nExample: horneroctl shell lock-process ${leaf}')
+	}
+	if leaf == 'status' && (dry_run || yes) {
+		return error('lock-process status takes no flags.\nExample: horneroctl shell lock-process status')
+	}
+	return LockProcessCmdOptions{
+		leaf:    leaf
+		dry_run: dry_run
+		yes:     yes
+	}
+}
+
 // WelcomeCmdOptions covers
 // `welcome <status|set-show-on-login|mark-seen|open|reset>`.
 pub struct WelcomeCmdOptions {

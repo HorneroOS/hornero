@@ -823,6 +823,13 @@ fn run_system(args []string, mode hornero_core.RenderMode) int {
 }
 
 fn run_shell(args []string, mode hornero_core.RenderMode) int {
+	if args.len > 0 && args[0] == 'lock-process' {
+		if wants_help(args) {
+			print(command_help('shell lock-process'))
+			return 0
+		}
+		return run_shell_lock_process(args[1..], mode)
+	}
 	if args.len > 0 && args[0] == 'preset' {
 		if wants_help(args) {
 			print(command_help('shell preset'))
@@ -863,6 +870,27 @@ fn run_shell(args []string, mode hornero_core.RenderMode) int {
 	return render(hornero_core.ipc_report(hornero_core.IpcOptions{
 		passthrough: opts.passthrough
 		dry_run:     opts.dry_run
+	}), mode)
+}
+
+fn run_shell_lock_process(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_shell_lock_process(args) or {
+		return render_error(hornero_core.err_usage('shell.lock-process.usage', err.msg()), mode)
+	}
+	if opts.leaf == 'status' {
+		return render(hornero_core.shell_lock_process_status(), mode)
+	}
+	if opts.leaf == 'enable' {
+		return render(hornero_core.shell_lock_process_enable(hornero_core.ShellLockProcessOptions{
+			leaf:    opts.leaf
+			dry_run: opts.dry_run
+			yes:     opts.yes
+		}), mode)
+	}
+	return render(hornero_core.shell_lock_process_disable(hornero_core.ShellLockProcessOptions{
+		leaf:    opts.leaf
+		dry_run: opts.dry_run
+		yes:     opts.yes
 	}), mode)
 }
 
