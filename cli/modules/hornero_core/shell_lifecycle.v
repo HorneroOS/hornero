@@ -342,6 +342,10 @@ pub fn shell_lock_engaged() bool {
 		paths << env_path
 	}
 	paths << os.join_path(resolve_quickshell_config_dir(), 'shell.qml')
+	// The standalone lock process (shell#257) answers the same `lock`
+	// IPC target from its lock.qml instance; probe it too so restart
+	// refusal also fires when the external process owns the lock.
+	paths << os.join_path(resolve_quickshell_config_dir(), 'lock.qml')
 	paths << ''
 	for candidate in paths {
 		mut argv := [bin, 'ipc', 'call', 'lock', 'isLocked']

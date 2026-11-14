@@ -304,9 +304,12 @@ Examples:
 '
 		}
 		'shell' {
-			return 'Usage: horneroctl shell <status|ipc|preset|start|stop|restart|logs> [options]
+			return 'Usage: horneroctl shell <status|ipc|preset|lock-process|start|stop|restart|logs> [options]
 
   status              Summarize shell session reachability
+  lock-process <status|enable|disable>
+                      Standalone supervised lock process (see
+                      lock-process --help)
   ipc [--dry-run] -- <qs-args...>
                       Pass arguments through to `qs ipc`
   preset list [--full] List installed shell presets (read-only)
@@ -339,6 +342,8 @@ shell.json, deep-merges, and updates the active-preset pointer
 
 Examples:
   horneroctl shell status
+  horneroctl shell lock-process status
+  horneroctl shell lock-process enable --dry-run
   horneroctl shell ipc -- show
   horneroctl shell ipc --dry-run -- call bar toggleLauncher
   horneroctl shell preset list
@@ -349,6 +354,31 @@ Examples:
   horneroctl shell start --yes
   horneroctl shell restart --yes
   horneroctl shell logs --lines 100
+'
+		}
+		'shell lock-process' {
+			return 'Usage: horneroctl shell lock-process <status|enable|disable> [options]
+
+  status              Shipped unit/lock.qml, unit enabled/active
+                      state, delegation marker (read-only)
+  enable [--dry-run|--yes]
+                      Enable hornero-lock.service and set
+                      HORNERO_EXTERNAL_LOCK=1 for future shell
+                      starts, as one pair (rolls back on failure)
+  disable [--dry-run|--yes]
+                      Disable the unit and clear the marker
+
+The standalone lock process (HorneroOS/shell#257) owns the session
+lock in its own supervised quickshell instance, so a main-shell crash
+or restart cannot strand the session without a lock surface. Enable
+and disable refuse while the session is locked. The main shell is
+never restarted here: it adopts the change at its next start.
+
+Examples:
+  horneroctl shell lock-process status
+  horneroctl shell lock-process enable --dry-run
+  horneroctl shell lock-process enable --yes
+  horneroctl shell lock-process disable --yes
 '
 		}
 		'shell preset' {

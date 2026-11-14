@@ -192,6 +192,20 @@ fn test_dispatch_unknown_shell_preset_is_usage_error() {
 	os.setenv('HORNERO_PRESETS_DIR', old_presets, true)
 }
 
+fn test_dispatch_shell_lock_process() {
+	assert dispatch(['horneroctl', 'shell', 'lock-process', 'status']) == 0
+	assert dispatch(['horneroctl', 'shell', 'lock-process', 'enable', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'shell', 'lock-process', 'disable', '--dry-run']) == 0
+	// Mutations without --yes refuse (exit 1); usage errors exit 2.
+	assert dispatch(['horneroctl', 'shell', 'lock-process', 'enable']) == 1
+	assert dispatch(['horneroctl', 'shell', 'lock-process', 'disable']) == 1
+	assert dispatch(['horneroctl', 'shell', 'lock-process', 'bogus']) == 2
+	assert dispatch(['horneroctl', 'shell', 'lock-process', 'status', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'shell', 'lock-process', 'enable', '--bogus']) == 2
+	assert command_help('shell lock-process').contains('Examples:')
+	assert command_help('shell').contains('lock-process')
+}
+
 fn test_dispatch_shell_ipc_dry_run() {
 	code := dispatch(['horneroctl', 'shell', 'ipc', '--dry-run', '--', 'show'])
 	assert code == 0
@@ -262,9 +276,9 @@ fn test_dispatch_completion() {
 }
 
 fn test_every_help_has_examples() {
-	for cmd in ['version', 'doctor', 'shell', 'shell preset', 'appearance', 'appearance theme',
-		'appearance scheme', 'appearance colors', 'appearance accent', 'appearance night-mode',
-		'config', 'completion'] {
+	for cmd in ['version', 'doctor', 'shell', 'shell preset', 'shell lock-process', 'appearance',
+		'appearance theme', 'appearance scheme', 'appearance colors', 'appearance accent',
+		'appearance night-mode', 'config', 'completion'] {
 		h := command_help(cmd)
 		assert h.contains('Examples:')
 	}
