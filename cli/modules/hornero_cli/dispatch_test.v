@@ -206,6 +206,15 @@ fn test_dispatch_shell_lock_process() {
 	assert command_help('shell').contains('lock-process')
 }
 
+fn test_dispatch_config_refresh_hypr() {
+	assert dispatch(['horneroctl', 'config', 'refresh-hypr', '--dry-run']) in [0, 1]
+	// Without --yes/--dry-run it refuses (exit 1); unknown flags exit 2.
+	assert dispatch(['horneroctl', 'config', 'refresh-hypr']) == 1
+	assert dispatch(['horneroctl', 'config', 'refresh-hypr', '--bogus']) == 2
+	assert command_help('config refresh-hypr').contains('Examples:')
+	assert command_help('config').contains('refresh-hypr')
+}
+
 fn test_dispatch_shell_ipc_dry_run() {
 	code := dispatch(['horneroctl', 'shell', 'ipc', '--dry-run', '--', 'show'])
 	assert code == 0
@@ -278,7 +287,7 @@ fn test_dispatch_completion() {
 fn test_every_help_has_examples() {
 	for cmd in ['version', 'doctor', 'shell', 'shell preset', 'shell lock-process', 'appearance',
 		'appearance theme', 'appearance scheme', 'appearance colors', 'appearance accent',
-		'appearance night-mode', 'config', 'completion'] {
+		'appearance night-mode', 'config', 'config refresh-hypr', 'completion'] {
 		h := command_help(cmd)
 		assert h.contains('Examples:')
 	}

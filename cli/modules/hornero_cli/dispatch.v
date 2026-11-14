@@ -1228,6 +1228,13 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 		}
 		return run_config_default_apps(args[1..], mode)
 	}
+	if args[0] == 'refresh-hypr' {
+		if wants_help(args) {
+			print(command_help('config refresh-hypr'))
+			return 0
+		}
+		return run_config_refresh_hypr(args[1..], mode)
+	}
 	if args[0] == 'materialize' {
 		if wants_help(args) {
 			print(command_help('config materialize'))
@@ -1303,6 +1310,17 @@ fn run_config_default_apps(args []string, mode hornero_core.RenderMode) int {
 	}
 	return render(hornero_core.default_apps_list_report(hornero_core.DefaultAppsListOptions{
 		dry_run: opts.dry_run
+	}), mode)
+}
+
+fn run_config_refresh_hypr(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_refresh_hypr_cmd(args) or {
+		return render_error(hornero_core.err_usage('config.refresh-hypr.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.config_refresh_hypr_report(hornero_core.ConfigRefreshHyprOptions{
+		dry_run: opts.dry_run
+		yes:     opts.yes
 	}), mode)
 }
 

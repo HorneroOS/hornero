@@ -659,9 +659,12 @@ Examples:
 '
 		}
 		'config' {
-			return 'Usage: horneroctl config <paths|validate|show|snapshot|default-apps|materialize|gui> [key]
+			return 'Usage: horneroctl config <paths|validate|show|snapshot|default-apps|materialize|refresh-hypr|gui> [key]
 
   paths               Print the resolved XDG path contract
+  refresh-hypr [--dry-run|--yes]
+                      Additively refresh the user Hyprland
+                      entrypoint from the packaged factory one
   validate            Check materialized config (read-only)
   show [key]          Show materialized shell.json values (read-only);
                       with a dot-notation key (bar.position) show one value
@@ -679,7 +682,29 @@ Examples:
   horneroctl config snapshot list
   horneroctl config default-apps list
   horneroctl config materialize --dest /tmp/hx-dest --dry-run
+  horneroctl config refresh-hypr --dry-run
   horneroctl config gui --pane appearance
+'
+		}
+		'config refresh-hypr' {
+			return 'Usage: horneroctl config refresh-hypr [--dry-run|--yes]
+
+Additively refresh the user Hyprland entrypoint
+(~/.config/hypr/hyprland.lua) from the packaged factory one
+(HorneroOS/config#124). Existing users keep a skel-seeded
+entrypoint, so new factory module lines (e.g. monitors-user.lua)
+never reach them and personal *-user.lua overrides stay ignored
+until the entrypoint learns to load them.
+
+Only missing factory `dofile` lines are inserted, in factory
+order; existing lines are preserved byte-for-byte and *-user.lua
+files are never touched. --dry-run prints the diff and writes
+nothing; --yes writes atomically and keeps a .pre-refresh backup.
+A restructured entrypoint is refused, not guessed at.
+
+Examples:
+  horneroctl config refresh-hypr --dry-run
+  horneroctl config refresh-hypr --yes
 '
 		}
 		'config default-apps' {
