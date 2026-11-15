@@ -147,6 +147,27 @@ pub fn agent_registry() []AgentSpec {
 			usage:            'normalized local usage via `horneroctl agent usage opencode` (opencode.db session aggregates; quota unknown)'
 			uninstall:        'remove the upstream package/binary yourself; ~/.config/opencode and ~/.local/share/opencode remain until you delete them'
 		},
+		AgentSpec{
+			id:               'veasel'
+			name:             'Veasel Code'
+			exec:             'veasel'
+			discovery:        'PATH lookup for `veasel`; data home from $VEASEL_DATA_DIR or ~/.local/share/veasel'
+			install_source:   'upstream veasel-labs/veasel releases (OS package/tap/AUR); not installed by horneroctl'
+			arch:             'V-native CLI binary (TUI + local HTTP API on 127.0.0.1:4097); Hornero launches it on demand as a user app, never as a daemon or QML plugin'
+			auth_detectable:  'file-presence'
+			auth_path:        '~/.local/share/veasel/model-settings.json'
+			config_path:      '~/.local/share/veasel/model-settings.json'
+			home_env:         'VEASEL_DATA_DIR'
+			instruction_path: 'AGENTS.md (project tree)'
+			skills_path:      'discovered SKILL.md packages via `veasel skills list` (Veasel-owned discovery)'
+			mcp_format:       'JSON MCP server config owned by Veasel (mcp-servers.json in Veasel data home)'
+			acp:              'unknown (not verified by Hornero; Veasel owns its HTTP API and installed-CLI adapters)'
+			session:          'Veasel-owned persistent sessions (SQLite store in Veasel data home); resumed via `veasel tui`/`veasel run`'
+			approval:         'Veasel execution policy (ask|auto-edit|sandbox-auto; MCP never auto); horneroctl never passes an auto-approve flag and Veasel actions on the OS go through typed horneroctl contracts only'
+			sandbox:          'Veasel-owned sandboxed shell (bubblewrap/seatbelt/windows where supported); not a Hornero boundary and no Hornero ABAC inheritance'
+			usage:            'unknown (no normalized horneroctl collector yet; Veasel reports adapter-reported usage only, never estimated)'
+			uninstall:        'remove the upstream package/binary yourself; ~/.local/share/veasel sessions and settings remain until you delete them'
+		},
 	]
 }
 
