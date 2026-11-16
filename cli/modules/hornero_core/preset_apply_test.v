@@ -13,7 +13,7 @@ const preset_valid_json = '{"_name":"Test Left","_description":"fixture","_icon"
 
 const preset_bad_edge_json = '{"_name":"Bad","bar":{"showOnHover":true,"sizes":{"innerWidth":40},"bars":[{"edge":"diagonal","style":"attached","groups":{"start":[],"center":[],"end":[]}}]}}'
 
-const preset_default_json = '{"_name":"Hornero Left","_description":"default fallback","_icon":"🏠","_iconMaterial":"dock_to_left","bar":{"persistent":true,"showOnHover":true,"sizes":{"innerWidth":40},"bars":[{"edge":"left","style":"attached","reserve":true,"margin":14,"thickness":40,"groups":{"start":[{"id":"workspaces","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[]}}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
+const preset_default_json = '{"_name":"Cockpit","_description":"default fallback","_icon":"🛫","_iconMaterial":"view_agenda","bar":{"persistent":true,"showOnHover":true,"sizes":{"innerWidth":30},"bars":[{"edge":"top","style":"inset","reserve":true,"margin":6,"thickness":36,"groups":{"start":[{"id":"logo","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[]}},{"edge":"bottom","style":"attached","reserve":true,"margin":0,"thickness":30,"groups":{"start":[{"id":"workspaces","enabled":true}],"center":[],"end":[]}}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
 
 fn preset_test_write(path string, content string) {
 	os.mkdir_all(os.dir(path)) or { assert false, 'mkdir ${os.dir(path)}' }
@@ -31,7 +31,7 @@ fn preset_test_isolate() (string, string, string) {
 	preset_test_write(preset_root + '/presets/test-left.json', preset_valid_json)
 	preset_test_write(preset_root + '/presets/bad.json', preset_bad_edge_json)
 	preset_test_write(preset_root + '/presets/broken.json', '{oops not json')
-	preset_test_write(preset_root + '/presets/hornero-left.json', preset_default_json)
+	preset_test_write(preset_root + '/presets/cockpit.json', preset_default_json)
 	return old_presets, old_marker, old_xdg
 }
 
@@ -81,12 +81,12 @@ fn test_preset_apply_unknown_name_fails_without_writing() {
 	conf := preset_root + '/config/hornero/shell.json'
 	marker := preset_root + '/state/current-shell-preset'
 	r := preset_apply_report(PresetApplyOptions{
-		name: 'hornero-lft'
+		name: 'cockpt'
 		yes:  true
 	})
 	assert !r.ok
-	assert r.message.contains('preset not found: hornero-lft')
-	assert r.message.contains('Did you mean: hornero-left?')
+	assert r.message.contains('preset not found: cockpt')
+	assert r.message.contains('Did you mean: cockpit?')
 	assert r.message.contains('Available presets:')
 	assert !os.is_file(conf)
 	assert !os.is_file(marker)
@@ -105,23 +105,23 @@ fn test_preset_apply_recovery_falls_back_to_default() {
 	})
 	assert r.ok
 	assert r.message.contains("unknown preset 'nope'")
-	assert r.message.contains('hornero-left')
-	assert r.data['preset'] == 'hornero-left'
+	assert r.message.contains('cockpit')
+	assert r.data['preset'] == 'cockpit'
 	raw := os.read_file(conf) or { assert false, 'shell.json written' }
 	merged := json2.decode[map[string]json2.Any](raw) or {
 		assert false, 'shell.json is a JSON object'
 		map[string]json2.Any{}
 	}
-	assert merged['bar'].as_map()['bars'].as_array()[0].as_map()['edge'].str() == 'left'
+	assert merged['bar'].as_map()['bars'].as_array()[0].as_map()['edge'].str() == 'top'
 	pointer := os.read_file(marker) or { assert false, 'marker written' }
-	assert pointer.trim_space() == 'hornero-left'
+	assert pointer.trim_space() == 'cockpit'
 	preset_test_restore(old_presets, old_marker, old_xdg)
 }
 
 // Only a missing default itself still fails, listing the catalogue.
 fn test_preset_apply_recovery_fails_without_default() {
 	old_presets, old_marker, old_xdg := preset_test_isolate()
-	os.rm(preset_root + '/presets/hornero-left.json') or { assert false, 'rm default' }
+	os.rm(preset_root + '/presets/cockpit.json') or { assert false, 'rm default' }
 	r := preset_apply_report(PresetApplyOptions{
 		name:                'nope'
 		yes:                 true
@@ -155,7 +155,12 @@ fn test_preset_apply_invalid_falls_back_to_safe_layout() {
 		map[string]json2.Any{}
 	}
 	assert merged['custom'].str() == 'keep'
-	assert merged['bar'].as_map()['bars'].as_array()[0].as_map()['edge'].str() == 'left'
+	safe_bars := merged['bar'].as_map()['bars'].as_array()
+	assert safe_bars.len == 2
+	assert safe_bars[0].as_map()['edge'].str() == 'top'
+	assert safe_bars[0].as_map()['thickness'].int() == 36
+	assert safe_bars[1].as_map()['edge'].str() == 'bottom'
+	assert safe_bars[1].as_map()['thickness'].int() == 30
 	pointer := os.read_file(marker) or { assert false, 'marker written' }
 	assert pointer.trim_space() == 'bad'
 	preset_test_restore(old_presets, old_marker, old_xdg)
@@ -201,7 +206,7 @@ fn test_preset_apply_recovery_dry_run_reports_default() {
 	})
 	assert r.ok
 	assert r.message.contains('would run')
-	assert r.message.contains('hornero-left')
+	assert r.message.contains('cockpit')
 	assert !os.is_file(conf)
 	assert !os.is_file(marker)
 	preset_test_restore(old_presets, old_marker, old_xdg)
@@ -315,7 +320,7 @@ fn test_preset_list_full_is_json_array() {
 	}
 	assert seen['test-left']
 	assert seen['bad']
-	assert seen['hornero-left']
+	assert seen['cockpit']
 	preset_test_restore(old_presets, old_marker, old_xdg)
 }
 
@@ -361,4 +366,8 @@ fn test_preset_list_full_carries_bars_and_lineage() {
 		}
 	}
 	preset_test_restore(old_presets, old_marker, old_xdg)
+}
+
+fn test_preset_default_is_cockpit() {
+	assert preset_default_name == 'cockpit'
 }

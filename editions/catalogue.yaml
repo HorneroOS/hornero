@@ -36,8 +36,7 @@ packageSets:
       - qt6ct
       - papirus-icon-theme
       - ttf-cascadia-code-nerd
-      - ttf-material-symbols-variable
-      - ttf-rubik-vf
+      - ttf-ibm-plex
       - sddm
       - hornero-greeter
       - hornero-greeter-media-base
@@ -265,6 +264,13 @@ editions:
     compositor:
       default: hyprland
       supported: [hyprland, niri]
+    # Factory appearance (RFC 0001 §5, HorneroOS/.github#28): the Cockpit
+    # shell preset with the Hornero Signal Night theme. Studio and Gaming
+    # inherit it through `extends: desktop`. Consumers apply it on first
+    # boot; it is a default, not a capability claim.
+    appearance:
+      shellPreset: cockpit
+      theme: hornero-signal-night
   server:
     title: HorneroOS Server
     maturity: planned

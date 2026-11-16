@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "hornero-dark",
+  "name": "Hornero Dark",
+  "darkMode": true,
+  "schemeType": "vibrant",
+  "defaultWallpaper": "x.png",
+  "wallpaperDir": "hornero-dark"
+}

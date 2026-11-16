@@ -1,13 +1,12 @@
 module hornero_core
 
-// Native smart-colors engine: palette analysis, semantic color selection,
-// and smart-color file generation. Ports Hornero palette pipeline (dotfiles
-// reference) so the xrdb palette math lives in V; only genuinely external
-// tools stay backends (xrdb for palette input via HORNERO_XRDB_BIN, the M3
-// python synthesizer via HORNERO_M3_SCRIPT, wallpaper setters).
+// Smart-colors engine: hex helpers, GTK colour-policy normalization, and
+// the smart-color file renderers (eww, waybar, mako, wlogout, CopyQ, CSS,
+// shell env). Every smart concept maps to a Hornero Signal role of the
+// live scheme (signal.v); there is no palette synthesis.
 //
-// All color math here is pure: functions take hex strings / palette maps
-// and return hex strings. Golden vectors live in smartcolor_test.v.
+// All functions here are pure: they take hex strings / palettes and return
+// strings. Golden vectors live in smartcolor_test.v.
 
 // hex_digit_value maps one ASCII hex digit to its value, or -1.
 fn hex_digit_value(c u8) int {
@@ -72,305 +71,6 @@ pub fn is_light_hex(bg string) bool {
 	return color_luminance(bg) > 128
 }
 
-// blend_hex mixes color1 toward color2 by blend_percent (0-100), clamped
-// to 0-255 per channel, exactly like the bash blend_colors.
-pub fn blend_hex(color1 string, color2 string, blend_percent int) string {
-	r1, g1, b1 := parse_hex6(color1) or { return color1 }
-	r2, g2, b2 := parse_hex6(color2) or { return color1 }
-	p := if blend_percent < 0 {
-		0
-	} else if blend_percent > 100 {
-		100
-	} else {
-		blend_percent
-	}
-	q := 100 - p
-	clamp := fn (v int) int {
-		return if v > 255 {
-			255
-		} else if v < 0 {
-			0
-		} else {
-			v
-		}
-	}
-	return rgb_to_hex(clamp((r1 * q + r2 * p) / 100), clamp((g1 * q + g2 * p) / 100),
-		clamp((b1 * q + b2 * p) / 100))
-}
-
-// enhance_contrast_for_theme darkens too-light colors on light themes
-// (60%) and brightens too-dark colors on dark themes (130%, clamped),
-// mirroring enhance_color_contrast.
-pub fn enhance_contrast_for_theme(color string, light bool) string {
-	r, g, b := parse_hex6(color) or { return color }
-	lum := color_luminance(color)
-	if light {
-		if lum > 180 {
-			return rgb_to_hex((r * 60) / 100, (g * 60) / 100, (b * 60) / 100)
-		}
-		return color
-	}
-	if lum < 80 {
-		mut nr := (r * 130) / 100
-		mut ng := (g * 130) / 100
-		mut nb := (b * 130) / 100
-		if nr > 255 {
-			nr = 255
-		}
-		if ng > 255 {
-			ng = 255
-		}
-		if nb > 255 {
-			nb = 255
-		}
-		return rgb_to_hex(nr, ng, nb)
-	}
-	return color
-}
-
-// palette_get reads one key from an xrdb-style palette map.
-fn palette_get(pal map[string]string, key string, fallback string) string {
-	if v := pal[key] {
-		if v.len > 0 {
-			return v
-		}
-	}
-	return fallback
-}
-
-// palette_dominant classifies the dominant hue from bright colors 9-14
-// (brightest total wins), like get_palette_dominant_color. Missing
-// entries are skipped; with no data it returns 'unknown'.
-pub fn palette_dominant(pal map[string]string) string {
-	mut best := ''
-	mut best_sum := 0
-	mut found := false
-	for i in 9 .. 15 {
-		c := palette_get(pal, 'color${i}', '')
-		if c.len == 0 {
-			continue
-		}
-		r, g, b := parse_hex6(c) or { continue }
-		sum := r + g + b
-		if !found || sum > best_sum {
-			best_sum = sum
-			best = c
-			found = true
-		}
-	}
-	if !found {
-		return 'unknown'
-	}
-	r, g, b := parse_hex6(best) or { return 'unknown' }
-	if r > g && r > b {
-		if g > 100 {
-			return 'orange'
-		}
-		if b > 100 {
-			return 'purple'
-		}
-		return 'red'
-	} else if g > r && g > b {
-		if r > 100 {
-			return 'yellow'
-		}
-		if b > 100 {
-			return 'cyan'
-		}
-		return 'green'
-	} else if b > r && b > g {
-		if r > 100 {
-			return 'purple'
-		}
-		if g > 100 {
-			return 'cyan'
-		}
-		return 'blue'
-	}
-	return 'gray'
-}
-
-// palette_average averages colors 1-14, like get_palette_average.
-// With no data it returns '#808080'.
-pub fn palette_average(pal map[string]string) string {
-	mut tr := 0
-	mut tg := 0
-	mut tb := 0
-	mut n := 0
-	for i in 1 .. 15 {
-		c := palette_get(pal, 'color${i}', '')
-		if c.len == 0 {
-			continue
-		}
-		r, g, b := parse_hex6(c) or { continue }
-		tr += r
-		tg += g
-		tb += b
-		n++
-	}
-	if n == 0 {
-		return '#808080'
-	}
-	return rgb_to_hex(tr / n, tg / n, tb / n)
-}
-
-// parse_xrdb_query parses `xrdb -query` output (`name: value` per line)
-// into a palette map keyed by the trailing resource name (background,
-// foreground, cursor, color0..color15). Only `#`-prefixed values are kept.
-pub fn parse_xrdb_query(out string) map[string]string {
-	mut pal := map[string]string{}
-	for line in out.split_into_lines() {
-		idx := line.index(':') or { continue }
-		mut name := line[..idx].trim_space()
-		if name.contains('*') {
-			name = name.all_after_last('*')
-		}
-		name = name.all_after_last('.').to_lower().trim_space()
-		value := line[idx + 1..].trim_space()
-		if name.len == 0 || !value.starts_with('#') {
-			continue
-		}
-		pal[name] = value
-	}
-	return pal
-}
-
-// optimal_foreground picks the foreground the way get_optimal_foreground
-// does: on light themes the softer color5/color7 wins over pure black.
-pub fn optimal_foreground(pal map[string]string, light bool) string {
-	fg := palette_get(pal, 'foreground', '#ffffff')
-	if !light {
-		return fg
-	}
-	c5 := palette_get(pal, 'color5', '#52758A')
-	if c5.len > 0 && c5 != '#000000' {
-		return c5
-	}
-	c7 := palette_get(pal, 'color7', '#0f1415')
-	if c7.len > 0 && c7 != '#000000' {
-		return c7
-	}
-	return fg
-}
-
-// semantic_table is the concept|theme|dominant lookup from
-// get_smart_color. The empty-dominant key is the per-concept wildcard
-// (`concept|theme|*` in bash); anything unmatched falls back to #757575.
-const semantic_table = {
-	'error|dark|red':       '#ff6b6b'
-	'error|dark|orange':    '#ff5722'
-	'error|dark|purple':    '#e91e63'
-	'error|dark|':          '#f44336'
-	'error|light|red':      '#d32f2f'
-	'error|light|orange':   '#bf360c'
-	'error|light|purple':   '#ad1457'
-	'error|light|':         '#c62828'
-	'warning|dark|orange':  '#ff9800'
-	'warning|dark|yellow':  '#ffc107'
-	'warning|dark|red':     '#ff7043'
-	'warning|dark|':        '#ff8f00'
-	'warning|light|orange': '#ef6c00'
-	'warning|light|yellow': '#f57f17'
-	'warning|light|red':    '#d84315'
-	'warning|light|':       '#e65100'
-	'success|dark|green':   '#4caf50'
-	'success|dark|cyan':    '#00bcd4'
-	'success|dark|blue':    '#2196f3'
-	'success|dark|':        '#8bc34a'
-	'success|light|green':  '#2e7d32'
-	'success|light|cyan':   '#00838f'
-	'success|light|blue':   '#1565c0'
-	'success|light|':       '#689f38'
-	'info|dark|blue':       '#2196f3'
-	'info|dark|cyan':       '#00bcd4'
-	'info|dark|purple':     '#9c27b0'
-	'info|dark|':           '#03a9f4'
-	'info|light|blue':      '#1976d2'
-	'info|light|cyan':      '#0097a7'
-	'info|light|purple':    '#7b1fa2'
-	'info|light|':          '#0288d1'
-	'accent|dark|purple':   '#9c27b0'
-	'accent|dark|pink':     '#e91e63'
-	'accent|dark|orange':   '#ff5722'
-	'accent|dark|':         '#673ab7'
-	'accent|light|purple':  '#6a1b9a'
-	'accent|light|pink':    '#c2185b'
-	'accent|light|orange':  '#d84315'
-	'accent|light|':        '#512da8'
-	'red|dark|red':         '#f44336'
-	'red|dark|orange':      '#ff5722'
-	'red|dark|':            '#e53935'
-	'red|light|red':        '#d32f2f'
-	'red|light|orange':     '#bf360c'
-	'red|light|':           '#c62828'
-	'green|dark|green':     '#4caf50'
-	'green|dark|cyan':      '#26a69a'
-	'green|dark|':          '#66bb6a'
-	'green|light|green':    '#388e3c'
-	'green|light|cyan':     '#00695c'
-	'green|light|':         '#2e7d32'
-	'blue|dark|blue':       '#2196f3'
-	'blue|dark|cyan':       '#00bcd4'
-	'blue|dark|':           '#42a5f5'
-	'blue|light|blue':      '#1976d2'
-	'blue|light|cyan':      '#0097a7'
-	'blue|light|':          '#1565c0'
-	'yellow|dark|yellow':   '#ffeb3b'
-	'yellow|dark|orange':   '#ffc107'
-	'yellow|dark|':         '#ffca28'
-	'yellow|light|yellow':  '#f57f17'
-	'yellow|light|orange':  '#ef6c00'
-	'yellow|light|':        '#f9a825'
-	'cyan|dark|cyan':       '#00bcd4'
-	'cyan|dark|blue':       '#03a9f4'
-	'cyan|dark|':           '#26c6da'
-	'cyan|light|cyan':      '#00838f'
-	'cyan|light|blue':      '#0277bd'
-	'cyan|light|':          '#00695c'
-	'magenta|dark|purple':  '#9c27b0'
-	'magenta|dark|pink':    '#e91e63'
-	'magenta|dark|':        '#ab47bc'
-	'magenta|light|purple': '#7b1fa2'
-	'magenta|light|pink':   '#ad1457'
-	'magenta|light|':       '#8e24aa'
-	'purple|dark|purple':   '#9c27b0'
-	'purple|dark|pink':     '#e91e63'
-	'purple|dark|':         '#ab47bc'
-	'purple|light|purple':  '#7b1fa2'
-	'purple|light|pink':    '#ad1457'
-	'purple|light|':        '#8e24aa'
-	'orange|dark|orange':   '#ff9800'
-	'orange|dark|red':      '#ff5722'
-	'orange|dark|':         '#ffb74d'
-	'orange|light|orange':  '#f57c00'
-	'orange|light|red':     '#d84315'
-	'orange|light|':        '#ef6c00'
-	'pink|dark|pink':       '#e91e63'
-	'pink|dark|purple':     '#9c27b0'
-	'pink|dark|':           '#f06292'
-	'pink|light|pink':      '#c2185b'
-	'pink|light|purple':    '#7b1fa2'
-	'pink|light|':          '#ad1457'
-	'brown|dark|red':       '#8d6e63'
-	'brown|dark|orange':    '#a1887f'
-	'brown|dark|':          '#795548'
-	'brown|light|red':      '#5d4037'
-	'brown|light|orange':   '#6d4c41'
-	'brown|light|':         '#4e342e'
-}
-
-// semantic_base returns the raw table color for concept|theme|dominant,
-// with the per-concept wildcard and the #757575 default.
-pub fn semantic_base(concept string, theme string, dominant string) string {
-	if v := semantic_table[concept + '|' + theme + '|' + dominant] {
-		return v
-	}
-	if v := semantic_table[concept + '|' + theme + '|'] {
-		return v
-	}
-	return '#757575'
-}
-
 // valid_smart_concept mirrors the find_best_color_for_concept validation.
 pub fn valid_smart_concept(concept string) bool {
 	return concept in ['error', 'warning', 'success', 'info', 'accent', 'red', 'green', 'blue',
@@ -378,89 +78,30 @@ pub fn valid_smart_concept(concept string) bool {
 		'grey', 'background', 'background-alt', 'foreground', 'foreground-alt']
 }
 
-// smart_color_for resolves one concept against a palette map: neutrals
-// and background/foreground variants read the palette directly, every
-// other concept goes through base + contrast + 10% harmonization.
-// Output is hex (the only format the file generators consume).
-pub fn smart_color_for(concept string, pal map[string]string) !string {
+// signal_concept maps one smart concept onto the Signal scheme: neutrals
+// and semantic concepts read roles, basic hues read the terminal palette.
+pub fn signal_concept(t SignalTheme, concept string) !string {
 	if !valid_smart_concept(concept) {
 		return error('unknown concept: ${concept}')
 	}
-	match concept {
-		'white' {
-			return palette_get(pal, 'foreground', '#ffffff')
-		}
-		'black' {
-			return palette_get(pal, 'background', '#000000')
-		}
-		'gray', 'grey' {
-			return palette_get(pal, 'color8', '#808080')
-		}
-		'background' {
-			return palette_get(pal, 'background', '#000000')
-		}
-		'background-alt' {
-			return palette_get(pal, 'color1', '#1a1a1a')
-		}
-		'foreground' {
-			bg := palette_get(pal, 'background', '#000000')
-			return optimal_foreground(pal, is_light_hex(bg))
-		}
-		'foreground-alt' {
-			return palette_get(pal, 'color5', '#888888')
-		}
-		else {}
-	}
-	bg := palette_get(pal, 'background', '#000000')
-	light := is_light_hex(bg)
-	theme := if light { 'light' } else { 'dark' }
-	dominant := palette_dominant(pal)
-	average := palette_average(pal)
-	base := semantic_base(concept, theme, dominant)
-	enhanced := enhance_contrast_for_theme(base, light)
-	return blend_hex(enhanced, average, 10)
-}
-
-// normalize_scheme_type canonicalizes an M3 scheme-type name the way
-// horneroctl appearance scheme does (fruitsalad/rainbow are expressive aliases).
-pub fn normalize_scheme_type(raw string) string {
-	n := raw.to_lower().replace('_', '-').replace(' ', '')
-	match n {
-		'vibrant' { return 'vibrant' }
-		'tonalspot', 'tonal-spot' { return 'tonal-spot' }
-		'expressive', 'fruitsalad', 'rainbow' { return 'expressive' }
-		'fidelity' { return 'fidelity' }
-		'content' { return 'content' }
-		'neutral' { return 'neutral' }
-		'monochrome' { return 'monochrome' }
-		else { return 'tonal-spot' }
-	}
-}
-
-// normalize_variant canonicalizes a launcher variant name.
-pub fn normalize_variant(raw string) string {
-	n := raw.to_lower().replace('_', '-').replace(' ', '')
-	match n {
-		'tonal-spot', 'tonalspot' {
-			return 'tonalspot'
-		}
-		'vibrant', 'expressive', 'fidelity', 'content', 'neutral', 'monochrome', 'fruitsalad',
-		'rainbow' {
-			return n
-		}
-		else {
-			return 'tonalspot'
-		}
-	}
-}
-
-// variant_to_scheme_type maps a variant name to its M3 scheme type.
-pub fn variant_to_scheme_type(variant string) string {
-	v := normalize_variant(variant)
-	match v {
-		'tonalspot' { return 'tonal-spot' }
-		'fruitsalad', 'rainbow' { return 'expressive' }
-		else { return v }
+	return match concept {
+		'background', 'black' { t.role('base') }
+		'background-alt' { t.role('panel') }
+		'foreground', 'white' { t.role('ink') }
+		'foreground-alt' { t.role('inkMuted') }
+		'gray', 'grey' { t.role('inkFaint') }
+		'error' { t.role('alert') }
+		'warning', 'accent', 'orange' { t.role('signal') }
+		'success' { t.role('phosphor') }
+		'info' { t.role('cue') }
+		'brown' { t.role('signalWell') }
+		'red' { t.terminal[1] }
+		'green' { t.terminal[2] }
+		'yellow' { t.terminal[3] }
+		'blue' { t.terminal[4] }
+		'magenta', 'purple' { t.terminal[5] }
+		'cyan' { t.terminal[6] }
+		else { t.terminal[13] } // pink: bright magenta
 	}
 }
 
@@ -579,27 +220,20 @@ pub:
 	light          bool
 }
 
-// derive_palette resolves every smart concept against a palette map,
-// mirroring generate_smart_color_files (fallbacks included).
-pub fn derive_palette(pal map[string]string, wallpaper string) SmartPalette {
-	bg := palette_get(pal, 'background', '#000000')
-	light := is_light_hex(bg)
-	fg := optimal_foreground(pal, light)
-	mut cursor := palette_get(pal, 'cursor', '')
-	if cursor.len == 0 {
-		cursor = fg
-	}
-	get := fn [pal] (concept string) string {
-		return smart_color_for(concept, pal) or { '#757575' }
+// signal_smart_palette resolves every smart concept against the Signal
+// scheme for the file renderers.
+pub fn signal_smart_palette(t SignalTheme, wallpaper string) SmartPalette {
+	get := fn [t] (concept string) string {
+		return signal_concept(t, concept) or { t.role('ink') }
 	}
 	mut base := [16]string{}
 	for i in 0 .. 16 {
-		base[i] = palette_get(pal, 'color${i}', '#000000')
+		base[i] = t.terminal[i]
 	}
 	return SmartPalette{
-		background:     bg
-		foreground:     fg
-		cursor:         cursor
+		background:     get('background')
+		foreground:     get('foreground')
+		cursor:         t.role('signal')
 		background_alt: get('background-alt')
 		foreground_alt: get('foreground-alt')
 		error:          get('error')
@@ -621,7 +255,7 @@ pub fn derive_palette(pal map[string]string, wallpaper string) SmartPalette {
 		gray:           get('gray')
 		base:           base
 		wallpaper:      wallpaper
-		light:          light
+		light:          t.mode == 'light'
 	}
 }
 
@@ -680,7 +314,7 @@ pub fn render_shell_colors(p SmartPalette) string {
 
 // render_env_colors renders colors.env.
 pub fn render_env_colors(p SmartPalette, env_file string) string {
-	mut out := '# Environment variables for smart colors\n# Generated by horneroctl appearance colors generate\n'
+	mut out := '# Environment variables for smart colors\n# Generated by horneroctl appearance colors generate from Hornero Signal\n'
 	out += '# Source this file: source ${env_file}\n\n# Background and foreground variants\n'
 	out += "export COLOR_BACKGROUND='${p.background}'\nexport COLOR_BACKGROUND_ALT='${p.background_alt}'\n"
 	out += "export COLOR_FOREGROUND='${p.foreground}'\nexport COLOR_FOREGROUND_ALT='${p.foreground_alt}'\n"
@@ -722,84 +356,13 @@ pub fn render_waybar(p SmartPalette) string {
 
 // render_mako renders colors-mako.conf.
 pub fn render_mako(p SmartPalette) string {
-	mut out := '# Mako notification colors\n# Generated by horneroctl appearance colors generate\n'
+	mut out := '# Mako notification colors\n# Generated by horneroctl appearance colors generate from Hornero Signal\n'
 	out += '# Include this in your mako config or replace values manually\n\n'
 	out += 'background-color=${p.background}\ntext-color=${p.foreground}\n'
 	out += 'border-color=${p.accent}\nprogress-color=over ${p.base[8]}\n\n'
 	out += '[urgency=low]\nborder-color=${p.info}\n\n[urgency=normal]\nborder-color=${p.accent}\n\n'
 	out += '[urgency=critical]\nborder-color=${p.error}\ntext-color=${p.error}\n'
 	return out
-}
-
-// render_hyprland renders the compatibility colors-hyprland.conf file.
-pub fn render_hyprland(p SmartPalette) string {
-	strip := fn (c string) string {
-		return if c.starts_with('#') { c[1..] } else { c }
-	}
-	mut out := '# Hyprland colors configuration\n# Generated by horneroctl appearance colors generate\n'
-	out += '# Source this in your hyprland.conf.d/colors.conf\n\ngeneral {\n'
-	out += '    col.active_border = rgba(${strip(p.accent)}ee) rgba(${strip(p.info)}ee) 45deg\n'
-	out += '    col.inactive_border = rgba(${strip(p.base[8])}aa)\n}\n\ngroup {\n'
-	out += '    col.border_active = rgba(${strip(p.accent)}ee)\n'
-	out += '    col.border_inactive = rgba(${strip(p.base[8])}aa)\n'
-	out += '    col.border_locked_active = rgba(${strip(p.warning)}ee)\n'
-	out += '    col.border_locked_inactive = rgba(${strip(p.base[8])}aa)\n'
-	out += '\n    groupbar {\n'
-	out += '        col.active = rgba(${strip(p.accent)}ee)\n'
-	out += '        col.inactive = rgba(${strip(p.base[8])}aa)\n'
-	out += '        col.locked_active = rgba(${strip(p.warning)}ee)\n'
-	out += '        col.locked_inactive = rgba(${strip(p.base[8])}aa)\n'
-	out += '    }\n}\n'
-	return out
-}
-
-// smart_hyprland_rgba renders a palette color in Hyprland's rgba() syntax,
-// falling back to a known-valid color if a palette value is malformed. The
-// color is embedded in generated Lua source, so validation also prevents
-// untrusted xrdb text from escaping a quoted string.
-fn smart_hyprland_rgba(color string, alpha string, fallback string) string {
-	hex := if color.starts_with('#') { color[1..] } else { color }
-	_, _, _ = parse_hex6(hex) or { return 'rgba(${fallback}${alpha})' }
-	return 'rgba(${hex.to_lower()}${alpha})'
-}
-
-// render_hyprland_lua renders a Lua-compatible palette module for the
-// Hyprland 0.55+ configuration path. The existing .conf output stays intact
-// for compatibility until the dotfiles entrypoint and consumers are migrated.
-pub fn render_hyprland_lua(p SmartPalette) string {
-	active := smart_hyprland_rgba(p.accent, 'ee', 'e07856')
-	secondary := smart_hyprland_rgba(p.info, 'ee', 'f2b749')
-	inactive := smart_hyprland_rgba(p.base[8], 'aa', '6b4e3b')
-	locked := smart_hyprland_rgba(p.warning, 'ee', 'f2b749')
-	locked_inactive := smart_hyprland_rgba(p.base[8], 'aa', '6b4e3b')
-	groupbar_inactive := smart_hyprland_rgba(p.base[8], 'ee', '6b4e3b')
-	groupbar_muted := smart_hyprland_rgba(p.base[8], 'ee', '6b4e3b')
-	return '-- Generated by horneroctl appearance colors generate; do not edit.\n' +
-		'-- Staged for the Hyprland Lua configuration migration.\n' +
-		'hl.config({\n' +
-		'    general = {\n' +
-		'        col = {\n' +
-		'            active_border = { colors = { "${active}", "${secondary}" }, angle = 45 },\n' +
-		'            inactive_border = "${inactive}",\n' +
-		'        },\n' +
-		'    },\n' +
-		'    group = {\n' +
-		'        col = {\n' +
-		'            border_active = "${active}",\n' +
-		'            border_inactive = "${inactive}",\n' +
-		'            border_locked_active = "${locked}",\n' +
-		'            border_locked_inactive = "${locked_inactive}",\n' +
-		'        },\n' +
-		'        groupbar = {\n' +
-		'            col = {\n' +
-		'                active = "${active}",\n' +
-		'                inactive = "${groupbar_inactive}",\n' +
-		'                locked_active = "${locked}",\n' +
-		'                locked_inactive = "${groupbar_muted}",\n' +
-		'            },\n' +
-		'        },\n' +
-		'    },\n' +
-		'})\n'
 }
 
 // render_wlogout renders colors-wlogout.css.
@@ -825,7 +388,7 @@ pub fn render_hyprlock_env(p SmartPalette) string {
 		return if c.starts_with('#') { c[1..] } else { c }
 	}
 	theme := if p.light { 'light' } else { 'dark' }
-	mut out := '# Hyprlock colors configuration\n# Generated by horneroctl appearance colors generate\n'
+	mut out := '# Hyprlock colors configuration\n# Generated by horneroctl appearance colors generate from Hornero Signal\n'
 	out += '# Source this for theme-adaptive lock screens\n\n'
 	out += '# Background and foreground (without # prefix for hyprlock rgba)\n'
 	out += 'SMART_BG="${p.background}"\nSMART_FG="${p.foreground}"\n'
@@ -841,21 +404,6 @@ pub fn render_hyprlock_env(p SmartPalette) string {
 	out += 'SMART_YELLOW="${p.yellow}"\nSMART_CYAN="${p.cyan}"\nSMART_MAGENTA="${p.magenta}"\n'
 	out += 'SMART_ORANGE="${p.orange}"\nSMART_PINK="${p.pink}"\n\n# Theme type\n'
 	out += 'SMART_THEME_TYPE="${theme}"\n'
-	return out
-}
-
-// render_kitty renders colors-kitty.conf.
-pub fn render_kitty(p SmartPalette) string {
-	mut out := '# Kitty terminal colors\n# Generated by horneroctl appearance colors generate\n'
-	out += '# Include this in kitty.conf: include ~/.cache/hornero/smart-colors/colors-kitty.conf\n\n# Base colors\n'
-	out += 'background ${p.background}\nforeground ${p.foreground}\ncursor ${p.cursor}\n'
-	out += 'selection_background ${p.accent}\nselection_foreground ${p.background}\n'
-	names := ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White']
-	los := [0, 1, 2, 3, 4, 5, 6, 7]
-	his := [8, 9, 10, 11, 12, 13, 14, 15]
-	for i, name in names {
-		out += '\n# ${name}\ncolor${los[i]} ${p.base[los[i]]}\ncolor${his[i]} ${p.base[his[i]]}\n'
-	}
 	return out
 }
 
@@ -889,11 +437,11 @@ pub fn render_copyq(p SmartPalette) string {
 	sel_fg := if p.light { p.background } else { p.foreground }
 	mut out := '[General]\n# CopyQ Theme - Smart Colors Integration\n'
 	out += '# Generated by horneroctl appearance colors generate\n# Theme type: ${theme}\n\n# Fonts\n'
-	out += 'font="JetBrainsMono Nerd Font,10,-1,5,50,0,0,0,0,0"\n'
-	out += 'edit_font="JetBrainsMono Nerd Font,11,-1,5,50,0,0,0,0,0"\n'
-	out += 'find_font="JetBrainsMono Nerd Font,10,-1,5,50,0,0,0,0,0"\n'
-	out += 'notes_font="JetBrainsMono Nerd Font,11,-1,5,50,0,0,0,0,0"\n'
-	out += 'num_font="JetBrainsMono Nerd Font,7,-1,5,25,0,0,0,0,0"\nfont_antialiasing=true\n\n'
+	out += 'font="IBM Plex Mono,10,-1,5,50,0,0,0,0,0"\n'
+	out += 'edit_font="IBM Plex Mono,11,-1,5,50,0,0,0,0,0"\n'
+	out += 'find_font="IBM Plex Mono,10,-1,5,50,0,0,0,0,0"\n'
+	out += 'notes_font="IBM Plex Mono,11,-1,5,50,0,0,0,0,0"\n'
+	out += 'num_font="IBM Plex Mono,7,-1,5,25,0,0,0,0,0"\nfont_antialiasing=true\n\n'
 	out += '# Main colors - balanced and readable\nbg=${p.background}\nfg=${p.foreground}\n'
 	alt_bg := if p.light { 'bg - #0a0a0a' } else { 'bg + #1a1a1a' }
 	out += 'alt_bg=${alt_bg}\n'
@@ -972,72 +520,5 @@ pub fn render_copyq(p SmartPalette) string {
 	out += '    ClipboardBrowser::item:hover{\n        background: ' + '$' + '{bg}' +
 		' ${pick('- #0a0a0a', '+ #0a0a0a')}\n'
 	out += '    }"\n\nnotes_css=\n'
-	return out
-}
-
-// hyprlock_rgba converts #rrggbb + alpha into hyprlock's rrggbbaa form.
-pub fn hyprlock_rgba(color string, alpha string) string {
-	hex := if color.starts_with('#') { color[1..] } else { color }
-	return hex + alpha
-}
-
-pub struct HyprlockScheme {
-pub:
-	primary            string
-	surface            string
-	on_surface         string
-	background         string
-	on_surface_variant string
-	outline            string
-	secondary          string
-	error              string
-	light              bool
-	wallpaper          string
-	scheme_source      string
-}
-
-// render_hyprlock_conf renders colors-hyprlock.conf from M3 scheme colors,
-// mirroring Hornero lock theme generator byte-for-byte in structure.
-pub fn render_hyprlock_conf(s HyprlockScheme) string {
-	def := fn (v string, fallback string) string {
-		return if v.len > 0 { v } else { fallback }
-	}
-	bg := hyprlock_rgba(def(s.background, '191114'), 'ff')
-	on_surface := hyprlock_rgba(def(s.on_surface, 'efdfe2'), 'ff')
-	on_surface_variant := hyprlock_rgba(def(s.on_surface_variant, 'd5c2c6'), 'cc')
-	outline := hyprlock_rgba(def(s.outline, '9e8c91'), '88')
-	secondary := hyprlock_rgba(def(s.secondary, 'e2bdc7'), 'ff')
-	input_inner := hyprlock_rgba(def(s.surface, '191114'), 'bb')
-	err_col := def(s.error, 'ffb4ab')
-	brightness := if s.light { '1.1' } else { '0.8' }
-	wall_block := if s.wallpaper.len > 0 {
-		'path = ${s.wallpaper}'
-	} else {
-		'color = 0xff${bg}'
-	}
-	on_surf := def(s.on_surface, 'efdfe2')
-	prim := def(s.primary, 'ffb0ca')
-	mut out := '# ============================================================================\n'
-	out += '# hyprlock smart-color overrides\n# Auto-generated by horneroctl — do not edit manually.\n'
-	out += '# Source: ${s.scheme_source}\n'
-	out += '# ============================================================================\n\nbackground {\n    monitor =\n    ${wall_block}\n'
-	out += '    blur_passes = 3\n    blur_size = 6\n    noise = 0.012\n    contrast = 0.9\n'
-	out += '    brightness = ${brightness}\n    vibrancy = 0.15\n    vibrancy_darkness = 0.0\n}\n\n'
-	out += 'input-field {\n    monitor =\n    size = 300, 60\n    outline_thickness = 2\n'
-	out += '    dots_spacing = 0.35\n    dots_center = true\n    dots_rounding = -1\n'
-	out += '    fade_on_empty = true\n'
-	out += '    placeholder_text = <span foreground="##${on_surface_variant}">  Enter Password</span>\n'
-	out += '    font_color = rgb(${on_surf})\n    inner_color = rgba(${input_inner})\n'
-	out += '    outer_color = rgba(${outline})\n    check_color = rgb(${prim})\n'
-	out += '    fail_color = rgba(${err_col}bb)\n'
-	out += '    fail_text = <i>\$FAIL_REASON</i>\n    fail_timeout = 2000\n    rounding = 12\n'
-	out += '    shadow_passes = 3\n    shadow_size = 8\n    shadow_color = rgba(00000060)\n}\n\n'
-	out += 'label {\n    monitor =\n    text = \$TIME12\n    text_align = center\n'
-	out += '    color = rgba(${on_surface})\n    font_size = 56\n    font_family = Rubik 300\n'
-	out += '    position = 0, 160\n    halign = center\n    valign = center\n'
-	out += '    shadow_passes = 3\n    shadow_size = 6\n    shadow_color = rgba(00000088)\n}\n\n'
-	out += 'label {\n    monitor =\n    text =  \$USER\n    text_align = center\n'
-	out += '    color = rgba(${secondary})\n    font_size = 13\n    font_family = Rubik\n'
-	out += '    position = 0, -80\n    halign = center\n    valign = center\n}\n'
 	return out
 }

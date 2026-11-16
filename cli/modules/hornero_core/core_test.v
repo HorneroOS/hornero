@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import x.json2
 
 fn test_exit_codes() {
 	assert ErrorClass.ok.exit_code() == 0
@@ -191,16 +192,28 @@ fn p2_write(path string, content string) {
 	os.write_file(path, content) or { assert false }
 }
 
+// p2_pack derives a schema-v2 pack from the Signal Night fixture.
+fn p2_pack(id string, extra string) string {
+	raw := os.read_file(os.join_path(os.dir(@FILE), '..', '..', 'testdata', 'signal-themes',
+		'hornero-signal-night', 'theme.json')) or { panic(err) }
+	mut m := json2.decode[map[string]json2.Any](raw) or { panic(err) }
+	m['id'] = json2.Any(id)
+	m.delete('description')
+	for k, v in json2.decode[map[string]json2.Any](extra) or { panic(err) } {
+		m[k] = v
+	}
+	return json2.encode(m)
+}
+
 fn p2_setup_themes() {
-	p2_write('${p2_root}/themes/alpha/theme.json', '{"schemaVersion":1,"id":"alpha","name":"Alpha","description":"First pack","gtkTheme":"Orchis-Dark","iconTheme":"Papirus","defaultWallpaper":"a.jpg","wallpaperDir":"alpha"}')
-	p2_write('${p2_root}/themes/beta/theme.json', '{"schemaVersion":1,"id":"beta","name":"Beta","defaultWallpaper":"b.jpg","wallpaperDir":"beta","gtkTheme":"Orchis-Light","iconTheme":"Numix"}')
+	p2_write('${p2_root}/themes/alpha/theme.json', p2_pack('alpha', '{"name":"Alpha","description":"First pack","gtkTheme":"Orchis-Dark","iconTheme":"Papirus","defaultWallpaper":"a.jpg","wallpaperDir":"alpha"}'))
+	p2_write('${p2_root}/themes/beta/theme.json', p2_pack('beta', '{"name":"Beta","mode":"light","defaultWallpaper":"b.jpg","wallpaperDir":"beta","gtkTheme":"Orchis-Light","iconTheme":"Numix"}'))
 	p2_write('${p2_root}/themes/broken/theme.json', '{not json')
 	os.setenv('HORNERO_THEMES_DIR', '${p2_root}/themes', true)
 }
 
 fn p2_setup_scheme() {
-	p2_write('${p2_root}/state/hornero/scheme/state.json', '{"name":"dynamic","flavour":"tonal-spot","mode":"dark","variant":"tonalspot","gtkColorScheme":"follow"}')
-	p2_write('${p2_root}/cache/hornero/smart-colors/scheme.json', '{"flavour":"expressive","mode":"light"}')
+	p2_write('${p2_root}/state/hornero/scheme/state.json', '{"theme":"hornero-signal-day","gtkColorScheme":"follow"}')
 	os.setenv('XDG_STATE_HOME', '${p2_root}/state', true)
 	os.setenv('XDG_CACHE_HOME', '${p2_root}/cache', true)
 }
@@ -249,6 +262,7 @@ fn test_theme_show_detail_and_rejections() {
 	r := theme_show_report('beta')
 	assert r.ok
 	assert r.data['name'] == 'Beta'
+	assert r.data['mode'] == 'light'
 	assert r.data['gtk_theme'] == 'Orchis-Light'
 	assert r.data['wallpaper'] == 'beta/b.jpg'
 	assert r.message.contains('wallpaper: beta/b.jpg')
@@ -264,21 +278,18 @@ fn test_theme_show_detail_and_rejections() {
 
 fn test_theme_apply_needs_yes_and_previews() {
 	// Native apply resolves the pack even for a preview: use a fixture pack.
-	os.mkdir_all('/tmp/hx-core-apply-test/themes/pampa') or { assert false }
-	os.write_file('/tmp/hx-core-apply-test/themes/pampa/theme.json', '{"schemaVersion":1,"id":"pampa","name":"Pampa","gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","mode":"dark"}') or {
-		assert false
-	}
-	os.setenv('HORNERO_THEMES_DIR', '/tmp/hx-core-apply-test/themes', true)
+	os.setenv('HORNERO_THEMES_DIR', os.join_path(os.dir(@FILE), '..', '..', 'testdata',
+		'signal-themes'), true)
 	dry := theme_apply_report(ThemeApplyOptions{
-		id:      'pampa'
+		id:      'hornero-signal-day'
 		dry_run: true
 	})
 	assert dry.ok
 	assert dry.data['dry_run'] == 'true'
-	assert dry.data['id'] == 'pampa'
+	assert dry.data['id'] == 'hornero-signal-day'
 	assert dry.message.contains('would run:')
 	refused := theme_apply_report(ThemeApplyOptions{
-		id: 'pampa'
+		id: 'hornero-signal-day'
 	})
 	assert !refused.ok
 	assert refused.message.contains('--yes')
@@ -290,18 +301,19 @@ fn test_theme_apply_needs_yes_and_previews() {
 	os.unsetenv('HORNERO_THEMES_DIR')
 }
 
-fn test_scheme_status_prefers_state_file() {
+fn test_scheme_status_reads_selection_from_state_file() {
 	p2_setup_scheme()
 	s := read_scheme_state()
-	assert s.mode == 'dark'
-	assert s.flavour == 'tonal-spot'
-	assert s.variant == 'tonalspot'
+	assert s.theme == 'hornero-signal-day'
+	assert s.theme_source == 'state'
+	assert s.mode == ''
+	assert !s.scheme_valid
 	assert s.gtk_color_scheme == 'follow'
 	r := scheme_status_report()
 	assert r.ok
-	assert r.data['mode'] == 'dark'
+	assert r.data['theme'] == 'hornero-signal-day'
 	assert r.data['gtk_color_scheme'] == 'follow'
-	assert r.message.contains('mode: dark')
+	assert r.message.contains('mode: (unknown)')
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
 }
@@ -309,36 +321,16 @@ fn test_scheme_status_prefers_state_file() {
 fn test_scheme_status_without_files_is_unknown_but_ok() {
 	os.setenv('XDG_STATE_HOME', '/nonexistent-state-hornero-test', true)
 	os.setenv('XDG_CACHE_HOME', '/nonexistent-cache-hornero-test', true)
+	os.setenv('XDG_CONFIG_HOME', '/nonexistent-config-hornero-test', true)
 	r := scheme_status_report()
 	assert r.ok
 	assert r.message.contains('(unknown)')
+	assert r.data['theme'] == 'hornero-signal-night'
 	// Missing policy key defaults to follow.
 	assert r.data['gtk_color_scheme'] == 'follow'
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
-}
-
-fn test_scheme_set_validates_and_previews() {
-	bad := scheme_set_report(SchemeSetOptions{
-		kind:  'mode'
-		value: 'dim'
-	})
-	assert !bad.ok
-	assert bad.message.contains('dark|light')
-	dry := scheme_set_report(SchemeSetOptions{
-		kind:    'mode'
-		value:   'dark'
-		dry_run: true
-	})
-	assert dry.ok
-	assert dry.message.contains('would run:')
-	assert dry.data['mode'] == 'dark'
-	refused := scheme_set_report(SchemeSetOptions{
-		kind:  'variant'
-		value: 'tonalspot'
-	})
-	assert !refused.ok
-	assert refused.message.contains('--yes')
+	os.unsetenv('XDG_CONFIG_HOME')
 }
 
 fn test_config_show_values_and_lookups() {

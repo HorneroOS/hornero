@@ -56,8 +56,8 @@ pub fn assistant_broker_argv(tool string, arg string) ![]string {
 			return ['grim', '<workspace>/screenshot-<timestamp>.png']
 		}
 		'theme_set' {
-			if arg !in ['hornero-dark', 'hornero-light', 'pampa'] {
-				return error('theme_set needs an official theme id (hornero-dark, hornero-light, pampa)')
+			if arg !in signal_builtin_theme_ids {
+				return error('theme_set needs an official theme id (${signal_builtin_theme_ids.join(', ')})')
 			}
 			return ['horneroctl', 'appearance', 'theme', 'set', arg, '--yes']
 		}

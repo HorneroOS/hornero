@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # p2-screenshots.sh - Preview 2 per-theme graphical evidence matrix.
 #
-# For each official theme (hornero-dark, hornero-light, pampa): apply it
+# For each built-in Signal theme (hornero-signal-night, -day, -contrast): apply it
 # through the real control plane (`horneroctl appearance theme set --yes`)
 # inside a live Hyprland + Hornero Shell session, launch representative
 # applications per toolkit, and capture screenshots plus machine-readable
@@ -158,18 +158,11 @@ bash "$SHELL_HARNESS/lib/deploy-shell.sh" || fail "guest deploy (shell + config 
 pass "guest deployed (shell, composed config, factory defaults, wallpapers)"
 
 # --- 4. P2 overlay preparation (network PREP phase) -----------------------------
-# Appearance dependency plus demo apps captured by the matrix. The palette
-# pipeline uses Hornero's Material generator directly; no Pywal backend is used.
+# Demo apps captured by the matrix. Hornero Signal themes carry their own
+# palette, so no colour generator is installed.
 # shellcheck disable=SC2016
-vm_ssh 'sudo pacman -S --noconfirm --needed python-pip gtk3 gtk4 gtk4-demos zenity loupe hyprlock qt6ct copyq' \
+vm_ssh 'sudo pacman -S --noconfirm --needed gtk3 gtk4 gtk4-demos zenity loupe hyprlock qt6ct copyq' \
   || fail "guest P2 packages"
-# shellcheck disable=SC2016
-vm_ssh 'python3 -m pip install --user -q --break-system-packages materialyoucolor' \
-  || fail "guest pip install (materialyoucolor)"
-# shellcheck disable=SC2016
-vm_ssh 'export PATH=$HOME/.local/bin:$PATH
-  python3 -c "import materialyoucolor"' \
-  || fail "guest P2 apply deps (materialyoucolor)"
 pass "guest P2 preparation complete"
 
 bash "$SHELL_HARNESS/lib/start-session.sh" || fail "guest session (Hyprland + shell)"
@@ -353,13 +346,13 @@ exec bash
 DEMO
 chmod +x /tmp/p2-term-demo.sh' || fail "guest term demo write"
 
-for spec in \
-  "hornero-dark:Hornero-Dark:hornero-dark/hornero-dark-01.png:dark" \
-  "hornero-light:Hornero-Light:hornero-light/hornero-light-01.png:light" \
-  "pampa:Hornero-Pampa:pampa/pampa-01.png:dark"; do
-  id="${spec%%:*}"; rest="${spec#*:}"
-  gtk="${rest%%:*}"; rest="${rest#*:}"
-  wall="${rest%%:*}"; mode="${rest##*:}"
+for spec in "hornero-signal-night:dark" "hornero-signal-day:light" "hornero-signal-contrast:dark"; do
+  id="${spec%%:*}"; mode="${spec##*:}"
+  # shellcheck disable=SC2016
+  show="$(vm_ssh "$GENV; \$HOME/horneroctl --json appearance theme show $id" 2>&1)" \
+    || fail "guest theme show $id: $show"
+  gtk="$(printf '%s' "$show" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["gtk_theme"])')"
+  wall="$(printf '%s' "$show" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["wallpaper"])')"
 
   # 6a0. fresh session per theme. Proven necessity, not paranoia: a
   # SIGTERM-released hyprlock poisons the NEXT shell lock in the same
@@ -382,12 +375,8 @@ for spec in \
     || fail "guest theme get $id: $getout"
   echo "$getout" | grep -q "current theme: $id (" \
     || fail "guest theme get $id (no id match): $getout"
-  # mode lives in scheme/state.json (horneroctl appearance scheme writer, absent in
-  # minimal guests): assert it when reported, note when the GTK match
-  # governs (same contract as tests/vm/smoke.sh).
-  if ! echo "$getout" | grep -q "(mode=$mode,"; then
-    echo "note: guest backend reports no mode for $id (want $mode; GTK match governs)"
-  fi
+  echo "$getout" | grep -q "mode=$mode," \
+    || fail "guest theme get $id (want mode=$mode): $getout"
   pass "guest theme $id applied via horneroctl (offline)"
 
   # 6b. machine-readable consumer state snapshot.
@@ -398,7 +387,7 @@ for spec in \
     echo '--- gtk4 settings'; grep -H '^gtk-theme-name\|^gtk-application-prefer-dark' \$HOME/.config/gtk-4.0/settings.ini 2>/dev/null || echo '(no gtk4 settings)'
     echo '--- wallpaper pointer'; cat \$HOME/.local/state/hornero/wallpaper/path 2>/dev/null || echo '(no wallpaper pointer)'
     echo '--- kitty'; ls -la \$HOME/.config/kitty/kitty.conf 2>/dev/null || echo '(no kitty conf)'
-    echo '--- M3 scheme'; ls -la \$HOME/.cache/hornero/smart-colors/scheme.json 2>/dev/null || echo '(no M3 scheme)'
+    echo '--- signal scheme'; cat \$HOME/.local/state/hornero/signal/scheme.json 2>/dev/null || echo '(no live scheme)'
     echo '--- qt6ct'; cat \$HOME/.config/qt6ct/qt6ct.conf 2>/dev/null | head -6 || cat /etc/xdg/qt6ct/qt6ct.conf 2>/dev/null | head -6 || echo '(no qt6ct conf)'
     echo '--- qt6ct effective'; grep -H '^custom_palette\|^color_scheme_path' \$HOME/.config/qt6ct/qt6ct.conf 2>/dev/null || echo '(no effective qt palette)'
     echo '--- hyprland env pin'; grep -H '^env = QT_QPA_PLATFORMTHEME' \$HOME/.config/hypr/hyprland.conf.d/environment.conf 2>/dev/null || echo '(no platformtheme pin)'
@@ -408,8 +397,12 @@ for spec in \
   # assertion must not anchor at line start.
   grep -q "gtk-theme-name=$gtk\$" "$SHOT_LOGS/$id-state.txt" \
     || fail "guest GTK mapping $id ($gtk)"
-  grep -q "$wall\$" "$SHOT_LOGS/$id-state.txt" \
-    || fail "guest wallpaper pointer $id ($wall)"
+  if [[ -n $wall ]]; then
+    grep -q "$wall\$" "$SHOT_LOGS/$id-state.txt" \
+      || fail "guest wallpaper pointer $id ($wall)"
+  fi
+  grep -q "\"id\":\"$id\"" "$SHOT_LOGS/$id-state.txt" \
+    || fail "guest live Signal scheme is not $id"
   grep -q "color_scheme_path=.*/qt6ct/colors/$id.conf\$" "$SHOT_LOGS/$id-state.txt" \
     || fail "guest qt6ct not pointed at the $id palette"
   grep -q "custom_palette=true\$" "$SHOT_LOGS/$id-state.txt" \
@@ -483,9 +476,9 @@ hyprctl clients -j 2>/dev/null | python3 -c 'import json,sys; sys.exit(0 if any(
   drawer_set dashboard false
 
   # 6g2. libadwaita witness: loupe (GTK4/libadwaita) showing the theme's
-  # own wallpaper, so the recolor path renders Hornero content.
+  # current wallpaper, so the recolor path renders Hornero content.
   # shellcheck disable=SC2016
-  launch "loupe \$HOME/.local/share/hornero/wallpapers/$id/$id-01.png"
+  launch "loupe \$(cat \$HOME/.local/state/hornero/wallpaper/path)"
   shot "$id" adwaita
   close_apps
 
@@ -571,7 +564,7 @@ from pathlib import Path
 img = Path(sys.argv[1])
 shots = ["desktop", "kitty", "gtk3", "gtk4", "qt6", "launcher", "dashboard", "adwaita", "lockscreen", "hyprlock"]
 out = {}
-for theme in ("hornero-dark", "hornero-light", "pampa"):
+for theme in ("hornero-signal-night", "hornero-signal-day", "hornero-signal-contrast"):
     got = {s: (img / theme / f"{s}.png").is_file() for s in shots}
     out[theme] = {"shots": got, "complete": all(got.values())}
 print(json.dumps(out))

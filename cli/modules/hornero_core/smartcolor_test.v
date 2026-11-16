@@ -1,31 +1,17 @@
 module hornero_core
 
-// Golden vectors for the smart-colors engine. Expected outputs were
-// computed by an independent Python oracle implementing the bash
-// formulas, then hardcoded here: the V port must match exactly.
+import os
+import x.json2
 
-fn golden_palette() map[string]string {
-	return {
-		'background': '#1a1b26'
-		'foreground': '#c0caf5'
-		'cursor':     '#c0caf5'
-		'color0':     '#15161e'
-		'color1':     '#f7768e'
-		'color2':     '#9ece6a'
-		'color3':     '#e0af68'
-		'color4':     '#7aa2f7'
-		'color5':     '#bb9af7'
-		'color6':     '#7dcfff'
-		'color7':     '#a9b1d6'
-		'color8':     '#414868'
-		'color9':     '#f7768e'
-		'color10':    '#9ece6a'
-		'color11':    '#e0af68'
-		'color12':    '#7aa2f7'
-		'color13':    '#bb9af7'
-		'color14':    '#7dcfff'
-		'color15':    '#c0caf5'
-	}
+// Smart-colors engine vectors: hex helpers, GTK policy normalization, and
+// the smart-color renderers fed from a Hornero Signal fixture
+// (cli/testdata/signal-themes). Every concept maps to a Signal role.
+
+fn sc_fixture(id string) SignalTheme {
+	path := os.join_path(os.dir(@FILE), '..', '..', 'testdata', 'signal-themes', id, 'theme.json')
+	raw := os.read_file(path) or { panic('missing fixture ${path}') }
+	m := json2.decode[map[string]json2.Any](raw) or { panic(err) }
+	return parse_signal_theme(id, m) or { panic(err) }
 }
 
 fn test_color_luminance_vectors() {
@@ -36,89 +22,6 @@ fn test_color_luminance_vectors() {
 	assert color_luminance('#ffffff') == 255
 	assert is_light_hex('#1a1b26') == false
 	assert is_light_hex('#eff1f5') == true
-}
-
-fn test_blend_hex_vector() {
-	assert blend_hex('#ff0000', '#0000ff', 50) == '#7f007f'
-	assert blend_hex('#e91e63', '#a8a3b4', 10) == '#e22b6b'
-	assert blend_hex('#ffffff', '#000000', 0) == '#ffffff'
-	assert blend_hex('#ffffff', '#000000', 100) == '#000000'
-}
-
-fn test_enhance_contrast_vectors() {
-	assert enhance_contrast_for_theme('#ffffff', true) == '#999999'
-	assert enhance_contrast_for_theme('#d32f2f', true) == '#d32f2f'
-	assert enhance_contrast_for_theme('#f44336', false) == '#f44336'
-	assert enhance_contrast_for_theme('#f57f17', true) == '#f57f17'
-}
-
-fn test_palette_dominant_and_average() {
-	pal := golden_palette()
-	assert palette_dominant(pal) == 'purple'
-	assert palette_average(pal) == '#a8a3b4'
-	assert palette_dominant(map[string]string{}) == 'unknown'
-	assert palette_average(map[string]string{}) == '#808080'
-}
-
-fn test_semantic_base_spots() {
-	assert semantic_base('error', 'dark', 'purple') == '#e91e63'
-	assert semantic_base('error', 'dark', 'red') == '#ff6b6b'
-	assert semantic_base('accent', 'light', 'pink') == '#c2185b'
-	assert semantic_base('magenta', 'dark', 'pink') == '#e91e63'
-	assert semantic_base('purple', 'light', 'cyan') == '#8e24aa'
-	assert semantic_base('brown', 'light', 'orange') == '#6d4c41'
-	assert semantic_base('nope', 'dark', 'red') == '#757575'
-}
-
-fn test_smart_color_golden_finals() {
-	pal := golden_palette()
-	assert smart_color_for('error', pal)! == '#e22b6b'
-	assert smart_color_for('warning', pal)! == '#f69112'
-	assert smart_color_for('success', pal)! == '#8dbf54'
-	assert smart_color_for('info', pal)! == '#9d33b0'
-	assert smart_color_for('accent', pal)! == '#9d33b0'
-	assert smart_color_for('red', pal)! == '#de4341'
-	assert smart_color_for('green', pal)! == '#6cb871'
-	assert smart_color_for('blue', pal)! == '#4ca4ee'
-	assert smart_color_for('yellow', pal)! == '#f6c636'
-	assert smart_color_for('cyan', pal)! == '#33c2d6'
-	assert smart_color_for('magenta', pal)! == '#9d33b0'
-	assert smart_color_for('purple', pal)! == '#9d33b0'
-	assert smart_color_for('orange', pal)! == '#f6b557'
-	assert smart_color_for('pink', pal)! == '#9d33b0'
-	assert smart_color_for('brown', pal)! == '#7d5c52'
-	assert smart_color_for('background', pal)! == '#1a1b26'
-	assert smart_color_for('background-alt', pal)! == '#f7768e'
-	assert smart_color_for('foreground', pal)! == '#c0caf5'
-	assert smart_color_for('foreground-alt', pal)! == '#bb9af7'
-	assert smart_color_for('white', pal)! == '#c0caf5'
-	assert smart_color_for('black', pal)! == '#1a1b26'
-	assert smart_color_for('gray', pal)! == '#414868'
-	assert smart_color_for('grey', pal)! == '#414868'
-	if _ := smart_color_for('bogus', pal) {
-		assert false, 'bogus concept must fail'
-	} else {
-		assert err.msg().contains('unknown concept')
-	}
-}
-
-fn test_normalize_scheme_type_vectors() {
-	assert normalize_scheme_type('fruitsalad') == 'expressive'
-	assert normalize_scheme_type('RAINBOW') == 'expressive'
-	assert normalize_scheme_type('TonalSpot') == 'tonal-spot'
-	assert normalize_scheme_type('tonal_spot') == 'tonal-spot'
-	assert normalize_scheme_type('vibrant') == 'vibrant'
-	assert normalize_scheme_type('bogus') == 'tonal-spot'
-}
-
-fn test_normalize_variant_vectors() {
-	assert normalize_variant('FRUITSALAD') == 'fruitsalad'
-	assert normalize_variant('TonalSpot') == 'tonalspot'
-	assert normalize_variant('bogus') == 'tonalspot'
-	assert variant_to_scheme_type('tonalspot') == 'tonal-spot'
-	assert variant_to_scheme_type('fruitsalad') == 'expressive'
-	assert variant_to_scheme_type('rainbow') == 'expressive'
-	assert variant_to_scheme_type('vibrant') == 'vibrant'
 }
 
 fn test_gtk_policy_vectors() {
@@ -153,88 +56,43 @@ fn test_gtk_policy_vectors() {
 	assert normalize_prefer_dark('x') == 'auto'
 }
 
-fn test_parse_xrdb_query_vector() {
-	out := '*background:\t#1a1b26\n*foreground:\t#c0caf5\nXTerm*color1: #f7768e\ncolor2: not-a-color\n'
-	pal := parse_xrdb_query(out)
-	assert pal['background'] == '#1a1b26'
-	assert pal['foreground'] == '#c0caf5'
-	assert pal['color1'] == '#f7768e'
-	assert 'color2' !in pal
+fn test_signal_concepts_map_to_roles() {
+	t := sc_fixture('hornero-signal-night')
+	assert (signal_concept(t, 'background') or { '' }) == '#13171D'
+	assert (signal_concept(t, 'foreground') or { '' }) == '#ECE6DA'
+	assert (signal_concept(t, 'error') or { '' }) == '#F0705A'
+	assert (signal_concept(t, 'accent') or { '' }) == '#F2A33A'
+	assert (signal_concept(t, 'info') or { '' }) == '#7EC1EA'
+	assert (signal_concept(t, 'success') or { '' }) == '#8BD49A'
+	assert (signal_concept(t, 'red') or { '' }) == t.terminal[1]
+	assert (signal_concept(t, 'pink') or { '' }) == t.terminal[13]
+	if _ := signal_concept(t, 'bogus') {
+		assert false, 'unknown concept must fail'
+	}
 }
 
-fn test_hyprlock_rgba_vector() {
-	assert hyprlock_rgba('#ff6b6b', 'ff') == 'ff6b6bff'
-	assert hyprlock_rgba('ff6b6b', 'aa') == 'ff6b6baa'
-}
-
-fn test_render_scss_spots() {
-	p := derive_palette(golden_palette(), '/pic/wall.jpg')
+fn test_render_smart_files_from_signal() {
+	t := sc_fixture('hornero-signal-day')
+	p := signal_smart_palette(t, '/pic/wall.jpg')
+	assert p.light
 	scss := render_scss(p)
 	assert scss.contains('\$wallpaper: "/pic/wall.jpg";')
-	assert scss.contains('\$background: #1a1b26;')
-	assert scss.contains('\$error: #e22b6b;')
-	assert scss.contains('\$color0: #15161e;')
-	assert scss.contains('\$pink: #9d33b0;')
-	sh := render_shell_colors(p)
-	assert sh.contains("color_error='#e22b6b'")
-	assert sh.contains("color_background='#1a1b26'")
+	assert scss.contains('\$background: #F2EEE5;')
+	assert scss.contains('\$error: #A8341C;')
+	assert scss.contains('\$color0: ${t.terminal[0]};')
+	assert render_shell_colors(p).contains("color_accent='#8F4B00'")
 	env := render_env_colors(p, '/x/colors.env')
-	assert env.contains("export COLOR_ERROR='#e22b6b'")
+	assert env.contains("export COLOR_ERROR='#A8341C'")
 	assert env.contains('source /x/colors.env')
-	waybar := render_waybar(p)
-	assert waybar.contains('@define-color smart-error #e22b6b;')
-	mako := render_mako(p)
-	assert mako.contains('background-color=#1a1b26')
-	hypr := render_hyprland(p)
-	assert hypr.contains('col.active_border = rgba(9d33b0ee) rgba(9d33b0ee) 45deg')
-	assert hypr.contains('col.border_locked_inactive')
-	hypr_lua := render_hyprland_lua(p)
-	assert hypr_lua.contains('active_border = { colors = { "rgba(9d33b0ee)", "rgba(9d33b0ee)" }, angle = 45 }')
-	assert hypr_lua.contains('border_locked_inactive = "rgba(414868aa)"')
-	assert hypr_lua.contains('groupbar = {\n            col = {')
-	assert hypr_lua.contains('locked_active = "rgba(f69112ee)"')
-	assert !hypr_lua.contains('general {')
-	assert smart_hyprland_rgba('ff0000\" } })\nmalicious = true --', 'ee', 'e07856') == 'rgba(e07856ee)'
-	wlogout := render_wlogout(p)
-	assert wlogout.contains('@define-color wlogout-bg #1a1b26;')
+	assert render_waybar(p).contains('@define-color smart-info #1A5F88;')
+	assert render_mako(p).contains('background-color=#F2EEE5')
+	assert render_wlogout(p).contains('@define-color wlogout-fg #1B1E22;')
 	henv := render_hyprlock_env(p)
-	assert henv.contains('SMART_ERROR="#e22b6b"')
-	assert henv.contains('SMART_THEME_TYPE="dark"')
-	kitty := render_kitty(p)
-	assert kitty.contains('background #1a1b26')
-	assert kitty.contains('color1 #f7768e')
-	css := render_css_vars(p)
-	assert css.contains('--smart-error: #e22b6b;')
+	assert henv.contains('SMART_ERROR="#A8341C"')
+	assert henv.contains('SMART_THEME_TYPE="light"')
+	assert render_css_vars(p).contains('--smart-success: #256A3B;')
 	copyq := render_copyq(p)
-	assert copyq.contains('# Theme type: dark')
-	assert copyq.contains('sel_bg=#9d33b0')
-}
-
-fn test_render_hyprlock_conf_vector() {
-	s := HyprlockScheme{
-		primary:            '#9d33b0'
-		surface:            '#1a1b26'
-		on_surface:         '#c0caf5'
-		background:         '#1a1b26'
-		on_surface_variant: '#a9b1d6'
-		outline:            '#414868'
-		secondary:          '#7aa2f7'
-		error:              '#e22b6b'
-		light:              false
-		wallpaper:          '/pic/wall.jpg'
-		scheme_source:      '/scheme.json'
-	}
-	conf := render_hyprlock_conf(s)
-	assert conf.contains('path = /pic/wall.jpg')
-	assert conf.contains('brightness = 0.8')
-	assert conf.contains('font_color = rgb(#c0caf5)')
-	assert conf.contains('fail_color = rgba(#e22b6b')
-	assert conf.contains('inner_color = rgba(1a1b26bb)')
-	assert conf.contains('# Source: /scheme.json')
-	light_conf := render_hyprlock_conf(HyprlockScheme{
-		background: '#eff1f5'
-		light:      true
-	})
-	assert light_conf.contains('brightness = 1.1')
-	assert light_conf.contains('color = 0xffeff1f5ff')
+	assert copyq.contains('# Theme type: light')
+	assert copyq.contains('IBM Plex Mono')
+	assert !copyq.contains('JetBrains')
 }

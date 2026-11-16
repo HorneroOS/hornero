@@ -1,6 +1,7 @@
 """Product-level edition package composition tests."""
 from __future__ import annotations
 
+import copy
 import importlib.util
 from pathlib import Path
 
@@ -75,10 +76,39 @@ def test_desktop_composition_installs_factory_default_providers():
         "papirus-icon-theme",
         "qt6ct",
         "ttf-cascadia-code-nerd",
-        "ttf-material-symbols-variable",
-        "ttf-rubik-vf",
+        "ttf-ibm-plex",
     }
     assert required <= packages
+
+
+def test_desktop_composition_drops_material_identity_packages():
+    catalogue = resolver.load_catalogue()
+    retired = {"ttf-material-symbols-variable", "ttf-rubik-vf", "python-materialyoucolor"}
+    for edition in ("desktop", "studio", "gaming"):
+        packages = set(resolver.resolve_edition(catalogue, edition)["packages"])
+        assert not retired & packages, edition
+
+
+def test_desktop_family_defaults_to_cockpit_and_signal_night():
+    catalogue = resolver.load_catalogue()
+    for edition in ("desktop", "studio", "gaming"):
+        appearance = resolver.resolve_edition(catalogue, edition)["appearance"]
+        assert appearance == {"shellPreset": "cockpit", "theme": "hornero-signal-night"}, edition
+    for edition in ("server", "agents"):
+        assert resolver.resolve_edition(catalogue, edition)["appearance"] is None
+
+
+def test_appearance_validation_rejects_retired_themes_and_headless_defaults():
+    catalogue = resolver.load_catalogue()
+    broken = copy.deepcopy(catalogue)
+    broken["editions"]["desktop"]["appearance"]["theme"] = "hornero-dark"
+    assert any("retired theme" in error for error in resolver.validate_catalogue(broken))
+    headless = copy.deepcopy(catalogue)
+    headless["editions"]["server"]["appearance"] = {"shellPreset": "cockpit", "theme": "hornero-signal-night"}
+    assert any("headless edition 'server'" in error for error in resolver.validate_catalogue(headless))
+    partial = copy.deepcopy(catalogue)
+    partial["editions"]["desktop"]["appearance"] = {"theme": "hornero-signal-night"}
+    assert any("exactly shellPreset and theme" in error for error in resolver.validate_catalogue(partial))
 
 
 def test_server_is_headless_and_remote_admin_focused():

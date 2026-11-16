@@ -5,7 +5,7 @@ import x.json2
 
 // Native GTK theme operations. They update the configured GTK settings plus
 // gtk-theme-manager.sh: theme/icon listing, current reads, apply,
-// color-scheme policy persistence, wallpaper-based detection, and
+// color-scheme policy persistence, scheme-luminance GTK detection, and
 // theme-pack GTK resolution. Only gsettings stays a backend
 // (HORNERO_GSETTINGS_BIN); every INI edit and policy decision is V.
 
@@ -147,7 +147,7 @@ pub fn list_names_in_dirs(dirs []string, require_index bool) []string {
 	return out
 }
 
-// detect_gtk_theme picks (theme, prefer_dark) from a generated background hex
+// detect_gtk_theme picks (theme, prefer_dark) from a Signal ground hex
 // and the installed themes, mirroring detect_optimal_gtk_theme: dark
 // backgrounds (r+g+b below 384) prefer the dark list.
 pub fn detect_gtk_theme(background string, installed []string) (string, string) {
@@ -238,11 +238,7 @@ pub fn apply_gtk_color_scheme_native(requested string, dry_run bool) CommandResu
 	}
 	update_state_json_fields({
 		'gtkColorScheme': policy
-	}, {
-		'name':    'dynamic'
-		'flavour': 'tonal-spot'
-		'variant': 'tonalspot'
-	}) or {
+	}, {}) or {
 		return fail_result('appearance gtk color-scheme', 'cannot persist policy: ${err.msg()}')
 	}
 	gtk_ini_set(resolve_gtk3_file(), 'gtk-application-prefer-dark-theme', prefer_dark) or {
@@ -456,35 +452,6 @@ pub fn gtk_current_policy_report() CommandResult {
 	return ok_result('appearance gtk current-color-scheme', policy, {
 		'policy': policy
 	})
-}
-
-// gtk_detect_report implements `appearance gtk detect [wallpaper]`
-// (read-only suggestion, never applies).
-pub fn gtk_detect_report(wallpaper string) CommandResult {
-	wall := if wallpaper.len > 0 { wallpaper } else { read_wallpaper_pointer() }
-	if wall.len == 0 || !os.is_file(wall) {
-		return fail_result('appearance gtk detect', 'No wallpaper specified and no current wallpaper found.')
-	}
-	bg := if wall == read_wallpaper_pointer() {
-		scheme_json_colour('background')
-	} else {
-		st := read_scheme_state()
-		mode := if st.mode == 'light' { 'light' } else { 'dark' }
-		out := os.join_path(os.temp_dir(), 'hornero-gtk-detect-${os.getpid()}.json')
-		defer { os.rm(out) or {} }
-		run_m3_synthesis(wall, out, normalize_scheme_type(st.flavour), mode, '', false) or {
-			return fail_result('appearance gtk detect', 'Could not analyse wallpaper colours: ${err.msg()}')
-		}
-		scheme_json_colour_from_file(out, 'background')
-	}
-	theme, prefer_dark := detect_gtk_theme(if bg.len > 0 { bg } else { '000000' }, list_names_in_dirs(gtk_theme_search_dirs(),
-		false))
-	return ok_result('appearance gtk detect', 'Detected optimal theme: ${theme}\nDark preference: ${prefer_dark}',
-		{
-			'theme':       theme
-			'prefer_dark': prefer_dark
-			'wallpaper':   wall
-		})
 }
 
 // gtk_info_report implements `appearance gtk info <name>` (read-only).

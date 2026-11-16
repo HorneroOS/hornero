@@ -12,7 +12,7 @@ Commands:
   version       Print version
   doctor        Read-only environment health checks
   shell         Desktop shell integration (status, ipc, preset, lifecycle, logs)
-  appearance    Appearance controls (status, sync, theme, scheme, colors, accent, night-mode, gtk, hyprlock)
+  appearance    Hornero Signal appearance (status, sync, doctor, theme, scheme, colors, night-mode, gtk, hyprlock)
   config        Configuration paths, values, validation, snapshots
   package       System packages (check, updates, status, upgrade, deps)
   backup        Config backups (list, schedule, create, restore)
@@ -23,7 +23,7 @@ Commands:
   hardware      Hardware controls (brightness, battery, mic, keyboard, network, bluetooth)
   bluetooth     Bluetooth diagnostics (doctor, status, devices, power, restart)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
-  wallpaper     Wallpaper image (set, current, reload)
+  wallpaper     Wallpaper image (set, current)
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard, status)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   system        Installed edition and active compositor information
@@ -173,7 +173,7 @@ Examples:
 			return 'Usage: horneroctl assistant knowledge [--json|--quiet]\n       horneroctl assistant knowledge vault [check] [--json|--quiet]\n       horneroctl assistant knowledge vault generate [--dry-run|--yes]\n\nRender the live read-only catalogue as a dated, provenance-stamped\nsnapshot for agents that cannot execute commands. Generated from\nthe same allowlist as `assistant tools`; regenerate it instead of\ncopying stale knowledge by hand. Contains no secrets.\n\nThe vault form persists a bounded snapshot (system, desktop,\npackages, services, capabilities, agents) under the user XDG data\ndir with a provenance manifest and sha256 change detection. It is\nregenerated only explicitly with --yes; user notes and edited\ngenerated files under the vault notes/ dir are preserved.\n\nExamples:\n  horneroctl assistant knowledge\n  horneroctl assistant knowledge --json\n  horneroctl assistant knowledge vault check\n  horneroctl assistant knowledge vault generate --dry-run\n  horneroctl assistant knowledge vault generate --yes\n'
 		}
 		'assistant tool' {
-			return 'Usage: horneroctl assistant tool <name> [arg] [--yes] [--dry-run] [--json|--quiet]\n\nRun one typed broker tool through the ABAC policy: theme_set\n<hornero-dark|hornero-light|pampa>, window_list, window_focus\n<0xaddress>, notify <text>, plus the read-only tools. Denied or\napproval-gated calls execute nothing; --yes approves exactly\nthis one call and every outcome is audit-logged. There is no\ngeneric command tool.\n\nExamples:\n  horneroctl assistant tool theme_set pampa --dry-run\n  horneroctl assistant tool theme_set pampa --yes\n  horneroctl assistant tool window_list\n'
+			return 'Usage: horneroctl assistant tool <name> [arg] [--yes] [--dry-run] [--json|--quiet]\n\nRun one typed broker tool through the ABAC policy: theme_set\n<hornero-signal-night|hornero-signal-day|hornero-signal-contrast>, window_list, window_focus\n<0xaddress>, notify <text>, plus the read-only tools. Denied or\napproval-gated calls execute nothing; --yes approves exactly\nthis one call and every outcome is audit-logged. There is no\ngeneric command tool.\n\nExamples:\n  horneroctl assistant tool theme_set hornero-signal-day --dry-run\n  horneroctl assistant tool theme_set hornero-signal-day --yes\n  horneroctl assistant tool window_list\n'
 		}
 		'assistant shell-proposal' {
 			return 'Usage: horneroctl assistant shell-proposal --command "<cmd>" [--json|--quiet]\n\nProposal only: classify the command risk (read-only, mutating,\nprivileged, protected) and execute nothing. Inspect, edit, or\ncopy the returned command and run it yourself, or use the\nexisting typed broker (assistant tool). Requires an explicit\nmanual run or existing typed broker approval.\n\nExamples:\n  horneroctl assistant shell-proposal --command "ls -la"\n  horneroctl assistant shell-proposal --command "sudo pacman -S vim" --json\n'
@@ -276,7 +276,7 @@ Examples:
 '
 		}
 		'plugin action' {
-			return 'Usage: horneroctl plugin action list [plugin-id] [--json|--quiet]\n       horneroctl plugin action check <plugin-id> <action> [arg] [--json|--quiet]\n       horneroctl plugin action run <plugin-id> <action> [arg] [--dry-run|--yes] [--json|--quiet]\n\nTyped capability broker for installed extensions: a closed\ncatalogue of narrow horneroctl actions, read-only separated from\nmutating. There is no generic or privileged shell action. A call\nruns only when the plugin is receipt-owned, enabled, and trusted,\nits manifest declares the action in capabilities.actions, and the\nABAC policy allows principal "plugin" (read-only preset: observe\nand read inside the plugin\'s own payload; mutations need an\nexplicit user policy rule). list and check never execute;\nmutating run calls also require --yes. Every run decision is\naudit-logged under XDG state (hornero/plugins/action.log).\n\nQML plugins are not sandboxed and manifest capabilities are\ndeclarations, not enforcement; this broker governs only calls\nmade through it.\n\nExamples:\n  horneroctl plugin action list\n  horneroctl plugin action list example-clock\n  horneroctl plugin action check example-clock system_info\n  horneroctl plugin action run example-clock plugin_file_read notes.txt\n  horneroctl plugin action run example-clock theme_set pampa --dry-run\n'
+			return 'Usage: horneroctl plugin action list [plugin-id] [--json|--quiet]\n       horneroctl plugin action check <plugin-id> <action> [arg] [--json|--quiet]\n       horneroctl plugin action run <plugin-id> <action> [arg] [--dry-run|--yes] [--json|--quiet]\n\nTyped capability broker for installed extensions: a closed\ncatalogue of narrow horneroctl actions, read-only separated from\nmutating. There is no generic or privileged shell action. A call\nruns only when the plugin is receipt-owned, enabled, and trusted,\nits manifest declares the action in capabilities.actions, and the\nABAC policy allows principal "plugin" (read-only preset: observe\nand read inside the plugin\'s own payload; mutations need an\nexplicit user policy rule). list and check never execute;\nmutating run calls also require --yes. Every run decision is\naudit-logged under XDG state (hornero/plugins/action.log).\n\nQML plugins are not sandboxed and manifest capabilities are\ndeclarations, not enforcement; this broker governs only calls\nmade through it.\n\nExamples:\n  horneroctl plugin action list\n  horneroctl plugin action list example-clock\n  horneroctl plugin action check example-clock system_info\n  horneroctl plugin action run example-clock plugin_file_read notes.txt\n  horneroctl plugin action run example-clock theme_set hornero-signal-day --dry-run\n'
 		}
 		'plugin install-local' {
 			return 'Usage: horneroctl plugin install-local <dir> [--dry-run|--yes]\n\nValidate and install an inert plugin package from an existing local\ndirectory. No network is used and no plugin code is executed or\nenabled. Any symlinked path component or entry, and any .git directory at\nany depth, are refused. The receipt\nrecords the absolute local path as source and the payload SHA-256 as\nrevision. Third-party QML is inert data: it is not loaded or sandboxed.\n\nExamples:\n  horneroctl plugin install-local ./my-plugin --dry-run\n  horneroctl plugin install-local ./my-plugin --yes\n'
@@ -348,8 +348,8 @@ Examples:
   horneroctl shell ipc --dry-run -- call bar toggleLauncher
   horneroctl shell preset list
   horneroctl shell preset current --json
-  horneroctl shell preset apply hornero-left --dry-run
-  horneroctl shell preset apply hornero-left --yes
+  horneroctl shell preset apply cockpit --dry-run
+  horneroctl shell preset apply cockpit --yes
   horneroctl shell start --dry-run
   horneroctl shell start --yes
   horneroctl shell restart --yes
@@ -405,40 +405,45 @@ Examples:
   horneroctl shell preset list
   horneroctl shell preset current
   horneroctl shell preset list --full --json
-  horneroctl shell preset apply hornero-left --dry-run
-  horneroctl shell preset apply hornero-left --yes
+  horneroctl shell preset apply cockpit --dry-run
+  horneroctl shell preset apply cockpit --yes
 '
 		}
 		'appearance' {
-			return 'Usage: horneroctl appearance <status|sync|doctor|set-*|theme|scheme|colors|accent|night-mode|gtk|hyprlock> [options]
+			return 'Usage: horneroctl appearance <status|sync|doctor|set-*|theme|scheme|colors|night-mode|gtk|hyprlock|hyprland> [options]
 
-  status              Show current appearance state (read-only)
-  sync [--dry-run]    Adopt the live scheme meta into state (needs --yes)
-  doctor              Check appearance consistency (read-only)
+  status              Show the selected theme, mode, wallpaper and GTK (read-only)
+  sync [--dry-run]    Migrate retired theme selections once, then rewrite
+                      the live scheme and derived files (needs --yes)
+  doctor              Check scheme validity, IBM Plex fonts and derived
+                      files (read-only)
   set-wallpaper <path> [--dry-run]
-                      Rebuild the palette from one wallpaper (needs --yes)
+                      Set the wallpaper; colours never change (needs --yes)
   set-gtk <theme> [--dry-run]
                       Set the GTK theme, keep live policy (needs --yes)
   set-icons <theme> [--dry-run]
                       Set the icon theme (needs --yes)
   set-gtk-color-scheme <policy> [--dry-run]
                       Set the GTK color-scheme policy (needs --yes)
-  theme ...           Installed theme packs (list, show, get, apply, set)
-  scheme ...          Color scheme state (status, list, current, set-mode,
-                      set-variant, regenerate, sync-state)
-  colors ...          Smart-color palette (status, generate, m3, concept, export)
-  accent ...          Accent override seed (show, set, clear)
+  theme ...           Hornero Signal theme packs (list, show, get, apply, set)
+  scheme ...          Live scheme state (status, current)
+  colors ...          Smart-color files from the live scheme (status,
+                      generate, concept, export)
   night-mode ...      Display temperature (status, toggle, on, off,
                       status-icon, status-text, backends)
   gtk ...             GTK themes (list, current, apply, set-icons,
-                      color-scheme, sync-color-scheme, detect, theme,
-                      auto, icons, info)
+                      color-scheme, sync-color-scheme, theme, auto,
+                      icons, info)
   hyprlock [--dry-run] Regenerate colors-hyprlock.conf (needs --yes)
+  hyprland [--dry-run] Regenerate colors-hyprland.lua (needs --yes)
 
-Native: every verb runs in V. Only external tools stay backends
-(xrdb, gsettings, hyprctl, quickshell IPC, the M3 python
-synthesizer, night-mode temperature tools), each with a
-HORNERO_*_BIN override.
+Colours come only from the selected schema-v2 theme. Applying one
+atomically writes \$XDG_STATE_HOME/hornero/signal/scheme.json (the
+file the shell watches) plus the Hyprland, hyprlock, Alacritty,
+Ghostty, btop and Cava colour files, and switches the kitty theme
+include. Wallpapers never recolour. External tools (gsettings,
+hyprctl, quickshell IPC, night-mode tools) keep HORNERO_*_BIN
+overrides.
 
 Options:
   --dry-run           Preview without changing anything
@@ -450,9 +455,9 @@ Examples:
   horneroctl appearance sync --yes
   horneroctl appearance doctor
   horneroctl appearance theme list
+  horneroctl appearance theme apply hornero-signal-night --yes
   horneroctl appearance scheme status
   horneroctl appearance colors status --dry-run
-  horneroctl appearance accent show
   horneroctl appearance night-mode status
   horneroctl appearance gtk list
   horneroctl appearance hyprlock --dry-run
@@ -462,111 +467,78 @@ Examples:
 		'appearance theme' {
 			return 'Usage: horneroctl appearance theme <list|show|get|apply|set> [options]
 
-  list [--full]       List installed theme packs (read-only);
+  list [--full]       List installed Hornero Signal themes (read-only);
                       --full prints every pack manifest as a JSON
-                      array (id, name, wallpapers, gtk, darkMode…)
+                      array (id, name, mode, wallpapers, gtk…)
                       for the launcher
   show <id>           Show one theme pack (read-only)
-  get [--dry-run]     Show the active official theme (read-only)
+  get [--dry-run]     Show the selected theme and where it comes from
+                      (read-only)
   apply <id> [--wallpaper <path>] [--dry-run]
-                      Apply a theme pack (needs --yes)
-  set <hornero-dark|hornero-light|pampa> [--dry-run]
-                      Switch the official theme atomically (needs --yes)
+                      Apply a schema-v2 theme pack (needs --yes)
+  set <hornero-signal-night|hornero-signal-day|hornero-signal-contrast> [--dry-run]
+                      Switch the built-in theme atomically (needs --yes)
 
 Pack source: HORNERO_THEMES_DIR, else the XDG data catalogue
-(hornero/themes).
-Reads parse the installed theme.json manifests; apply runs
-the native M3 + GTK pipeline. get matches the live
-native state against the official hornero-dark/hornero-light/pampa
-trio; set validates, applies natively, then verifies GTK/scheme
-agree (best-effort rollback to the previous official theme on
-failure).
+(hornero/themes). Only schema-v2 packs (palette roles + 16-colour
+terminal) are listed or applied. apply writes the live scheme
+(\$XDG_STATE_HOME/hornero/signal/scheme.json) atomically, then the
+Hyprland/hyprlock/terminal colours, persists the selection in the
+appearance state and shell.json, and applies GTK. Retired ids (hornero-dark,
+hornero-light, hornero-199x, neon-city, vapor-dreams, soft-morning,
+warm-sunset) are rejected with their replacement; persisted selections migrate once via
+`appearance sync --yes`. set verifies scheme and GTK agree
+(best-effort rollback to the previous built-in theme on failure).
 
 Examples:
   horneroctl appearance theme list
   horneroctl appearance theme list --full --json
-  horneroctl appearance theme show vapor-dreams
+  horneroctl appearance theme show hornero-signal-night
   horneroctl appearance theme get
-  horneroctl appearance theme apply vapor-dreams --dry-run
-  horneroctl appearance theme apply vapor-dreams --yes
-  horneroctl appearance theme set hornero-dark --dry-run
-  horneroctl appearance theme set hornero-light --yes
+  horneroctl appearance theme apply hornero-signal-day --dry-run
+  horneroctl appearance theme apply hornero-signal-day --yes
+  horneroctl appearance theme set hornero-signal-night --dry-run
+  horneroctl appearance theme set hornero-signal-contrast --yes
 '
 		}
 		'appearance scheme' {
-			return 'Usage: horneroctl appearance scheme <status|list|current|set-mode|set-variant|regenerate|sync-state> [options]
+			return 'Usage: horneroctl appearance scheme <status|current> [options]
 
-  status              Show mode/flavour/variant (read-only)
-  list                Show live colours under every flavour (read-only)
-  current             Show name/flavour/variant (read-only)
-  set-mode <dark|light> [--dry-run]
-                      Set the color-scheme mode (needs --yes)
-  set-variant <name> [--dry-run]
-                      Set the color-scheme variant (needs --yes)
-  regenerate [--dry-run]
-                      Rewrite scheme.json from the wallpaper (needs --yes)
-  sync-state [--theme-id <id>] [--dry-run]
-                      Adopt scheme.json meta into state; keep selected theme (needs --yes)
+  status              Show the selected theme, live mode, scheme file
+                      validity and GTK policy (read-only)
+  current             Print the theme id and mode, one per line (read-only)
 
-State source: the materialized scheme files under XDG state/cache,
-all read and written natively.
-
-Later phases: device brightness and other hardware controls (no
-verified IPC path yet).
+State source: \$XDG_STATE_HOME/hornero/signal/scheme.json (live
+scheme) and \$XDG_STATE_HOME/hornero/scheme/state.json (selection
+and GTK policy).
 
 Examples:
   horneroctl appearance scheme status
-  horneroctl appearance scheme list
-  horneroctl appearance scheme set-mode dark --dry-run
-  horneroctl appearance scheme set-mode dark --yes
-  horneroctl appearance scheme set-variant tonalspot --yes
-  horneroctl appearance scheme regenerate --dry-run
-  horneroctl appearance scheme sync-state --theme-id pampa --yes
+  horneroctl appearance scheme status --json
+  horneroctl appearance scheme current
 '
 		}
 		'appearance colors' {
-			return 'Usage: horneroctl appearance colors <status|generate|m3|concept|export> [options]
+			return 'Usage: horneroctl appearance colors <status|generate|concept|export> [options]
 
-  status [--dry-run]  Preview the generated palette (read-only)
-  generate [--m3] [--dry-run]
-                      Rewrite the smart-color files (needs --yes;
-                      --m3 also refreshes scheme.json)
-  m3 [--dry-run] -- <backend-args...>
-                      Pass arguments to the M3 synthesizer (needs --yes)
-  concept <name>      Resolve one semantic color (read-only)
-  export              Print shell variables for every color (read-only)
+  status [--dry-run]  Preview the smart concepts of the live scheme (read-only)
+  generate [--dry-run]
+                      Rewrite the smart-color files from the live
+                      scheme (needs --yes)
+  concept <name>      Resolve one concept to a hex colour (read-only)
+  export              Print shell variables for every concept (read-only)
 
-Native: the palette engine (luminance, semantic table, contrast,
-harmonization) runs in V from xrdb input (HORNERO_XRDB_BIN). Only
-the M3 synthesis stays a backend (python + generate-m3-colors.py
-via HORNERO_M3_PYTHON_BIN / HORNERO_M3_SCRIPT).
+Every concept maps to a Hornero Signal role (error=alert,
+accent=signal, info=cue, success=phosphor, …) or the theme terminal
+palette; nothing is synthesised.
 
 Examples:
   horneroctl appearance colors status
   horneroctl appearance colors status --dry-run
   horneroctl appearance colors generate --dry-run
-  horneroctl appearance colors generate --m3 --yes
-  horneroctl appearance colors m3 --dry-run -- --help
+  horneroctl appearance colors generate --yes
   horneroctl appearance colors concept error
   horneroctl appearance colors export
-'
-		}
-		'appearance accent' {
-			return 'Usage: horneroctl appearance accent <show|set|clear> [options]
-
-  show [--dry-run]    Print the accent override seed (read-only)
-  set <hex> [--dry-run]
-                      Set the accent seed (needs --yes)
-  clear [--dry-run]   Clear the override, regenerate from wallpaper (needs --yes)
-
-Native: the seed file plus the scheme regenerate run in V.
-Set/clear trigger a scheme regenerate downstream.
-
-Examples:
-  horneroctl appearance accent show
-  horneroctl appearance accent set "#8839ef" --dry-run
-  horneroctl appearance accent set "#8839ef" --yes
-  horneroctl appearance accent clear --dry-run
 '
 		}
 		'appearance night-mode' {
@@ -616,9 +588,8 @@ Examples:
                       Set the GTK color-scheme policy (needs --yes)
   sync-color-scheme [--dry-run]
                       Re-apply the persisted policy (needs --yes)
-  detect [wallpaper]  Suggest the optimal theme (read-only)
   theme [id]          Apply GTK settings from a theme pack (needs --yes)
-  auto [--dry-run]    Auto-detect and apply (needs --yes)
+  auto [--dry-run]    Apply GTK for the current theme (needs --yes)
   icons               List installed icon themes (read-only)
   info <theme>        Show theme components and metadata (read-only)
   select [--dry-run]  Numbered menu to pick and apply a theme
@@ -638,8 +609,9 @@ Examples:
 		'appearance hyprlock' {
 			return 'Usage: horneroctl appearance hyprlock [--wallpaper <path>] [options]
 
-  Regenerate colors-hyprlock.conf from the live scheme.json
-  colours (needs --yes); --dry-run only previews.
+  Regenerate colors-hyprlock.conf (hyprlang colour variables
+  only, sourced by hyprlock.conf) from the live Signal scheme
+  (needs --yes); --dry-run only previews.
 
 Examples:
   horneroctl appearance hyprlock --dry-run
@@ -649,9 +621,9 @@ Examples:
 		'appearance hyprland' {
 			return 'Usage: horneroctl appearance hyprland [options]
 
-  Regenerate colors-hyprland.lua from the live scheme.json
-  colours so Hyprland border colours follow the wallpaper
-  (needs --yes); --dry-run only previews.
+  Regenerate colors-hyprland.lua from the live Signal scheme
+  (active border = signal, inactive = rule, locked groups = cue;
+  needs --yes); --dry-run only previews.
 
 Examples:
   horneroctl appearance hyprland --dry-run
@@ -973,7 +945,7 @@ Examples:
 '
 		}
 		'hypr windows' {
-			return 'Usage: horneroctl hypr windows <status|set|restore|rules> [options]\n\n  status              Live gaps/border/rounding/focus, else persisted (read-only)\n  set [flags] [--dry-run]\n                      Apply any subset (needs --yes); omitted\n                      flags keep their current values\n  restore [--dry-run] Re-apply the persisted settings (needs --yes)\n  rules list          List user window rules (read-only)\n  rules add --match class|title --pattern RE --effect float|pin [--yes]\n                      Add a user window rule (user rules file;\n                      applies on Hyprland reload/restart)\n  rules remove --name NAME [--yes]\n                      Remove a user window rule\n\nOptions:\n  --gaps-in <n>       Inner gap 0-100 (default 5)\n  --gaps-out <n>      Outer gap 0-200 (default 20)\n  --border-size <n>   Border width 0-20 (default 2)\n  --rounding <n>      Corner rounding 0-60 (default 10)\n  --follow-mouse <n>  Focus follows mouse 0-2 (default 1)\n  --ephemeral         Do not persist the settings to disk\n  --dry-run           Preview without running\n  --yes               Confirm a mutating action\n\nGeometry and focus apply through hyprctl keyword and persist\nunder $XDG_STATE_HOME (hornero/hypr/windows/current). Rules live\nin the user window-rules overlay and never edit factory rules.\nHyprland only; Niri window behaviour stays experimental and is\nnever faked through this command.\n\nExamples:\n  horneroctl hypr windows status\n  horneroctl hypr windows set --gaps-in 8 --follow-mouse 2 --yes\n  horneroctl hypr windows rules add --match class --pattern kitty --effect float --yes\n  horneroctl hypr windows restore --yes\n'
+			return 'Usage: horneroctl hypr windows <status|set|restore|rules> [options]\n\n  status              Live gaps/border/rounding/focus, else persisted (read-only)\n  set [flags] [--dry-run]\n                      Apply any subset (needs --yes); omitted\n                      flags keep their current values\n  restore [--dry-run] Re-apply the persisted settings (needs --yes)\n  rules list          List user window rules (read-only)\n  rules add --match class|title --pattern RE --effect float|pin [--yes]\n                      Add a user window rule (user rules file;\n                      applies on Hyprland reload/restart)\n  rules remove --name NAME [--yes]\n                      Remove a user window rule\n\nOptions:\n  --gaps-in <n>       Inner gap 0-100 (default 5)\n  --gaps-out <n>      Outer gap 0-200 (default 20)\n  --border-size <n>   Border width 0-20 (default 2)\n  --rounding <n>      Corner rounding 0-60 (default 10)\n  --follow-mouse <n>  Focus follows mouse 0-2 (default 1)\n  --ephemeral         Do not persist the settings to disk\n  --dry-run           Preview without running\n  --yes               Confirm a mutating action\n\nGeometry and focus apply through hyprctl keyword and persist\nunder \$XDG_STATE_HOME (hornero/hypr/windows/current). Rules live\nin the user window-rules overlay and never edit factory rules.\nHyprland only; Niri window behaviour stays experimental and is\nnever faked through this command.\n\nExamples:\n  horneroctl hypr windows status\n  horneroctl hypr windows set --gaps-in 8 --follow-mouse 2 --yes\n  horneroctl hypr windows rules add --match class --pattern kitty --effect float --yes\n  horneroctl hypr windows restore --yes\n'
 		}
 		'hypr cursor' {
 			return 'Usage: horneroctl hypr cursor <status|set|restore> [options]\n\n  status              Cursor theme and size with its source (read-only)\n  set --size N [--dry-run] [--yes]\n                      Set the cursor size 8-96 via hyprctl\n                      setcursor; persists for restore\n  restore [--dry-run] [--yes]\n                      Re-apply the persisted cursor size\n\nHyprland does not expose the live cursor size back; status\nreports the persisted size, else XCURSOR_SIZE, else 24, and\nnames the source. Session apps read XCURSOR_SIZE at start.\n\nExamples:\n  horneroctl hypr cursor status\n  horneroctl hypr cursor set --size 32 --yes\n  horneroctl hypr cursor restore --yes\n'
@@ -1078,13 +1050,14 @@ Examples:
 '
 		}
 		'wallpaper' {
-			return 'Usage: horneroctl wallpaper <set|current|reload> [options]
+			return 'Usage: horneroctl wallpaper <set|current> [options]
 
-  set <path> [--dry-run]    Apply a wallpaper image (needs --yes)
+  set <path> [--dry-run]    Set the wallpaper image (needs --yes)
   current [path]            Print the current wallpaper path (read-only)
-  reload [--dry-run]        Re-apply the color pipeline (needs --yes)
 
-Reads use the canonical Hornero wallpaper pointer. `set` and `reload` use shell IPC when available and otherwise generate the Hornero Material colour scheme directly. A failed generation leaves the selected wallpaper unchanged.
+Both use the canonical Hornero wallpaper pointer, which the shell
+watches. `set` replaces it atomically and refreshes the lock
+backdrop; it never changes a colour (themes own all colours).
 
 Mutations need --yes; --dry-run only previews.
 
@@ -1093,8 +1066,6 @@ Examples:
   horneroctl wallpaper current --json
   horneroctl wallpaper set ~/wall.jpg --dry-run
   horneroctl wallpaper set ~/wall.jpg --yes
-  horneroctl wallpaper reload --dry-run
-  horneroctl wallpaper reload --yes
 '
 		}
 		'hardware' {

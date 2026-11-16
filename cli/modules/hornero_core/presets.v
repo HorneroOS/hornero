@@ -330,8 +330,10 @@ pub fn preset_list_full_report() CommandResult {
 }
 
 // preset_owned_defaults_json contains current Shell-owned settings
-// reset before a preset is merged, preventing stale layout state.
-const preset_owned_defaults_json = '{"appearance":{"padding":{"scale":1.0},"rounding":{"scale":1.0},"spacing":{"scale":1.0},"transparency":{"base":0.85,"enabled":false,"layers":0.4}},"background":{"desktopClock":{"enabled":false},"visualiser":{"autoHide":true,"enabled":false}},"bar":{"bars":[{"edge":"left","style":"attached","reserve":true,"margin":8,"thickness":40,"density":"values","backdrop":"solid","groups":{"start":[{"id":"logo","enabled":true},{"id":"workspaces","enabled":true}],"center":[{"id":"activeWindow","enabled":true}],"end":[{"id":"tray","enabled":true},{"id":"clock","enabled":true},{"id":"statusIcons","enabled":true},{"id":"power","enabled":true}]}}],"perScreen":[],"persistent":true,"scrollActions":{"brightness":true,"volume":true,"workspaces":true},"showOnHover":true,"sizes":{"innerWidth":40},"status":{"showAudio":false,"showBattery":true,"showBluetooth":true,"showKbLayout":false,"showLockStatus":true,"showMicrophone":false,"showNetwork":true,"showWifi":true}},"border":{"frameEnabled":true},"notifs":{"defaultExpireTimeout":5000},"osd":{"hideDelay":2000}}'
+// reset before a preset is merged, preventing stale layout state. Its bar
+// layout is the minimal Cockpit composition (RFC 0001 §5: 36 px top rail,
+// 30 px attached bottom strip) used as the safe-reset fallback.
+const preset_owned_defaults_json = '{"appearance":{"padding":{"scale":1.0},"rounding":{"scale":1.0},"spacing":{"scale":1.0},"transparency":{"base":0.85,"enabled":false,"layers":0.4}},"background":{"desktopClock":{"enabled":false},"visualiser":{"autoHide":true,"enabled":false}},"bar":{"bars":[{"edge":"top","style":"inset","reserve":true,"margin":6,"thickness":36,"density":"values","backdrop":"solid","groups":{"start":[{"id":"logo","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[{"id":"statusIcons","enabled":true},{"id":"tray","enabled":true},{"id":"extensions","enabled":true},{"id":"power","enabled":true}]}},{"edge":"bottom","style":"attached","reserve":true,"margin":0,"thickness":30,"density":"values","backdrop":"solid","groups":{"start":[{"id":"workspaces","enabled":true}],"center":[{"id":"activeWindow","enabled":true}],"end":[{"id":"kbLayout","enabled":true},{"id":"resources","enabled":true}]}}],"perScreen":[],"persistent":true,"scrollActions":{"brightness":true,"volume":true,"workspaces":true},"showOnHover":true,"sizes":{"innerWidth":30},"status":{"showAudio":false,"showBattery":true,"showBluetooth":true,"showKbLayout":false,"showLockStatus":true,"showMicrophone":false,"showNetwork":true,"showWifi":true}},"border":{"frameEnabled":false},"notifs":{"defaultExpireTimeout":5000},"osd":{"hideDelay":2000}}'
 
 // preset_owned_defaults decodes a fresh copy of the owned defaults.
 fn preset_owned_defaults() map[string]json2.Any {
@@ -604,11 +606,9 @@ fn preset_write_tmp(path string, content string) !string {
 
 // preset_default_name is the fallback preset for `shell preset apply`
 // (shell#46): an unknown name resolves to it, and a broken preset file
-// falls back past it to the owned-defaults safe layout. hornero-left is
-// the product default and this file's own worked example; its
-// left/attached bar matches the factory geometry in
-// preset_owned_defaults_json.
-const preset_default_name = 'hornero-left'
+// falls back past it to the owned-defaults safe layout. Cockpit is the
+// factory default desktop (RFC 0001 §5).
+pub const preset_default_name = 'cockpit'
 
 // preset_suggestions ranks installed names close to a mistyped one.
 fn preset_suggestions(name string, names []string) []string {
@@ -706,7 +706,7 @@ pub:
 // and previews without writing.
 pub fn preset_apply_report(opts PresetApplyOptions) CommandResult {
 	if opts.name.len == 0 {
-		return fail_result('shell preset apply', 'missing preset name.\nExample: horneroctl shell preset apply hornero-left --dry-run')
+		return fail_result('shell preset apply', 'missing preset name.\nExample: horneroctl shell preset apply cockpit --dry-run')
 	}
 	if opts.name.contains('/') || opts.name.contains('\\') || opts.name.contains('..') {
 		return fail_result('shell preset apply', 'invalid preset name: ${opts.name}.\nList them: horneroctl shell preset list')

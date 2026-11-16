@@ -12,8 +12,8 @@ pass over every shipped config script).
 
 ## Appearance matrix (`tests/vm/p2-screenshots.sh`)
 
-Preview 2 graphical evidence: for each official theme
-(`hornero-dark`, `hornero-light`, `pampa`) applies it through the real
+Preview 2 graphical evidence: for each built-in Hornero Signal theme
+(`hornero-signal-night`, `hornero-signal-day`, `hornero-signal-contrast`) applies it through the real
 control plane (`horneroctl appearance theme set --yes`) inside a live
 Hyprland + Hornero Shell session and captures ten cells per theme
 (`desktop`, `kitty`, `gtk3`, `gtk4`, `qt6`, `launcher`, `dashboard`,
