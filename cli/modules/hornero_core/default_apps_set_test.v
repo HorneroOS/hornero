@@ -155,7 +155,7 @@ fn test_default_terminal_set_updates_exo_and_xdg_preferences() {
 	os.write_file('${root}/config/xdg-terminals.list', '# Preferred terminal\nkitty.desktop\nAlacritty.desktop\n') or {
 		assert false
 	}
-	os.write_file('${root}/config/hornero/shell.json', '{"appearance":{"theme":"hornero-light"},"general":{"apps":{"audio":["pavucontrol"],"terminal":["kitty"],"explorer":["thunar"]}},"custom":{"keep":true}}') or {
+	os.write_file('${root}/config/hornero/shell.json', '{"appearance":{"theme":"hornero-signal-day"},"general":{"apps":{"audio":["pavucontrol"],"terminal":["kitty"],"explorer":["thunar"]}},"custom":{"keep":true}}') or {
 		assert false
 	}
 	os.setenv('XDG_CONFIG_HOME', '${root}/config', true)
@@ -193,7 +193,7 @@ fn test_default_terminal_set_updates_exo_and_xdg_preferences() {
 
 fn test_shell_config_with_terminal_preserves_other_values_for_each_supported_terminal() {
 	for terminal in supported_terminal_defaults {
-		updated := shell_config_with_terminal('{"appearance":{"theme":"pampa"},"general":{"apps":{"audio":["pavucontrol"],"terminal":["kitty"]}},"extra":17}', terminal) or {
+		updated := shell_config_with_terminal('{"appearance":{"theme":"hornero-signal-night"},"general":{"apps":{"audio":["pavucontrol"],"terminal":["kitty"]}},"extra":17}', terminal) or {
 			assert false
 			continue
 		}

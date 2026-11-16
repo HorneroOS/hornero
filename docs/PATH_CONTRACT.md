@@ -17,7 +17,8 @@ never modified at runtime.
 | Current layout | `$XDG_STATE_HOME/hornero/current-shell-preset` | — |
 | Current wallpaper | `$XDG_STATE_HOME/hornero/wallpaper/path` | — |
 | Appearance state | `$XDG_STATE_HOME/hornero/scheme/state.json` | — |
-| Generated palette | `$XDG_CACHE_HOME/hornero/smart-colors/scheme.json` | — |
+| Live Signal scheme | `$XDG_STATE_HOME/hornero/signal/scheme.json` | — |
+| Derived colour files | `$XDG_CACHE_HOME/hornero/smart-colors/` | — |
 | Notifications | `$XDG_STATE_HOME/hornero/notifs.json` | — |
 | Image cache | `$XDG_CACHE_HOME/hornero/imagecache/` | — |
 | Lock-screen effects | `$XDG_CACHE_HOME/hornero/lockscreen/` | — |

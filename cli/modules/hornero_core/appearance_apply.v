@@ -4,16 +4,14 @@ import os
 import time
 import x.json2
 
-// Native appearance apply pipeline. Ports horneroctl appearance (theme
-// list/show/apply, status, set-*, sync, doctor), Hornero lock theme generator,
-// horneroctl wallpaper reload, and the apply-appearance.sh / wallpaper-resolver.sh
-// helpers. Quickshell IPC stays the live-shell fast path (external
-// `quickshell`/`qs` backend, best-effort with shell fallback); every
-// file decision is V.
+// Native Hornero Signal appearance pipeline: theme apply, status, sync,
+// doctor, the derived compositor/lock/terminal files, and the smart-color
+// files. Colours come only from the selected schema-v2 theme (signal.v);
+// the live scheme file is the shell contract, so apply never needs shell
+// IPC. Quickshell IPC stays the fast path for GTK/icon setters only.
 
-// resolve_quickshell_bin locates the IPC-capable shell CLI for the
-// appearance fast path: HORNERO_QUICKSHELL_BIN, else `quickshell`, else
-// `qs` (both external backends).
+// resolve_quickshell_bin locates the IPC-capable shell CLI:
+// HORNERO_QUICKSHELL_BIN, else `quickshell`, else `qs`.
 pub fn resolve_quickshell_bin() string {
 	ensure_quickshell_ipc_config()
 	env := os.getenv('HORNERO_QUICKSHELL_BIN')
@@ -43,8 +41,8 @@ fn ipc_appearance_call(args []string, dry_run bool) ExecReport {
 	return strict_exec(bin, full, dry_run)
 }
 
-// wait_appearance_ipc polls isBusy/lastError after an IPC mutation,
-// mirroring _wait_appearance_ipc (120 polls, then the last error).
+// wait_appearance_ipc polls isBusy/lastError after an IPC mutation
+// (120 polls, then the last error).
 fn wait_appearance_ipc(dry_run bool) !string {
 	if dry_run {
 		return 'preview'
@@ -72,21 +70,6 @@ fn wait_appearance_ipc(dry_run bool) !string {
 	return 'settled'
 }
 
-// shell_colours_reload_best_effort pings the shell colours target after
-// an M3 rewrite; absence/failure only adds a note (the horneroctl shell
-// `ipc colours reload` handshake it replaces).
-pub fn shell_colours_reload_best_effort() string {
-	bin := resolve_quickshell_bin()
-	if bin.len == 0 {
-		return ''
-	}
-	rep := strict_exec(bin, ['ipc', 'call', 'colours', 'reload'], false)
-	if rep.ok {
-		return 'shell colours reloaded via ${bin}'
-	}
-	return 'note: shell colours reload ping failed (shell will pick up scheme.json on next read)'
-}
-
 // shell_running reports whether a Quickshell process is visible in /proc.
 // HORNERO_SHELL_RUNNING=0/1 forces the answer (hermetic tests and CI
 // never depend on the host process table).
@@ -108,63 +91,62 @@ pub fn shell_running() bool {
 	return false
 }
 
-// PaletteBackends is the test seam for the native palette pipeline.
-// Production uses default_palette_backends().
-pub struct PaletteBackends {
-	m3_exec     fn (image string, output string, flavour string, mode string, accent string, dry_run bool) ExecReport @[required]
-	gtk_sync    fn (dry_run bool) CommandResult @[required]
+// AppearanceBackends is the test seam for every external side effect of
+// a theme apply. Production uses default_appearance_backends().
+pub struct AppearanceBackends {
+pub:
 	gtk_apply   fn (theme string, icon string, policy string, dry_run bool) CommandResult @[required]
-	hyprlock    fn (wallpaper string, dry_run bool) CommandResult                         @[required]
-	hyprland    fn (dry_run bool) CommandResult @[required]
-	hyprctl_run fn (dry_run bool)               @[required]
-}
-
-fn default_m3_exec(image string, output string, flavour string, mode string, accent string, dry_run bool) ExecReport {
-	return run_m3_synthesis(image, output, flavour, mode, accent, dry_run) or {
-		ExecReport{
-			command_line: 'm3 ${image} -> ${output}'
-			ok:           false
-			output:       err.msg()
-			exit_code:    1
-		}
-	}
-}
-
-fn default_gtk_sync(dry_run bool) CommandResult {
-	return sync_gtk_color_scheme_native(dry_run)
+	pack_extras fn (id string, gtk_theme string, name string) @[required]
+	reload      fn () @[required]
 }
 
 fn default_gtk_apply(theme string, icon string, policy string, dry_run bool) CommandResult {
 	return apply_gtk_theme_native(theme, icon, policy, dry_run)
 }
 
-fn default_hyprlock(wallpaper string, dry_run bool) CommandResult {
-	return regenerate_hyprlock_native(wallpaper, dry_run)
+// default_pack_extras runs the best-effort per-pack integrations.
+fn default_pack_extras(id string, gtk_theme string, name string) {
+	sync_kitty_include(id)
+	sync_gtk_recolor(gtk_theme)
+	sync_qt6ct_palette(id)
+	snappy_pack_best_effort(id)
+	notify_best_effort('Hornero', '${name} theme applied')
 }
 
-fn default_hyprland(dry_run bool) CommandResult {
-	return regenerate_hyprland_native(dry_run)
-}
-
-fn default_hyprctl_run(dry_run bool) {
-	if dry_run {
-		return
-	}
+// default_reload asks Hyprland and running terminals to re-read colours.
+fn default_reload() {
 	hc := resolve_hyprctl_bin()
 	if hc.len > 0 {
 		strict_exec(hc, ['reload'], false)
 	}
+	pk := resolve_pkill_bin()
+	strict_exec(pk, ['-SIGUSR1', '-x', 'kitty'], false)
+	reload_ghostty_theme()
 }
 
-pub fn default_palette_backends() PaletteBackends {
-	return PaletteBackends{
-		m3_exec:     default_m3_exec
-		gtk_sync:    default_gtk_sync
+pub fn default_appearance_backends() AppearanceBackends {
+	return AppearanceBackends{
 		gtk_apply:   default_gtk_apply
-		hyprlock:    default_hyprlock
-		hyprland:    default_hyprland
-		hyprctl_run: default_hyprctl_run
+		pack_extras: default_pack_extras
+		reload:      default_reload
 	}
+}
+
+// reload_ghostty_theme asks a running Ghostty to re-read its named theme:
+// the documented user service first, else SIGUSR2 through pkill.
+fn reload_ghostty_theme() {
+	systemctl := find_on_path('systemctl')
+	if systemctl.len > 0 {
+		active := strict_exec(systemctl, ['--user', 'is-active', '--quiet',
+			'app-com.mitchellh.ghostty.service'], false)
+		if active.ok {
+			reloaded := strict_exec(systemctl, ['--user', 'reload', 'app-com.mitchellh.ghostty.service'], false)
+			if reloaded.ok {
+				return
+			}
+		}
+	}
+	_ = strict_exec(resolve_pkill_bin(), ['-USR2', '-x', 'ghostty'], false)
 }
 
 // read_pack_map reads one theme pack's theme.json canonical-first.
@@ -176,7 +158,7 @@ pub fn read_pack_map(id string) !map[string]json2.Any {
 			return parsed
 		}
 	}
-	return error('Theme not found: ${id}')
+	return error('Theme not found: ${id}.\nRun: horneroctl appearance theme list')
 }
 
 // pack_str reads one string field from a pack map (bools render true/false).
@@ -189,13 +171,14 @@ pub fn pack_str(m map[string]json2.Any, key string) string {
 
 // resolve_pack_wallpaper finds the wallpaper for a pack: the override
 // first, then Pictures/Wallpapers, then the installed wallpaper trees
-// (default name, else first sorted image) — the resolver port.
+// (default name, else first sorted image).
 pub fn resolve_pack_wallpaper(id string, wallpaper_dir string, default_name string, override string) !string {
 	if override.len > 0 {
 		real := os.real_path(override)
 		if os.is_file(real) {
 			return real
 		}
+		return error('wallpaper not found: ${override}')
 	}
 	pics_base := resolve_pictures_wallpapers_dir()
 	wall_roots := resolve_wallpapers_dirs_for_read()
@@ -215,9 +198,7 @@ pub fn resolve_pack_wallpaper(id string, wallpaper_dir string, default_name stri
 		entries := os.ls(base) or { continue }
 		mut cands := []string{}
 		for e in entries {
-			lc := e.to_lower()
-			if lc.ends_with('.jpg') || lc.ends_with('.jpeg') || lc.ends_with('.png')
-				|| lc.ends_with('.webp') || lc.ends_with('.gif') || lc.ends_with('.bmp') {
+			if os.file_ext(e).to_lower().trim_left('.') in theme_image_exts {
 				full := os.join_path(base, e)
 				if os.is_file(full) {
 					cands << os.real_path(full)
@@ -232,232 +213,151 @@ pub fn resolve_pack_wallpaper(id string, wallpaper_dir string, default_name stri
 	return error('no wallpaper for theme ${id}')
 }
 
-// resolve_theme_apply_wallpaper keeps colour-only recipes usable when their
-// optional catalogue image is absent. In that case their intended behavior is
-// to generate colours from the currently selected background.
-fn resolve_theme_apply_wallpaper(id string, wallpaper_dir string, default_name string, override string, color_only bool, dry_run bool) !string {
-	wallpaper := resolve_pack_wallpaper(id, wallpaper_dir, default_name, override) or {
-		if color_only {
-			current := read_wallpaper_pointer()
-			if current.len > 0 && os.is_file(current) {
-				return os.real_path(current)
-			}
-			if dry_run {
-				return '<current wallpaper>'
-			}
-			return error('theme ${id} changes colours only, but no current wallpaper is available; choose a wallpaper first')
-		}
-		if dry_run {
-			return '<wallpaper>'
-		}
-		return err
-	}
-	return wallpaper
-}
-
-// run_palette_pipeline generates Hornero M3 colours, then commits the selected
-// wallpaper pointer and synchronizes dependent appearance state.
-pub fn run_palette_pipeline(wallpaper string, flavour string, mode string, dry_run bool) CommandResult {
-	return run_palette_pipeline_with(wallpaper, flavour, mode, dry_run, default_palette_backends())
-}
-
-// run_palette_pipeline_with is the injectable worker behind
-// run_palette_pipeline. M3 must succeed before the wallpaper pointer changes.
-pub fn run_palette_pipeline_with(wallpaper string, flavour string, mode string, dry_run bool, deps PaletteBackends) CommandResult {
-	pointer := resolve_wallpaper_pointer_file()
-	out := os.join_path(smart_colors_dir(), 'scheme.json')
-	accent := read_accent_override()
-	if dry_run {
-		m3 := run_m3_synthesis(wallpaper, out, flavour, mode, accent, true) or {
-			return fail_result('appearance palette', err.msg())
-		}
-		lines := [
-			m3.command_line
-			'would atomically write ${wallpaper} to ${pointer}'
-			'would run: sync state.json from scheme.json'
-			'would run: sync GTK color-scheme policy'
-			'would run: regenerate colors-hyprlock.conf'
-			'would run: regenerate colors-hyprland.lua'
-			'would run: hyprctl reload (when present)',
-		]
-		return ok_result('appearance palette', lines.join('\n'), {
-			'command_line': lines.join('\n')
-			'dry_run':      'true'
-		})
-	}
-	if !os.is_file(wallpaper) {
-		return fail_result('appearance palette', 'wallpaper not found: ${wallpaper}')
-	}
-	os.mkdir_all(os.dir(out)) or {
-		return fail_result('appearance palette', 'cannot create scheme dir: ${err.msg()}')
-	}
-	m3 := deps.m3_exec(wallpaper, out, flavour, mode, accent, false)
-	if !m3.ok {
-		return fail_result('appearance palette', 'M3 backend failed (exit ${m3.exit_code}):\n${m3.output}')
-	}
-	os.mkdir_all(os.dir(pointer)) or {
-		return fail_result('appearance palette', 'cannot create wallpaper pointer dir: ${err.msg()}')
-	}
-	write_wallpaper_pointer(pointer, wallpaper) or {
-		return fail_result('appearance palette', 'cannot commit wallpaper pointer: ${err.msg()}')
-	}
-	sync_state_from_scheme() or {
-		return fail_result('appearance palette', 'palette wrote ${out} but state sync failed: ${err.msg()}')
-	}
-	gtk := deps.gtk_sync(false)
-	if !gtk.ok {
-		return fail_result('appearance palette', 'palette applied but GTK sync failed: ${gtk.message}')
-	}
-	lock_result := deps.hyprlock(wallpaper, false)
-	if !lock_result.ok {
-		return fail_result('appearance palette', 'colour scheme applied, but lock screen refresh failed: ${lock_result.message}')
-	}
-	hypr_result := deps.hyprland(false)
-	if !hypr_result.ok {
-		return fail_result('appearance palette', 'colour scheme applied, but Hyprland border refresh failed: ${hypr_result.message}')
-	}
-	deps.hyprctl_run(false)
-	return ok_result('appearance palette', 'wallpaper and generated colours applied', {
-		'wallpaper': wallpaper
-		'scheme':    out
-	})
-}
-
-// write_wallpaper_pointer atomically replaces the canonical Hornero pointer.
+// write_wallpaper_pointer atomically replaces the canonical Hornero pointer
+// (the shell watches it). Setting a wallpaper never changes a colour.
 fn write_wallpaper_pointer(pointer string, wallpaper string) ! {
-	tmp := pointer + '.tmp.' + os.getpid().str()
-	defer { os.rm(tmp) or {} }
-	os.write_file(tmp, wallpaper + '\n') or { return err }
-	os.rename(tmp, pointer) or { return err }
+	write_file_atomic(pointer, wallpaper + '\n')!
 }
 
-// theme_apply_native applies one theme pack once (no sticky current
-// theme): IPC fast path when the shell is up, else the native M3 + GTK +
-// Kitty + recolor + Qt palette pipeline.
+// check_typed_theme_id rejects malformed ids and names retired ones with
+// their replacement instead of silently rewriting explicit input.
+fn check_typed_theme_id(id string) ! {
+	if id.len == 0 || id.contains('/') || id == '.' || id == '..' || id.contains('\x00') {
+		return error('invalid theme id.\nExample: horneroctl appearance theme apply ${signal_default_theme_id} --dry-run')
+	}
+	replacement := retired_theme_replacement(id)
+	if replacement.len > 0 {
+		return error('theme ${id} was removed with Hornero Signal; use ${replacement}.\nExample: horneroctl appearance theme apply ${replacement} --yes')
+	}
+}
+
+// theme_apply_native applies one schema-v2 theme pack.
 pub fn theme_apply_native(id string, wallpaper_override string, dry_run bool) CommandResult {
-	return theme_apply_native_with(id, wallpaper_override, dry_run, default_palette_backends())
+	return theme_apply_native_with(id, wallpaper_override, dry_run, default_appearance_backends())
 }
 
 // theme_apply_native_with is the injectable worker behind
-// theme_apply_native.
-pub fn theme_apply_native_with(id string, wallpaper_override string, dry_run bool, deps PaletteBackends) CommandResult {
-	if id.len == 0 || id.contains('/') || id == '.' || id == '..' {
-		return fail_result('appearance theme apply', 'invalid theme id.\nExample: horneroctl appearance theme apply vapor-dreams --dry-run')
-	}
+// theme_apply_native: validate the pack, migrate retired selections once,
+// write the live scheme and every derived file atomically, persist the
+// selection, then apply wallpaper and GTK.
+pub fn theme_apply_native_with(id string, wallpaper_override string, dry_run bool, deps AppearanceBackends) CommandResult {
+	check_typed_theme_id(id) or { return fail_result('appearance theme apply', err.msg()) }
 	pack := read_pack_map(id) or { return fail_result('appearance theme apply', err.msg()) }
-	scheme_type := normalize_scheme_type(pack_str(pack, 'schemeType'))
-	dark_raw := pack_str(pack, 'darkMode')
-	mode := if dark_raw == 'false' { 'light' } else { 'dark' }
-	if !dry_run && shell_running() {
-		ipc := ipc_appearance_call(['applyTheme', id, wallpaper_override], false)
-		if ipc.ok && !ipc.output.contains('Target not found') {
-			wait_appearance_ipc(false) or {
-				return fail_result('appearance theme apply', err.msg())
-			}
-			// The shell owns the live apply; horneroctl owns the state
-			// file `appearance status` reads. Persist the pack identity
-			// here so status never disagrees with the live shell.
-			write_scheme_state(id, scheme_type, mode, normalize_variant(scheme_type)) or {
-				return fail_result('appearance theme apply', '${id} applied via shell but state sync failed: ${err.msg()}')
-			}
-			return ok_result('appearance theme apply', '${id} applied via shell', {
-				'id':   id
-				'mode': mode
-			})
-		}
+	theme := parse_signal_theme(id, pack) or {
+		return fail_result('appearance theme apply', 'not a Hornero Signal theme: ${err.msg()}')
 	}
 	mut gtk_theme := pack_str(pack, 'gtkTheme')
-	if gtk_theme.len == 0 {
-		gtk_theme = 'Orchis-Light-Compact'
-	}
 	mut icon_theme := pack_str(pack, 'iconTheme')
 	if icon_theme.len == 0 {
-		icon_theme = 'Numix-Circle'
+		icon_theme = 'Papirus-Dark'
 	}
-	mut wallpaper_dir := pack_str(pack, 'wallpaperDir')
-	if wallpaper_dir.len == 0 {
-		wallpaper_dir = id
+	policy := pack_gtk_policy(pack_str(pack, 'gtkColorScheme'), '', '', theme.mode)
+	wallpaper_dir := theme_nonempty_str(pack, 'wallpaperDir', id)
+	default_wall := pack_str(pack, 'defaultWallpaper')
+	has_wallpaper := wallpaper_override.len > 0 || default_wall.len > 0 || 'wallpaperDir' in pack
+	mut wallpaper := ''
+	if has_wallpaper {
+		wallpaper = resolve_pack_wallpaper(id, wallpaper_dir, default_wall, wallpaper_override) or {
+			if wallpaper_override.len > 0 {
+				return fail_result('appearance theme apply', err.msg())
+			}
+			''
+		}
 	}
-	mut color_only := false
-	if 'colorOnly' in pack {
-		color_only = theme_truthy(pack['colorOnly'])
-	}
-	wallpaper := resolve_theme_apply_wallpaper(id, wallpaper_dir, pack_str(pack, 'defaultWallpaper'),
-		wallpaper_override, color_only, dry_run) or {
-		return fail_result('appearance theme apply', err.msg())
-	}
-	policy := pack_gtk_policy(pack_str(pack, 'gtkColorScheme'), pack_str(pack, 'gtkPreferDark'),
-		gtk_theme, mode)
+	pointer := resolve_wallpaper_pointer_file()
+	migration := plan_legacy_migration()
 	if dry_run {
-		pal := run_palette_pipeline(wallpaper, scheme_type, mode, true)
-		lines := [pal.message,
-			'would run: apply gtk ${gtk_theme} icons ${icon_theme} policy ${policy}',
-			'would run: sync kitty include, gtk recolor, qt6ct palette']
+		mut lines := []string{}
+		for c in migration.changes {
+			lines << 'would migrate ${c}'
+		}
+		lines << signal_output_preview()
+		lines << 'would persist theme ${id} in ${scheme_state_file()} and ${shell_config_file(resolve_paths())}'
+		if wallpaper.len > 0 {
+			lines << 'would atomically write ${wallpaper} to ${pointer}'
+		} else {
+			lines << 'would keep the current wallpaper'
+		}
+		gtk_label := if gtk_theme.len == 0 || gtk_theme == 'auto' { 'auto' } else { gtk_theme }
+		lines << 'would run: apply gtk ${gtk_label} icons ${icon_theme} policy ${policy}'
+		lines << 'would run: sync kitty include, gtk recolor, qt6ct palette; reload Hyprland and terminals'
 		return ok_result('appearance theme apply', lines.join('\n'), {
 			'command_line': lines.join('\n')
 			'dry_run':      'true'
 			'id':           id
+			'mode':         theme.mode
 		})
 	}
-	pal := run_palette_pipeline_with(wallpaper, scheme_type, mode, false, deps)
-	if !pal.ok {
-		return fail_result('appearance theme apply', pal.message)
+	migrate_legacy_appearance() or {
+		return fail_result('appearance theme apply', 'cannot migrate retired appearance state: ${err.msg()}')
 	}
-	if gtk_theme != 'auto' && gtk_theme.len > 0 {
-		gtk := deps.gtk_apply(gtk_theme, icon_theme, policy, false)
-		if !gtk.ok {
-			return fail_result('appearance theme apply', 'colour scheme and wallpaper applied, but GTK apply failed: ${gtk.message}')
-		}
-	} else {
-		pack_gtk := theme_pack_gtk_apply(id, false)
-		if !pack_gtk.ok {
-			return fail_result('appearance theme apply', 'colour scheme and wallpaper applied, but pack GTK failed: ${pack_gtk.message}')
+	outputs := write_signal_outputs(theme) or {
+		return fail_result('appearance theme apply', err.msg())
+	}
+	persist_state_theme(id) or {
+		return fail_result('appearance theme apply', 'scheme written but state persist failed: ${err.msg()}')
+	}
+	persist_shell_theme(id) or {
+		return fail_result('appearance theme apply', 'scheme written but shell.json update failed: ${err.msg()}')
+	}
+	if wallpaper.len > 0 {
+		write_wallpaper_pointer(pointer, wallpaper) or {
+			return fail_result('appearance theme apply', 'scheme written but wallpaper pointer failed: ${err.msg()}')
 		}
 	}
-	sync_kitty_include(id)
-	sync_gtk_recolor(id)
-	sync_qt6ct_palette(id)
-	snappy_pack_best_effort(id)
-	notify_best_effort('HorneroConfig', '${pack_str(pack, 'name')} theme applied')
-	name := pack_str(pack, 'name')
-	return ok_result('appearance theme apply', '${if name.len > 0 { name } else { id }} theme applied',
-		{
-			'id': id
-		})
+	if gtk_theme.len == 0 || gtk_theme == 'auto' {
+		gtk_theme = gtk_theme_for(theme)
+	}
+	gtk := deps.gtk_apply(gtk_theme, icon_theme, policy, false)
+	if !gtk.ok {
+		return fail_result('appearance theme apply', 'scheme written, but GTK apply failed: ${gtk.message}')
+	}
+	deps.pack_extras(id, gtk_theme, theme.name)
+	deps.reload()
+	mut msg := '${theme.name} theme applied (${outputs.scheme})'
+	if migration.changes.len > 0 {
+		msg += '\nmigrated: ' + migration.changes.join('; ')
+	}
+	return ok_result('appearance theme apply', msg, {
+		'id':        id
+		'mode':      theme.mode
+		'scheme':    outputs.scheme
+		'wallpaper': wallpaper
+	})
 }
 
-// theme_pack_gtk_apply resolves GTK/icons from a pack (wallpaper
-// detection when gtkTheme is auto) and applies them.
-pub fn theme_pack_gtk_apply(id string, dry_run bool) CommandResult {
-	pack := read_pack_map(id) or { return fail_result('appearance gtk pack', err.msg()) }
-	gtk_theme := pack_str(pack, 'gtkTheme')
+// gtk_theme_for picks an installed GTK theme for packs that set gtkTheme
+// to auto (or omit it), from the luminance of the theme's ground role.
+fn gtk_theme_for(theme SignalTheme) string {
+	name, _ := detect_gtk_theme(theme.role('ground'), list_names_in_dirs(gtk_theme_search_dirs(),
+		false))
+	return name
+}
+
+// theme_pack_gtk_apply applies the GTK/icon side of one pack (mode-based
+// GTK pick when gtkTheme is auto). An empty id uses the current theme.
+pub fn theme_pack_gtk_apply(id_arg string, dry_run bool) CommandResult {
+	id := if id_arg.len > 0 { id_arg } else { resolve_signal_selection().id }
+	pack := read_pack_map(id) or { return fail_result('appearance gtk theme', err.msg()) }
+	theme := parse_signal_theme(id, pack) or {
+		return fail_result('appearance gtk theme', 'not a Hornero Signal theme: ${err.msg()}')
+	}
+	mut gtk_theme := pack_str(pack, 'gtkTheme')
 	mut icon_theme := pack_str(pack, 'iconTheme')
 	if icon_theme.len == 0 {
-		icon_theme = 'Numix-Circle'
+		icon_theme = 'Papirus-Dark'
 	}
-	mode := if pack_str(pack, 'darkMode') == 'false' { 'light' } else { 'dark' }
-	policy := pack_gtk_policy(pack_str(pack, 'gtkColorScheme'), pack_str(pack, 'gtkPreferDark'),
-		gtk_theme, mode)
+	policy := pack_gtk_policy(pack_str(pack, 'gtkColorScheme'), '', '', theme.mode)
 	if gtk_theme.len == 0 || gtk_theme == 'auto' {
-		wall := read_wallpaper_pointer()
-		if wall.len > 0 && os.is_file(wall) {
-			bg := scheme_json_colour('background')
-			detected, _ := detect_gtk_theme(if bg.len > 0 { bg } else { '000000' }, list_names_in_dirs(gtk_theme_search_dirs(),
-				false))
-			return apply_gtk_theme_native(detected, icon_theme, policy, dry_run)
-		}
-		fallback := if policy == 'prefer-light' {
-			'Orchis-Light-Compact'
-		} else {
-			'Orchis-Dark-Compact'
-		}
-		return apply_gtk_theme_native(fallback, icon_theme, policy, dry_run)
+		gtk_theme = gtk_theme_for(theme)
 	}
 	return apply_gtk_theme_native(gtk_theme, icon_theme, policy, dry_run)
 }
 
-// sync_kitty_include swaps the kitty.conf include to the theme variant
-// and pokes kitty with SIGUSR1 (best-effort, silent skip).
+// sync_kitty_include swaps the single theme `include <id>.conf` line of
+// kitty.conf to the applied pack's shipped `<id>.conf` (HorneroOS/config
+// ships one per theme). Only includes naming an installed or retired theme
+// are touched; a missing kitty.conf or variant skips silently.
 pub fn sync_kitty_include(theme_id string) {
 	kitty_dir := os.join_path(gtk_config_home(), 'kitty')
 	conf := os.join_path(kitty_dir, 'kitty.conf')
@@ -467,36 +367,34 @@ pub fn sync_kitty_include(theme_id string) {
 	}
 	raw := os.read_file(conf) or { return }
 	mut out := []string{}
+	mut changed := false
 	for line in raw.split_into_lines() {
-		if line.starts_with('include ')
-			&& (line.ends_with('hornero-dark.conf') || line.ends_with('hornero-light.conf')
-				|| line.ends_with('pampa.conf')) {
-			out << 'include ${theme_id}.conf'
-		} else {
-			out << line
+		if line.starts_with('include ') && line.ends_with('.conf') {
+			name := line.all_after('include ').trim_space().all_before_last('.conf')
+			is_theme := retired_theme_replacement(name).len > 0 || (read_pack_map(name) or {
+				map[string]json2.Any{}
+			}).len > 0
+			if !name.contains('/') && name != theme_id && is_theme {
+				out << 'include ${theme_id}.conf'
+				changed = true
+				continue
+			}
 		}
+		out << line
 	}
-	os.write_file(conf, out.join('\n') + '\n') or { return }
-	pk := resolve_pkill_bin()
-	if pk.len > 0 {
-		strict_exec(pk, ['-SIGUSR1', '-x', 'kitty'], false)
+	if changed {
+		write_file_atomic(conf, out.join('\n') + '\n') or {}
 	}
 }
 
-// sync_gtk_recolor copies the theme's libadwaita recolor.css into place
-// (silent no-op when the variant ships none).
-pub fn sync_gtk_recolor(theme_id string) {
-	tree := match theme_id {
-		'hornero-dark' { 'Hornero-Dark' }
-		'hornero-light' { 'Hornero-Light' }
-		'pampa' { 'Hornero-Pampa' }
-		else { return }
+// sync_gtk_recolor copies the GTK theme's libadwaita recolor.css into
+// place (silent no-op when the theme ships none).
+pub fn sync_gtk_recolor(gtk_theme string) {
+	if gtk_theme.len == 0 || gtk_theme.contains('/') {
+		return
 	}
-	mut data := os.getenv('XDG_DATA_HOME')
-	if data.len == 0 {
-		data = os.join_path(os.home_dir(), '.local', 'share')
-	}
-	src := os.join_path(data, 'themes', tree, 'gtk-4.0', 'recolor.css')
+	data := xdg_or_home('XDG_DATA_HOME', '.local/share')
+	src := os.join_path(data, 'themes', gtk_theme, 'gtk-4.0', 'recolor.css')
 	if !os.is_file(src) {
 		return
 	}
@@ -573,137 +471,47 @@ fn notify_best_effort(title string, body string) {
 	strict_exec(nb, [title, body], false)
 }
 
-// regenerate_hyprlock_native rebuilds colors-hyprlock.conf from the live
-// scheme.json colours (the Hornero lock theme generator port).
+// regenerate_hyprlock_native rebuilds colors-hyprlock.conf (hyprlang
+// colour variables only) from the live Signal scheme. The wallpaper
+// argument is accepted for CLI compatibility; it never affects colours.
 pub fn regenerate_hyprlock_native(wallpaper_arg string, dry_run bool) CommandResult {
-	scheme := color_scheme_file()
-	if !os.is_file(scheme) && !dry_run {
-		return fail_result('appearance hyprlock', 'scheme.json not found at ${scheme} — regenerate first.')
-	}
-	dir := smart_colors_dir()
-	out := os.join_path(dir, 'colors-hyprlock.conf')
+	out := signal_output_paths().hyprlock_conf
 	if dry_run {
-		return ok_result('appearance hyprlock', 'would run: write ${out} from ${scheme}',
+		return ok_result('appearance hyprlock', 'would run: write ${out} from ${signal_scheme_file()}',
 			{
 				'command_line': 'write ${out}'
 				'dry_run':      'true'
 			})
 	}
-	raw := os.read_file(scheme) or {
-		return fail_result('appearance hyprlock', 'cannot read ${scheme}: ${err.msg()}')
+	theme := read_signal_scheme() or {
+		return fail_result('appearance hyprlock', '${err.msg()}.\nRun: horneroctl appearance sync --yes')
 	}
-	parsed := json2.decode[json2.Any](raw) or {
-		return fail_result('appearance hyprlock', 'scheme.json is not JSON: ${err.msg()}')
+	write_file_atomic(out, render_signal_hyprlock_conf(theme)) or {
+		return fail_result('appearance hyprlock', err.msg())
 	}
-	mut colours := map[string]string{}
-	if parsed is map[string]json2.Any {
-		cmap := parsed.clone()
-		if 'colours' in cmap {
-			for k, v in cmap['colours'].as_map() {
-				colours[k] = v.str()
-			}
-		}
-	}
-	mode := scheme_json_field(scheme, 'mode')
-	mut wallpaper := wallpaper_arg
-	if wallpaper.len == 0 {
-		wallpaper = read_wallpaper_pointer()
-	}
-	if wallpaper.len > 0 && !os.is_file(wallpaper) {
-		wallpaper = ''
-	}
-	conf := render_hyprlock_conf(HyprlockScheme{
-		primary:            colours['primary']
-		surface:            colours['surface']
-		on_surface:         colours['onSurface']
-		background:         colours['background']
-		on_surface_variant: colours['onSurfaceVariant']
-		outline:            colours['outline']
-		secondary:          colours['secondary']
-		error:              colours['error']
-		light:              mode == 'light'
-		wallpaper:          wallpaper
-		scheme_source:      scheme
-	})
-	os.mkdir_all(dir) or {
-		return fail_result('appearance hyprlock', 'cannot create ${dir}: ${err.msg()}')
-	}
-	os.write_file(out, conf) or {
-		return fail_result('appearance hyprlock', 'cannot write ${out}: ${err.msg()}')
-	}
-	return ok_result('appearance hyprlock', 'wrote color overrides to ${out}', {
+	return ok_result('appearance hyprlock', 'wrote lock colour variables to ${out}', {
 		'output': out
 	})
 }
 
 // regenerate_hyprland_native rebuilds colors-hyprland.lua from the live
-// scheme.json colours, mirroring regenerate_hyprlock_native. This is what
-// makes Hyprland's border colours follow the wallpaper: the palette
-// pipeline regenerates the M3 scheme on every wallpaper change, and the
-// Lua entrypoint (desktop/hypr/hyprland.lua.d/smart-colors.lua in
-// HorneroOS/config) loads this file on every config evaluation. Without
-// it, Hyprland silently keeps the factory palette and borders stop
-// following the wallpaper. The xrdb-era `colors generate` path still
-// writes the same file for compatibility.
+// Signal scheme. HorneroOS/config's smart-colors.lua loads it on every
+// Hyprland config evaluation; the write is atomic so a reload never sees
+// a half-written chunk.
 pub fn regenerate_hyprland_native(dry_run bool) CommandResult {
-	scheme := color_scheme_file()
-	if !os.is_file(scheme) && !dry_run {
-		return fail_result('appearance hyprland', 'scheme.json not found at ${scheme} — regenerate first.')
-	}
-	dir := smart_colors_dir()
-	out := os.join_path(dir, 'colors-hyprland.lua')
+	out := signal_output_paths().hyprland_lua
 	if dry_run {
-		return ok_result('appearance hyprland', 'would run: write ${out} from ${scheme}',
+		return ok_result('appearance hyprland', 'would run: write ${out} from ${signal_scheme_file()}',
 			{
 				'command_line': 'write ${out}'
 				'dry_run':      'true'
 			})
 	}
-	raw := os.read_file(scheme) or {
-		return fail_result('appearance hyprland', 'cannot read ${scheme}: ${err.msg()}')
+	theme := read_signal_scheme() or {
+		return fail_result('appearance hyprland', '${err.msg()}.\nRun: horneroctl appearance sync --yes')
 	}
-	parsed := json2.decode[json2.Any](raw) or {
-		return fail_result('appearance hyprland', 'scheme.json is not JSON: ${err.msg()}')
-	}
-	mut colours := map[string]string{}
-	if parsed is map[string]json2.Any {
-		cmap := parsed.clone()
-		if 'colours' in cmap {
-			for k, v in cmap['colours'].as_map() {
-				colours[k] = v.str()
-			}
-		}
-	}
-	pick := fn [colours] (keys []string, fallback string) string {
-		for k in keys {
-			if colours[k].len > 0 {
-				return colours[k]
-			}
-		}
-		return fallback
-	}
-	mut base := [16]string{}
-	base[8] = pick(['outline', 'surfaceVariant', 'onSurfaceVariant'], '6b4e3b')
-	sp := SmartPalette{
-		accent:  pick(['primary'], 'e07856')
-		info:    pick(['secondary', 'tertiary'], 'f2b749')
-		warning: pick(['tertiary', 'secondary'], 'f2b749')
-		base:    base
-		light:   scheme_json_field(scheme, 'mode') == 'light'
-	}
-	os.mkdir_all(dir) or {
-		return fail_result('appearance hyprland', 'cannot create ${dir}: ${err.msg()}')
-	}
-	// Write atomically (tmp + rename): Hyprland may evaluate its config
-	// at any moment, and a half-written Lua chunk would silently drop
-	// back to the factory palette.
-	tmp := out + '.tmp.' + os.getpid().str()
-	defer { os.rm(tmp) or {} }
-	os.write_file(tmp, render_hyprland_lua(sp)) or {
-		return fail_result('appearance hyprland', 'cannot write ${tmp}: ${err.msg()}')
-	}
-	os.rename(tmp, out) or {
-		return fail_result('appearance hyprland', 'cannot replace ${out}: ${err.msg()}')
+	write_file_atomic(out, render_signal_hyprland_lua(theme)) or {
+		return fail_result('appearance hyprland', err.msg())
 	}
 	return ok_result('appearance hyprland', 'wrote Hyprland border colours to ${out}', {
 		'output': out
@@ -711,45 +519,42 @@ pub fn regenerate_hyprland_native(dry_run bool) CommandResult {
 }
 
 // read_appearance_status_native gathers the live appearance state without
-// any backend: wallpaper pointer, scheme state, gtk3 ini, gsettings icon.
+// any backend: selected theme, live scheme, wallpaper, GTK and icons.
 pub fn read_appearance_status_native() AppearanceStatus {
-	wallpaper := read_wallpaper_pointer()
 	st := read_scheme_state()
 	gtk_theme, _, _ := read_gtk3_ini()
-	icon := current_icon_theme()
 	return AppearanceStatus{
+		theme:            st.theme
 		mode:             st.mode
-		flavour:          st.flavour
 		gtk_theme:        gtk_theme
-		icon_theme:       icon
+		icon_theme:       current_icon_theme()
 		gtk_color_scheme: st.gtk_color_scheme
-		wallpaper:        wallpaper
+		wallpaper:        read_wallpaper_pointer()
 	}
 }
 
 // appearance_status_report implements `appearance status` natively.
 pub fn appearance_status_report(json bool) CommandResult {
 	st := read_appearance_status_native()
-	if json {
-		payload := '{"wallpaper":"${st.wallpaper}","mode":"${st.mode}","flavour":"${st.flavour}","gtkTheme":"${st.gtk_theme}","iconTheme":"${st.icon_theme}","gtkColorScheme":"${st.gtk_color_scheme}"}'
-		return ok_result('appearance status', payload, {
-			'mode':             st.mode
-			'flavour':          st.flavour
-			'gtk_theme':        st.gtk_theme
-			'wallpaper':        st.wallpaper
-			'gtk_color_scheme': st.gtk_color_scheme
-		})
-	}
-	lines := ['wallpaper      : ${st.wallpaper}', 'mode           : ${st.mode}',
-		'flavour        : ${st.flavour}', 'gtkTheme       : ${st.gtk_theme}',
-		'iconTheme      : ${st.icon_theme}', 'gtkColorScheme : ${st.gtk_color_scheme}']
-	return ok_result('appearance status', lines.join('\n'), {
+	data := {
+		'theme':            st.theme
 		'mode':             st.mode
-		'flavour':          st.flavour
 		'gtk_theme':        st.gtk_theme
+		'icon_theme':       st.icon_theme
 		'wallpaper':        st.wallpaper
 		'gtk_color_scheme': st.gtk_color_scheme
-	})
+	}
+	if json {
+		mut doc := map[string]json2.Any{}
+		for k, v in data {
+			doc[k] = json2.Any(v)
+		}
+		return ok_result('appearance status', json2.encode(doc, escape_unicode: true), data)
+	}
+	lines := ['theme          : ${st.theme}', 'mode           : ${st.mode}',
+		'wallpaper      : ${st.wallpaper}', 'gtkTheme       : ${st.gtk_theme}',
+		'iconTheme      : ${st.icon_theme}', 'gtkColorScheme : ${st.gtk_color_scheme}']
+	return ok_result('appearance status', lines.join('\n'), data)
 }
 
 // appearance_set_gtk_native sets the GTK theme: shell IPC first, native
@@ -770,7 +575,7 @@ pub fn appearance_set_gtk_native(theme string, dry_run bool) CommandResult {
 	}
 	mut icon := current_icon_theme()
 	if icon.len == 0 {
-		icon = 'Numix-Circle'
+		icon = 'Papirus-Dark'
 	}
 	return apply_gtk_theme_native(theme, icon, '', dry_run)
 }
@@ -819,8 +624,32 @@ pub fn appearance_set_gtk_policy_native(policy string, dry_run bool) CommandResu
 	return apply_gtk_color_scheme_native(policy, dry_run)
 }
 
-// appearance_set_wallpaper_native validates a wallpaper path and runs
-// the wallpaper-only pipeline (live state prefs).
+// set_wallpaper_only atomically points the shell at a new wallpaper.
+// Colours never change.
+pub fn set_wallpaper_only(command string, path string, dry_run bool) CommandResult {
+	pointer := resolve_wallpaper_pointer_file()
+	if dry_run {
+		return ok_result(command, 'would atomically write ${path} to ${pointer}',
+			{
+				'command_line': 'write ${pointer}'
+				'dry_run':      'true'
+				'path':         path
+			})
+	}
+	if !os.is_file(path) {
+		return fail_result(command, 'wallpaper not found: ${path}')
+	}
+	write_wallpaper_pointer(pointer, path) or {
+		return fail_result(command, 'cannot write wallpaper pointer: ${err.msg()}')
+	}
+	return ok_result(command, 'wallpaper set: ${path}', {
+		'path':    path
+		'pointer': pointer
+	})
+}
+
+// appearance_set_wallpaper_native validates a wallpaper path and sets it
+// without touching colours.
 pub fn appearance_set_wallpaper_native(path string, dry_run bool) CommandResult {
 	if path.len == 0 {
 		return fail_result('appearance set-wallpaper', 'Usage: horneroctl appearance set-wallpaper <path>.\nExample: horneroctl appearance set-wallpaper ~/wall.jpg --dry-run')
@@ -829,58 +658,162 @@ pub fn appearance_set_wallpaper_native(path string, dry_run bool) CommandResult 
 	if !os.is_file(real) && !dry_run {
 		return fail_result('appearance set-wallpaper', 'wallpaper not found: ${path}')
 	}
-	st := ensure_scheme_state()
-	flavour := normalize_scheme_type(if st.flavour.len > 0 { st.flavour } else { 'tonal-spot' })
-	mode := if st.mode == 'light' || st.mode == 'dark' { st.mode } else { 'dark' }
-	return run_palette_pipeline(if dry_run { path } else { real }, flavour, mode, dry_run)
+	return set_wallpaper_only('appearance set-wallpaper', if dry_run { path } else { real },
+		dry_run)
 }
 
-// appearance_sync_native reloads the shell (when up) and adopts the live
-// scheme meta into state.json.
+// appearance_sync_native is the repair verb: run the one-shot migration of
+// retired selections, then rewrite the live scheme and derived files from
+// the selected theme (factory default when none). Wallpaper and GTK stay.
 pub fn appearance_sync_native(dry_run bool) CommandResult {
-	if !dry_run && shell_running() {
-		ipc := ipc_appearance_call(['reload'], false)
-		if ipc.ok {
-			wait_appearance_ipc(false) or { return fail_result('appearance sync', err.msg()) }
-		}
+	migration := plan_legacy_migration()
+	sel := resolve_signal_selection()
+	theme := load_signal_theme(sel.id) or {
+		return fail_result('appearance sync', 'selected theme ${sel.id} (${sel.source}) is not usable: ${err.msg()}\nRun: horneroctl appearance theme apply ${signal_default_theme_id} --yes')
 	}
 	if dry_run {
-		return ok_result('appearance sync', 'would run: sync state.json from scheme.json',
-			{
-				'dry_run': 'true'
-			})
+		mut lines := []string{}
+		for c in migration.changes {
+			lines << 'would migrate ${c}'
+		}
+		lines << signal_output_preview()
+		return ok_result('appearance sync', lines.join('\n'), {
+			'dry_run': 'true'
+			'theme':   theme.id
+		})
 	}
-	sync_state_from_scheme() or { return fail_result('appearance sync', err.msg()) }
-	return ok_result('appearance sync', 'appearance state synced from scheme.json', {})
+	migrate_legacy_appearance() or { return fail_result('appearance sync', err.msg()) }
+	outputs := write_signal_outputs(theme) or {
+		return fail_result('appearance sync', err.msg())
+	}
+	persist_state_theme(theme.id) or { return fail_result('appearance sync', err.msg()) }
+	mut msg := 'appearance synced from ${theme.id} (${outputs.scheme})'
+	if migration.changes.len > 0 {
+		msg += '\nmigrated: ' + migration.changes.join('; ')
+	}
+	return ok_result('appearance sync', msg, {
+		'theme':  theme.id
+		'scheme': outputs.scheme
+	})
 }
 
-// appearance_doctor_native checks appearance consistency (the doctor
-// port): scheme/state agreement, wallpaper pointer chain, hyprlock
-// output, GTK policy, and M3 interpreter. It never mutates user state.
+// ibm_plex_families are the Signal font files the shell needs
+// (package ttf-ibm-plex), matched by file-name prefix.
+const ibm_plex_families = {
+	'IBM Plex Sans':           'IBMPlexSans-'
+	'IBM Plex Mono':           'IBMPlexMono-'
+	'IBM Plex Sans Condensed': 'IBMPlexSansCondensed-'
+}
+
+// font_search_dirs lists font roots: the user font dirs, then
+// `<XDG_DATA_DIRS>/fonts`. HORNERO_FONT_DIRS (colon-separated) overrides.
+pub fn font_search_dirs() []string {
+	override := os.getenv('HORNERO_FONT_DIRS')
+	if override.len > 0 {
+		return override.split(':').filter(it.len > 0)
+	}
+	mut dirs := [os.join_path(xdg_or_home('XDG_DATA_HOME', '.local/share'), 'fonts'),
+		os.join_path(os.home_dir(), '.fonts')]
+	for d in system_data_dirs() {
+		dirs << os.join_path(d, 'fonts')
+	}
+	return dirs
+}
+
+// missing_ibm_plex_families scans font dirs (recursively) and returns the
+// Signal families with no installed file.
+pub fn missing_ibm_plex_families(dirs []string) []string {
+	mut found := map[string]bool{}
+	for dir in dirs {
+		if !os.is_dir(dir) {
+			continue
+		}
+		mut files := os.walk_ext(dir, '.ttf')
+		files << os.walk_ext(dir, '.otf')
+		for path in files {
+			name := os.file_name(path)
+			for family, prefix in ibm_plex_families {
+				// Prefixes end in `-`, so IBMPlexSans- never matches
+				// IBMPlexSansCondensed- files.
+				if name.starts_with(prefix) {
+					found[family] = true
+				}
+			}
+		}
+	}
+	mut missing := []string{}
+	for family, _ in ibm_plex_families {
+		if family !in found {
+			missing << family
+		}
+	}
+	return missing
+}
+
+// appearance_doctor_checks gathers the read-only appearance probes shared
+// by `appearance doctor` and the top-level `doctor`.
+pub fn appearance_doctor_checks() []DoctorCheck {
+	mut checks := []DoctorCheck{}
+	scheme_path := signal_scheme_file()
+	if live := read_signal_scheme() {
+		checks << DoctorCheck{
+			name:   'signal-scheme'
+			ok:     true
+			detail: '${live.id} (${live.mode}) at ${scheme_path}'
+		}
+	} else {
+		checks << DoctorCheck{
+			name:   'signal-scheme'
+			ok:     false
+			detail: '${err.msg()}; run: horneroctl appearance sync --yes'
+		}
+	}
+	missing := missing_ibm_plex_families(font_search_dirs())
+	checks << DoctorCheck{
+		name:   'signal-fonts'
+		ok:     missing.len == 0
+		detail: if missing.len == 0 {
+			'IBM Plex Sans, Mono and Sans Condensed installed'
+		} else {
+			'missing ${missing.join(', ')}; install ttf-ibm-plex'
+		}
+	}
+	return checks
+}
+
+// appearance_doctor_native checks appearance consistency: live scheme
+// validity, Signal fonts, retired selections, derived files, wallpaper
+// pointer and GTK policy. It never mutates user state.
 pub fn appearance_doctor_native() CommandResult {
 	mut fails := []string{}
 	mut warns := []string{}
 	mut lines := []string{}
-	scheme := color_scheme_file()
-	state := scheme_state_file()
-	scheme_flavour := scheme_json_field(scheme, 'flavour')
-	state_flavour := scheme_json_field(state, 'flavour')
-	scheme_mode := scheme_json_field(scheme, 'mode')
-	state_mode := scheme_json_field(state, 'mode')
-	lines << 'scheme.flavour : ${if scheme_flavour.len > 0 { scheme_flavour } else { '(missing)' }}'
-	lines << 'state.flavour  : ${if state_flavour.len > 0 { state_flavour } else { '(missing)' }}'
-	lines << 'scheme.mode    : ${if scheme_mode.len > 0 { scheme_mode } else { '(missing)' }}'
-	lines << 'state.mode     : ${if state_mode.len > 0 { state_mode } else { '(missing)' }}'
-	pointer_val := read_wallpaper_pointer()
-	resolved := read_wallpaper_pointer()
-	lines << 'wallpaper.ptr  : ${if pointer_val.len > 0 { pointer_val } else { '(missing)' }}'
-	lines << 'wallpaper.res  : ${if resolved.len > 0 { resolved } else { '(missing)' }}'
-	hl_conf := os.join_path(smart_colors_dir(), 'colors-hyprlock.conf')
-	mut hl_bytes := 0
-	if os.is_file(hl_conf) {
-		hl_bytes = (os.read_file(hl_conf) or { '' }).len
+	for c in appearance_doctor_checks() {
+		lines << '${c.name}: ${c.detail}'
+		if !c.ok {
+			fails << c.detail
+		}
 	}
-	lines << 'hyprlock.conf  : ${hl_bytes} bytes'
+	sel := resolve_signal_selection()
+	lines << 'theme          : ${sel.id} (${sel.source})'
+	migration := plan_legacy_migration()
+	for c in migration.changes {
+		warns << 'retired appearance state: ${c}; run: horneroctl appearance sync --yes'
+	}
+	outputs := signal_output_paths()
+	for path in [outputs.hyprland_lua, outputs.hyprlock_conf] {
+		size := if os.is_file(path) { os.file_size(path) } else { u64(0) }
+		lines << '${os.file_name(path)} : ${size} bytes'
+		if size == 0 {
+			fails << '${path} missing or empty'
+		}
+	}
+	pointer_val := read_wallpaper_pointer()
+	lines << 'wallpaper.ptr  : ${if pointer_val.len > 0 { pointer_val } else { '(missing)' }}'
+	if pointer_val.len > 0 && !os.is_file(pointer_val) {
+		warns << 'wallpaper file does not exist: ${pointer_val}'
+	}
+	st := read_scheme_state()
 	gtk_theme, _, gtk_prefer := read_gtk3_ini()
 	mut gtk_scheme := ''
 	gs := resolve_gsettings_bin()
@@ -891,43 +824,19 @@ pub fn appearance_doctor_native() CommandResult {
 			gtk_scheme = rep.output.trim("'")
 		}
 	}
-	policy := read_scheme_state().gtk_color_scheme
 	lines << 'gtk.theme.ini  : ${if gtk_theme.len > 0 { gtk_theme } else { '(missing)' }}'
 	lines << 'gtk.preferDark : ${if gtk_prefer.len > 0 { gtk_prefer } else { '(missing)' }}'
-	lines << 'gtk.colorPolicy: ${policy}'
+	lines << 'gtk.colorPolicy: ${st.gtk_color_scheme}'
 	lines << 'gtk.colorScheme: ${if gtk_scheme.len > 0 { gtk_scheme } else { '(missing)' }}'
-	if scheme_flavour.len > 0 && state_flavour.len > 0 && scheme_flavour != state_flavour {
-		fails << 'scheme flavour != state flavour (${scheme_flavour} vs ${state_flavour})'
-	}
-	if scheme_mode.len > 0 && state_mode.len > 0 && scheme_mode != state_mode {
-		fails << 'scheme mode != state mode (${scheme_mode} vs ${state_mode})'
-	}
-	if pointer_val.len == 0 {
-		fails << 'wallpaper pointer missing'
-	}
-	if pointer_val.len > 0 && !os.is_file(pointer_val) {
-		fails << 'wallpaper file does not exist: ${pointer_val}'
-	}
-	if !os.is_file(scheme) {
-		fails << 'generated colour scheme is missing'
-	}
-	if hl_bytes == 0 {
-		fails << 'colors-hyprlock.conf missing or empty'
-	}
-	m3py := resolve_m3_python(false) or { '' }
-	lines << 'm3.python      : ${if m3py.len > 0 { m3py } else { '(missing)' }}'
-	if m3py.len == 0 {
-		fails << 'no Python with materialyoucolor (install python-materialyoucolor; pyenv shims alone are not enough)'
-	}
-	if policy == 'follow' {
-		if state_mode == 'dark' && gtk_prefer == 'false' {
+	if st.gtk_color_scheme == 'follow' && st.mode.len > 0 {
+		if st.mode == 'dark' && gtk_prefer == 'false' {
 			warns << 'GTK prefer-dark=false while follow-policy mode is dark'
-		} else if state_mode == 'light' && gtk_prefer == 'true' {
+		} else if st.mode == 'light' && gtk_prefer == 'true' {
 			warns << 'GTK prefer-dark=true while follow-policy mode is light'
 		}
-		if state_mode == 'dark' && gtk_scheme.len > 0 && gtk_scheme != 'prefer-dark' {
+		if st.mode == 'dark' && gtk_scheme.len > 0 && gtk_scheme != 'prefer-dark' {
 			warns << 'gsettings color-scheme=${gtk_scheme} while follow-policy mode is dark'
-		} else if state_mode == 'light' && gtk_scheme.len > 0 && gtk_scheme != 'prefer-light' {
+		} else if st.mode == 'light' && gtk_scheme.len > 0 && gtk_scheme != 'prefer-light' {
 			warns << 'gsettings color-scheme=${gtk_scheme} while follow-policy mode is light'
 		}
 	}
@@ -945,133 +854,34 @@ pub fn appearance_doctor_native() CommandResult {
 	return fail_result('appearance doctor', lines.join('\n'))
 }
 
-// wallpaper_reload_native re-applies the wallpaper color pipeline: shell
-// IPC reload when the shell is up (Hyprland sessions briefly wait for
-// IPC first), else regenerate M3 colours and dependent state natively.
-pub fn wallpaper_reload_native(dry_run bool) CommandResult {
-	if !dry_run && os.getenv('HYPRLAND_INSTANCE_SIGNATURE').len > 0 {
-		for _ in 0 .. 30 {
-			if shell_running() && ipc_appearance_call(['isBusy'], false).ok {
-				break
-			}
-			time.sleep(500 * time.millisecond)
-		}
-	}
-	if !dry_run && shell_running() {
-		ipc := ipc_appearance_call(['reload'], false)
-		if ipc.ok {
-			wait_appearance_ipc(false) or { return fail_result('wallpaper reload', err.msg()) }
-			last := ipc_appearance_call(['lastError'], false)
-			if last.ok && last.output.len > 0 {
-				return fail_result('wallpaper reload', 'appearance reload failed: ${last.output}')
-			}
-			return ok_result('wallpaper reload', 'wallpaper pipeline reloaded via shell',
-				{})
-		}
-	}
-	wallpaper := read_wallpaper_pointer()
-	if wallpaper.len == 0 {
-		return fail_result('wallpaper reload', 'no wallpaper pointer; set one first.')
-	}
-	mut lines := []string{}
-	st := read_scheme_state()
-	flavour := normalize_scheme_type(if st.flavour.len > 0 { st.flavour } else { 'tonal-spot' })
-	mode := if st.mode == 'light' || st.mode == 'dark' { st.mode } else { 'dark' }
-	out := os.join_path(smart_colors_dir(), 'scheme.json')
-	accent := read_accent_override()
-	m3 := run_m3_synthesis(wallpaper, out, flavour, mode, accent, dry_run) or {
-		return fail_result('wallpaper reload', err.msg())
-	}
-	if !m3.ok {
-		return fail_result('wallpaper reload', 'M3 backend failed (exit ${m3.exit_code}):\n${m3.output}')
-	}
-	lines << m3.command_line
-	lines << 'sync state.json from scheme.json'
-	lines << 'sync GTK color-scheme policy'
-	lines << 'regenerate colors-hyprlock.conf'
-	lines << 'regenerate colors-hyprland.lua'
-	if dry_run {
-		return ok_result('wallpaper reload', 'would run:\n' + lines.join('\n'), {
-			'command_line': lines.join('\n')
-			'dry_run':      'true'
-		})
-	}
-	sync_state_from_scheme() or {
-		return fail_result('wallpaper reload', 'M3 colours regenerated but state synchronization failed: ${err.msg()}')
-	}
-	gtk := sync_gtk_color_scheme_native(false)
-	if !gtk.ok {
-		return fail_result('wallpaper reload', 'M3 colours regenerated, but GTK synchronization failed: ${gtk.message}')
-	}
-	lock_result := regenerate_hyprlock_native('', false)
-	if !lock_result.ok {
-		return fail_result('wallpaper reload', 'M3 colours regenerated, but lock screen refresh failed: ${lock_result.message}')
-	}
-	hypr_result := regenerate_hyprland_native(false)
-	if !hypr_result.ok {
-		return fail_result('wallpaper reload', 'M3 colours regenerated, but Hyprland border refresh failed: ${hypr_result.message}')
-	}
-	default_hyprctl_run(false)
-	return ok_result('wallpaper reload', 'wallpaper pipeline reloaded from ${wallpaper}',
-		{
-			'wallpaper': wallpaper
-		})
-}
-
 // smart_file_outputs lists every file `colors generate` writes.
 pub fn smart_file_outputs(dir string) map[string]string {
-	return {
-		'colors-eww.scss':      os.join_path(dir, 'colors-eww.scss')
-		'colors.sh':            os.join_path(dir, 'colors.sh')
-		'colors.env':           os.join_path(dir, 'colors.env')
-		'colors-waybar.css':    os.join_path(dir, 'colors-waybar.css')
-		'colors-mako.conf':     os.join_path(dir, 'colors-mako.conf')
-		'colors-hyprland.conf': os.join_path(dir, 'colors-hyprland.conf')
-		'colors-hyprland.lua':  os.join_path(dir, 'colors-hyprland.lua')
-		'colors-wlogout.css':   os.join_path(dir, 'colors-wlogout.css')
-		'colors-copyq.ini':     os.join_path(dir, 'colors-copyq.ini')
-		'colors-hyprlock.env':  os.join_path(dir, 'colors-hyprlock.env')
-		'current.env':          os.join_path(dir, 'current.env')
-		'colors-kitty.conf':    os.join_path(dir, 'colors-kitty.conf')
-		'colors.css':           os.join_path(dir, 'colors.css')
+	mut out := map[string]string{}
+	for name in smart_file_names {
+		out[name] = os.join_path(dir, name)
 	}
+	return out
 }
 
-// colors_generate_native reads the xrdb palette and writes every
-// smart-color file, plus M3 scheme.json with --m3.
-pub fn colors_generate_native(with_m3 bool, dry_run bool) CommandResult {
-	xrdb := backend_or_empty('HORNERO_XRDB_BIN', 'xrdb')
-	if xrdb.len == 0 && !dry_run {
-		return fail_result('appearance colors generate', 'xrdb not found on PATH. Set HORNERO_XRDB_BIN.')
-	}
+const smart_file_names = ['colors-eww.scss', 'colors.sh', 'colors.env', 'colors-waybar.css',
+	'colors-mako.conf', 'colors-hyprland.conf', 'colors-hyprland.lua', 'colors-wlogout.css',
+	'colors-copyq.ini', 'colors-hyprlock.env', 'current.env', 'colors-kitty.conf', 'colors.css']
+
+// colors_generate_native renders every smart-color file from the live
+// Signal scheme.
+pub fn colors_generate_native(dry_run bool) CommandResult {
 	dir := smart_colors_dir()
 	if dry_run {
-		xr_line := strict_command_line(if xrdb.len > 0 { xrdb } else { 'xrdb' }, [
-			'-query',
-		])
-		mut lines := ['would run: ${xr_line}', 'would run: write 13 smart-color files to ${dir}']
-		if with_m3 {
-			m3 := run_m3_synthesis('<wallpaper>', os.join_path(dir, 'scheme.json'), 'tonal-spot',
-				'dark', read_accent_override(), true) or {
-				return fail_result('appearance colors generate', err.msg())
-			}
-			lines << 'would run: ${m3.command_line}'
-		}
-		return ok_result('appearance colors generate', lines.join('\n'), {
-			'command_line': lines.join('\n')
+		msg := 'would run: write ${smart_file_names.len} smart-color files to ${dir} from ${signal_scheme_file()}'
+		return ok_result('appearance colors generate', msg, {
+			'command_line': msg
 			'dry_run':      'true'
 		})
 	}
-	query := strict_exec(xrdb, ['-query'], false)
-	if !query.ok {
-		return fail_result('appearance colors generate', 'xrdb -query failed (exit ${query.exit_code}):\n${query.output}')
+	theme := read_signal_scheme() or {
+		return fail_result('appearance colors generate', '${err.msg()}.\nRun: horneroctl appearance sync --yes')
 	}
-	pal := parse_xrdb_query(query.output)
-	wallpaper := read_wallpaper_pointer()
-	sp := derive_palette(pal, if wallpaper.len > 0 { wallpaper } else { '' })
-	os.mkdir_all(dir) or {
-		return fail_result('appearance colors generate', 'cannot create ${dir}: ${err.msg()}')
-	}
+	sp := signal_smart_palette(theme, read_wallpaper_pointer())
 	env_path := os.join_path(dir, 'colors.env')
 	hypr_env := render_hyprlock_env(sp)
 	contents := {
@@ -1080,50 +890,31 @@ pub fn colors_generate_native(with_m3 bool, dry_run bool) CommandResult {
 		'colors.env':           render_env_colors(sp, env_path)
 		'colors-waybar.css':    render_waybar(sp)
 		'colors-mako.conf':     render_mako(sp)
-		'colors-hyprland.conf': render_hyprland(sp)
-		'colors-hyprland.lua':  render_hyprland_lua(sp)
+		'colors-hyprland.conf': render_signal_hyprland_conf(theme)
+		'colors-hyprland.lua':  render_signal_hyprland_lua(theme)
 		'colors-wlogout.css':   render_wlogout(sp)
 		'colors-copyq.ini':     render_copyq(sp)
 		'colors-hyprlock.env':  hypr_env
 		'current.env':          hypr_env
-		'colors-kitty.conf':    render_kitty(sp)
+		'colors-kitty.conf':    render_signal_kitty(theme)
 		'colors.css':           render_css_vars(sp)
 	}
 	for name, body in contents {
-		os.write_file(os.join_path(dir, name), body) or {
+		write_file_atomic(os.join_path(dir, name), body) or {
 			return fail_result('appearance colors generate', 'cannot write ${name}: ${err.msg()}')
 		}
 	}
 	link_copyq_theme(os.join_path(dir, 'colors-copyq.ini'))
-	mut msg := 'Smart color files generated in ${dir}'
-	if with_m3 {
-		if wallpaper.len == 0 || !os.is_file(wallpaper) {
-			return fail_result('appearance colors generate', 'smart files written but M3 needs a wallpaper (none found).')
-		}
-		st := ensure_scheme_state()
-		flavour := normalize_scheme_type(if st.flavour.len > 0 { st.flavour } else { 'tonal-spot' })
-		mode := if st.mode == 'light' || st.mode == 'dark' { st.mode } else { 'dark' }
-		m3 := run_m3_synthesis(wallpaper, os.join_path(dir, 'scheme.json'), flavour, mode,
-			read_accent_override(), false) or {
-			return fail_result('appearance colors generate', err.msg())
-		}
-		if !m3.ok {
-			return fail_result('appearance colors generate', 'smart files written but M3 failed (exit ${m3.exit_code}):\n${m3.output}')
-		}
-		msg += '\nM3 scheme.json generated'
-	}
-	return ok_result('appearance colors generate', msg, {
-		'dir': dir
-	})
+	return ok_result('appearance colors generate', 'Smart color files generated in ${dir} from ${theme.id}',
+		{
+			'dir':   dir
+			'theme': theme.id
+		})
 }
 
 // link_copyq_theme symlinks the generated CopyQ theme into place.
 fn link_copyq_theme(theme_file string) {
-	mut cfg := os.getenv('XDG_CONFIG_HOME')
-	if cfg.len == 0 {
-		cfg = os.join_path(os.home_dir(), '.config')
-	}
-	themes := os.join_path(cfg, 'copyq', 'themes')
+	themes := os.join_path(xdg_or_home('XDG_CONFIG_HOME', '.config'), 'copyq', 'themes')
 	os.mkdir_all(themes) or { return }
 	link := os.join_path(themes, 'hornero-smart-colors.ini')
 	if os.is_link(link) && os.real_path(link) == os.real_path(theme_file) {
@@ -1133,48 +924,35 @@ fn link_copyq_theme(theme_file string) {
 	os.symlink(theme_file, link) or {}
 }
 
-// colors_status_native prints the smart-colors preview from the xrdb
-// palette (read-only).
+// colors_status_native previews the smart concepts of the live scheme.
 pub fn colors_status_native() CommandResult {
-	xrdb := backend_or_empty('HORNERO_XRDB_BIN', 'xrdb')
-	if xrdb.len == 0 {
-		return fail_result('appearance colors status', 'xrdb not found on PATH. Set HORNERO_XRDB_BIN.')
+	theme := read_signal_scheme() or {
+		return fail_result('appearance colors status', '${err.msg()}.\nRun: horneroctl appearance sync --yes')
 	}
-	query := strict_exec(xrdb, ['-query'], false)
-	if !query.ok {
-		return fail_result('appearance colors status', 'xrdb -query failed (exit ${query.exit_code}):\n${query.output}')
-	}
-	pal := parse_xrdb_query(query.output)
-	bg := palette_get(pal, 'background', '#000000')
-	theme := if is_light_hex(bg) { 'Light' } else { 'Dark' }
-	mut lines := ['Smart Colors Preview:', 'Theme: ${theme}', '']
+	mut lines := ['Smart Colors Preview:', 'Theme: ${theme.id} (${theme.mode})', '']
 	for concept in ['background', 'foreground', 'background-alt', 'foreground-alt'] {
-		lines << '${concept}: ${smart_color_for(concept, pal) or { '?' }}'
+		lines << '${concept}: ${signal_concept(theme, concept) or { '?' }}'
 	}
 	lines << ''
 	lines << 'Semantic:'
 	for concept in ['error', 'warning', 'success', 'info', 'accent'] {
-		lines << '${concept}: ${smart_color_for(concept, pal) or { '?' }}'
+		lines << '${concept}: ${signal_concept(theme, concept) or { '?' }}'
 	}
 	return ok_result('appearance colors status', lines.join('\n'), {
-		'theme': theme
+		'theme': theme.id
+		'mode':  theme.mode
 	})
 }
 
-// colors_concept_native resolves one --concept value (hex out).
+// colors_concept_native resolves one concept against the live scheme.
 pub fn colors_concept_native(concept string) CommandResult {
-	xrdb := backend_or_empty('HORNERO_XRDB_BIN', 'xrdb')
-	if xrdb.len == 0 {
-		return fail_result('appearance colors concept', 'xrdb not found on PATH. Set HORNERO_XRDB_BIN.')
-	}
 	if !valid_smart_concept(concept) {
 		return fail_result('appearance colors concept', 'unknown concept: ${concept}')
 	}
-	query := strict_exec(xrdb, ['-query'], false)
-	if !query.ok {
-		return fail_result('appearance colors concept', 'xrdb -query failed.')
+	theme := read_signal_scheme() or {
+		return fail_result('appearance colors concept', '${err.msg()}.\nRun: horneroctl appearance sync --yes')
 	}
-	color := smart_color_for(concept, parse_xrdb_query(query.output)) or {
+	color := signal_concept(theme, concept) or {
 		return fail_result('appearance colors concept', err.msg())
 	}
 	return ok_result('appearance colors concept', color, {
@@ -1185,63 +963,28 @@ pub fn colors_concept_native(concept string) CommandResult {
 
 // colors_export_native prints shell export lines for every concept.
 pub fn colors_export_native() CommandResult {
-	xrdb := backend_or_empty('HORNERO_XRDB_BIN', 'xrdb')
-	if xrdb.len == 0 {
-		return fail_result('appearance colors export', 'xrdb not found on PATH. Set HORNERO_XRDB_BIN.')
+	theme := read_signal_scheme() or {
+		return fail_result('appearance colors export', '${err.msg()}.\nRun: horneroctl appearance sync --yes')
 	}
-	query := strict_exec(xrdb, ['-query'], false)
-	if !query.ok {
-		return fail_result('appearance colors export', 'xrdb -query failed.')
-	}
-	pal := parse_xrdb_query(query.output)
 	mut lines := [
 		'# Smart color variables generated by horneroctl appearance colors export',
+		'# Source theme: ${theme.id}',
 		'',
 	]
 	lines << '# Background and foreground variants'
 	for concept in ['background', 'background-alt', 'foreground', 'foreground-alt'] {
-		color := smart_color_for(concept, pal) or { '' }
-		lines << "export COLOR_${concept.to_upper().replace('-', '_')}='${color}'"
+		lines << "export COLOR_${concept.to_upper().replace('-', '_')}='${signal_concept(theme, concept) or { '' }}'"
 	}
 	lines << ''
 	lines << '# Semantic colors'
 	for concept in ['error', 'warning', 'success', 'info', 'accent'] {
-		color := smart_color_for(concept, pal) or { '' }
-		lines << "export COLOR_${concept.to_upper()}='${color}'"
+		lines << "export COLOR_${concept.to_upper()}='${signal_concept(theme, concept) or { '' }}'"
 	}
 	lines << ''
 	lines << '# Basic colors'
 	for concept in ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'orange', 'pink', 'brown',
 		'white', 'black', 'gray'] {
-		color := smart_color_for(concept, pal) or { '' }
-		lines << "export COLOR_${concept.to_upper()}='${color}'"
+		lines << "export COLOR_${concept.to_upper()}='${signal_concept(theme, concept) or { '' }}'"
 	}
 	return ok_result('appearance colors export', lines.join('\n'), {})
-}
-
-// colors_m3_passthrough_native runs the M3 backend with caller args.
-pub fn colors_m3_passthrough_native(args []string, dry_run bool) CommandResult {
-	if args.len == 0 {
-		return fail_result('appearance colors m3', 'nothing to pass through.\nExample: horneroctl appearance colors m3 --dry-run -- --help')
-	}
-	script := resolve_m3_script()
-	if !dry_run && !os.is_file(script) {
-		return fail_result('appearance colors m3', 'M3 script not found: ${script} (set HORNERO_M3_SCRIPT).')
-	}
-	py := resolve_m3_python(dry_run) or { return fail_result('appearance colors m3', err.msg()) }
-	mut full := [script]
-	full << args
-	rep := strict_exec(py, full, dry_run)
-	if rep.was_dry_run {
-		return ok_result('appearance colors m3', 'would run: ${rep.command_line}', {
-			'command_line': rep.command_line
-			'dry_run':      'true'
-		})
-	}
-	if rep.ok {
-		return ok_result('appearance colors m3', rep.output, {
-			'command_line': rep.command_line
-		})
-	}
-	return fail_result('appearance colors m3', 'M3 backend failed (exit ${rep.exit_code}):\n${rep.output}')
 }

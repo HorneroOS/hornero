@@ -1,6 +1,19 @@
 module hornero_core
 
 import os
+import x.json2
+
+// pc_pack derives a schema-v2 pack from the Signal Night fixture.
+fn pc_pack(id string, extra string) string {
+	raw := os.read_file(os.join_path(os.dir(@FILE), '..', '..', 'testdata', 'signal-themes',
+		'hornero-signal-night', 'theme.json')) or { panic(err) }
+	mut m := json2.decode[map[string]json2.Any](raw) or { panic(err) }
+	m['id'] = json2.Any(id)
+	for k, v in json2.decode[map[string]json2.Any](extra) or { panic(err) } {
+		m[k] = v
+	}
+	return json2.encode(m)
+}
 
 // Path-contract conformance tests (docs/PATH_CONTRACT.md, hornero row).
 // Hornero-owned paths are the only read/write contract. Everything lives under /tmp with XDG
@@ -56,7 +69,8 @@ fn test_pc_canonical_resolvers_are_write_targets() {
 	assert resolve_presets_dir() == '${pc_root}/write-targets/data/hornero/shell-presets'
 	assert resolve_preset_state_file() == '${pc_root}/write-targets/state/hornero/current-shell-preset'
 	assert scheme_state_file() == '${pc_root}/write-targets/state/hornero/scheme/state.json'
-	assert color_scheme_file() == '${pc_root}/write-targets/cache/hornero/smart-colors/scheme.json'
+	assert signal_scheme_file() == '${pc_root}/write-targets/state/hornero/signal/scheme.json'
+	assert smart_colors_dir() == '${pc_root}/write-targets/cache/hornero/smart-colors'
 	assert resolve_snapshots_dir() == '${pc_root}/write-targets/data/hornero/snapshots'
 	assert resolve_wallpapers_dir() == '${pc_root}/write-targets/data/hornero/wallpapers'
 	assert resolve_wallpaper_pointer_file() == '${pc_root}/write-targets/state/hornero/wallpaper/path'
@@ -64,7 +78,7 @@ fn test_pc_canonical_resolvers_are_write_targets() {
 	assert resolve_image_cache_dir() == '${pc_root}/write-targets/cache/hornero/imagecache'
 	assert resolve_notif_image_cache_dir() == '${pc_root}/write-targets/cache/hornero/imagecache/notifs'
 	targets := [resolve_themes_dir(), resolve_presets_dir(), resolve_preset_state_file(),
-		scheme_state_file(), color_scheme_file(), resolve_snapshots_dir(), resolve_wallpapers_dir(),
+		scheme_state_file(), signal_scheme_file(), resolve_snapshots_dir(), resolve_wallpapers_dir(),
 		resolve_wallpaper_pointer_file(), resolve_notifs_file(), resolve_image_cache_dir()]
 	for p in targets {
 		assert p.contains('/hornero/'), 'write target must be hornero/*: ${p}'
@@ -115,7 +129,7 @@ fn test_pc_system_wallpaper_catalogue_is_read_only_fallback() {
 	empty_pictures := '${pc_root}/system-wallpapers/pictures-empty'
 	os.setenv('HORNERO_PICTURES_WALLPAPERS', empty_pictures, true)
 	pc_write('${system_root}/pampa/pampa-01.png', 'system-wallpaper')
-	pc_write('${pc_root}/system-wallpapers/sys/hornero/themes/pampa/theme.json', '{"schemaVersion":1,"id":"pampa","name":"Pampa","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","darkMode":true,"gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark"}')
+	pc_write('${pc_root}/system-wallpapers/sys/hornero/themes/pampa/theme.json', pc_pack('pampa', '{"name":"Pampa","defaultWallpaper":"pampa-01.png","wallpaperDir":"pampa","gtkTheme":"Hornero-Pampa","iconTheme":"Papirus-Dark"}'))
 	assert resolve_wallpapers_dirs_for_read() == [system_root]
 	resolved := resolve_pack_wallpaper('pampa', 'pampa', 'pampa-01.png', '') or {
 		assert false, err.msg()
@@ -155,8 +169,8 @@ fn test_pc_system_wallpaper_catalogue_is_read_only_fallback() {
 
 fn test_pc_themes_use_only_user_and_system_catalogues() {
 	pc_set_xdg('themes-only-current')
-	pc_write('${pc_root}/themes-only-current/data/hornero/themes/alpha/theme.json', '{"schemaVersion":1,"id":"alpha","name":"Alpha","defaultWallpaper":"a.jpg","wallpaperDir":"alpha"}')
-	pc_write('${pc_root}/themes-only-current/data/retired/themes/beta/theme.json', '{"schemaVersion":1,"id":"beta","name":"Old Beta","defaultWallpaper":"b.jpg","wallpaperDir":"beta"}')
+	pc_write('${pc_root}/themes-only-current/data/hornero/themes/alpha/theme.json', pc_pack('alpha', '{"name":"Alpha","defaultWallpaper":"a.jpg","wallpaperDir":"alpha"}'))
+	pc_write('${pc_root}/themes-only-current/data/retired/themes/beta/theme.json', pc_pack('beta', '{"name":"Old Beta","defaultWallpaper":"b.jpg","wallpaperDir":"beta"}'))
 	dirs := resolve_themes_dirs_for_read()
 	assert dirs == [resolve_themes_dir()]
 	packs := list_theme_packs() or {
@@ -170,7 +184,7 @@ fn test_pc_themes_use_only_user_and_system_catalogues() {
 
 fn test_pc_themes_do_not_read_old_namespace_only() {
 	pc_set_xdg('themes-old-only')
-	pc_write('${pc_root}/themes-old-only/data/retired/themes/old/theme.json', '{"schemaVersion":1,"id":"old","name":"Old","defaultWallpaper":"o.jpg","wallpaperDir":"old"}')
+	pc_write('${pc_root}/themes-old-only/data/retired/themes/old/theme.json', pc_pack('old', '{"name":"Old","defaultWallpaper":"o.jpg","wallpaperDir":"old"}'))
 	assert resolve_themes_dirs_for_read() == []
 	if packs := list_theme_packs() {
 		assert packs.len == 0
@@ -197,25 +211,14 @@ fn test_pc_presets_use_canonical_catalogue_and_pointer_only() {
 
 fn test_pc_scheme_uses_only_canonical_state() {
 	pc_set_xdg('scheme-current-only')
-	pc_write('${pc_root}/scheme-current-only/state/retired/scheme/state.json', '{"mode":"light","flavour":"old"}')
-	pc_write('${pc_root}/scheme-current-only/cache/retired/smart-colors/scheme.json', '{"mode":"light","flavour":"old"}')
+	pc_write('${pc_root}/scheme-current-only/state/retired/signal/scheme.json', '{"schemaVersion":2,"id":"x","mode":"light"}')
+	// The retired smart-colors cache scheme is never read as the live scheme.
+	pc_write('${pc_root}/scheme-current-only/cache/hornero/smart-colors/scheme.json', '{"mode":"light","colours":{}}')
 	s := read_scheme_state()
 	assert s.mode == ''
-	assert s.flavour == ''
+	assert !s.scheme_present
 	assert s.state_file == scheme_state_file()
-	assert s.scheme_file == color_scheme_file()
-	pc_unset_xdg()
-}
-
-fn test_pc_scheme_reads_canonical_runtime_metadata_without_state() {
-	pc_set_xdg('scheme-meta-current')
-	pc_write('${pc_root}/scheme-meta-current/cache/hornero/smart-colors/scheme.json', '{"mode":"light","flavour":"expressive"}')
-	s := read_scheme_state()
-	assert s.mode == 'light'
-	assert s.flavour == 'expressive'
-	assert s.scheme_present
-	assert !s.state_present
-	assert s.scheme_file == color_scheme_file()
+	assert s.scheme_file == signal_scheme_file()
 	pc_unset_xdg()
 }
 
@@ -286,7 +289,7 @@ fn test_pc_manifest_missing_is_optional() {
 fn test_pc_system_catalogues_package_only_install() {
 	pc_set_xdg('sys-only')
 	pc_write('${pc_root}/sys-only/sys/hornero/shell-presets/cockpit-clear.json', '{"_name":"Cockpit Clear","bar":{"position":"top"}}')
-	pc_write('${pc_root}/sys-only/sys/hornero/themes/hornero-dark/theme.json', '{"schemaVersion":1,"id":"hornero-dark","name":"Hornero Dark","defaultWallpaper":"d.jpg","wallpaperDir":"hornero-dark"}')
+	pc_write('${pc_root}/sys-only/sys/hornero/themes/hornero-signal-night/theme.json', pc_pack('hornero-signal-night', '{"name":"Signal Night","defaultWallpaper":"d.jpg","wallpaperDir":"hornero-signal-night"}'))
 	assert resolve_presets_dirs_for_read() == ['${pc_root}/sys-only/sys/hornero/shell-presets']
 	assert resolve_themes_dirs_for_read() == ['${pc_root}/sys-only/sys/hornero/themes']
 	presets := list_presets() or {
@@ -298,7 +301,7 @@ fn test_pc_system_catalogues_package_only_install() {
 		assert false, err.msg()
 		return
 	}
-	assert packs.map(it.id) == ['hornero-dark']
+	assert packs.map(it.id) == ['hornero-signal-night']
 	// Reads never materialize the user side.
 	assert !os.exists(resolve_presets_dir())
 	assert !os.exists(resolve_themes_dir())
@@ -334,21 +337,4 @@ fn test_pc_system_data_dirs_default_and_dedup() {
 	assert system_data_dirs() == ['/usr/local/share', '/usr/share']
 	os.setenv('XDG_DATA_DIRS', '/a::/b:/a', true)
 	assert system_data_dirs() == ['/a', '/b']
-}
-
-fn test_pc_m3_script_user_then_system() {
-	pc_set_xdg('m3')
-	old_home := os.getenv('HOME')
-	os.setenv('HOME', '${pc_root}/m3/home', true)
-	os.unsetenv('HORNERO_M3_SCRIPT')
-	user := '${pc_root}/m3/home/.local/lib/hornero/generate-m3-colors.py'
-	sys := '${pc_root}/m3/sys/hornero/lib/hornero/generate-m3-colors.py'
-	// Nothing installed: the documented user path is named.
-	assert resolve_m3_script() == user
-	pc_write(sys, '# packaged\n')
-	assert resolve_m3_script() == sys
-	pc_write(user, '# user\n')
-	assert resolve_m3_script() == user
-	os.setenv('HOME', old_home, true)
-	pc_unset_xdg()
 }

@@ -20,6 +20,24 @@ INSTALL_METHODS = {"pacman-repository", "pacman-repository-opt-in", "manual"}
 FORBIDDEN_STUDIO_PACKAGES = {"pipewire-media-session"}
 
 
+# Theme ids removed with Hornero Signal (HorneroOS/.github#28).
+RETIRED_THEMES = frozenset({"hornero-dark", "hornero-light", "hornero-199x"})
+
+
+def resolve_appearance(doc: dict, edition_name: str) -> dict | None:
+    """Return the factory appearance of an edition, inherited via `extends`."""
+    editions = doc["editions"]
+    current: str | None = edition_name
+    seen: set[str] = set()
+    while current is not None and current not in seen:
+        seen.add(current)
+        edition = editions[current]
+        if isinstance(edition.get("appearance"), dict):
+            return dict(edition["appearance"])
+        current = edition.get("extends")
+    return None
+
+
 def load_catalogue(path: Path = CATALOGUE) -> dict:
     doc = yaml.safe_load(path.read_text(encoding="utf-8"))
     errors = validate_catalogue(doc)
@@ -96,6 +114,16 @@ def validate_catalogue(doc: object) -> list[str]:
                 break
             seen.add(cursor)
             cursor = cursor_edition.get("extends")
+        appearance = edition.get("appearance")
+        if appearance is not None:
+            if not isinstance(appearance, dict) or set(appearance) != {"shellPreset", "theme"}:
+                errors.append(f"edition '{name}' appearance must set exactly shellPreset and theme")
+            elif not all(isinstance(appearance[key], str) and appearance[key] for key in ("shellPreset", "theme")):
+                errors.append(f"edition '{name}' appearance values must be non-empty strings")
+            elif appearance["theme"] in RETIRED_THEMES:
+                errors.append(f"edition '{name}' uses retired theme '{appearance['theme']}'")
+            if edition.get("compositor") is None:
+                errors.append(f"headless edition '{name}' must not declare a desktop appearance")
         compositor_choice = edition.get("compositor")
         if compositor_choice is not None:
             if not isinstance(compositor_choice, dict):
@@ -1034,6 +1062,7 @@ def resolve_edition(doc: dict, edition_name: str, compositor_name: str | None = 
         "role": edition["role"],
         "compositor": compositor_name,
         "compositorMaturity": backend.get("maturity") if backend else None,
+        "appearance": resolve_appearance(doc, edition_name),
         "packageSets": package_sets,
         "packages": packages,
         "optionalPackages": optional_packages,

@@ -3,51 +3,41 @@ module hornero_core
 import os
 import x.json2
 
-// Scheme backend: materialized color-scheme state files plus the
-// `horneroctl appearance` setters for mutation.
-//
-// Reads are native: `$XDG_CACHE_HOME/hornero/smart-colors/scheme.json` is
-// the runtime source of truth and `$XDG_STATE_HOME/hornero/scheme/state.json`
-// persists mode, flavour, variant and the independent GTK color policy.
-// Mutation (`set-mode`/`set-variant`) delegates to the verified
-// `horneroctl appearance set-mode|set-variant` verbs.
-//
-// Later phases (no verified backend from this repo, so intentionally absent
-// here): `device brightness ...` and other hardware/compositor controls.
-// The shell documents a `brightness` IPC target today, but horneroctl must
-// not drive hardware without a pinned, integration-tested IPC path; those
-// leaves land in a later phase per docs/cli-architecture.md section 7.
+// Scheme state: the live Hornero Signal scheme (signal.v) plus the
+// persisted appearance state file, which records the selected theme and
+// the independent GTK color-scheme policy.
 
 pub struct SchemeState {
 pub:
+	theme            string
+	theme_source     string
 	mode             string
-	flavour          string
-	variant          string
 	gtk_color_scheme string
 	state_file       string
 	scheme_file      string
 	state_present    bool
 	scheme_present   bool
+	scheme_valid     bool
+	scheme_error     string
 }
 
-// scheme_state_file is the canonical scheme state location
-// (docs/PATH_CONTRACT.md row 5) and the WRITE TARGET.
+// scheme_state_file is the canonical appearance state location
+// (docs/PATH_CONTRACT.md) and the WRITE TARGET.
 pub fn scheme_state_file() string {
-	mut base := os.getenv('XDG_STATE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.local', 'state')
-	}
+	base := xdg_or_home('XDG_STATE_HOME', '.local/state')
 	return os.join_path(base, 'hornero', 'scheme', 'state.json')
 }
 
-// color_scheme_file is the canonical scheme runtime location
-// (docs/PATH_CONTRACT.md row 4) and the WRITE TARGET.
-pub fn color_scheme_file() string {
-	mut base := os.getenv('XDG_CACHE_HOME')
-	if base.len == 0 {
-		base = os.join_path(os.home_dir(), '.cache')
+// smart_colors_dir is the derived colour-file cache (WRITE TARGET):
+// Hyprland, hyprlock, kitty and the smart-color files live here.
+// Override with HORNERO_SMART_COLORS_DIR.
+pub fn smart_colors_dir() string {
+	env := os.getenv('HORNERO_SMART_COLORS_DIR')
+	if env.len > 0 {
+		return env
 	}
-	return os.join_path(base, 'hornero', 'smart-colors', 'scheme.json')
+	base := xdg_or_home('XDG_CACHE_HOME', '.cache')
+	return os.join_path(base, 'hornero', 'smart-colors')
 }
 
 fn scheme_json_field(path string, key string) string {
@@ -61,49 +51,33 @@ fn scheme_json_field(path string, key string) string {
 	return ''
 }
 
-// scheme_json_colour reads one Material role from scheme.json's colours map.
-fn scheme_json_colour(key string) string {
-	return scheme_json_colour_from_file(color_scheme_file(), key)
-}
-
-fn scheme_json_colour_from_file(path string, key string) string {
-	raw := os.read_file(path) or { return '' }
-	parsed := json2.decode[json2.Any](raw) or { return '' }
-	if parsed is map[string]json2.Any {
-		if colours := parsed['colours'] {
-			if colours is map[string]json2.Any {
-				if value := colours[key] {
-					return value.str()
-				}
-			}
-		}
-	}
-	return ''
-}
-
-// read_scheme_state loads persisted appearance from canonical Hornero state.
-// Scheme metadata supplies mode, flavour, and variant when state is incomplete.
+// read_scheme_state loads the live scheme (validated) and the persisted
+// selection without writing anything. Mode comes from the live scheme.
 pub fn read_scheme_state() SchemeState {
 	state := scheme_state_file()
-	scheme := color_scheme_file()
-	state_present := os.is_file(state)
-	scheme_present := os.is_file(scheme)
-	mut mode := scheme_json_field(state, 'mode')
-	mut flavour := scheme_json_field(state, 'flavour')
-	mut variant := scheme_json_field(state, 'variant')
-	if mode.len == 0 { mode = scheme_json_field(scheme, 'mode') }
-	if flavour.len == 0 { flavour = scheme_json_field(scheme, 'flavour') }
-	if variant.len == 0 { variant = scheme_json_field(scheme, 'variant') }
+	scheme := signal_scheme_file()
+	sel := resolve_signal_selection()
+	mut mode := ''
+	mut valid := false
+	mut scheme_error := ''
+	if live := read_signal_scheme() {
+		mode = live.mode
+		valid = true
+	} else {
+		scheme_error = err.msg()
+	}
 	policy := scheme_json_field(state, 'gtkColorScheme')
 	return SchemeState{
+		theme:            sel.id
+		theme_source:     sel.source
 		mode:             mode
-		flavour:          flavour
-		variant:          variant
 		gtk_color_scheme: if policy.len > 0 { policy } else { 'follow' }
 		state_file:       state
 		scheme_file:      scheme
-		state_present:    state_present
-		scheme_present:   scheme_present
+		state_present:    os.is_file(state)
+		scheme_present:   os.is_file(scheme)
+		scheme_valid:     valid
+		scheme_error:     scheme_error
 	}
 }
 
@@ -117,48 +91,30 @@ fn or_unknown(v string) string {
 // scheme_status_report implements `appearance scheme status` (read-only).
 pub fn scheme_status_report() CommandResult {
 	s := read_scheme_state()
+	validity := if s.scheme_valid { 'valid' } else { 'invalid: ${s.scheme_error}' }
 	lines := [
+		'theme: ${s.theme} (${s.theme_source})',
 		'mode: ${or_unknown(s.mode)}',
-		'flavour: ${or_unknown(s.flavour)}',
-		'variant: ${or_unknown(s.variant)}',
+		'scheme: ${s.scheme_file} (${validity})',
 		'gtkColorScheme: ${s.gtk_color_scheme}',
 	]
 	return ok_result('appearance scheme status', lines.join('\n'), {
+		'theme':            s.theme
+		'theme_source':     s.theme_source
 		'mode':             s.mode
-		'flavour':          s.flavour
-		'variant':          s.variant
+		'scheme_file':      s.scheme_file
+		'scheme_valid':     s.scheme_valid.str()
 		'gtk_color_scheme': s.gtk_color_scheme
 		'state_file':       s.state_file
 	})
 }
 
-pub struct SchemeSetOptions {
-pub:
-	kind    string // mode | variant
-	value   string
-	dry_run bool
-	yes     bool
-	helper  string
-}
-
-// scheme_set_report implements `appearance scheme set-mode|set-variant`
-// natively (persist + M3 regenerate, GTK follow-push for mode).
-// Mutating: needs --yes; --dry-run only previews.
-pub fn scheme_set_report(opts SchemeSetOptions) CommandResult {
-	if opts.kind == 'mode' && opts.value !in ['dark', 'light'] {
-		return fail_result('appearance scheme set-mode', 'invalid mode: ${opts.value} (want dark|light).\nExample: horneroctl appearance scheme set-mode dark --dry-run')
-	}
-	if opts.kind == 'variant' && opts.value.len == 0 {
-		return fail_result('appearance scheme set-variant', 'missing variant.\nExample: horneroctl appearance scheme set-variant tonalspot --dry-run')
-	}
-	if opts.kind !in ['mode', 'variant'] {
-		return fail_result('appearance scheme', 'unknown action: ${opts.kind}.\nRun: horneroctl appearance scheme --help')
-	}
-	if !opts.yes && !opts.dry_run {
-		return fail_result('appearance scheme', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance scheme set-${opts.kind} ${opts.value} --dry-run')
-	}
-	if opts.kind == 'mode' {
-		return scheme_set_mode_native(opts.value, opts.dry_run)
-	}
-	return scheme_set_variant_native(opts.value, opts.dry_run)
+// scheme_current_report implements `appearance scheme current`: the live
+// theme id and mode, one per line.
+pub fn scheme_current_report() CommandResult {
+	s := read_scheme_state()
+	return ok_result('appearance scheme current', '${s.theme}\n${or_unknown(s.mode)}', {
+		'theme': s.theme
+		'mode':  s.mode
+	})
 }

@@ -207,17 +207,9 @@ if ! $SSH 'getent hosts archlinux.org >/dev/null 2>&1'; then
   [[ $dns_ok -eq 1 ]] || fail "guest DNS still broken after pinning $GUEST_DNS"
 fi
 pass "guest DNS resolves"
-# Guest appearance prerequisite (network PREP phase, before the offline
-# boundary): the Hornero Material generator dependency is installed in the
-# isolated guest user profile. Wallpaper assets are shipped in separately.
-$SSH 'command -v pip3 >/dev/null 2>&1 || sudo pacman -Sy --noconfirm --needed python-pip' \
-  || fail "guest python-pip install"
-$SSH 'export HOME=$HOME/hx-root; python3 -m pip install --user -q --break-system-packages materialyoucolor' \
-  || fail "guest pip install (materialyoucolor)"
-$SSH 'export HOME=$HOME/hx-root; unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
-  python3 -c "import materialyoucolor"' \
-  || fail "guest apply deps (materialyoucolor)"
-pass "guest Hornero palette dependency installed (materialyoucolor)"
+# Guest appearance prerequisites: none beyond the composition. Hornero Signal
+# themes carry their palette, so no colour generator is installed. Wallpaper
+# assets are shipped in separately.
 WALLS_DIR="$(mktemp -d)"
 "$WORK/compose/config/scripts/render-brand-assets.sh" --wallpapers "$WALLS_DIR" \
   >/dev/null || fail "host wallpaper render"
@@ -270,44 +262,41 @@ if [[ -n $leak ]]; then
   fail "guest still reaches the internet via $leak (offline boundary broken)"
 fi
 pass "guest is offline (firewall: no DNS, no HTTPS egress; host SSH alive)"
-# --- 4c. official trio matrix --------------------------------------------------
-# Each official theme goes through the real control plane
-# (`horneroctl appearance theme set --yes`: validate -> resolve -> apply via
-# horneroctl appearance -> verify mode+GTK), then `theme get` must read the id
-# back and the consumer files must agree. No hand-editing between themes.
+# --- 4c. built-in Signal theme matrix ----------------------------------------
+# Each built-in theme goes through the real control plane
+# (`horneroctl appearance theme set --yes`: validate -> apply -> verify
+# scheme+GTK), then `theme get` must read the id back and the consumer files
+# must agree: the live scheme (signal/scheme.json), the Hyprland border
+# colours, GTK from the pack, and the pack wallpaper when it declares one.
 GENV='export HOME=$HOME/hx-root; unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME; export PATH=$HOME/.local/bin:$PATH'
-for spec in \
-  "hornero-dark:Hornero-Dark:hornero-dark/hornero-dark-01.png:dark" \
-  "hornero-light:Hornero-Light:hornero-light/hornero-light-01.png:light" \
-  "pampa:Hornero-Pampa:pampa/pampa-01.png:dark"; do
-  id="${spec%%:*}"; rest="${spec#*:}"
-  gtk="${rest%%:*}"; rest="${rest#*:}"
-  wall="${rest%%:*}"; mode="${rest##*:}"
+for spec in "hornero-signal-night:dark" "hornero-signal-day:light" "hornero-signal-contrast:dark"; do
+  id="${spec%%:*}"; mode="${spec##*:}"
+  show="$($SSH "$GENV; ./horneroctl --json appearance theme show $id" 2>&1)" \
+    || fail "guest theme show $id: $show"
+  gtk="$(printf '%s' "$show" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["gtk_theme"])')"
+  wall="$(printf '%s' "$show" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["wallpaper"])')"
   if ! bout="$($SSH "$GENV; ./horneroctl appearance theme set $id --yes" 2>&1)"; then
     fail "guest theme set $id: $bout"
   fi
   getout="$($SSH "$GENV; ./horneroctl appearance theme get" 2>&1)" \
     || fail "guest theme get $id: $getout"
-  echo "$getout" | grep -q "current theme: $id (" \
-    || fail "guest theme get $id (no id match): $getout"
-  # mode/flavour live in scheme/state.json, which only `horneroctl appearance scheme
-  # sync-state` (absent in minimal guests) writes — so an empty mode with a
-  # solid GTK match is the documented backend behavior, not a mismatch.
-  # Assert mode when reported, note when absent.
-  if ! echo "$getout" | grep -q "(mode=$mode,"; then
-    echo "note: guest backend reports no mode for $id (GTK match governs)"
+  echo "$getout" | grep -q "current theme: $id (scheme; mode=$mode," \
+    || fail "guest theme get $id (no id/mode match): $getout"
+  $SSH "$GENV; grep -q '\"id\":\"$id\"' \$HOME/.local/state/hornero/signal/scheme.json" \
+    || fail "guest live scheme $id"
+  $SSH "$GENV; test -s \$HOME/.cache/hornero/smart-colors/colors-hyprland.lua" \
+    || fail "guest Hyprland colours $id"
+  if [[ -n $gtk ]]; then
+    $SSH "$GENV; grep -q \"^gtk-theme-name=$gtk\$\" \$HOME/.config/gtk-3.0/settings.ini" \
+      || fail "guest GTK mapping $id ($gtk)"
   fi
-  $SSH "$GENV; grep -q \"^gtk-theme-name=$gtk\$\" \$HOME/.config/gtk-3.0/settings.ini" \
-    || fail "guest GTK mapping $id ($gtk)"
-  $SSH "$GENV; grep -q \"$wall\$\" \$HOME/.local/state/hornero/wallpaper/path" \
-    || fail "guest wallpaper pointer $id ($wall)"
-  $SSH "$GENV; test -f \$HOME/.config/kitty/kitty.conf" \
-    || fail "guest kitty palette $id"
-  $SSH "$GENV; test -f \$HOME/.cache/hornero/smart-colors/scheme.json" \
-    || fail "guest M3 scheme $id"
-  pass "guest official theme $id (set+get+GTK+wallpaper+kitty+M3)"
+  if [[ -n $wall ]]; then
+    $SSH "$GENV; grep -q \"$wall\$\" \$HOME/.local/state/hornero/wallpaper/path" \
+      || fail "guest wallpaper pointer $id ($wall)"
+  fi
+  pass "guest built-in theme $id (set+get+scheme+GTK+Hyprland)"
 done
-pass "guest trio matrix: hornero-dark hornero-light pampa applied via horneroctl (offline)"
+pass "guest Signal matrix: night day contrast applied via horneroctl (offline)"
 $SSH 'sudo iptables -F 2>/dev/null; sudo ip6tables -F 2>/dev/null; sudo ip route add default via 10.0.2.2 2>/dev/null || true'
 
 # --- 5. done --------------------------------------------------------------------

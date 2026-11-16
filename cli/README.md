@@ -18,8 +18,9 @@ usage.
 Run `horneroctl --help` for the installed command list and
 `horneroctl <group> --help` for examples. The CLI includes:
 
-- `appearance` and `wallpaper` for themes, GTK, color schemes, palettes, and
-  wallpaper state;
+- `appearance` and `wallpaper` for Hornero Signal themes, GTK, the live
+  colour scheme, derived colour files, and wallpaper state (see
+  [Appearance](#appearance-hornero-signal));
 - `shell` for Quickshell lifecycle, IPC, layout presets, and component toggles;
 - `config` for path inspection, validation, snapshots, default applications,
   package materialization, and opening Control Center panes;
@@ -101,6 +102,10 @@ whether the Hornero Shell's selected terminal can be launched. A missing or
 unsupported selection is reported as a health failure with the available
 choices; the check is read-only.
 
+`horneroctl doctor` and `horneroctl appearance doctor` also check that the
+live Hornero Signal scheme is valid and that the IBM Plex Sans, Mono and Sans
+Condensed fonts (`ttf-ibm-plex`) are installed.
+
 `horneroctl lock now --yes` skips a duplicate launch when a `hyprlock`
 process owned by the current user is already running. `horneroctl lock status`
 reports that process observation separately from the selected lock backend.
@@ -108,6 +113,37 @@ The process state can be `running`, `not running`, or `unknown` when `pgrep` is
 unavailable or fails; it is a best-effort observation, not proof that the
 current session is securely locked. The command never terminates an existing
 locker.
+
+## Appearance (Hornero Signal)
+
+Colours come only from the selected theme pack: a schema-v2 `theme.json`
+(`palette` with the RFC 0001 §3.1 role set plus a 16-colour `terminal`
+array; HorneroOS/.github#28). There is no wallpaper-driven palette
+synthesis; setting a wallpaper never changes a colour.
+
+- `appearance theme apply <id> --yes` validates the pack, then atomically
+  writes the live scheme the shell watches,
+  `${XDG_STATE_HOME:-~/.local/state}/hornero/signal/scheme.json`
+  (`{"schemaVersion":2,"id","mode","palette","terminal"}`), followed by
+  the derived files, matching HorneroOS/config's `apply-appearance.sh`:
+  `colors-hyprland.lua` (active border = `signal`, inactive = `rule`,
+  locked groups = `cue`) and `colors-hyprlock.conf` (hyprlang `$hs_*`
+  variables only) under `$XDG_CACHE_HOME/hornero/smart-colors/`, the
+  Alacritty, Ghostty, btop and Cava "Hornero Dynamic" colours, the kitty
+  `include <id>.conf` swap, the selection in the appearance state and
+  `shell.json`, and the pack's GTK theme and libadwaita recolour.
+- `appearance theme set <hornero-signal-night|hornero-signal-day|hornero-signal-contrast>`
+  switches between the built-in themes and verifies scheme and GTK agree.
+  `hornero-signal-night` is the factory default.
+- `appearance sync --yes` migrates persisted selections of removed
+  themes once (`hornero-dark` and `hornero-199x` to night,
+  `hornero-light` to day, `neon-city`, `vapor-dreams`, `soft-morning`
+  and `warm-sunset` to night) and rewrites the live scheme and derived files from the selected theme.
+  Typed retired ids are rejected with their replacement, not rewritten.
+- `appearance scheme status|current`, `appearance status`, `appearance
+  colors status|concept|export` and `appearance doctor` are read-only.
+- `shell preset apply` falls back to the `cockpit` preset, and its safe
+  reset layout is the minimal Cockpit composition.
 
 ## Ownership
 

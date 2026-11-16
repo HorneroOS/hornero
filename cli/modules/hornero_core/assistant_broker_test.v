@@ -10,12 +10,12 @@ fn test_broker_catalogue_is_typed_and_closed() {
 }
 
 fn test_broker_argv_validation() {
-	argv := assistant_broker_argv('theme_set', 'pampa') or { panic(err) }
-	assert argv == ['horneroctl', 'appearance', 'theme', 'set', 'pampa', '--yes']
+	argv := assistant_broker_argv('theme_set', 'hornero-signal-day') or { panic(err) }
+	assert argv == ['horneroctl', 'appearance', 'theme', 'set', 'hornero-signal-day', '--yes']
 	if _ := assistant_broker_argv('theme_set', 'vapor-dreams') {
 		assert false, 'non-official theme must be rejected'
 	}
-	if _ := assistant_broker_argv('theme_set', 'pampa; rm -rf /') {
+	if _ := assistant_broker_argv('theme_set', 'hornero-signal-day; rm -rf /') {
 		assert false, 'injection-shaped theme must be rejected'
 	}
 	if _ := assistant_broker_argv('window_focus', 'window:1;evil') {
@@ -31,13 +31,13 @@ fn test_broker_argv_validation() {
 fn test_broker_policy_gate_denies_without_preset() {
 	// Default (no policy file) is the read-only preset: mutations denied,
 	// and dry-run proves nothing executed even when policy would allow.
-	denied := assistant_broker_exec_report('theme_set', 'pampa', 'agent', false, false)
+	denied := assistant_broker_exec_report('theme_set', 'hornero-signal-day', 'agent', false, false)
 	assert !denied.ok
 	assert denied.data['decision'] == 'deny' || denied.data['decision'] == 'require_approval'
 	unknown := assistant_broker_exec_report('rm_rf', '/', 'agent', false, false)
 	assert !unknown.ok
 	// Ask mode can never mutate, regardless of approval flag at this layer.
-	ask := assistant_broker_exec_report('theme_set', 'pampa', 'ask', true, false)
+	ask := assistant_broker_exec_report('theme_set', 'hornero-signal-day', 'ask', true, false)
 	assert !ask.ok
 }
 

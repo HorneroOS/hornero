@@ -132,6 +132,7 @@ pub fn run_doctor() []DoctorCheck {
 			detail: '${cfg} not found (shell will use built-in defaults)'
 		}
 	}
+	checks << appearance_doctor_checks()
 	return checks
 }
 

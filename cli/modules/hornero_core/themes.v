@@ -3,12 +3,14 @@ module hornero_core
 import os
 import x.json2
 
-// Theme-pack backend: installed `theme.json` recipes.
+// Theme-pack backend: installed Hornero Signal `theme.json` packs
+// (schema v2, signal.v).
 //
 // The packs ship in HorneroOS/config (`profiles/themes/<id>/theme.json`)
 // and are installed to the user catalogue or the read-only system
-// catalogue. Mutation (`apply`) runs the native shell pipeline in
-// appearance_apply.v.
+// catalogue. Packs that are not valid schema-v2 Signal themes are not
+// listed and cannot be applied. Mutation (`apply`) runs the native
+// pipeline in appearance_apply.v.
 
 // resolve_themes_dir locates installed theme packs: the canonical
 // `hornero/*` location (docs/PATH_CONTRACT.md row 1) and the WRITE TARGET.
@@ -41,6 +43,7 @@ pub:
 	id          string
 	name        string
 	description string
+	mode        string
 }
 
 fn theme_str_field(m map[string]json2.Any, key string) string {
@@ -62,21 +65,15 @@ fn read_theme_pack(dir string, id string) !ThemeEntry {
 	return error('theme pack is corrupt: ${id} (theme.json is not an object)')
 }
 
-// theme_entry_from_map validates required pack keys and the
+// theme_entry_from_map validates one pack as a Signal theme and the
 // id == directory invariant.
 fn theme_entry_from_map(id string, m map[string]json2.Any) !ThemeEntry {
-	for key in ['schemaVersion', 'id', 'name', 'defaultWallpaper', 'wallpaperDir'] {
-		if key !in m || m[key].str().len == 0 {
-			return error('theme pack is corrupt: ${id} (missing key: ${key})')
-		}
-	}
-	if m['id'].str() != id {
-		return error('theme pack is corrupt: ${id} (id != directory name)')
-	}
+	theme := parse_signal_theme(id, m) or { return error('theme pack is corrupt: ${err.msg()}') }
 	return ThemeEntry{
 		id:          id
-		name:        theme_str_field(m, 'name')
+		name:        theme.name
 		description: theme_str_field(m, 'description')
+		mode:        theme.mode
 	}
 }
 
@@ -215,26 +212,6 @@ fn theme_nonempty_str(m map[string]json2.Any, key string, fallback string) strin
 	return fallback
 }
 
-// theme_gtk_prefer_dark resolves the effective dark preference: explicit
-// gtkPreferDark first (null falls through), then the GTK name, then the
-// pack darkMode. Mirrors the retired lister.
-fn theme_gtk_prefer_dark(m map[string]json2.Any, gtk string, dark bool) bool {
-	if 'gtkPreferDark' in m {
-		raw := m['gtkPreferDark']
-		if raw is bool || raw is string || raw is i64 || raw is f64 {
-			return theme_truthy(raw)
-		}
-	}
-	lower := gtk.to_lower()
-	if lower.contains('light') {
-		return false
-	}
-	if lower.contains('dark') {
-		return true
-	}
-	return dark
-}
-
 // theme_gtk_color_scheme normalizes the persisted color-scheme policy.
 // Mirrors the retired lister exactly.
 fn theme_gtk_color_scheme(m map[string]json2.Any, prefer_dark bool) string {
@@ -259,9 +236,8 @@ fn theme_gtk_color_scheme(m map[string]json2.Any, prefer_dark bool) string {
 }
 
 // theme_load_full_entry builds one `--full` entry from a pack directory.
-// Lenient like the retired lister: unparseable manifests are skipped by
-// the caller, ids default to the directory name, every display field has
-// a fallback. Returns the entry with its resolved id.
+// Only valid schema-v2 Signal packs are listed; display fields have
+// fallbacks. Returns the entry with its resolved id.
 fn theme_load_full_entry(themes_dir string, dirname string, roots []string) !map[string]json2.Any {
 	raw := os.read_file(os.join_path(themes_dir, dirname, 'theme.json'))!
 	parsed := json2.decode[json2.Any](raw)!
@@ -270,28 +246,23 @@ fn theme_load_full_entry(themes_dir string, dirname string, roots []string) !map
 		return error('not an object')
 	}
 	m := parsed.as_map()
-	theme_id := theme_nonempty_str(m, 'id', dirname)
-	name := theme_nonempty_str(m, 'name', theme_id)
+	signal := parse_signal_theme(dirname, m)!
+	theme_id := signal.id
+	name := signal.name
 	description := theme_str_field(m, 'description')
-	mut dark := true
-	if 'darkMode' in m {
-		dark = theme_truthy(m['darkMode'])
-	}
+	gtk := theme_nonempty_str(m, 'gtkTheme', 'Hornero-Signal')
+	icons := theme_nonempty_str(m, 'iconTheme', 'Papirus-Dark')
+	// Same policy as HorneroOS/config list-themes.py: explicit
+	// gtkColorScheme, else the theme mode.
+	policy := theme_gtk_color_scheme(m, signal.mode == 'dark')
 	mut color_only := false
 	if 'colorOnly' in m {
 		color_only = theme_truthy(m['colorOnly'])
 	}
-	scheme := theme_nonempty_str(m, 'schemeType', 'tonal-spot')
-	gtk := theme_nonempty_str(m, 'gtkTheme', 'Orchis-Light-Compact')
-	icons := theme_nonempty_str(m, 'iconTheme', 'Numix-Circle')
-	// Heuristics read the raw manifest value (missing counts as empty),
-	// not the display default above — mirroring the retired lister.
-	mut raw_gtk := ''
-	if 'gtkTheme' in m && m['gtkTheme'] is string {
-		raw_gtk = m['gtkTheme'].str()
+	mut swatch := map[string]json2.Any{}
+	for role in ['base', 'panel', 'ink', 'signal', 'cue'] {
+		swatch[role] = json2.Any(signal.role(role))
 	}
-	prefer_dark := theme_gtk_prefer_dark(m, raw_gtk, dark)
-	policy := theme_gtk_color_scheme(m, prefer_dark)
 	wallpaper_dir := theme_nonempty_str(m, 'wallpaperDir', theme_id)
 	walls, paths := theme_wallpaper_index(theme_id, wallpaper_dir, roots)
 	mut preview := ''
@@ -339,7 +310,6 @@ fn theme_load_full_entry(themes_dir string, dirname string, roots []string) !map
 			collection_order = int(order.f64())
 		}
 	}
-	model := if theme_str_field(m, 'family').len > 0 { 'semantic' } else { 'recipe' }
 	return {
 		'id':               json2.Any(theme_id)
 		'name':             json2.Any(name)
@@ -348,12 +318,11 @@ fn theme_load_full_entry(themes_dir string, dirname string, roots []string) !map
 		'tags':             json2.Any(tags)
 		'collection':       json2.Any(collection)
 		'collectionOrder':  json2.Any(collection_order)
-		'model':            json2.Any(model)
-		'darkMode':         json2.Any(dark)
-		'schemeType':       json2.Any(scheme)
+		'schemaVersion':    json2.Any(signal_schema_version)
+		'mode':             json2.Any(signal.mode)
 		'gtkTheme':         json2.Any(gtk)
 		'iconTheme':        json2.Any(icons)
-		'gtkPreferDark':    json2.Any(prefer_dark)
+		'swatch':           json2.Any(swatch)
 		'gtkColorScheme':   json2.Any(policy)
 		'defaultWallpaper': json2.Any(default_wall)
 		'wallpaperDir':     json2.Any(wallpaper_dir)
@@ -430,6 +399,7 @@ pub fn themes_list_report() CommandResult {
 pub struct ThemeShow {
 pub:
 	id                string
+	mode              string
 	name              string
 	description       string
 	gtk_theme         string
@@ -443,7 +413,7 @@ pub:
 // Canonical-first: the canonical copy wins when both locations hold the id.
 pub fn show_theme_pack(id string) !ThemeShow {
 	if id.len == 0 || id.contains('/') || id == '.' || id == '..' || id.contains('\x00') {
-		return error('invalid theme id: ${id}.\nExample: horneroctl appearance theme show vapor-dreams')
+		return error('invalid theme id: ${id}.\nExample: horneroctl appearance theme show ${signal_default_theme_id}')
 	}
 	dirs := resolve_themes_dirs_for_read()
 	if dirs.len == 0 {
@@ -470,17 +440,11 @@ pub fn show_theme_pack(id string) !ThemeShow {
 
 // theme_show_from_map validates one pack and builds its detail view.
 fn theme_show_from_map(id string, raw string, m map[string]json2.Any) !ThemeShow {
-	for key in ['schemaVersion', 'id', 'name', 'defaultWallpaper', 'wallpaperDir'] {
-		if key !in m || m[key].str().len == 0 {
-			return error('theme pack is corrupt: ${id} (missing key: ${key})')
-		}
-	}
-	if m['id'].str() != id {
-		return error('theme pack is corrupt: ${id} (id != directory name)')
-	}
+	theme := parse_signal_theme(id, m) or { return error('theme pack is corrupt: ${err.msg()}') }
 	return ThemeShow{
 		id:                id
-		name:              theme_str_field(m, 'name')
+		mode:              theme.mode
+		name:              theme.name
 		description:       theme_str_field(m, 'description')
 		gtk_theme:         theme_str_field(m, 'gtkTheme')
 		icon_theme:        theme_str_field(m, 'iconTheme')
@@ -496,6 +460,7 @@ pub fn theme_show_report(id string) CommandResult {
 	mut lines := []string{}
 	lines << 'id: ${pack.id}'
 	lines << 'name: ${pack.name}'
+	lines << 'mode: ${pack.mode}'
 	if pack.description.len > 0 {
 		lines << 'description: ${pack.description}'
 	}
@@ -505,12 +470,20 @@ pub fn theme_show_report(id string) CommandResult {
 	if pack.icon_theme.len > 0 {
 		lines << 'icons: ${pack.icon_theme}'
 	}
-	lines << 'wallpaper: ${pack.wallpaper_dir}/${pack.default_wallpaper}'
+	wallpaper := if pack.default_wallpaper.len > 0 {
+		'${pack.wallpaper_dir}/${pack.default_wallpaper}'
+	} else {
+		''
+	}
+	if wallpaper.len > 0 {
+		lines << 'wallpaper: ${wallpaper}'
+	}
 	return ok_result('appearance theme show', lines.join('\n'), {
 		'id':        pack.id
 		'name':      pack.name
+		'mode':      pack.mode
 		'gtk_theme': pack.gtk_theme
-		'wallpaper': '${pack.wallpaper_dir}/${pack.default_wallpaper}'
+		'wallpaper': wallpaper
 	})
 }
 
@@ -520,16 +493,13 @@ pub:
 	wallpaper string
 	dry_run   bool
 	yes       bool
-	helper    string
 }
 
-// theme_apply_report implements `appearance theme apply <id>` natively
-// (shell IPC fast path, else the wal + M3 + GTK pipeline). Mutating:
-// needs --yes; --dry-run only previews.
+// theme_apply_report implements `appearance theme apply <id>`: write the
+// live Signal scheme plus derived files from one schema-v2 pack.
+// Mutating: needs --yes; --dry-run only previews.
 pub fn theme_apply_report(opts ThemeApplyOptions) CommandResult {
-	if opts.id.len == 0 || opts.id.contains('/') || opts.id == '.' || opts.id == '..' {
-		return fail_result('appearance theme apply', 'invalid theme id.\nExample: horneroctl appearance theme apply vapor-dreams --dry-run')
-	}
+	check_typed_theme_id(opts.id) or { return fail_result('appearance theme apply', err.msg()) }
 	if !opts.yes && !opts.dry_run {
 		return fail_result('appearance theme apply', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance theme apply ${opts.id} --dry-run')
 	}

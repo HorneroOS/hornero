@@ -16,8 +16,6 @@ fn wp_dispatch_setup() {
 	os.setenv('XDG_STATE_HOME', base + '/state', true)
 	os.setenv('XDG_CACHE_HOME', base + '/cache', true)
 	os.setenv('HORNERO_SHELL_RUNNING', '0', true)
-	os.setenv('HORNERO_M3_PYTHON_BIN', '/bin/false', true)
-	os.setenv('HORNERO_M3_SCRIPT', '/nonexistent/generate-m3-colors.py', true)
 }
 
 fn wp_dispatch_teardown() {
@@ -25,8 +23,6 @@ fn wp_dispatch_teardown() {
 	os.unsetenv('XDG_STATE_HOME')
 	os.unsetenv('XDG_CACHE_HOME')
 	os.unsetenv('HORNERO_SHELL_RUNNING')
-	os.unsetenv('HORNERO_M3_PYTHON_BIN')
-	os.unsetenv('HORNERO_M3_SCRIPT')
 }
 
 fn test_dispatch_wallpaper_current() {
@@ -51,13 +47,10 @@ fn test_dispatch_wallpaper_set() {
 	wp_dispatch_teardown()
 }
 
-fn test_dispatch_wallpaper_reload() {
+fn test_dispatch_wallpaper_reload_is_removed() {
 	wp_dispatch_setup()
-	assert dispatch(['horneroctl', 'wallpaper', 'reload', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'wallpaper', 'reload']) == 1
-	assert dispatch(['horneroctl', 'wallpaper', 'reload', '--yes']) == 1
-	assert dispatch(['horneroctl', 'wallpaper', 'reload', '--bogus']) == 2
-	assert dispatch(['horneroctl', 'wallpaper', 'reload', 'extra']) == 2
+	assert dispatch(['horneroctl', 'wallpaper', 'reload', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'wallpaper', 'reload', '--yes']) == 2
 	wp_dispatch_teardown()
 }
 
@@ -73,13 +66,14 @@ fn test_dispatch_wallpaper_usage() {
 fn test_wallpaper_help_has_examples() {
 	h := command_help('wallpaper')
 	assert h.contains('Examples:')
+	assert h.contains('never changes a colour')
+	assert !h.contains('reload')
 }
 
 fn test_wallpaper_dry_run_needs_no_backend() {
 	// Hermetic: nonexistent backends; dry-run previews must still pass.
 	wp_dispatch_setup()
 	assert dispatch(['horneroctl', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg', '--dry-run']) == 0
-	assert dispatch(['horneroctl', 'wallpaper', 'reload', '--dry-run']) == 0
 	wp_dispatch_teardown()
 }
 
@@ -89,6 +83,5 @@ fn test_wallpaper_json_and_quiet_modes() {
 	assert dispatch(['horneroctl', '--quiet', 'wallpaper', 'current']) == 0
 	assert dispatch(['horneroctl', '--json', 'wallpaper', 'set', '/tmp/hx-wallpaper-dtest/wall.jpg',
 		'--dry-run']) == 0
-	assert dispatch(['horneroctl', '--json', 'wallpaper', 'reload', '--dry-run']) == 0
 	wp_dispatch_teardown()
 }

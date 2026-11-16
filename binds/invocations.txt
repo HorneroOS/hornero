@@ -5,9 +5,6 @@
 #   --binary cli/build/horneroctl --shell-dir <shell> --config-dir <config>
 # The gate fails on unhandled chains and on drift vs this file.
 
-appearance accent clear
-appearance accent set
-appearance colors m3
 appearance gtk apply
 appearance gtk color-scheme
 appearance gtk current
@@ -27,12 +24,6 @@ appearance night-mode schedule set
 appearance night-mode set
 appearance night-mode status
 appearance night-mode toggle
-appearance scheme current
-appearance scheme list
-appearance scheme regenerate
-appearance scheme set-mode
-appearance scheme set-variant
-appearance scheme sync-state
 appearance theme apply
 appearance theme list
 apps launch

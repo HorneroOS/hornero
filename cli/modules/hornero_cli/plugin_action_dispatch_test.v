@@ -16,11 +16,12 @@ fn test_plugin_action_parser_shapes() {
 	assert run.action_arg == 'notes.txt'
 	assert !run.dry_run && !run.yes
 
-	mutate := parse_plugin(['action', 'run', 'example-clock', 'theme_set', 'pampa', '--yes']) or {
+	mutate := parse_plugin(['action', 'run', 'example-clock', 'theme_set', 'hornero-signal-day',
+		'--yes']) or {
 		assert false, err.msg()
 		return
 	}
-	assert mutate.yes && mutate.action_arg == 'pampa'
+	assert mutate.yes && mutate.action_arg == 'hornero-signal-day'
 
 	invalid := [
 		['action'],

@@ -921,8 +921,7 @@ fn run_shell_preset(args []string, mode hornero_core.RenderMode) int {
 
 fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 	if args.len > 0
-		&& args[0] in ['theme', 'scheme', 'colors', 'accent', 'night-mode', 'gtk', 'hyprlock',
-			'hyprland'] {
+		&& args[0] in ['theme', 'scheme', 'colors', 'night-mode', 'gtk', 'hyprlock', 'hyprland'] {
 		if wants_help(args) {
 			print(command_help('appearance ' + args[0]))
 			return 0
@@ -932,9 +931,6 @@ fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 		}
 		if args[0] == 'colors' {
 			return run_appearance_colors(args[1..], mode)
-		}
-		if args[0] == 'accent' {
-			return run_appearance_accent(args[1..], mode)
 		}
 		if args[0] == 'night-mode' {
 			return run_appearance_night_mode(args[1..], mode)
@@ -1003,8 +999,6 @@ fn run_appearance_colors(args []string, mode hornero_core.RenderMode) int {
 	return render(hornero_core.colors_report(hornero_core.ColorsOptions{
 		action:  opts.leaf
 		value:   opts.value
-		m3:      opts.m3
-		call:    opts.call_args
 		dry_run: opts.dry_run
 		yes:     opts.yes
 	}), mode)
@@ -1030,9 +1024,6 @@ fn run_appearance_gtk(args []string, mode hornero_core.RenderMode) int {
 		}
 		'current-color-scheme' {
 			return render(hornero_core.gtk_current_policy_report(), mode)
-		}
-		'detect' {
-			return render(hornero_core.gtk_detect_report(opts.value), mode)
 		}
 		'info' {
 			return render(hornero_core.gtk_info_report(opts.value), mode)
@@ -1078,7 +1069,7 @@ fn run_appearance_gtk(args []string, mode hornero_core.RenderMode) int {
 		}
 		'theme' {
 			if !opts.yes && !opts.dry_run {
-				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk theme vapor-dreams --dry-run'),
+				return render_error(hornero_core.err_usage('appearance.gtk.usage', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance gtk theme hornero-signal-night --dry-run'),
 					mode)
 			}
 			return render(hornero_core.theme_pack_gtk_apply(opts.value, opts.dry_run),
@@ -1123,19 +1114,6 @@ fn run_appearance_hyprland(args []string, mode hornero_core.RenderMode) int {
 	return render(hornero_core.regenerate_hyprland_native(opts.dry_run), mode)
 }
 
-fn run_appearance_accent(args []string, mode hornero_core.RenderMode) int {
-	opts := parse_appearance_accent(args) or {
-		return render_error(hornero_core.err_usage('appearance.accent.usage', err.msg()),
-			mode)
-	}
-	return render(hornero_core.accent_report(hornero_core.AccentOptions{
-		action:  opts.leaf
-		value:   opts.value
-		dry_run: opts.dry_run
-		yes:     opts.yes
-	}), mode)
-}
-
 fn run_appearance_night_mode(args []string, mode hornero_core.RenderMode) int {
 	opts := parse_appearance_night_mode(args) or {
 		return render_error(hornero_core.err_usage('appearance.night-mode.usage', err.msg()),
@@ -1157,56 +1135,10 @@ fn run_appearance_scheme(args []string, mode hornero_core.RenderMode) int {
 		return render_error(hornero_core.err_usage('appearance.scheme.usage', err.msg()),
 			mode)
 	}
-	if opts.leaf == 'status' {
-		return render(hornero_core.scheme_status_report(), mode)
-	}
-	if opts.leaf == 'list' {
-		return render(hornero_core.scheme_list_report(), mode)
-	}
 	if opts.leaf == 'current' {
 		return render(hornero_core.scheme_current_report(), mode)
 	}
-	if opts.leaf == 'regenerate' {
-		if !opts.yes && !opts.dry_run {
-			return render_error(hornero_core.err_usage('appearance.scheme.usage', 'refusing to regenerate without --yes (preview with --dry-run).\nExample: horneroctl appearance scheme regenerate --dry-run'),
-				mode)
-		}
-		return render(hornero_core.regenerate_scheme_native(hornero_core.read_wallpaper_pointer(),
-			opts.dry_run), mode)
-	}
-	if opts.leaf == 'sync-state' {
-		if !opts.yes && !opts.dry_run {
-			return render_error(hornero_core.err_usage('appearance.scheme.usage', 'refusing to sync without --yes (preview with --dry-run).\nExample: horneroctl appearance scheme sync-state --dry-run'),
-				mode)
-		}
-		if opts.dry_run {
-			return render(hornero_core.ok_result('appearance scheme sync-state', 'would run: sync state.json from scheme.json${if opts.theme_id.len > 0 {
-				' with theme ${opts.theme_id}'
-			} else {
-				''
-			}}',
-				{
-					'dry_run':  'true'
-					'theme_id': opts.theme_id
-				}), mode)
-		}
-		path := hornero_core.sync_state_from_scheme_with_theme_id(opts.theme_id) or {
-			return render_error(hornero_core.err_usage('appearance.scheme.usage', err.msg()),
-				mode)
-		}
-		return render(hornero_core.ok_result('appearance scheme sync-state', 'state synced from scheme.json',
-			{
-				'state_file': path
-				'theme_id':   opts.theme_id
-			}), mode)
-	}
-	kind := if opts.leaf == 'set-mode' { 'mode' } else { 'variant' }
-	return render(hornero_core.scheme_set_report(hornero_core.SchemeSetOptions{
-		kind:    kind
-		value:   opts.value
-		dry_run: opts.dry_run
-		yes:     opts.yes
-	}), mode)
+	return render(hornero_core.scheme_status_report(), mode)
 }
 
 fn run_config(args []string, mode hornero_core.RenderMode) int {

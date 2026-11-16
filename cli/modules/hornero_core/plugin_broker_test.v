@@ -86,7 +86,7 @@ fn test_plugin_broker_catalogue_is_typed_closed_and_separated() {
 fn test_plugin_broker_argv_validation() {
 	argv := plugin_broker_argv('studio_jobs_list', '') or { panic(err) }
 	assert argv == ['horneroctl', '--json', 'studio', 'jobs', 'list']
-	if _ := plugin_broker_argv('theme_set', 'pampa; rm -rf /') {
+	if _ := plugin_broker_argv('theme_set', 'hornero-signal-day; rm -rf /') {
 		assert false, 'injection-shaped theme must be rejected'
 	}
 	if _ := plugin_broker_argv('shell', 'id') {
@@ -194,9 +194,9 @@ fn test_plugin_broker_exec_gates() {
 	// Declared mutation without --yes is refused at the CLI contract,
 	// and with --yes it is still denied by the default ABAC policy
 	// (no plugin appearance.modify rule exists in any preset).
-	no_yes := plugin_broker_exec_report('broker-ok', 'theme_set', 'pampa', false, false)
+	no_yes := plugin_broker_exec_report('broker-ok', 'theme_set', 'hornero-signal-day', false, false)
 	assert !no_yes.ok
-	policy_denied := plugin_broker_exec_report('broker-ok', 'theme_set', 'pampa', true,
+	policy_denied := plugin_broker_exec_report('broker-ok', 'theme_set', 'hornero-signal-day', true,
 		false)
 	assert !policy_denied.ok
 	assert policy_denied.data['decision'] == 'deny'
@@ -204,7 +204,7 @@ fn test_plugin_broker_exec_gates() {
 	// check simulates the same decisions without executing.
 	allowed := plugin_broker_check_report('broker-ok', 'system_info', '')
 	assert allowed.ok && allowed.data['decision'] == 'allow'
-	denied_check := plugin_broker_check_report('broker-ok', 'theme_set', 'pampa')
+	denied_check := plugin_broker_check_report('broker-ok', 'theme_set', 'hornero-signal-day')
 	assert !denied_check.ok && denied_check.data['decision'] == 'deny'
 
 	// A traversal-shaped plugin id never reaches the filesystem.

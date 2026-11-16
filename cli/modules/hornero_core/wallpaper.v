@@ -2,13 +2,13 @@ module hornero_core
 
 import os
 
-// Wallpaper control uses the Hornero state pointer and native palette
-// pipeline for both live-shell and headless operations.
+// Wallpaper control writes the Hornero state pointer the shell watches.
+// Setting a wallpaper never changes a colour (Hornero Signal).
 // Mutations require --yes; --dry-run only previews.
 
 pub struct WallpaperOptions {
 pub:
-	action  string // set | current | reload
+	action  string // set | current
 	path    string // set target, or explicit candidate for current
 	dry_run bool
 	yes     bool
@@ -97,38 +97,9 @@ pub fn current_wallpaper(explicit string) string {
 	return ''
 }
 
-// wallpaper_report implements the wallpaper subcommands. `current` reads the
-// pointer; set and reload use the native palette pipeline.
+// wallpaper_report implements the wallpaper subcommands. `current` reads
+// the pointer; `set` atomically rewrites it (no recolouring).
 // Mutating verbs require --yes; --dry-run only previews.
-// wallpaper_set_native applies one wallpaper without the
-// horneroctl wallpaper set wrapper (retired): quickshell IPC setWallpaper
-// first (when the shell runs), else the Hornero M3 palette pipeline for
-// the new path — the native wallpaper-only contract. An explicit
-
-fn wallpaper_set_native(path string, dry_run bool) CommandResult {
-	if !dry_run && shell_running() {
-		ipc := ipc_appearance_call(['setWallpaper', path], false)
-		if ipc.ok && !ipc.output.contains('Target not found') {
-			wait_appearance_ipc(false) or { return fail_result('wallpaper set', err.msg()) }
-			return ok_result('wallpaper set', 'wallpaper applied via shell: ${path}',
-				{
-					'path':    path
-					'backend': 'shell'
-				})
-		}
-	}
-	st := read_scheme_state()
-	flavour := normalize_scheme_type(if st.flavour.len > 0 { st.flavour } else { 'tonal-spot' })
-	mode := if st.mode == 'light' || st.mode == 'dark' { st.mode } else { 'dark' }
-	res := run_palette_pipeline_with(path, flavour, mode, dry_run, default_palette_backends())
-	if !res.ok {
-		return res
-	}
-	mut data := res.data.clone()
-	data['path'] = path
-	return ok_result('wallpaper set', res.message, data)
-}
-
 pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 	match opts.action {
 		'current' {
@@ -151,13 +122,7 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			if !opts.yes && !opts.dry_run {
 				return fail_result('wallpaper set', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl wallpaper set ~/wall.jpg --dry-run')
 			}
-			return wallpaper_set_native(resolved, opts.dry_run)
-		}
-		'reload' {
-			if !opts.yes && !opts.dry_run {
-				return fail_result('wallpaper reload', 'refusing to reload without --yes (preview with --dry-run).\nExample: horneroctl wallpaper reload --dry-run')
-			}
-			return wallpaper_reload_native(opts.dry_run)
+			return set_wallpaper_only('wallpaper set', resolved, opts.dry_run)
 		}
 		else {
 			return fail_result('wallpaper', 'unknown action: ${opts.action}.\nRun: horneroctl wallpaper --help')

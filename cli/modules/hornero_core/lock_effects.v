@@ -340,56 +340,27 @@ pub:
 	error   string
 }
 
-// lock_colors resolves the native scheme palette, then accessible defaults.
+// lock_colors reads the live Hornero Signal scheme (ground, ink, signal,
+// alert), falling back to the Signal Night values when it is missing.
 pub fn lock_colors() LockColors {
-	mut bg := lock_scheme_colour('background')
-	mut fg := lock_scheme_colour('onBackground')
-	mut primary := lock_scheme_colour('primary')
-	mut error := lock_scheme_colour('error')
-	if bg.len == 0 {
-		bg = '1e1e1e'
-	}
-	if fg.len == 0 {
-		fg = 'ffffff'
-	}
-	if primary.len == 0 {
-		primary = '6495ed'
-	}
-	if error.len == 0 {
-		error = 'ff6b6b'
+	if t := read_signal_scheme() {
+		return LockColors{
+			bg:      lock_hex(t.role('ground'))
+			fg:      lock_hex(t.role('ink'))
+			primary: lock_hex(t.role('signal'))
+			error:   lock_hex(t.role('alert'))
+		}
 	}
 	return LockColors{
-		bg:      lock_hex(bg)
-		fg:      lock_hex(fg)
-		primary: lock_hex(primary)
-		error:   lock_hex(error)
+		bg:      '0c0f13'
+		fg:      'ece6da'
+		primary: 'f2a33a'
+		error:   'f0705a'
 	}
 }
 
 fn lock_hex(raw string) string {
-	mut c := raw.trim_space()
-	if c.starts_with('#') {
-		c = c[1..]
-	}
-	return c
-}
-
-// lock_scheme_colour reads one M3 colour from the native scheme.json
-// (canonical Hornero cache path).
-fn lock_scheme_colour(key string) string {
-	scheme := color_scheme_file()
-	raw := os.read_file(scheme) or { return '' }
-	parsed := json2.decode[json2.Any](raw) or { return '' }
-	if parsed is map[string]json2.Any {
-		if colours := parsed['colours'] {
-			if colours is map[string]json2.Any {
-				if v := colours[key] {
-					return v.str()
-				}
-			}
-		}
-	}
-	return ''
+	return raw.trim_space().trim_left('#').to_lower()
 }
 
 // render_hyprlock_config renders one temporary hyprlock config for a
@@ -450,7 +421,7 @@ fn render_lock_cyberpunk(image string) string {
 	lines << '  text = cmd[update:1000] echo "' + '$' + '(date +\'%H:%M:%S\')"'
 	lines << '  color = rgba(00ffffff)'
 	lines << '  font_size = 90'
-	lines << '  font_family = JetBrainsMono Nerd Font'
+	lines << '  font_family = IBM Plex Mono'
 	lines << '  text_align = center'
 	lines << '  position = 0, 180'
 	lines << '  halign = center'
@@ -465,7 +436,7 @@ fn render_lock_cyberpunk(image string) string {
 	lines << '  text = ▌SYSTEM LOCKED▐'
 	lines << '  color = rgba(ff00ffdd)'
 	lines << '  font_size = 14'
-	lines << '  font_family = JetBrainsMono Nerd Font'
+	lines << '  font_family = IBM Plex Mono'
 	lines << '  position = 0, 100'
 	lines << '  halign = center'
 	lines << '  valign = center'
@@ -476,7 +447,7 @@ fn render_lock_cyberpunk(image string) string {
 	lines << '  text = cmd[update:1000] echo "' + '$' + '(date +\'%Y.%m.%d\')"'
 	lines << '  color = rgba(9d00ffdd)'
 	lines << '  font_size = 16'
-	lines << '  font_family = JetBrainsMono Nerd Font'
+	lines << '  font_family = IBM Plex Mono'
 	lines << '  position = 0, 70'
 	lines << '  halign = center'
 	lines << '  valign = center'
@@ -487,7 +458,7 @@ fn render_lock_cyberpunk(image string) string {
 	lines << '  text = 󰯄 ' + '$' + 'USER'
 	lines << '  color = rgba(ff00ffcc)'
 	lines << '  font_size = 18'
-	lines << '  font_family = JetBrainsMono Nerd Font'
+	lines << '  font_family = IBM Plex Mono'
 	lines << '  position = 0, -170'
 	lines << '  halign = center'
 	lines << '  valign = center'
@@ -777,7 +748,7 @@ fn render_lock_default(image string, c LockColors) string {
 	lines << '  text = cmd[update:1000] echo "' + '$' + '(date +\'%H:%M\')"'
 	lines << '  color = rgba(' + c.fg + 'ff)'
 	lines << '  font_size = 80'
-	lines << '  font_family = JetBrainsMono Nerd Font'
+	lines << '  font_family = IBM Plex Mono'
 	lines << '  position = 0, 150'
 	lines << '  halign = center'
 	lines << '  valign = center'
@@ -788,7 +759,7 @@ fn render_lock_default(image string, c LockColors) string {
 	lines << '  text = cmd[update:1000] echo "' + '$' + '(date +\'%A, %d %B %Y\')"'
 	lines << '  color = rgba(' + c.fg + 'dd)'
 	lines << '  font_size = 18'
-	lines << '  font_family = JetBrainsMono Nerd Font'
+	lines << '  font_family = IBM Plex Mono'
 	lines << '  position = 0, 80'
 	lines << '  halign = center'
 	lines << '  valign = center'
@@ -799,7 +770,7 @@ fn render_lock_default(image string, c LockColors) string {
 	lines << '  text = 󰌾 ' + '$' + 'USER'
 	lines << '  color = rgba(' + c.fg + 'dd)'
 	lines << '  font_size = 16'
-	lines << '  font_family = JetBrainsMono Nerd Font'
+	lines << '  font_family = IBM Plex Mono'
 	lines << '  position = 0, -180'
 	lines << '  halign = center'
 	lines << '  valign = center'

@@ -9,9 +9,25 @@ import x.json2
 
 const theme_full_root = '/tmp/hx-theme-full-test'
 
-const theme_full_a_json = '{"schemaVersion":1,"id":"pack-a","name":"Pack A","description":"first","tags":["dark","cozy"],"darkMode":true,"schemeType":"tonal-spot","gtkTheme":"Orchis-Dark-Compact","iconTheme":"Papirus-Dark","gtkPreferDark":true,"defaultWallpaper":"a.jpg","wallpaperDir":"hx-full-a","colorOnly":false,"collection":"hornero-originals","collectionOrder":3,"family":"hornero"}'
-
-const theme_full_b_json = '{"id":"pack-b","name":"Pack B"}'
+// theme_full_pack builds a valid schema-v2 pack from the Signal Night test
+// fixture (cli/testdata/signal-themes), overriding id/name and extras.
+fn theme_full_pack(id string, extra string) string {
+	fixture := os.join_path(os.dir(@FILE), '..', '..', 'testdata', 'signal-themes',
+		'hornero-signal-night', 'theme.json')
+	raw := os.read_file(fixture) or { panic('missing fixture ${fixture}') }
+	mut m := json2.decode[map[string]json2.Any](raw) or { panic(err) }
+	m['id'] = json2.Any(id)
+	m['name'] = json2.Any(id)
+	for key in ['description', 'gtkTheme', 'iconTheme', 'defaultWallpaper', 'wallpaperDir', 'tags',
+		'collection', 'collectionOrder'] {
+		m.delete(key)
+	}
+	extras := json2.decode[map[string]json2.Any](extra) or { panic(err) }
+	for k, v in extras {
+		m[k] = v
+	}
+	return json2.encode(m)
+}
 
 fn theme_full_write(path string, content string) {
 	os.mkdir_all(os.dir(path)) or { assert false, 'mkdir ${os.dir(path)}' }
@@ -24,9 +40,11 @@ fn theme_full_isolate() (string, string) {
 	os.setenv('HORNERO_THEMES_DIR', theme_full_root + '/themes', true)
 	os.setenv('HORNERO_WALLPAPERS_DIR', theme_full_root + '/walls', true)
 	os.rmdir_all(theme_full_root) or {}
-	theme_full_write(theme_full_root + '/themes/pack-a/theme.json', theme_full_a_json)
+	theme_full_write(theme_full_root + '/themes/pack-a/theme.json', theme_full_pack('pack-a', '{"name":"Pack A","description":"first","tags":["dark","cozy"],"gtkTheme":"Orchis-Dark-Compact","iconTheme":"Papirus-Dark","defaultWallpaper":"a.jpg","wallpaperDir":"hx-full-a","collection":"hornero-originals","collectionOrder":3}'))
 	theme_full_write(theme_full_root + '/themes/pack-a/preview.jpg', 'fake')
-	theme_full_write(theme_full_root + '/themes/pack-b/theme.json', theme_full_b_json)
+	theme_full_write(theme_full_root + '/themes/pack-b/theme.json', theme_full_pack('pack-b', '{"name":"Pack B"}'))
+	// Retired schema-v1 packs are not Signal themes and are never listed.
+	theme_full_write(theme_full_root + '/themes/pack-old/theme.json', '{"schemaVersion":1,"id":"pack-old","name":"Old","schemeType":"vibrant"}')
 	theme_full_write(theme_full_root + '/walls/hx-full-a/a.jpg', 'fake')
 	theme_full_write(theme_full_root + '/walls/hx-full-a/b.png', 'fake')
 	theme_full_write(theme_full_root + '/walls/hx-full-a/notes.txt', 'not-an-image')
@@ -55,10 +73,16 @@ fn test_theme_list_full_is_manifest_array() {
 	assert a['description'].str() == 'first'
 	assert a['collection'].str() == 'hornero-originals'
 	assert a['collectionOrder'].i64() == 3
-	assert a['model'].str() == 'semantic'
-	assert a['darkMode'].bool() == true
+	assert a['schemaVersion'].int() == 2
+	assert a['mode'].str() == 'dark'
+	assert 'schemeType' !in a
+	assert 'darkMode' !in a
 	assert a['gtkTheme'].str() == 'Orchis-Dark-Compact'
-	assert a['gtkPreferDark'].bool() == true
+	assert 'gtkPreferDark' !in a
+	assert a['colorOnly'].bool() == false
+	swatch := a['swatch'].as_map()
+	assert swatch.len == 5
+	assert swatch['signal'].str() == '#F2A33A'
 	assert a['gtkColorScheme'].str() == 'prefer-dark'
 	assert a['wallpaperDir'].str() == 'hx-full-a'
 	assert a['defaultWallpaper'].str() == 'a.jpg'
@@ -74,17 +98,16 @@ fn test_theme_list_full_is_manifest_array() {
 	assert b['id'].str() == 'pack-b'
 	assert b['collection'].str() == ''
 	assert b['collectionOrder'].i64() == 0
-	assert b['model'].str() == 'recipe'
-	assert b['schemeType'].str() == 'tonal-spot'
-	assert b['iconTheme'].str() == 'Numix-Circle'
+	assert b['gtkTheme'].str() == 'Hornero-Signal'
+	assert b['iconTheme'].str() == 'Papirus-Dark'
 	assert b['wallpapers'].as_array().len == 0
 	assert b['wallpaperPath'].str() == ''
 	theme_full_restore(old_themes, old_walls)
 }
 
-fn test_theme_list_full_light_gtk_heuristic() {
+fn test_theme_list_full_policy_follows_mode() {
 	old_themes, old_walls := theme_full_isolate()
-	theme_full_write(theme_full_root + '/themes/pack-c/theme.json', '{"id":"pack-c","name":"C","gtkTheme":"Orchis-Light-Compact"}')
+	theme_full_write(theme_full_root + '/themes/pack-c/theme.json', theme_full_pack('pack-c', '{"mode":"light","gtkTheme":"Orchis-Dark"}'))
 	r := theme_list_full_report()
 	assert r.ok
 	arr := json2.decode[[]json2.Any](r.message) or {
@@ -94,14 +117,14 @@ fn test_theme_list_full_light_gtk_heuristic() {
 	assert arr.len == 3
 	c := arr[2].as_map()
 	assert c['id'].str() == 'pack-c'
-	assert c['gtkPreferDark'].bool() == false
+	assert c['mode'].str() == 'light'
 	assert c['gtkColorScheme'].str() == 'prefer-light'
 	theme_full_restore(old_themes, old_walls)
 }
 
 fn test_theme_list_full_does_not_claim_missing_default_wallpaper() {
 	old_themes, old_walls := theme_full_isolate()
-	theme_full_write(theme_full_root + '/themes/pack-c/theme.json', '{"id":"pack-c","name":"Pack C","defaultWallpaper":"missing.jpg","wallpaperDir":"pack-c","colorOnly":true}')
+	theme_full_write(theme_full_root + '/themes/pack-c/theme.json', theme_full_pack('pack-c', '{"defaultWallpaper":"missing.jpg","wallpaperDir":"pack-c"}'))
 	r := theme_list_full_report()
 	assert r.ok
 	arr := json2.decode[[]json2.Any](r.message) or {
@@ -110,7 +133,6 @@ fn test_theme_list_full_does_not_claim_missing_default_wallpaper() {
 	}
 	pack := arr[2].as_map()
 	assert pack['id'].str() == 'pack-c'
-	assert pack['colorOnly'].bool()
 	assert pack['defaultWallpaper'].str() == 'missing.jpg'
 	assert pack['wallpaperPath'].str() == ''
 	assert pack['wallpapers'].as_array().len == 0

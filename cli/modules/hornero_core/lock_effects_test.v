@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import x.json2
 
 const lock_troot = '/tmp/hx-lock-test'
 
@@ -177,28 +178,33 @@ fn test_lock_layout_style_prefers_pack_tags() {
 	lock_tteardown()
 }
 
-fn test_lock_colors_prefers_scheme_json() {
+fn test_lock_colors_prefers_signal_scheme() {
 	lock_tsetup()
-	os.mkdir_all('${lock_troot}/cache/hornero/smart-colors') or { assert false }
-	os.write_file('${lock_troot}/cache/hornero/smart-colors/scheme.json', '{"colours":{"background":"#112233","onBackground":"#aabbcc","primary":"#445566","error":"#778899"}}') or {
-		assert false
-	}
+	day := load_signal_theme_fixture('hornero-signal-day')
+	write_signal_scheme(day) or { assert false, err.msg() }
 	c := lock_colors()
-	assert c.bg == '112233'
-	assert c.fg == 'aabbcc'
-	assert c.primary == '445566'
-	assert c.error == '778899'
+	assert c.bg == 'e6e1d5'
+	assert c.fg == '1b1e22'
+	assert c.primary == '8f4b00'
+	assert c.error == 'a8341c'
 	lock_tteardown()
 }
 
-fn test_lock_colors_defaults_without_any_state() {
+fn test_lock_colors_default_to_signal_night_without_scheme() {
 	lock_tsetup()
 	c := lock_colors()
-	assert c.bg == '1e1e1e'
-	assert c.fg == 'ffffff'
-	assert c.primary == '6495ed'
-	assert c.error == 'ff6b6b'
+	assert c.bg == '0c0f13'
+	assert c.fg == 'ece6da'
+	assert c.primary == 'f2a33a'
+	assert c.error == 'f0705a'
 	lock_tteardown()
+}
+
+fn load_signal_theme_fixture(id string) SignalTheme {
+	path := os.join_path(os.dir(@FILE), '..', '..', 'testdata', 'signal-themes', id, 'theme.json')
+	raw := os.read_file(path) or { panic('missing fixture ${path}') }
+	m := json2.decode[map[string]json2.Any](raw) or { panic(err) }
+	return parse_signal_theme(id, m) or { panic(err) }
 }
 
 fn test_lock_templates_carry_image_and_colors() {
