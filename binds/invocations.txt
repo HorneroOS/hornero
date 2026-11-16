@@ -24,7 +24,6 @@ appearance night-mode schedule set
 appearance night-mode set
 appearance night-mode status
 appearance night-mode toggle
-appearance scheme current
 appearance theme apply
 appearance theme list
 apps launch
