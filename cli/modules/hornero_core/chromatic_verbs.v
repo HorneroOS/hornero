@@ -388,6 +388,44 @@ fn gated_theme_doc(doc map[string]json2.Any) ! {
 	}
 }
 
+// theme_name_ok accepts the characters real GTK/icon theme directory names
+// use; anything with a newline, quote, slash or leading dash is refused so an
+// imported value can never break out of the settings.ini / gtkrc line it is
+// written into.
+fn theme_name_ok(name string) bool {
+	return name.len > 0 && name.len <= 64 && !name.starts_with('-') && !name.contains('..')
+		&& name.bytes().all((it >= `a` && it <= `z`) || (it >= `A` && it <= `Z`)
+			|| (it >= `0` && it <= `9`) || it in [`.`, `_`, `-`, `+`, ` `])
+}
+
+// plain_name_ok is a single path component: no separators, no dot-dot.
+fn plain_name_ok(name string) bool {
+	return name.len > 0 && name.len <= 128 && name != '.' && name != '..'
+		&& !name.contains('/') && !name.contains('\\') && !name.contains('\x00')
+		&& name.bytes().all(it >= 0x20 && it != 0x7f)
+}
+
+// check_import_fields rejects the free-text fields of an untrusted theme
+// document that later reach config files or wallpaper lookups. A saved
+// palette only ever needs plain theme names and a plain wallpaper file name.
+fn check_import_fields(doc map[string]json2.Any) ! {
+	for key in ['gtkTheme', 'iconTheme'] {
+		v := jget(doc, key)
+		if key == 'gtkTheme' && v == 'auto' {
+			continue
+		}
+		if !theme_name_ok(v) {
+			return error('${key} must be a plain theme name (letters, digits, space, . _ + -; at most 64)')
+		}
+	}
+	for key in ['defaultWallpaper', 'wallpaperDir'] {
+		v := jget(doc, key)
+		if !plain_name_ok(v) {
+			return error('${key} must be a single file or directory name, not a path')
+		}
+	}
+}
+
 fn store_user_pack(doc map[string]json2.Any) !string {
 	id := jget(doc, 'id')
 	path := user_pack_path(id)
@@ -606,6 +644,7 @@ pub fn chromatic_import(o ChromaticOptions) ChromaticReply {
 			doc[k] = jstr(v)
 		}
 	}
+	check_import_fields(doc) or { return chromatic_fail('chromatic.usage', err.msg()) }
 	gated_theme_doc(doc) or { return chromatic_fail('chromatic.gates-failed', err.msg()) }
 	if o.dry_run {
 		return chromatic_ok('would import ${id} to ${user_pack_path(id)}; nothing was written.', {

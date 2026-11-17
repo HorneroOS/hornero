@@ -560,6 +560,45 @@ fn test_saved_palettes_round_trip() {
 	assert !os.exists(os.join_path(root, 'themes', 'imported'))
 }
 
+fn test_import_rejects_untrusted_free_text_fields() {
+	root := cx_setup()
+	defer { cx_teardown() }
+	assert chromatic_apply(cx_opts('balanced'), cx_backends()).ok
+	exp := os.join_path(root, 'export.json')
+	assert chromatic_export(ChromaticOptions{
+		output: exp
+		id:     'exported'
+	}).ok
+	good := parse_json_object(os.read_file(exp) or { panic(err) }) or { panic(err) }
+	// Hostile values for each free-text field; every one must be refused and
+	// leave nothing behind.
+	hostile := {
+		'iconTheme':        'x\ngtk-modules=evil'
+		'gtkTheme':         'a"\nmodule_path "/tmp/x"'
+		'defaultWallpaper': '../../../../etc/hostname'
+		'wallpaperDir':     '../outside'
+	}
+	for key, value in hostile {
+		mut doc := good.clone()
+		doc[key] = jstr(value)
+		path := os.join_path(root, 'hostile.json')
+		os.write_file(path, json2.encode(doc)) or { panic(err) }
+		r := chromatic_import(ChromaticOptions{
+			file: path
+			id:   'hostile'
+			yes:  true
+		})
+		assert r.code == 'chromatic.usage', '${key}: ${r.message}'
+		assert !pack_is_user('hostile')
+	}
+	// A normal document still imports.
+	assert chromatic_import(ChromaticOptions{
+		file: exp
+		id:   'fine'
+		yes:  true
+	}).ok
+}
+
 fn test_templates_verbs() {
 	root := cx_setup()
 	defer { cx_teardown() }
