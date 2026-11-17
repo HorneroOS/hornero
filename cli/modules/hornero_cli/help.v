@@ -386,7 +386,7 @@ Examples:
 
   list [--full]       List installed shell presets (read-only);
                       --full prints the full entry array as JSON
-                      (name, display, description, icon, iconMaterial,
+                      (name, display, description, icon, glyph,
                       position, style, active) for the layout picker
   current             Show the active preset (read-only)
   apply <name> [--dry-run|--yes]

@@ -66,13 +66,13 @@ pub fn resolve_preset_state_file_for_read() string {
 
 pub struct PresetEntry {
 pub:
-	name          string
-	display       string
-	description   string
-	icon          string
-	icon_material string
-	active        bool
-	lineage       string
+	name        string
+	display     string
+	description string
+	icon        string
+	glyph       string
+	active      bool
+	lineage     string
 	// bars: topology summary for previews (preset_bars_summary), one
 	// {edge, style, backdrop, reserve, groups:{start,center,end}} per bar.
 	bars []json2.Any
@@ -185,9 +185,9 @@ fn preset_entry_from_map(name string, m map[string]json2.Any, current string) Pr
 	if '_icon' in m && m['_icon'].str().len > 0 {
 		icon = m['_icon'].str()
 	}
-	mut icon_material := 'widgets'
-	if '_iconMaterial' in m && m['_iconMaterial'].str().len > 0 {
-		icon_material = m['_iconMaterial'].str()
+	mut glyph := 'widgets'
+	if '_glyph' in m && m['_glyph'].str().len > 0 {
+		glyph = m['_glyph'].str()
 	}
 	mut lineage := ''
 	if '_lineage' in m {
@@ -199,14 +199,14 @@ fn preset_entry_from_map(name string, m map[string]json2.Any, current string) Pr
 		bars = preset_bars_summary(bar)
 	}
 	return PresetEntry{
-		name:          name
-		display:       title
-		description:   about
-		icon:          icon
-		icon_material: icon_material
-		active:        name == current
-		lineage:       lineage
-		bars:          bars
+		name:        name
+		display:     title
+		description: about
+		icon:        icon
+		glyph:       glyph
+		active:      name == current
+		lineage:     lineage
+		bars:        bars
 	}
 }
 
@@ -311,14 +311,14 @@ pub fn preset_list_full_report() CommandResult {
 			active = p.name
 		}
 		arr << json2.Any({
-			'name':         json2.Any(p.name)
-			'display':      json2.Any(p.display)
-			'description':  json2.Any(p.description)
-			'icon':         json2.Any(p.icon)
-			'iconMaterial': json2.Any(p.icon_material)
-			'active':       json2.Any(p.active)
-			'lineage':      json2.Any(p.lineage)
-			'bars':         json2.Any(p.bars)
+			'name':        json2.Any(p.name)
+			'display':     json2.Any(p.display)
+			'description': json2.Any(p.description)
+			'icon':        json2.Any(p.icon)
+			'glyph':       json2.Any(p.glyph)
+			'active':      json2.Any(p.active)
+			'lineage':     json2.Any(p.lineage)
+			'bars':        json2.Any(p.bars)
 		})
 	}
 	return ok_result('shell preset list', json2.encode(arr, escape_unicode: true), {
