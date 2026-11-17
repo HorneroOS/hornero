@@ -11,7 +11,7 @@ fn gates_testdata(rel string) string {
 	return os.join_path(os.dir(@FILE), 'testdata', rel)
 }
 
-fn gates_json() map[string]json2.Any {
+fn gate_table_json() map[string]json2.Any {
 	raw := os.read_file(gates_testdata('contrast-gates.json')) or { panic(err) }
 	parsed := json2.decode[json2.Any](raw) or { panic(err) }
 	return parsed.as_map()
@@ -66,7 +66,7 @@ fn resolve_json_level(levels map[string]json2.Any, name string) map[string]json2
 }
 
 fn test_gate_levels_match_the_config_table() {
-	table := gates_json()
+	table := gate_table_json()
 	assert (table['version'] or { panic('version') }).int() == 1
 	levels := (table['levels'] or { panic('levels') }).as_map()
 	assert levels.keys().sorted() == gate_levels.clone().sorted()
@@ -106,7 +106,7 @@ fn test_gate_levels_match_the_config_table() {
 }
 
 fn test_terminal_and_chromatic_extra_match_the_config_table() {
-	table := gates_json()
+	table := gate_table_json()
 	term := (table['terminal'] or { panic('terminal') }).as_map()
 	assert json_f64(term, 'normalMin') == gate_terminal.normal_min
 	assert json_f64(term, 'brightMin') == gate_terminal.bright_min

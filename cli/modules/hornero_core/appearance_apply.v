@@ -770,16 +770,6 @@ pub fn appearance_doctor_checks() []DoctorCheck {
 			detail: '${err.msg()}; run: horneroctl appearance sync --yes'
 		}
 	}
-	helper := chromatic_helper_path()
-	checks << DoctorCheck{
-		name:   'chromatic-helper'
-		ok:     helper.len > 0 || !is_chromatic_active()
-		detail: if helper.len > 0 {
-			helper
-		} else {
-			'hornero-chromatic not found (optional; run: horneroctl appearance chromatic doctor)'
-		}
-	}
 	missing := missing_ibm_plex_families(font_search_dirs())
 	checks << DoctorCheck{
 		name:   'signal-fonts'
@@ -788,6 +778,16 @@ pub fn appearance_doctor_checks() []DoctorCheck {
 			'IBM Plex Sans, Mono and Sans Condensed installed'
 		} else {
 			'missing ${missing.join(', ')}; install ttf-ibm-plex'
+		}
+	}
+	helper := chromatic_helper_path()
+	checks << DoctorCheck{
+		name:   'chromatic-helper'
+		ok:     helper.len > 0 || !is_chromatic_active()
+		detail: if helper.len > 0 {
+			helper
+		} else {
+			'hornero-chromatic not found (optional; run: horneroctl appearance chromatic doctor)'
 		}
 	}
 	return checks

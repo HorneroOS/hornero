@@ -89,9 +89,9 @@ pub fn chromatic_preview(o ChromaticOptions) ChromaticReply {
 	msg := 'preview: ${g.mode} ${g.variant} (${g.level}) ${personality_of(g)}\nfingerprint ${g.fingerprint}\n' +
 		'would write ${plan.len} files; nothing was written.'
 	return chromatic_ok(msg, generated_doc(g, {
-		'dryRun':   jbool(true)
+		'dryRun':     jbool(true)
 		'wouldWrite': jstrs(paths_of(plan))
-		'warnings': jstrs(warnings)
+		'warnings':   jstrs(warnings)
 	}))
 }
 
@@ -224,7 +224,11 @@ pub fn chromatic_rollback(o ChromaticOptions, deps ChromaticBackends) ChromaticR
 	entries, corrupt := read_history()
 	if entries.len < o.steps {
 		return chromatic_fail('chromatic.no-snapshot', 'only ${entries.len} usable snapshot(s); cannot go back ${o.steps}.' +
-			if corrupt.len > 0 { ' Corrupt snapshots were set aside: ${corrupt.join(', ')}' } else { '' })
+			if corrupt.len > 0 {
+				' Corrupt snapshots were set aside: ${corrupt.join(', ')}'
+			} else {
+				''
+			})
 	}
 	entry := entries[o.steps - 1]
 	files := jmap(entry.doc, 'files')
@@ -268,8 +272,7 @@ pub fn chromatic_rollback(o ChromaticOptions, deps ChromaticBackends) ChromaticR
 		chromatic:      chrom_v
 	}
 	if o.dry_run {
-		return chromatic_ok('rollback would restore snapshot ${entry.number:04} (${jget(entry.doc,
-			'themeId')}, ${plan.len} files); nothing was written.', {
+		return chromatic_ok('rollback would restore snapshot ${entry.number:04} (${jget(entry.doc, 'themeId')}, ${plan.len} files); nothing was written.', {
 			'dryRun':     jbool(true)
 			'snapshot':   jstr('${entry.number:04}')
 			'wouldWrite': jstrs(paths_of(plan))
@@ -297,11 +300,11 @@ pub fn chromatic_rollback(o ChromaticOptions, deps ChromaticBackends) ChromaticR
 	}
 	mark_chromatic_inactive_unless(restored, snap)
 	return chromatic_ok('rolled back to snapshot ${entry.number:04} (${theme_id}); undo with another rollback.', {
-		'restored':  jstr('${entry.number:04}')
-		'themeId':   jstr(theme_id)
-		'snapshot':  jstr('${snap:04}')
-		'outputs':   jstrs(paths_of(plan))
-		'warnings':  jstrs(warnings)
+		'restored': jstr('${entry.number:04}')
+		'themeId':  jstr(theme_id)
+		'snapshot': jstr('${snap:04}')
+		'outputs':  jstrs(paths_of(plan))
+		'warnings': jstrs(warnings)
 	})
 }
 
