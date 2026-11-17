@@ -20,7 +20,7 @@ pub fn render(result hornero_core.CommandResult, mode hornero_core.RenderMode) i
 			return hornero_core.err_user('command.failed', result.message).exit_code()
 		}
 		.human {
-			println(result.message)
+			println_human(result.message)
 			if result.ok {
 				return 0
 			}
@@ -37,7 +37,7 @@ pub fn render_error(err hornero_core.DomainError, mode hornero_core.RenderMode) 
 			println(error_json(err))
 		}
 		.human {
-			eprintln(err.message)
+			eprintln_human(err.message)
 		}
 	}
 	return err.exit_code()
