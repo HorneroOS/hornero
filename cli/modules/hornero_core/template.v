@@ -437,10 +437,20 @@ pub fn jail_output(raw string) !string {
 	if raw.contains('\x00') || raw.split('/').any(it == '..') {
 		return error('output "${raw}" may not contain ".."')
 	}
-	expanded := expand_output_prefix(raw)
+	return jail_expanded(expand_output_prefix(raw), raw, false)
+}
+
+// jail_expanded proves an absolute path stays under the XDG directories
+// after symlink resolution (state too when include_state, for snapshot
+// restores); `label` names it in errors.
+pub fn jail_expanded(expanded string, label string, include_state bool) !string {
 	p := resolve_paths()
 	mut roots := []string{}
-	for root in [p.config_dir, p.cache_dir, p.data_dir] {
+	mut dirs := [p.config_dir, p.cache_dir, p.data_dir]
+	if include_state {
+		dirs << p.state_dir
+	}
+	for root in dirs {
 		roots << real_prefix(root)
 	}
 	mut real := real_prefix(expanded)
@@ -452,7 +462,7 @@ pub fn jail_output(raw string) !string {
 			return expanded
 		}
 	}
-	return error('output "${raw}" resolves outside the XDG directories (${real})')
+	return error('output "${label}" resolves outside the XDG directories (${real})')
 }
 
 // ResolvedTemplate is a manifest ready to render: jailed output path and

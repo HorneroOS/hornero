@@ -106,6 +106,7 @@ fn default_gtk_apply(theme string, icon string, policy string, dry_run bool) Com
 
 // default_pack_extras runs the best-effort per-pack integrations.
 fn default_pack_extras(id string, gtk_theme string, name string) {
+	chromatic_release_outputs()
 	sync_kitty_include(id)
 	sync_gtk_recolor(gtk_theme)
 	sync_qt6ct_palette(id)
@@ -371,9 +372,10 @@ pub fn sync_kitty_include(theme_id string) {
 	for line in raw.split_into_lines() {
 		if line.starts_with('include ') && line.ends_with('.conf') {
 			name := line.all_after('include ').trim_space().all_before_last('.conf')
-			is_theme := retired_theme_replacement(name).len > 0 || (read_pack_map(name) or {
-				map[string]json2.Any{}
-			}).len > 0
+			is_theme := name == chromatic_theme_id || retired_theme_replacement(name).len > 0
+				|| (read_pack_map(name) or {
+					map[string]json2.Any{}
+				}).len > 0
 			if !name.contains('/') && name != theme_id && is_theme {
 				out << 'include ${theme_id}.conf'
 				changed = true
@@ -766,6 +768,16 @@ pub fn appearance_doctor_checks() []DoctorCheck {
 			name:   'signal-scheme'
 			ok:     false
 			detail: '${err.msg()}; run: horneroctl appearance sync --yes'
+		}
+	}
+	helper := chromatic_helper_path()
+	checks << DoctorCheck{
+		name:   'chromatic-helper'
+		ok:     helper.len > 0 || !is_chromatic_active()
+		detail: if helper.len > 0 {
+			helper
+		} else {
+			'hornero-chromatic not found (optional; run: horneroctl appearance chromatic doctor)'
 		}
 	}
 	missing := missing_ibm_plex_families(font_search_dirs())

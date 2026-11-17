@@ -1,16 +1,29 @@
 {
- "schemaVersion": 1,
- "engine": {
-  "name": "hornero-chromatic",
-  "version": "1.0.0",
-  "algorithm": 1
- },
- "qt": "6.11.0",
- "formats": [
-  "png",
-  "jpeg",
-  "webp",
-  "gif"
- ],
- "ffmpeg": "/usr/bin/ffmpeg"
+    "algorithm": 1,
+    "engine": {
+        "algorithm": 1,
+        "name": "hornero-chromatic",
+        "version": "1.0.0"
+    },
+    "ffmpeg": "/usr/bin/ffmpeg",
+    "formats": [
+        "bmp",
+        "cur",
+        "gif",
+        "ico",
+        "jfif",
+        "jpeg",
+        "jpg",
+        "pbm",
+        "pdf",
+        "pgm",
+        "png",
+        "ppm",
+        "svg",
+        "svgz",
+        "xbm",
+        "xpm"
+    ],
+    "qt": "6.12.0",
+    "schemaVersion": 1
 }

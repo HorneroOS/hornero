@@ -1,53 +1,170 @@
 {
- "schemaVersion": 1,
- "variants": [
-  {
-   "id": "balanced",
-   "label": "Balanced",
-   "description": "balanced",
-   "darkOnly": false
-  },
-  {
-   "id": "vibrant",
-   "label": "Vibrant",
-   "description": "vibrant",
-   "darkOnly": false
-  },
-  {
-   "id": "expressive",
-   "label": "Expressive",
-   "description": "expressive",
-   "darkOnly": false
-  },
-  {
-   "id": "faithful",
-   "label": "Faithful",
-   "description": "faithful",
-   "darkOnly": false
-  },
-  {
-   "id": "muted",
-   "label": "Muted",
-   "description": "muted",
-   "darkOnly": false
-  },
-  {
-   "id": "monochrome",
-   "label": "Monochrome",
-   "description": "monochrome",
-   "darkOnly": false
-  },
-  {
-   "id": "high-contrast",
-   "label": "High-Contrast",
-   "description": "high-contrast",
-   "darkOnly": false
-  },
-  {
-   "id": "neon",
-   "label": "Neon",
-   "description": "neon",
-   "darkOnly": true
-  }
- ]
+    "engine": {
+        "algorithm": 1,
+        "name": "hornero-chromatic",
+        "version": "1.0.0"
+    },
+    "schemaVersion": 1,
+    "variants": [
+        {
+            "auto": true,
+            "darkOnly": false,
+            "description": "Signal Night/Day character re-hued: quiet surfaces, one confident accent",
+            "id": "balanced",
+            "label": "Balanced",
+            "params": {
+                "accentChroma": [
+                    0.09,
+                    0.15
+                ],
+                "cueRotation": 165,
+                "glow": true,
+                "harmonise": 10,
+                "highContrast": false,
+                "inkChroma": 0.014,
+                "surfaceChroma": 0.016,
+                "terminalHarmonise": 10
+            }
+        },
+        {
+            "auto": true,
+            "darkOnly": false,
+            "description": "Stronger accents and tinted chrome",
+            "id": "vibrant",
+            "label": "Vibrant",
+            "params": {
+                "accentChroma": [
+                    0.14,
+                    0.4
+                ],
+                "cueRotation": 165,
+                "glow": true,
+                "harmonise": 12,
+                "highContrast": false,
+                "inkChroma": 0.014,
+                "surfaceChroma": 0.028,
+                "terminalHarmonise": 15
+            }
+        },
+        {
+            "auto": true,
+            "darkOnly": false,
+            "description": "Triadic cue unless the image has a second hue; more harmonised status colours",
+            "id": "expressive",
+            "label": "Expressive",
+            "params": {
+                "accentChroma": [
+                    0.11,
+                    0.17
+                ],
+                "cueRotation": 120,
+                "glow": true,
+                "harmonise": 20,
+                "highContrast": false,
+                "inkChroma": 0.016,
+                "surfaceChroma": 0.022,
+                "terminalHarmonise": 20
+            }
+        },
+        {
+            "auto": false,
+            "darkOnly": false,
+            "description": "Signal is the seed itself when it passes the gates; surfaces take the image's dominant hue",
+            "id": "faithful",
+            "label": "Faithful",
+            "params": {
+                "accentChroma": [
+                    0,
+                    0.4
+                ],
+                "cueRotation": 165,
+                "glow": true,
+                "harmonise": 8,
+                "highContrast": false,
+                "inkChroma": 0.012,
+                "surfaceChroma": 0.02,
+                "terminalHarmonise": 8
+            }
+        },
+        {
+            "auto": true,
+            "darkOnly": false,
+            "description": "Near-neutral chrome, soft accents",
+            "id": "muted",
+            "label": "Muted",
+            "params": {
+                "accentChroma": [
+                    0.05,
+                    0.08
+                ],
+                "cueRotation": 165,
+                "glow": true,
+                "harmonise": 5,
+                "highContrast": false,
+                "inkChroma": 0.008,
+                "surfaceChroma": 0.008,
+                "terminalHarmonise": 5
+            }
+        },
+        {
+            "auto": false,
+            "darkOnly": false,
+            "description": "Neutral chrome and ink; accents whisper the seed hue; status colours keep their meaning",
+            "id": "monochrome",
+            "label": "Monochrome",
+            "params": {
+                "accentChroma": [
+                    0.035,
+                    0.035
+                ],
+                "cueRotation": 165,
+                "glow": false,
+                "harmonise": 0,
+                "highContrast": false,
+                "inkChroma": 0,
+                "surfaceChroma": 0,
+                "terminalHarmonise": 0
+            }
+        },
+        {
+            "auto": false,
+            "darkOnly": false,
+            "description": "Maximum gates, deeper ground, brighter ink; no glow, no translucency",
+            "id": "high-contrast",
+            "label": "High contrast",
+            "params": {
+                "accentChroma": [
+                    0.12,
+                    0.17
+                ],
+                "cueRotation": 165,
+                "glow": false,
+                "harmonise": 5,
+                "highContrast": true,
+                "inkChroma": 0,
+                "surfaceChroma": 0.006,
+                "terminalHarmonise": 5
+            }
+        },
+        {
+            "auto": false,
+            "darkOnly": true,
+            "description": "Dark only; complementary cue, saturated terminal, glow at gamut",
+            "id": "neon",
+            "label": "Neon",
+            "params": {
+                "accentChroma": [
+                    0.16,
+                    0.4
+                ],
+                "cueRotation": 180,
+                "glow": true,
+                "harmonise": 0,
+                "highContrast": false,
+                "inkChroma": 0.02,
+                "surfaceChroma": 0.03,
+                "terminalHarmonise": 0
+            }
+        }
+    ]
 }

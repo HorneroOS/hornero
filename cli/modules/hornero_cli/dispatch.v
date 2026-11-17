@@ -1016,10 +1016,14 @@ fn run_shell_preset(args []string, mode hornero_core.RenderMode) int {
 
 fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 	if args.len > 0
-		&& args[0] in ['theme', 'scheme', 'colors', 'night-mode', 'gtk', 'hyprlock', 'hyprland'] {
+		&& args[0] in ['theme', 'scheme', 'colors', 'night-mode', 'gtk', 'hyprlock', 'hyprland',
+			'chromatic'] {
 		if wants_help(args) {
 			print(command_help('appearance ' + args[0]))
 			return 0
+		}
+		if args[0] == 'chromatic' {
+			return run_appearance_chromatic(args[1..], mode)
 		}
 		if args[0] == 'theme' {
 			return run_appearance_theme(args[1..], mode)
@@ -1050,6 +1054,62 @@ fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 		dry_run: opts.dry_run
 		yes:     opts.yes
 	}), mode)
+}
+
+fn run_appearance_chromatic(args []string, mode hornero_core.RenderMode) int {
+	if args.len >= 2 && args[0] == 'templates' && wants_help(args) {
+		print(command_help('appearance chromatic'))
+		return 0
+	}
+	opts := parse_chromatic(args) or {
+		return render_error(hornero_core.err_usage('appearance.chromatic.usage', err.msg()),
+			mode)
+	}
+	deps := hornero_core.default_chromatic_backends()
+	reply := match opts.verb {
+		'status' { hornero_core.chromatic_status(opts) }
+		'analyze' { hornero_core.chromatic_analyze(opts) }
+		'preview' { hornero_core.chromatic_preview(opts) }
+		'apply' { hornero_core.chromatic_apply(opts, deps) }
+		'follow' { hornero_core.chromatic_follow(opts, deps) }
+		'rollback' { hornero_core.chromatic_rollback(opts, deps) }
+		'history' { hornero_core.chromatic_history(opts) }
+		'save' { hornero_core.chromatic_save(opts) }
+		'export' { hornero_core.chromatic_export(opts) }
+		'import' { hornero_core.chromatic_import(opts) }
+		'variants' { hornero_core.chromatic_variants(opts) }
+		'off' { hornero_core.chromatic_off(opts, deps) }
+		'doctor' { hornero_core.chromatic_doctor(opts) }
+		'list' { hornero_core.chromatic_list(opts) }
+		'rename' { hornero_core.chromatic_rename(opts) }
+		'delete' { hornero_core.chromatic_delete(opts) }
+		else {
+			match opts.sub {
+				'render' { hornero_core.chromatic_templates_render(opts) }
+				'check' { hornero_core.chromatic_templates_check(opts) }
+				else { hornero_core.chromatic_templates_list(opts) }
+			}
+		}
+	}
+	return render_chromatic(reply, mode)
+}
+
+// render_chromatic prints one ChromaticReply and returns its exit code.
+fn render_chromatic(r hornero_core.ChromaticReply, mode hornero_core.RenderMode) int {
+	match mode {
+		.json {
+			println(r.json)
+		}
+		.human {
+			if r.ok {
+				println(r.message)
+			} else {
+				eprintln('${r.code}: ${r.message}')
+			}
+		}
+		.quiet {}
+	}
+	return if r.ok { 0 } else { 1 }
 }
 
 fn run_appearance_theme(args []string, mode hornero_core.RenderMode) int {

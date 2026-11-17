@@ -417,7 +417,7 @@ Examples:
 '
 		}
 		'appearance' {
-			return 'Usage: horneroctl appearance <status|sync|doctor|set-*|theme|scheme|colors|night-mode|gtk|hyprlock|hyprland> [options]
+			return 'Usage: horneroctl appearance <status|sync|doctor|set-*|theme|chromatic|scheme|colors|night-mode|gtk|hyprlock|hyprland> [options]
 
   status              Show the selected theme, mode, wallpaper and GTK (read-only)
   sync [--dry-run]    Migrate retired theme selections once, then rewrite
@@ -433,6 +433,9 @@ Examples:
   set-gtk-color-scheme <policy> [--dry-run]
                       Set the GTK color-scheme policy (needs --yes)
   theme ...           Hornero Signal theme packs (list, show, get, apply, set)
+  chromatic ...       Hornero Chromatic: palettes generated from a wallpaper,
+                      image or seed colours (status, preview, apply, follow,
+                      rollback, off, save, ...)
   scheme ...          Live scheme state (status, current)
   colors ...          Smart-color files from the live scheme (status,
                       generate, concept, export)
@@ -546,6 +549,58 @@ Examples:
   horneroctl appearance colors generate --yes
   horneroctl appearance colors concept error
   horneroctl appearance colors export
+'
+		}
+		'appearance chromatic' {
+			return 'Usage: horneroctl appearance chromatic <verb> [options]
+
+Hornero Chromatic derives a complete Hornero Signal palette from the wallpaper,
+an image or seed colours (engine: hornero-chromatic, shipped with hornero-shell).
+Every palette is re-validated against the contrast gates before anything is
+written; apply is transactional (snapshot, atomic writes, restore on failure).
+
+  status                 Active palette, follow policy, helper, snapshots (read-only)
+  analyze [--source image:PATH]
+                         What the engine sees in the image (read-only)
+  preview [request]      Generate and validate; writes nothing
+  apply [request] [--no-persist] [--dry-run] [--yes]
+                         Apply Chromatic; --no-persist keeps appearance.chromatic
+  follow [--dry-run] [--yes]
+                         Regenerate for the current wallpaper when Chromatic is
+                         active and follow is auto (no-op otherwise)
+  rollback [--steps N] [--dry-run] [--yes]
+                         Restore the state N applies back (default 1)
+  history                Snapshots (newest 10)
+  off [--dry-run] [--yes]
+                         Leave Chromatic: apply the fallback theme for the mode
+  variants               Variants the engine offers
+  doctor                 Helper, ffmpeg, templates, state, lock (read-only)
+  list                   Saved palettes
+  save --id ID --name NAME [--force] [--dry-run] [--yes]
+                         Save the live palette as a user theme
+  rename ID --name NAME [--yes]   Rename a saved palette
+  delete ID [--yes]               Delete a saved palette
+  export [--id ID] [--name NAME] [--output FILE]
+                         Print or write the live palette as a theme document
+  import FILE [--id ID] [--force] [--dry-run] [--yes]
+                         Install a theme document as a saved palette (gated)
+  templates list | render [--name N | --all] | check FILE
+                         Config-owned app templates (GTK, Qt, kitty, foot, ...)
+
+Request flags (override shell.json appearance.chromatic):
+  --source wallpaper|image:PATH|seed|house   --seed #RRGGBB (up to 2)
+  --variant V  --mode auto|dark|light  --contrast auto|standard|boosted|maximum
+  --depth standard|deep  --chroma 0.5..1.5  --hue-shift -180..180
+
+Error codes (--json): chromatic.engine-missing, .source-unreadable, .gates-failed,
+.locked, .write-failed, .state-corrupt, .template-invalid.
+
+Examples:
+  horneroctl appearance chromatic preview --seed "#D98A3A"
+  horneroctl appearance chromatic apply --variant vibrant --dry-run
+  horneroctl appearance chromatic apply --yes
+  horneroctl appearance chromatic rollback --yes
+  horneroctl appearance chromatic save --id amber-dusk --name "Amber dusk" --yes
 '
 		}
 		'appearance night-mode' {
