@@ -500,8 +500,15 @@ pub fn gaming_doctor_checks() []DoctorCheck {
 	}
 	checks << steam_check
 	checks << bin_check('gamemode', 'gamemoderun')
-	checks << bin_check('gamescope', 'gamescope')
-	checks << bin_check('mangohud', 'mangohud')
+	// Gamescope is required only by the Handheld session; MangoHud is an
+	// optional overlay. Absent is a warning elsewhere, never a failure.
+	if 'handheld' in sel.specializations {
+		checks << bin_check('gamescope', 'gamescope')
+	} else {
+		checks << optional_bin_check('gamescope', 'gamescope', 'only the Handheld session needs it; also usable per game with horneroctl gaming launch-options')
+	}
+	checks << optional_bin_check('mangohud', 'mangohud', 'optional frametime overlay')
+	checks << gaming_probe_checks(sel)
 	checks << bin_check('pipewire', 'pipewire')
 	checks << bin_check('wireplumber', 'wireplumber')
 	portal := '/usr/lib/xdg-desktop-portal'
@@ -545,12 +552,24 @@ pub fn gaming_doctor_result() CommandResult {
 	mut failed := 0
 	mut data := map[string]string{}
 	for c in checks {
-		mark := if c.ok { 'ok' } else { 'FAIL' }
+		mark := if !c.ok {
+			'FAIL'
+		} else if c.warn {
+			'WARN'
+		} else {
+			'ok'
+		}
 		if !c.ok {
 			failed++
 		}
 		lines << '${mark}  ${c.name}: ${redact_secrets(c.detail)}'
-		data[c.name] = if c.ok { 'ok' } else { 'fail' }
+		data[c.name] = if !c.ok {
+			'fail'
+		} else if c.warn {
+			'warn'
+		} else {
+			'ok'
+		}
 	}
 	if failed == 0 {
 		lines << 'gaming doctor: all ${checks.len} checks passed'

@@ -268,6 +268,7 @@ pub fn studio_doctor_checks() []DoctorCheck {
 		ok:     true
 		detail: 'recorded: ${mode_state.audio_mode} (Balanced is the device default; Low Latency and Advanced are explicit opt-ins; quantum is a scheduling period, not physical latency)'
 	}
+	checks << studio_audio_doctor_checks()
 	checks << DoctorCheck{
 		name:   'studio-package-apply'
 		ok:     true
@@ -322,12 +323,24 @@ pub fn studio_doctor_result() CommandResult {
 	mut failed := 0
 	mut data := map[string]string{}
 	for c in checks {
-		mark := if c.ok { 'ok' } else { 'FAIL' }
+		mark := if !c.ok {
+			'FAIL'
+		} else if c.warn {
+			'WARN'
+		} else {
+			'ok'
+		}
 		if !c.ok {
 			failed++
 		}
 		lines << '${mark}  ${c.name}: ${redact_secrets(c.detail)}'
-		data[c.name] = if c.ok { 'ok' } else { 'fail' }
+		data[c.name] = if !c.ok {
+			'fail'
+		} else if c.warn {
+			'warn'
+		} else {
+			'ok'
+		}
 	}
 	if failed == 0 {
 		lines << 'studio doctor: all ${checks.len} checks passed'

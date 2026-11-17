@@ -27,3 +27,18 @@ fn test_gaming_unknown_subcommand_fails() {
 	assert dispatch(['horneroctl', 'gaming']) != 0
 	assert dispatch(['horneroctl', 'gaming', 'doctor', 'extra']) != 0
 }
+
+fn test_gaming_launch_options_help_and_usage() {
+	h := command_help('gaming launch-options')
+	assert h.contains('Examples:')
+	assert h.contains('never edits Steam')
+	assert command_help('gaming').contains('launch-options')
+	assert dispatch(['horneroctl', 'gaming', 'launch-options', '--bogus']) == 2 || dispatch([
+		'horneroctl',
+		'gaming',
+		'launch-options',
+		'--bogus',
+	]) != 0
+	assert dispatch(['horneroctl', 'gaming', 'launch-options', '--width', 'x']) != 0
+	assert dispatch(['horneroctl', 'gaming', 'launch-options', '--gamemode']) == 0
+}

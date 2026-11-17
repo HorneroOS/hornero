@@ -47,6 +47,10 @@ pub:
 	name   string
 	ok     bool
 	detail string
+	// warn marks a check that passes but needs the person's attention or
+	// reports an optional capability that is absent. It never counts as a
+	// failure and is reported as "warn" so UIs do not draw it as a pass.
+	warn bool
 }
 
 fn bin_check(name string, prog string) DoctorCheck {
