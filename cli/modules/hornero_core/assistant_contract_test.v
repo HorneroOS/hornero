@@ -252,9 +252,9 @@ fn test_contract_events_pending_approval_is_not_auto_answered() {
 	result := assistant_events_report('run_6')
 	assert !result.ok
 	assert result.message.contains('waiting for approval')
-	// Only the events GET may be recorded: no approval POST ever.
+	// Only GETs (events + the run-status verification): no approval POST ever.
 	reqs := mock_wait_requests(mock, 1)
-	assert reqs.len == 1
+	assert reqs.all(it.method == 'GET')
 }
 
 fn test_contract_run_submission_shape() {
@@ -370,7 +370,7 @@ fn test_contract_pending_approval_result_carries_structured_data() {
 	assert result.data['choices'] == 'once,deny'
 	assert !result.data['detail'].contains('sk-abcdefghijklmnopqrstuvwxyz123456')
 	reqs := mock_wait_requests(mock, 1)
-	assert reqs.len == 1
+	assert reqs.all(it.path != '/v1/runs/run_pd/approval')
 }
 
 fn test_contract_pending_clarify_result_carries_structured_data() {
@@ -408,12 +408,38 @@ fn test_contract_stream_emits_run_frame_first_and_approval_frame() {
 	assert frames[0] == 'run:run_fr'
 	assert 'approval:pacman -S x' in frames
 	reqs := mock_wait_requests(mock, 2)
-	// Only run creation and the events GET: no approval POST ever.
-	assert reqs.len == 2
+	// Run creation and the events GET (+ status checks): no approval POST ever.
+	assert reqs.len >= 2
+	assert reqs.all(it.method != 'POST' || it.path == '/v1/runs')
 }
 
 // FrameSink is heap-allocated so closures capture it by reference.
 struct FrameSink {
 mut:
 	items []string
+}
+
+fn test_status_approval_state_reads_pending_controls_and_status() {
+	assert assistant_status_approval_state('{"pending_controls":[{"kind":"approval","prompt_id":"p"}]}') == 1
+	assert assistant_status_approval_state('{"pending_controls":[]}') == 0
+	assert assistant_status_approval_state('{"status":"waiting_for_approval"}') == 1
+	assert assistant_status_approval_state('{"status":"running"}') == 0
+	assert assistant_status_approval_state('not json') == -1
+	assert assistant_status_approval_state('{}') == -1
+}
+
+fn test_contract_already_decided_approval_in_event_log_is_not_pending() {
+	// Following a run after the user approved replays the old
+	// approval.request; the run status says nothing is pending now.
+	sse := 'data: {"type":"approval.request","command":"pacman -S x"}\n\ndata: {"delta":"installed"}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_dec/events': sse
+		'GET /v1/runs/run_dec':        '{"status":"completed","pending_controls":[]}'
+	})
+	defer { mock_restore_env(saved) }
+	result := assistant_events_report('run_dec')
+	assert result.ok
+	assert result.data['text'] == 'installed'
+	assert result.data['pending'] == 'none'
+	_ = mock
 }

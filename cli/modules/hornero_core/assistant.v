@@ -484,6 +484,58 @@ pub fn assistant_pending_request(events []AssistantEvent) AssistantPending {
 	}
 }
 
+// assistant_status_approval_state reads a run-status body and says
+// whether an approval is outstanding right now: 1 pending, 0 not
+// pending (resolved), -1 unknown. The event log keeps every
+// approval.request ever emitted, so an event alone cannot tell a live
+// request from one already decided (e.g. when following a run after
+// the user approved); the run status is the authority.
+pub fn assistant_status_approval_state(status_body string) int {
+	decoded := json2.decode[json2.Any](status_body) or { return -1 }
+	if decoded !is map[string]json2.Any {
+		return -1
+	}
+	root := decoded.as_map()
+	if 'pending_controls' in root && root['pending_controls'] is []json2.Any {
+		for control in root['pending_controls'].as_array() {
+			if control is map[string]json2.Any {
+				c := control.as_map()
+				if 'kind' in c && c['kind'] is string && c['kind'].str() == 'approval' {
+					return 1
+				}
+			}
+		}
+		return 0
+	}
+	if 'status' in root && root['status'] is string {
+		return if root['status'].str() == 'waiting_for_approval' { 1 } else { 0 }
+	}
+	return -1
+}
+
+// assistant_approval_still_pending verifies an approval event against
+// the run status. Unknown (unreachable/old gateway) keeps the
+// event-based answer so a real request is never hidden; only a
+// definite "not pending" status suppresses it. `retries` re-checks a
+// definite no, because the status can lag the event by a moment on a
+// run that has just blocked.
+fn assistant_approval_still_pending(settings AssistantSettings, run_id string, retries int) bool {
+	for attempt in 0 .. retries + 1 {
+		resp := assistant_http(settings, .get, '/v1/runs/${run_id}', '') or { return true }
+		if resp.status_code >= 400 {
+			return true
+		}
+		state := assistant_status_approval_state(resp.body)
+		if state != 0 {
+			return true
+		}
+		if attempt < retries {
+			time.sleep(150 * time.millisecond)
+		}
+	}
+	return false
+}
+
 pub fn assistant_events_report(run_id string) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
@@ -1079,7 +1131,13 @@ pub fn assistant_mode_tool_violation(command string, run_id string, events []Ass
 }
 
 fn assistant_events_outcome_mode(command string, run_id string, events []AssistantEvent, mode string) CommandResult {
-	pending := assistant_pending_request(events)
+	mut pending := assistant_pending_request(events)
+	if pending.kind == 'approval' && !assistant_approval_still_pending(assistant_load_settings(), run_id, 0) {
+		// Already decided (the log still holds the old request).
+		pending = AssistantPending{
+			kind: 'none'
+		}
+	}
 	text := assistant_collect_text(events)
 	mut data := {
 		'mode':    mode
@@ -1141,7 +1199,7 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 	// The closure only emits live deltas; event collection for the
 	// final outcome uses the assembled response body, so it does not
 	// depend on closure capture semantics.
-	on_event := fn [emit, on_trace] (ev AssistantEvent) {
+	on_event := fn [emit, on_trace, settings, run_id] (ev AssistantEvent) {
 		delta := assistant_event_text(ev)
 		if delta.len > 0 {
 			emit(delta)
@@ -1155,7 +1213,8 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 		// the stream open waiting for the decision. Detail is
 		// redacted; nothing here answers the request.
 		pending := assistant_pending_request([ev])
-		if pending.kind == 'approval' || pending.kind == 'clarify' {
+		if pending.kind == 'clarify'
+			|| (pending.kind == 'approval' && assistant_approval_still_pending(settings, run_id, 2)) {
 			on_trace(pending.kind, redact_secrets(pending.detail))
 		}
 	}
@@ -1562,7 +1621,12 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 		return fail_result('assistant ask', 'Run ${run_id} started but its events could not be read: ${err.msg()}. Cancel with: horneroctl assistant stop ${run_id}')
 	}
 	events := parse_sse_events(events_resp.body)
-	pending := assistant_pending_request(events)
+	mut pending := assistant_pending_request(events)
+	if pending.kind == 'approval' && !assistant_approval_still_pending(settings, run_id, 1) {
+		pending = AssistantPending{
+			kind: 'none'
+		}
+	}
 	if pending.kind == 'approval' {
 		mode := assistant_resolve_ask_mode(explicit_mode, session_id)
 		if !assistant_mode_escalates(mode) {
