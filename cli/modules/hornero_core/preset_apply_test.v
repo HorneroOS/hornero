@@ -9,11 +9,11 @@ import x.json2
 
 const preset_root = '/tmp/hx-preset-test'
 
-const preset_valid_json = '{"_name":"Test Left","_description":"fixture","_icon":"🏠","_iconMaterial":"dock_to_left","bar":{"persistent":true,"showOnHover":true,"sizes":{"innerWidth":40},"bars":[{"edge":"left","style":"attached","reserve":true,"margin":14,"thickness":40,"groups":{"start":[{"id":"workspaces","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[]}}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
+const preset_valid_json = '{"_name":"Test Left","_description":"fixture","_icon":"🏠","_glyph":"dock_to_left","bar":{"persistent":true,"showOnHover":true,"sizes":{"innerWidth":40},"bars":[{"edge":"left","style":"attached","reserve":true,"margin":14,"thickness":40,"groups":{"start":[{"id":"workspaces","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[]}}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
 
 const preset_bad_edge_json = '{"_name":"Bad","bar":{"showOnHover":true,"sizes":{"innerWidth":40},"bars":[{"edge":"diagonal","style":"attached","groups":{"start":[],"center":[],"end":[]}}]}}'
 
-const preset_default_json = '{"_name":"Cockpit","_description":"default fallback","_icon":"🛫","_iconMaterial":"view_agenda","bar":{"persistent":true,"showOnHover":true,"sizes":{"innerWidth":30},"bars":[{"edge":"top","style":"inset","reserve":true,"margin":6,"thickness":36,"groups":{"start":[{"id":"logo","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[]}},{"edge":"bottom","style":"attached","reserve":true,"margin":0,"thickness":30,"groups":{"start":[{"id":"workspaces","enabled":true}],"center":[],"end":[]}}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
+const preset_default_json = '{"_name":"Cockpit","_description":"default fallback","_icon":"🛫","_glyph":"view_agenda","bar":{"persistent":true,"showOnHover":true,"sizes":{"innerWidth":30},"bars":[{"edge":"top","style":"inset","reserve":true,"margin":6,"thickness":36,"groups":{"start":[{"id":"logo","enabled":true}],"center":[{"id":"clock","enabled":true}],"end":[]}},{"edge":"bottom","style":"attached","reserve":true,"margin":0,"thickness":30,"groups":{"start":[{"id":"workspaces","enabled":true}],"center":[],"end":[]}}]},"border":{"frameEnabled":true},"appearance":{"rounding":{"scale":1.0},"padding":{"scale":1.0},"spacing":{"scale":1.0}}}'
 
 fn preset_test_write(path string, content string) {
 	os.mkdir_all(os.dir(path)) or { assert false, 'mkdir ${os.dir(path)}' }
@@ -313,7 +313,7 @@ fn test_preset_list_full_is_json_array() {
 		m := item.as_map()
 		assert 'name' in m
 		assert 'display' in m
-		assert 'iconMaterial' in m
+		assert 'glyph' in m
 		assert 'bars' in m
 		assert 'active' in m
 		seen[m['name'].str()] = true
