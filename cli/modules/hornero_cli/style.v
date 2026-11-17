@@ -53,9 +53,13 @@ fn env_width() int {
 	return 80
 }
 
+// style_plain_env is set by dispatch for --json/--quiet so no output of that
+// invocation is styled (internal; not a user knob, use NO_COLOR).
+const style_plain_env = 'HORNERO_STYLE_PLAIN'
+
 // caps_for decides the profile for fd (1 = stdout, 2 = stderr).
 pub fn caps_for(fd int) StyleCaps {
-	if os.getenv('NO_COLOR').len > 0 || os.getenv('TERM') == 'dumb' {
+	if os.getenv('NO_COLOR').len > 0 || os.getenv(style_plain_env).len > 0 || os.getenv('TERM') == 'dumb' {
 		return plain_caps()
 	}
 	forced := os.getenv('CLICOLOR_FORCE').len > 0 && os.getenv('CLICOLOR_FORCE') != '0'

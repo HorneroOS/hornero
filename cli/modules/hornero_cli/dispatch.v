@@ -1,6 +1,7 @@
 module hornero_cli
 
 import hornero_core
+import os
 
 // Deferred groups (locked in docs/cli-architecture.md, no verified backend yet,
 // so no leaves here): device (monitors/compositor needs a pinned IPC path
@@ -32,6 +33,13 @@ pub fn dispatch(args []string) int {
 		argv = args[1..].clone()
 	}
 	mode, rest := split_globals(argv)
+	// --json/--quiet never get Signal styling, not even on help text.
+	if mode != .human {
+		os.setenv(style_plain_env, '1', true)
+	}
+	defer {
+		os.unsetenv(style_plain_env)
+	}
 	if rest.len == 0 {
 		print_human(root_help())
 		return 0
