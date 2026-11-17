@@ -113,3 +113,15 @@ fn test_error_marker_has_glyph_and_word_and_plain_is_identity() {
 	assert out.starts_with('✗ ERROR missing subcommand.')
 	assert out.ends_with('Example: horneroctl appearance status')
 }
+
+fn test_json_and_quiet_invocations_disable_styling_and_clean_up() {
+	os.setenv('CLICOLOR_FORCE', '1', true)
+	assert caps_for(1).color
+	assert dispatch(['horneroctl', '--json', 'help']) == 0
+	// dispatch must not leak its internal switch into the process
+	assert os.getenv('HORNERO_STYLE_PLAIN') == ''
+	os.setenv('HORNERO_STYLE_PLAIN', '1', true)
+	assert !caps_for(1).color
+	os.unsetenv('HORNERO_STYLE_PLAIN')
+	os.unsetenv('CLICOLOR_FORCE')
+}
