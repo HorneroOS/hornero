@@ -1077,3 +1077,48 @@ fn test_manifest_v2_malformed_still_fails_at_v_layer() {
 	assert !rejected.ok && rejected.message.contains('schemaVersion'), rejected.message
 	assert !os.exists('${root}/data/hornero/plugins/example-good')
 }
+
+// Validator resolution (plugins E2E): the validator must match the running
+// Shell generation, never silently the first one found on disk.
+fn test_community_plugin_validator_supports_requires_current_schema() {
+	root := community_plugins_test_new_root('validator-supports')
+	defer { os.rmdir_all(root) or {} }
+	old_validator := os.join_path(root, 'old-validator')
+	community_plugins_test_write_executable(old_validator, '#!/bin/sh\necho "usage: validate <dir>" >&2\nexit 2\n')
+	legacy := os.join_path(root, 'legacy-validator')
+	community_plugins_test_write_executable(legacy, '#!/bin/sh\necho \'{"schemaVersions": [1, 2], "pluginKit": 2}\'\n')
+	current := os.join_path(root, 'current-validator')
+	community_plugins_test_write_executable(current, '#!/bin/sh\necho \'{"schemaVersions": [3], "pluginKit": 3}\'\n')
+	assert !community_plugin_validator_supports(old_validator)
+	assert !community_plugin_validator_supports(legacy)
+	assert community_plugin_validator_supports(current)
+}
+
+fn test_community_plugin_validator_prefers_the_running_shell_tree() {
+	root := community_plugins_test_new_root('validator-tree')
+	saved_env := os.getenv('HORNERO_QUICKSHELL_CONFIG_DIR')
+	saved_validator := os.getenv('HORNERO_PLUGIN_VALIDATOR')
+	defer {
+		if saved_env.len == 0 {
+			os.unsetenv('HORNERO_QUICKSHELL_CONFIG_DIR')
+		} else {
+			os.setenv('HORNERO_QUICKSHELL_CONFIG_DIR', saved_env, true)
+		}
+		if saved_validator.len > 0 {
+			os.setenv('HORNERO_PLUGIN_VALIDATOR', saved_validator, true)
+		}
+		os.rmdir_all(root) or {}
+	}
+	os.unsetenv('HORNERO_PLUGIN_VALIDATOR')
+	shell := os.join_path(root, 'shell')
+	os.mkdir_all(os.join_path(shell, 'scripts')) or { panic(err) }
+	tree := os.join_path(shell, 'scripts', 'validate_plugin.py')
+	// Not executable on purpose: the shell tree ships it mode 0644 and
+	// horneroctl must run it through python3.
+	os.write_file(tree, 'import sys\nif sys.argv[1:] == ["--info"]:\n    print(\'{"schemaVersions": [3], "pluginKit": 3}\')\n') or {
+		panic(err)
+	}
+	os.setenv('HORNERO_QUICKSHELL_CONFIG_DIR', shell, true)
+	assert community_plugin_validator_candidates()[0] == tree
+	assert resolve_community_plugin_validator() == tree
+}
