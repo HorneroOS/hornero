@@ -1070,13 +1070,19 @@ pub fn assistant_mode_tool_violation(command string, run_id string, events []Ass
 	}
 	assistant_stop_report(run_id)
 	assistant_log_append('mode-deny', run_id, tool, effective)
-	return fail_result(command, 'Tool execution denied by ${effective} mode on run ${run_id}: ${tool}. ${effective} mode never executes tools; switch to an Agent session to act.'), true
+	return fail_result_data(command, 'Tool execution denied by ${effective} mode on run ${run_id}: ${redact_secrets(tool)}. ${effective} mode never executes tools; switch to an Agent session to act.', {
+		'runId':   run_id
+		'mode':    effective
+		'pending': 'denied-by-mode'
+		'detail':  redact_secrets(tool)
+	}), true
 }
 
 fn assistant_events_outcome_mode(command string, run_id string, events []AssistantEvent, mode string) CommandResult {
 	pending := assistant_pending_request(events)
 	text := assistant_collect_text(events)
 	mut data := {
+		'mode':    mode
 		'runId':   run_id
 		'events':  events.len.str()
 		'pending': pending.kind
@@ -1086,18 +1092,21 @@ fn assistant_events_outcome_mode(command string, run_id string, events []Assista
 		data['trace'] = trace
 	}
 	if pending.kind == 'approval' {
-		data['detail'] = pending.detail
+		shown := redact_secrets(pending.detail)
+		data['detail'] = shown
 		if !assistant_mode_escalates(mode) {
 			assistant_approve_report(run_id, 'deny')
 			assistant_log_append('mode-deny', run_id, pending.detail, mode)
 			data['pending'] = 'denied-by-mode'
-			return fail_result(command, 'Approval denied by ${mode} mode on run ${run_id}: ${pending.detail}. Ask/Chat modes never escalate; switch to an Agent session to act.')
+			return fail_result_data(command, 'Approval denied by ${mode} mode on run ${run_id}: ${shown}. Ask/Chat modes never escalate; switch to an Agent session to act.', data)
 		}
-		return fail_result(command, 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
+		data['choices'] = pending.choices.join(',')
+		return fail_result_data(command, 'Hermes is waiting for approval on run ${run_id}: ${shown}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.', data)
 	}
 	if pending.kind == 'clarify' {
-		data['detail'] = pending.detail
-		return fail_result(command, 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
+		shown := redact_secrets(pending.detail)
+		data['detail'] = shown
+		return fail_result_data(command, 'Hermes is asking on run ${run_id}: ${shown} Answer with: horneroctl assistant clarify ${run_id} "<answer>"', data)
 	}
 	violation, denied := assistant_mode_tool_violation(command, run_id, events, mode)
 	if denied {
@@ -1140,6 +1149,14 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 		kind, text := assistant_event_trace(ev)
 		if kind.len > 0 && text.len > 0 {
 			on_trace(kind, text)
+		}
+		// Typed pending frames: the UI learns about a blocking
+		// request the moment it arrives, even while the gateway keeps
+		// the stream open waiting for the decision. Detail is
+		// redacted; nothing here answers the request.
+		pending := assistant_pending_request([ev])
+		if pending.kind == 'approval' || pending.kind == 'clarify' {
+			on_trace(pending.kind, redact_secrets(pending.detail))
 		}
 	}
 	resp := assistant_stream_events(settings, run_id, on_event) or {
@@ -1551,14 +1568,28 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 		if !assistant_mode_escalates(mode) {
 			assistant_approve_report(run_id, 'deny')
 			assistant_log_append('mode-deny', run_id, pending.detail, mode)
-			return fail_result('assistant ask', 'Approval denied by ${mode} mode on run ${run_id}: ${pending.detail}. Ask/Chat modes never escalate; switch to an Agent session to act.')
+			return fail_result_data('assistant ask', 'Approval denied by ${mode} mode on run ${run_id}: ${redact_secrets(pending.detail)}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
+				'runId':   run_id
+				'mode':    mode
+				'pending': 'denied-by-mode'
+				'detail':  redact_secrets(pending.detail)
+			})
 		}
 		assistant_log_append('ask', run_id, 'pending approval: ${pending.detail}', 'pending')
-		return fail_result('assistant ask', 'Hermes is waiting for approval on run ${run_id}: ${pending.detail}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.')
+		return fail_result_data('assistant ask', 'Hermes is waiting for approval on run ${run_id}: ${redact_secrets(pending.detail)}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.', {
+			'runId':   run_id
+			'pending': 'approval'
+			'detail':  redact_secrets(pending.detail)
+			'choices': pending.choices.join(',')
+		})
 	}
 	if pending.kind == 'clarify' {
 		assistant_log_append('ask', run_id, 'pending clarify: ${pending.detail}', 'pending')
-		return fail_result('assistant ask', 'Hermes is asking on run ${run_id}: ${pending.detail} Answer with: horneroctl assistant clarify ${run_id} "<answer>"')
+		return fail_result_data('assistant ask', 'Hermes is asking on run ${run_id}: ${redact_secrets(pending.detail)} Answer with: horneroctl assistant clarify ${run_id} "<answer>"', {
+			'runId':   run_id
+			'pending': 'clarify'
+			'detail':  redact_secrets(pending.detail)
+		})
 	}
 	violation, denied := assistant_mode_tool_violation('assistant ask', run_id, events, assistant_resolve_ask_mode(explicit_mode, session_id))
 	if denied {
@@ -1632,13 +1663,19 @@ pub fn assistant_ask_stream_report_traced_mode(prompt string, attach []string, s
 	if run_id.len == 0 {
 		return fail_result('assistant ask', 'Hermes did not return a run id.')
 	}
+	// Typed `run` frame first: the UI needs the run id immediately so
+	// Stop works server-side during streaming (not only after the
+	// final line), and so approvals can be bound to the run.
+	on_trace('run', run_id)
 	result := assistant_events_stream_report_traced_mode(run_id, emit, on_trace, assistant_resolve_ask_mode(explicit_mode,
 		session_id))
-	if !result.ok {
-		return result
-	}
 	mut data := result.data.clone()
 	data['runId'] = run_id
+	if !result.ok {
+		// Keep the run id on failures too: the run exists server-side
+		// and the UI must be able to stop/inspect it.
+		return fail_result_data(result.command, result.message, data)
+	}
 	return ok_result('assistant ask', result.message, data)
 }
 

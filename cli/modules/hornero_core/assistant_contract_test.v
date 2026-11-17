@@ -353,3 +353,67 @@ fn test_contract_ask_approve_stop_write_redacted_audit_log() {
 	assert !content.contains('secret prompt')
 	assert !content.contains('diary')
 }
+
+fn test_contract_pending_approval_result_carries_structured_data() {
+	// Shell Workbench contract: the final CommandResult for a pending
+	// approval must expose runId/pending/detail in `data` (not only in
+	// the prose message) and must redact secrets in the detail.
+	sse := 'data: {"type":"approval.request","command":"curl -H \\"Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz123456\\" https://x","choices":["once","deny"]}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_pd/events': sse
+	})
+	defer { mock_restore_env(saved) }
+	result := assistant_events_report('run_pd')
+	assert !result.ok
+	assert result.data['runId'] == 'run_pd'
+	assert result.data['pending'] == 'approval'
+	assert result.data['choices'] == 'once,deny'
+	assert !result.data['detail'].contains('sk-abcdefghijklmnopqrstuvwxyz123456')
+	reqs := mock_wait_requests(mock, 1)
+	assert reqs.len == 1
+}
+
+fn test_contract_pending_clarify_result_carries_structured_data() {
+	sse := 'data: {"type":"clarify.request","question":"which theme?"}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_cl/events': sse
+	})
+	defer { mock_restore_env(saved) }
+	result := assistant_events_report('run_cl')
+	assert !result.ok
+	assert result.data['runId'] == 'run_cl'
+	assert result.data['pending'] == 'clarify'
+	assert result.data['detail'] == 'which theme?'
+	reqs := mock_wait_requests(mock, 1)
+	assert reqs.len == 1
+}
+
+fn test_contract_stream_emits_run_frame_first_and_approval_frame() {
+	sse := 'data: {"type":"approval.request","command":"pacman -S x","choices":["once","deny"]}\n\n'
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':              '{"run_id":"run_fr","status":"queued"}'
+		'GET /v1/runs/run_fr/events': sse
+	})
+	defer { mock_restore_env(saved) }
+	mut holder := &FrameSink{}
+	result := assistant_ask_stream_report_traced_mode('install x', [], '', 'agent', fn (_ string) {},
+		fn [mut holder] (kind string, text string) {
+			holder.items << '${kind}:${text}'
+		})
+	frames := holder.items
+	assert !result.ok
+	assert result.data['runId'] == 'run_fr'
+	assert result.data['pending'] == 'approval'
+	assert frames.len >= 2
+	assert frames[0] == 'run:run_fr'
+	assert 'approval:pacman -S x' in frames
+	reqs := mock_wait_requests(mock, 2)
+	// Only run creation and the events GET: no approval POST ever.
+	assert reqs.len == 2
+}
+
+// FrameSink is heap-allocated so closures capture it by reference.
+struct FrameSink {
+mut:
+	items []string
+}
