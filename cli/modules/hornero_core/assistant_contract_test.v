@@ -96,8 +96,14 @@ fn (mut m MockGateway) handle(mut conn net.TcpConn) {
 	m.mu.lock()
 	m.requests << req
 	m.mu.unlock()
-	body := m.routes['${req.method} ${req.path}'] or { '{}' }
-	conn.write_string('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.len}\r\nConnection: close\r\n\r\n${body}') or {}
+	mut body := m.routes['${req.method} ${req.path}'] or { '{}' }
+	// a route value '!500' answers HTTP 500 (failure injection)
+	mut status := '200 OK'
+	if body == '!500' {
+		status = '500 Internal Server Error'
+		body = '{}'
+	}
+	conn.write_string('HTTP/1.1 ${status}\r\nContent-Type: application/json\r\nContent-Length: ${body.len}\r\nConnection: close\r\n\r\n${body}') or {}
 }
 
 // start_mock_gateway points the assistant settings (via
@@ -175,6 +181,7 @@ fn test_contract_approve_sends_once_with_pending_control() {
 		'POST /v1/runs/run_1/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_1', 'agent')
 	result := assistant_approve_report('run_1', 'approve', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
@@ -194,6 +201,7 @@ fn test_contract_deny_sends_deny_and_no_widening() {
 		'POST /v1/runs/run_2/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_2', 'agent')
 	result := assistant_approve_report('run_2', 'deny', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
@@ -209,6 +217,7 @@ fn test_contract_approve_falls_back_to_plain_choice() {
 		'POST /v1/runs/run_3/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_3', 'agent')
 	result := assistant_approve_report('run_3', 'approve', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
@@ -344,6 +353,7 @@ fn test_contract_ask_approve_stop_write_redacted_audit_log() {
 
 	prompt := 'a very secret prompt about my diary'
 	assert assistant_ask_report_attached_session(prompt, [], '').ok
+	assistant_run_mode_record('run_9', 'agent')
 	assert assistant_approve_report('run_9', 'approve', '').ok
 	assert assistant_stop_report('run_9').ok
 	_ = mock
@@ -548,6 +558,7 @@ fn test_contract_approve_refuses_when_pending_request_changed() {
 	})
 	defer { mock_restore_env(saved) }
 	// the card showed p1; the gateway now waits on p2
+	assistant_run_mode_record('run_sw', 'agent')
 	r := assistant_approve_report('run_sw', 'approve', 'p1@3')
 	assert !r.ok && r.data['pending'] == 'changed'
 	// generation mismatch is refused too
@@ -564,6 +575,82 @@ fn test_contract_approve_refuses_when_pending_request_changed() {
 fn test_contract_approve_with_request_but_no_status_fails_closed() {
 	_, saved := start_mock_gateway({})
 	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_nostatus', 'agent')
 	r := assistant_approve_report('run_nostatus', 'approve', 'p1@1')
 	assert !r.ok
+}
+
+fn test_contract_failed_deny_stops_the_run_reports_failure_and_does_not_log_denied() {
+	// F1: the deny POST is not routed (404): the deny failed.
+	sse := 'data: {"type":"approval.request","command":"rm -rf /"}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_df/events':    sse
+		'POST /v1/runs/run_df/approval': '!500'
+		'POST /v1/runs/run_df/stop':     '{}'
+	})
+	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_df', 'ask')
+	result := assistant_events_report('run_df')
+	assert !result.ok
+	assert result.data['pending'] == 'deny-failed'
+	assert !result.message.contains('denied by')
+	reqs := mock_wait_requests(mock, 3)
+	assert reqs.any(it.method == 'POST' && it.path == '/v1/runs/run_df/stop')
+	log := os.read_file(assistant_log_file()) or { '' }
+	assert !log.contains('mode-deny\t') && log.contains('mode-deny-failed')
+}
+
+fn test_contract_ask_stream_failed_deny_emits_deny_failed_frame_and_stops() {
+	sse := 'data: {"type":"approval.request","command":"pacman -S x"}\n\n'
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':                 '{"run_id":"run_fd","status":"queued"}'
+		'GET /v1/runs/run_fd/events':    sse
+		'POST /v1/runs/run_fd/approval': '!500'
+		'POST /v1/runs/run_fd/stop':     '{}'
+	})
+	defer { mock_restore_env(saved) }
+	mut holder := &FrameSink{}
+	result := assistant_ask_stream_report_traced_mode('install x', [], '', 'ask', fn (_ string) {},
+		fn [mut holder] (kind string, text string) {
+			holder.items << '${kind}:${text}'
+		})
+	assert !result.ok && result.data['pending'] == 'deny-failed'
+	assert holder.items.any(it.starts_with('deny-failed:'))
+	assert holder.items.all(!it.starts_with('approval'))
+	reqs := mock_wait_requests(mock, 4)
+	assert reqs.any(it.method == 'POST' && it.path == '/v1/runs/run_fd/stop')
+}
+
+fn test_contract_approve_refused_for_non_agent_runs_but_deny_allowed() {
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_na':           '{"pending_controls":[{"kind":"approval","prompt_id":"p1","execution_generation":1}]}'
+		'POST /v1/runs/run_na/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	for m in ['ask', 'chat'] {
+		assistant_run_mode_record('run_na', m)
+		r := assistant_approve_report('run_na', 'approve', 'p1@1')
+		assert !r.ok && r.message.contains('not an Agent run')
+	}
+	// unknown run: refused too
+	assert !assistant_approve_report('run_never', 'approve', '').ok
+	assert assistant_approve_report('run_na', 'deny', '').ok
+	posts := mock_wait_requests(mock, 2).filter(it.method == 'POST')
+	assert posts.len == 1 && posts[0].body.contains('deny')
+}
+
+fn test_run_mode_registry_survives_concurrent_writers() {
+	_, saved := start_mock_gateway({})
+	defer { mock_restore_env(saved) }
+	mut threads := []thread{}
+	for i in 0 .. 8 {
+		threads << spawn fn (n int) {
+			assistant_run_mode_record('run_c${n}', 'agent')
+		}(i)
+	}
+	threads.wait()
+	for i in 0 .. 8 {
+		assert assistant_run_mode('run_c${i}') == 'agent'
+	}
+	assert !os.exists(assistant_run_modes_file() + '.lock')
 }

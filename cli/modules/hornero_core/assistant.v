@@ -180,6 +180,30 @@ pub fn assistant_run_mode_record(run_id string, mode string) {
 		return
 	}
 	path := assistant_run_modes_file()
+	os.mkdir_all(os.dir(path)) or { return }
+	// Lock: mkdir is atomic. A lock older than 5 s is stale (crashed
+	// writer) and is taken over.
+	lock_dir := path + '.lock'
+	mut got := false
+	for _ in 0 .. 100 {
+		os.mkdir(lock_dir) or {
+			if st := os.stat(lock_dir) {
+				if time.now().unix() - i64(st.mtime) > 5 {
+					os.rmdir(lock_dir) or {}
+				}
+			}
+			time.sleep(20 * time.millisecond)
+			continue
+		}
+		got = true
+		break
+	}
+	if !got {
+		return
+	}
+	defer {
+		os.rmdir(lock_dir) or {}
+	}
 	mut lines := []string{}
 	if existing := os.read_file(path) {
 		lines = existing.split('\n').filter(it.len > 0)
@@ -188,9 +212,11 @@ pub fn assistant_run_mode_record(run_id string, mode string) {
 	if lines.len > 200 {
 		lines = lines[lines.len - 200..]
 	}
-	os.mkdir_all(os.dir(path)) or { return }
-	os.write_file(path, lines.join('\n') + '\n') or { return }
-	os.chmod(path, 0o600) or {}
+	// Atomic replace: write a private temp file, then rename over.
+	tmp := '${path}.tmp.${os.getpid()}'
+	os.write_file(tmp, lines.join('\n') + '\n') or { return }
+	os.chmod(tmp, 0o600) or {}
+	os.mv(tmp, path, overwrite: true) or { os.rm(tmp) or {} }
 }
 
 pub fn assistant_run_mode(run_id string) string {
@@ -1245,6 +1271,35 @@ pub fn assistant_mode_tool_violation(command string, run_id string, events []Ass
 	}), true
 }
 
+// assistant_mode_deny denies a pending approval in a non-escalating
+// mode and CHECKS that the deny was accepted. When it was not, the run
+// is stopped (so nothing can proceed on a half-denied approval) and the
+// caller must report a failure, never "denied by mode". Logged only on
+// success ('mode-deny') or as 'mode-deny-failed'.
+fn assistant_mode_deny(run_id string, mode string, detail string) bool {
+	denied := assistant_approve_report(run_id, 'deny', '')
+	if denied.ok {
+		assistant_log_append('mode-deny', run_id, detail, mode)
+		return true
+	}
+	stopped := assistant_stop_report(run_id)
+	assistant_log_append('mode-deny-failed', run_id, detail, if stopped.ok {
+		'stop-requested'
+	} else {
+		'stop-failed'
+	})
+	return false
+}
+
+fn assistant_deny_failed_result(command string, run_id string, mode string, detail string) CommandResult {
+	return fail_result_data(command, 'Could not deny the approval on run ${run_id} in ${mode} mode; a stop was requested. Check the run: horneroctl assistant stop ${run_id}. Nothing was approved.', {
+		'runId':   run_id
+		'mode':    mode
+		'pending': 'deny-failed'
+		'detail':  assistant_redact_tokens(detail)
+	})
+}
+
 fn assistant_events_outcome_mode(command string, run_id string, events []AssistantEvent, mode string) CommandResult {
 	mut pending := assistant_pending_request(events)
 	settings := assistant_load_settings()
@@ -1254,8 +1309,9 @@ fn assistant_events_outcome_mode(command string, run_id string, events []Assista
 			// Non-escalating modes ALWAYS deny, independent of any
 			// status check: the status only decides display, never
 			// whether authority is withheld.
-			assistant_approve_report(run_id, 'deny', '')
-			assistant_log_append('mode-deny', run_id, pending.detail, mode)
+			if !assistant_mode_deny(run_id, mode, pending.detail) {
+				return assistant_deny_failed_result(command, run_id, mode, pending.detail)
+			}
 			shown := assistant_redact_tokens(pending.detail)
 			return fail_result_data(command, 'Approval denied by ${mode} mode on run ${run_id}: ${shown}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
 				'mode':    mode
@@ -1356,8 +1412,9 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 		pending := assistant_pending_request([ev])
 		if pending.kind == 'approval' && !assistant_mode_escalates(mode) {
 			// Ask/Chat: always deny, no frame, independent of status.
-			assistant_approve_report(run_id, 'deny', '')
-			assistant_log_append('mode-deny', run_id, pending.detail, mode)
+			if !assistant_mode_deny(run_id, mode, pending.detail) {
+				on_trace('deny-failed', 'Could not deny the approval; the run was stopped.')
+			}
 			return
 		}
 		if pending.kind == 'clarify' {
@@ -1786,8 +1843,9 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 	if pending.kind == 'approval' {
 		if !assistant_mode_escalates(ask_mode) {
 			// Ask/Chat always deny, independent of any status check.
-			assistant_approve_report(run_id, 'deny', '')
-			assistant_log_append('mode-deny', run_id, pending.detail, ask_mode)
+			if !assistant_mode_deny(run_id, ask_mode, pending.detail) {
+				return assistant_deny_failed_result('assistant ask', run_id, ask_mode, pending.detail)
+			}
 			return fail_result_data('assistant ask', 'Approval denied by ${ask_mode} mode on run ${run_id}: ${assistant_redact_tokens(pending.detail)}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
 				'runId':   run_id
 				'mode':    ask_mode
@@ -2059,6 +2117,12 @@ pub fn assistant_approve_report(run_id string, decision string, request_ref stri
 	}
 	if decision !in ['approve', 'deny'] {
 		return fail_result('assistant approve', 'Decision must be approve or deny. Example: horneroctl assistant approve ${run_id} deny')
+	}
+	// Only an Agent run may be approved; Ask/Chat/unknown runs can be
+	// denied but never approved, whatever UI or script asks.
+	if decision == 'approve' && assistant_run_mode(run_id) != 'agent' {
+		assistant_log_append('approve', run_id, 'not an agent run', 'refused')
+		return fail_result('assistant approve', 'Run ${run_id} is not an Agent run; it cannot be approved (Ask/Chat runs only allow deny).')
 	}
 	if request_ref.len > 0 && !assistant_request_ref_valid(request_ref) {
 		return fail_result('assistant approve', 'Invalid --request value. Expected prompt-id or prompt-id@generation.')
