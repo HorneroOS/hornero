@@ -449,8 +449,9 @@ fn test_appearance_doctor_checks_scheme_and_fonts() {
 	sg_setup()
 	os.setenv('HORNERO_FONT_DIRS', '${sg_root}/fonts', true)
 	checks := appearance_doctor_checks()
-	assert checks.len == 2
+	assert checks.len == 3
 	assert checks[0].name == 'signal-scheme'
+	assert checks[2].name == 'chromatic-helper'
 	assert !checks[0].ok
 	assert checks[1].name == 'signal-fonts'
 	assert checks[1].detail.contains('ttf-ibm-plex')

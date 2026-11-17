@@ -1,0 +1,104 @@
+{
+    "analysis": {
+        "C90": 0.1262,
+        "C95": 0.1368,
+        "L5": 0.3143,
+        "L50": 0.4053,
+        "L95": 0.4896,
+        "Lmax": 0.5136,
+        "Lmin": 0.2863,
+        "achromatic": false,
+        "bottom": {
+            "meanL": 0.4794,
+            "stdL": 0.0165
+        },
+        "brightC95": 0,
+        "detail": 6e-04,
+        "hueEntropy": 3.0184,
+        "kind": "still",
+        "meanC": 0.0759,
+        "meanL": 0.4057,
+        "neutralHue": 256.3556,
+        "seeds": [
+            {
+                "hex": "#5F2475",
+                "oklch": [
+                    0.3854,
+                    0.1399,
+                    315.3808
+                ],
+                "score": 3.9911,
+                "share": 0.0696
+            },
+            {
+                "hex": "#4E246D",
+                "oklch": [
+                    0.356,
+                    0.1241,
+                    307.91
+                ],
+                "score": 3.7626,
+                "share": 0.0696
+            },
+            {
+                "hex": "#3E2465",
+                "oklch": [
+                    0.329,
+                    0.1095,
+                    298.5126
+                ],
+                "score": 3.4948,
+                "share": 0.0655
+            },
+            {
+                "hex": "#603B76",
+                "oklch": [
+                    0.4214,
+                    0.1028,
+                    311.843
+                ],
+                "score": 3.3684,
+                "share": 0.064
+            },
+            {
+                "hex": "#2F245D",
+                "oklch": [
+                    0.3065,
+                    0.098,
+                    287.8499
+                ],
+                "score": 3.1874,
+                "share": 0.0573
+            }
+        ],
+        "sourceKey": "sha256:9436ae94eb939fa7683c12780f943a17a7c2fd0ac445c667afaecf82d8ce62b6",
+        "stdL": 0.0542,
+        "top": {
+            "meanL": 0.3405,
+            "stdL": 0.0312
+        }
+    },
+    "engine": {
+        "algorithm": 1,
+        "name": "hornero-chromatic",
+        "version": "1.0.0"
+    },
+    "inference": {
+        "chromaClass": "intense",
+        "confidence": 0.56,
+        "contrast": "standard",
+        "mode": "dark",
+        "personality": "Dark · vibrant · neutral violet · calm",
+        "reasons": [
+            "mean lightness 0.41 < 0.58: dark",
+            "C90 0.126 ≥ 0.12: vibrant"
+        ],
+        "suggestion": null,
+        "temperature": "neutral",
+        "variant": "vibrant"
+    },
+    "schemaVersion": 1,
+    "source": {
+        "path": "wall.ppm"
+    }
+}

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "foot",
+  "template": "foot.ini.tmpl",
+  "output": "${XDG_CONFIG_HOME}/foot/hornero-chromatic.ini",
+  "when": "chromatic",
+  "requires": "${XDG_CONFIG_HOME}/foot"
+}

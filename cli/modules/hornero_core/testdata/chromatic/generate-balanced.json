@@ -1,0 +1,539 @@
+{
+    "adjustments": [
+        {
+            "from": "#83766C",
+            "reason": "contrast on lifted",
+            "role": "ruleStrong",
+            "to": "#85796E"
+        }
+    ],
+    "analysis": null,
+    "engine": {
+        "algorithm": 1,
+        "name": "hornero-chromatic",
+        "version": "1.0.0"
+    },
+    "fingerprint": "sha256:b742be412630ad5edd0d87be13b9b48330c0f837c1a293a501be5909efe80b0d",
+    "gates": {
+        "level": "standard",
+        "passed": true,
+        "rows": [
+            [
+                "ink on sunken",
+                14.9638,
+                4.5
+            ],
+            [
+                "ink on base",
+                14.5475,
+                4.5
+            ],
+            [
+                "ink on panel",
+                13.6688,
+                4.5
+            ],
+            [
+                "ink on raised",
+                12.4156,
+                4.5
+            ],
+            [
+                "inkMuted on sunken",
+                8.0335,
+                4.5
+            ],
+            [
+                "inkMuted on base",
+                7.81,
+                4.5
+            ],
+            [
+                "inkMuted on panel",
+                7.3383,
+                4.5
+            ],
+            [
+                "inkMuted on raised",
+                6.6655,
+                4.5
+            ],
+            [
+                "signal on sunken",
+                9.0017,
+                4.5
+            ],
+            [
+                "signal on base",
+                8.7513,
+                4.5
+            ],
+            [
+                "signal on panel",
+                8.2227,
+                4.5
+            ],
+            [
+                "signal on raised",
+                7.4688,
+                4.5
+            ],
+            [
+                "cue on sunken",
+                9.5732,
+                4.5
+            ],
+            [
+                "cue on base",
+                9.3069,
+                4.5
+            ],
+            [
+                "cue on panel",
+                8.7448,
+                4.5
+            ],
+            [
+                "cue on raised",
+                7.943,
+                4.5
+            ],
+            [
+                "phosphor on sunken",
+                10.284,
+                4.5
+            ],
+            [
+                "phosphor on base",
+                9.998,
+                4.5
+            ],
+            [
+                "phosphor on panel",
+                9.3941,
+                4.5
+            ],
+            [
+                "phosphor on raised",
+                8.5328,
+                4.5
+            ],
+            [
+                "alert on sunken",
+                6.5463,
+                4.5
+            ],
+            [
+                "alert on base",
+                6.3642,
+                4.5
+            ],
+            [
+                "alert on panel",
+                5.9798,
+                4.5
+            ],
+            [
+                "alert on raised",
+                5.4315,
+                4.5
+            ],
+            [
+                "onSignal on signal",
+                9.144,
+                4.5
+            ],
+            [
+                "onSignalWell on signalWell",
+                10.8411,
+                4.5
+            ],
+            [
+                "onCue on cue",
+                9.6738,
+                4.5
+            ],
+            [
+                "onCueWell on cueWell",
+                10.9026,
+                4.5
+            ],
+            [
+                "onPhosphor on phosphor",
+                10.3526,
+                4.5
+            ],
+            [
+                "onPhosphorWell on phosphorWell",
+                10.8372,
+                4.5
+            ],
+            [
+                "onAlert on alert",
+                6.6513,
+                4.5
+            ],
+            [
+                "onAlertWell on alertWell",
+                10.8328,
+                4.5
+            ],
+            [
+                "onInverse on inverse",
+                13.6688,
+                4.5
+            ],
+            [
+                "inverseSignal on inverse",
+                5.1803,
+                4.5
+            ],
+            [
+                "ruleStrong on base",
+                4.2606,
+                3
+            ],
+            [
+                "ruleStrong on panel",
+                4.0033,
+                3
+            ],
+            [
+                "ruleStrong on lifted",
+                3.1712,
+                3
+            ],
+            [
+                "focus on base",
+                9.3069,
+                3
+            ],
+            [
+                "focus on ground",
+                9.8945,
+                3
+            ],
+            [
+                "focus on sunken",
+                9.5732,
+                3
+            ],
+            [
+                "focus on panel",
+                8.7448,
+                3
+            ],
+            [
+                "focus on raised",
+                7.943,
+                3
+            ],
+            [
+                "focus on lifted",
+                6.9271,
+                3
+            ],
+            [
+                "terminal foreground (ink) on base",
+                14.5475,
+                4.5
+            ],
+            [
+                "terminal[1] on base",
+                8.2563,
+                4.5
+            ],
+            [
+                "terminal[2] on base",
+                9.1448,
+                4.5
+            ],
+            [
+                "terminal[3] on base",
+                8.5949,
+                4.5
+            ],
+            [
+                "terminal[4] on base",
+                8.6614,
+                4.5
+            ],
+            [
+                "terminal[5] on base",
+                8.1673,
+                4.5
+            ],
+            [
+                "terminal[6] on base",
+                9.2926,
+                4.5
+            ],
+            [
+                "terminal[9] on base",
+                11.9372,
+                3
+            ],
+            [
+                "terminal[10] on base",
+                12.6671,
+                3
+            ],
+            [
+                "terminal[11] on base",
+                12.0438,
+                3
+            ],
+            [
+                "terminal[12] on base",
+                12.1205,
+                3
+            ],
+            [
+                "terminal[13] on base",
+                11.6941,
+                3
+            ],
+            [
+                "terminal[14] on base",
+                12.7835,
+                3
+            ],
+            [
+                "terminal red/green (from 1) dE76",
+                77.4736,
+                10
+            ],
+            [
+                "terminal red/yellow (from 1) dE76",
+                38.8157,
+                10
+            ],
+            [
+                "terminal green/yellow (from 1) dE76",
+                56.7049,
+                10
+            ],
+            [
+                "terminal red/green (from 9) dE76",
+                53.4693,
+                10
+            ],
+            [
+                "terminal red/yellow (from 9) dE76",
+                33.8379,
+                10
+            ],
+            [
+                "terminal green/yellow (from 9) dE76",
+                45.8733,
+                10
+            ],
+            [
+                "terminal[1] vs [9] dE76",
+                29.4805,
+                6
+            ],
+            [
+                "terminal[2] vs [10] dE76",
+                14.375,
+                6
+            ],
+            [
+                "terminal[3] vs [11] dE76",
+                17.974,
+                6
+            ],
+            [
+                "terminal[4] vs [12] dE76",
+                22.0658,
+                6
+            ],
+            [
+                "terminal[5] vs [13] dE76",
+                18.0248,
+                6
+            ],
+            [
+                "terminal[6] vs [14] dE76",
+                13.506,
+                6
+            ],
+            [
+                "inkFaint on base",
+                4.1102,
+                3
+            ],
+            [
+                "inkFaint on panel",
+                3.8619,
+                3
+            ],
+            [
+                "signal vs alert dEOK",
+                0.1127,
+                0.1
+            ],
+            [
+                "signal vs alert hue",
+                30.8772,
+                25
+            ],
+            [
+                "cue vs phosphor dEOK",
+                0.1626,
+                0.1
+            ],
+            [
+                "cue vs phosphor hue",
+                87.6275,
+                25
+            ],
+            [
+                "signal vs cue dEOK",
+                0.2688,
+                0.1
+            ],
+            [
+                "signal vs cue hue",
+                159.0532,
+                25
+            ]
+        ]
+    },
+    "inference": {
+        "chromaClass": "intense",
+        "confidence": 1,
+        "contrast": "standard",
+        "mode": "dark",
+        "personality": "Dark · balanced · warm amber · steady",
+        "reasons": [
+            "mode dark requested"
+        ],
+        "suggestion": null,
+        "temperature": "warm",
+        "variant": "balanced"
+    },
+    "request": {
+        "chroma": 1,
+        "contrast": "standard",
+        "hueShift": 0,
+        "mode": "dark",
+        "path": "",
+        "seeds": [
+            "#D98A3A"
+        ],
+        "source": "seed",
+        "surfaceDepth": "standard",
+        "variant": "balanced"
+    },
+    "schemaVersion": 1,
+    "scheme": {
+        "chromatic": {
+            "algorithm": 1,
+            "engine": "1.0.0",
+            "fingerprint": "sha256:b742be412630ad5edd0d87be13b9b48330c0f837c1a293a501be5909efe80b0d",
+            "request": {
+                "chroma": 1,
+                "contrast": "standard",
+                "hueShift": 0,
+                "mode": "dark",
+                "seeds": [
+                    "#D98A3A"
+                ],
+                "source": "seed",
+                "surfaceDepth": "standard",
+                "variant": "balanced"
+            },
+            "resolved": {
+                "contrast": "standard",
+                "mode": "dark",
+                "variant": "balanced"
+            },
+            "seeds": [
+                "#D98A3A"
+            ],
+            "sourceKey": null,
+            "version": 1
+        },
+        "clearInk": {
+            "dark": {
+                "alert": "#A33713",
+                "halo": "#FFFFFF",
+                "ink": "#1A2025",
+                "inkMuted": "#4D5053",
+                "signal": "#804E00"
+            },
+            "light": {
+                "alert": "#FA8563",
+                "halo": "#0D0805",
+                "ink": "#E0E9F1",
+                "inkMuted": "#ADB2B5",
+                "signal": "#FFB255"
+            }
+        },
+        "id": "hornero-chromatic",
+        "minSurfaceAlpha": {
+            "base": 1,
+            "lifted": 1,
+            "panel": 1,
+            "raised": 1,
+            "sunken": 1
+        },
+        "mode": "dark",
+        "palette": {
+            "alert": "#EB7957",
+            "alertWell": "#40221A",
+            "base": "#1C150F",
+            "cue": "#50C7F5",
+            "cueWell": "#132F3B",
+            "focus": "#50C7F5",
+            "glow": "#FFB762",
+            "ground": "#130E09",
+            "ink": "#DFE8EF",
+            "inkFaint": "#75797C",
+            "inkMuted": "#A7ABAF",
+            "inverse": "#DFE8EF",
+            "inverseSignal": "#875300",
+            "lifted": "#372D24",
+            "onAlert": "#1D0D08",
+            "onAlertWell": "#FFD7CB",
+            "onCue": "#02141C",
+            "onCueWell": "#BBEAFF",
+            "onInverse": "#231B14",
+            "onPhosphor": "#0A1508",
+            "onPhosphorWell": "#CFEBC8",
+            "onSignal": "#1A0F03",
+            "onSignalWell": "#FFDAB3",
+            "panel": "#231B14",
+            "phosphor": "#98CF8B",
+            "phosphorWell": "#22301F",
+            "raised": "#2C231B",
+            "rule": "#3A3028",
+            "ruleStrong": "#85796E",
+            "scrim": "#000000",
+            "shadow": "#000000",
+            "signal": "#F5A33A",
+            "signalWell": "#3B260E",
+            "sunken": "#18120D"
+        },
+        "schemaVersion": 2,
+        "terminal": [
+            "#2A221C",
+            "#FF9272",
+            "#82CA72",
+            "#E3A939",
+            "#90B3FF",
+            "#EB90D7",
+            "#00D1B8",
+            "#B9C6D0",
+            "#776C63",
+            "#FFC5B3",
+            "#AAE89D",
+            "#FECB75",
+            "#C0D4FF",
+            "#FFBBEF",
+            "#6EEED7",
+            "#E9EFF5"
+        ]
+    }
+}

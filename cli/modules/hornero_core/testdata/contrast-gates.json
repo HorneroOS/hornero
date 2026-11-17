@@ -1,0 +1,56 @@
+{
+  "$comment": "Single contrast gate table (Hornero Signal + Chromatic). Consumed by lib/hornero/signal_theme.py; vendored byte-for-byte by shell (libs/chromatic/data) and hornero (signal_gates.v) with sync tests. Separation pairs must satisfy BOTH minDeltaEOK and minHueDeg (hue measured in OKLCH, shortest arc).",
+  "version": 1,
+  "levels": {
+    "standard": {
+      "text": {
+        "roles": ["ink", "inkMuted", "signal", "cue", "phosphor", "alert"],
+        "on": ["sunken", "base", "panel", "raised"],
+        "min": 4.5
+      },
+      "textOverrides": {},
+      "onPairs": {
+        "min": 4.5,
+        "pairs": [
+          ["onSignal", "signal"], ["onSignalWell", "signalWell"],
+          ["onCue", "cue"], ["onCueWell", "cueWell"],
+          ["onPhosphor", "phosphor"], ["onPhosphorWell", "phosphorWell"],
+          ["onAlert", "alert"], ["onAlertWell", "alertWell"],
+          ["onInverse", "inverse"], ["inverseSignal", "inverse"]
+        ]
+      },
+      "boundary": { "roles": ["ruleStrong"], "on": ["base", "panel", "lifted"], "min": 3.0 },
+      "focus": { "on": ["base"], "min": 3.0 }
+    },
+    "boosted": {
+      "inherits": "standard",
+      "textOverrides": { "ink": 7.0, "inkMuted": 5.5 },
+      "boundary": { "roles": ["ruleStrong"], "on": ["base", "panel", "lifted"], "min": 4.5 },
+      "focus": { "on": ["ground", "sunken", "base", "panel", "raised", "lifted"], "min": 4.5 }
+    },
+    "maximum": {
+      "inherits": "standard",
+      "text": { "min": 7.0 },
+      "onPairs": { "min": 7.0 },
+      "boundary": { "roles": ["ruleStrong"], "on": ["base", "panel", "lifted"], "min": 4.5 },
+      "focus": { "on": ["ground", "sunken", "base", "panel", "raised", "lifted"], "min": 4.5 }
+    }
+  },
+  "terminal": {
+    "background": "base",
+    "foreground": "ink",
+    "normalMin": 4.5,
+    "brightMin": 3.0,
+    "rgyMinDeltaE76": 10.0,
+    "rampMinDeltaE76": 6.0
+  },
+  "chromaticExtra": {
+    "focusOnEverySurfaceMin": 3.0,
+    "separation": {
+      "pairs": [["signal", "alert"], ["cue", "phosphor"], ["signal", "cue"]],
+      "minDeltaEOK": 0.10,
+      "minHueDeg": 25
+    }
+  },
+  "margin": 0.15
+}

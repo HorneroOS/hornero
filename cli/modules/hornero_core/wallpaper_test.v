@@ -11,11 +11,12 @@ fn wp_setup() string {
 	os.setenv('HORNERO_WALLPAPER_POINTER_FILE', base + '/state/hornero/wallpaper/path', true)
 	os.setenv('XDG_STATE_HOME', base + '/state', true)
 	os.setenv('XDG_CACHE_HOME', base + '/cache', true)
+	os.setenv('XDG_CONFIG_HOME', base + '/config', true)
 	return base
 }
 
 fn wp_teardown() {
-	for name in ['HORNERO_WALLPAPER_POINTER_FILE', 'XDG_STATE_HOME', 'XDG_CACHE_HOME',
+	for name in ['HORNERO_WALLPAPER_POINTER_FILE', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_CONFIG_HOME',
 		'HORNERO_SHELL_RUNNING', 'HORNERO_QUICKSHELL_BIN'] {
 		os.unsetenv(name)
 	}

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "zed",
+  "template": "zed.json.tmpl",
+  "output": "${XDG_CONFIG_HOME}/zed/themes/hornero-chromatic.json",
+  "when": "chromatic",
+  "requires": "${XDG_CONFIG_HOME}/zed"
+}

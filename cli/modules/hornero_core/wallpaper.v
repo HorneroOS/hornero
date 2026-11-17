@@ -122,7 +122,19 @@ pub fn wallpaper_report(opts WallpaperOptions) CommandResult {
 			if !opts.yes && !opts.dry_run {
 				return fail_result('wallpaper set', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl wallpaper set ~/wall.jpg --dry-run')
 			}
-			return set_wallpaper_only('wallpaper set', resolved, opts.dry_run)
+			set := set_wallpaper_only('wallpaper set', resolved, opts.dry_run)
+			if !set.ok || opts.dry_run {
+				return set
+			}
+			// Chromatic follows the wallpaper only when it is the active
+			// theme and its follow policy is explicitly `auto`.
+			followed := chromatic_follow_after_wallpaper()
+			if followed.len == 0 {
+				return set
+			}
+			mut data := set.data.clone()
+			data['chromatic'] = followed
+			return ok_result(set.command, '${set.message}\n${followed}', data)
 		}
 		else {
 			return fail_result('wallpaper', 'unknown action: ${opts.action}.\nRun: horneroctl wallpaper --help')

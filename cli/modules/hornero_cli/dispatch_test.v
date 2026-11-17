@@ -284,8 +284,8 @@ fn test_dispatch_completion() {
 
 fn test_every_help_has_examples() {
 	for cmd in ['version', 'doctor', 'shell', 'shell preset', 'shell lock-process', 'appearance',
-		'appearance theme', 'appearance scheme', 'appearance colors', 'appearance night-mode',
-		'config', 'config refresh-hypr', 'completion'] {
+		'appearance theme', 'appearance chromatic', 'appearance scheme', 'appearance colors',
+		'appearance night-mode', 'config', 'config refresh-hypr', 'completion'] {
 		h := command_help(cmd)
 		assert h.contains('Examples:')
 	}
