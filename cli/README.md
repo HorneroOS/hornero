@@ -172,6 +172,22 @@ synthesis; setting a wallpaper never changes a colour.
 - `shell preset apply` falls back to the `cockpit` preset, and its safe
   reset layout is the minimal Cockpit composition.
 
+## Human output (Signal presentation)
+
+On an interactive terminal horneroctl styles its human output in the Hornero
+Signal language: section labels become mono-style eyebrows (`── PACKAGE ──`),
+check results carry a glyph **and** a word (`✓ OK`, `! WARN`, `✗ FAIL`,
+`■ DONE`; ASCII `+ ! x #` outside UTF-8 locales), diagnostics are marked
+`✗ ERROR`, and keys/arrows are dimmed. Colours are ANSI palette names only
+(never RGB), so they follow the applied terminal theme (yellow = signal,
+green = phosphor, red = alert).
+
+Styling is a pure post-process in `hornero_cli/style.v` and applies only when
+the destination stream is a TTY (or `CLICOLOR_FORCE=1`), `NO_COLOR` is unset
+and `TERM` is not `dumb`. `--json`, `--quiet`, pipes and redirects receive the
+exact bytes the command produced; shell completions are never styled.
+Eyebrows are capped at the terminal width (`COLUMNS` / ioctl).
+
 ## Ownership
 
 The Shell owns live session state and visual interactions. `horneroctl` owns
