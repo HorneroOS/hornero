@@ -30,6 +30,8 @@ Run `horneroctl --help` for the installed command list and
   compositor session;
 - `lock`, `capture`, `hypr`, `hardware`, `apps`, and `welcome` for their
   corresponding platform and desktop capabilities.
+- `mode list|get|set|reset|status` for the shell's experience modes (focus,
+  everyday, signal, gaming, studio); see [Experience modes](#experience-modes).
 - `agent list|status|doctor|default|launch` for the declarative Agent
   Registry (javi-hermes, codex, claude-code, muse, opencode) as data:
   executable/discovery/install-source/arch, config, instruction and
@@ -113,6 +115,31 @@ The process state can be `running`, `not running`, or `unknown` when `pgrep` is
 unavailable or fails; it is a best-effort observation, not proof that the
 current session is securely locked. The command never terminates an existing
 locker.
+
+## Experience modes
+
+`horneroctl mode` is the system interface to the experience modes of RFC 0001
+section 5a. The shell owns the Experience service and persists the active mode;
+every verb is a validated passthrough to `qs ipc call experience <verb>`
+(contract: shell `docs/IPC.md`, `docs/EXPERIENCE.md`).
+
+```sh
+horneroctl mode list             # five modes, active one marked
+horneroctl mode get              # active mode id
+horneroctl mode set signal       # switch (validated; no --yes, reversible)
+horneroctl mode reset --yes      # factory Everyday + Cockpit + Signal Night
+horneroctl mode status --json    # mode, previous, source, auto-switch, deck
+```
+
+All verbs accept `--json`; `set` and `reset` accept `--dry-run`, which prints
+the planned IPC call without needing the shell. Unknown mode names exit 2/1
+before the shell is contacted. `reset` needs `--yes` because it reapplies the
+factory layout and theme; it keeps per-mode customisations and never deletes
+`shell.json` or the user's customisation files.
+
+When the shell is not running, every verb except `--dry-run` explains that,
+exits 1 and reports nothing: horneroctl does not guess the mode and does not
+write the shell's state file.
 
 ## Appearance (Hornero Signal)
 
