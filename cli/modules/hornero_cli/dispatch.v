@@ -20,8 +20,9 @@ import hornero_core
 // core result + dispatch + help with Examples + unit tests, and
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
-	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'wallpaper', 'capture',
-	'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery', 'agent', 'help']
+	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'mode', 'wallpaper',
+	'capture', 'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery', 'agent',
+	'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -141,6 +142,9 @@ pub fn dispatch(args []string) int {
 		}
 		'gaming' {
 			run_gaming(rest[1..], mode)
+		}
+		'mode' {
+			run_mode(rest[1..], mode)
 		}
 		'recovery' {
 			run_recovery(rest[1..], mode)
@@ -1897,6 +1901,18 @@ fn run_welcome(args []string, mode hornero_core.RenderMode) int {
 				mode)
 		}
 	}
+}
+
+fn run_mode(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_mode(args) or {
+		return render_error(hornero_core.err_usage('mode.usage', err.msg()), mode)
+	}
+	return render(hornero_core.mode_report(hornero_core.ModeOptions{
+		action:  opts.action
+		mode:    opts.mode
+		dry_run: opts.dry_run
+		yes:     opts.yes
+	}), mode)
 }
 
 fn run_wallpaper(args []string, mode hornero_core.RenderMode) int {

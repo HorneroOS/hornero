@@ -55,6 +55,7 @@ output (class: safe-read-only):
 | Pending package updates | `horneroctl package updates --json` |
 | Installed plugins + state | `horneroctl plugin list --json` |
 | Assistant status | `horneroctl assistant status --json` |
+| Current experience mode | `horneroctl mode get --json` / `horneroctl mode status --json` |
 
 Every `horneroctl` command accepts `--json`; failures return
 `ok: false` with a human message — surface that message, do not

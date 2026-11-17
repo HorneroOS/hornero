@@ -23,6 +23,7 @@ Commands:
   hardware      Hardware controls (brightness, battery, mic, keyboard, network, bluetooth)
   bluetooth     Bluetooth diagnostics (doctor, status, devices, power, restart)
   welcome       First-login onboarding state (status, set-show-on-login, mark-seen, open, reset)
+  mode          Experience modes via the running shell (list, get, set, reset, status)
   wallpaper     Wallpaper image (set, current)
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard, status)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
@@ -1495,6 +1496,96 @@ Examples:
   horneroctl completion zsh > ~/.zsh/completions/_horneroctl
 '
 		}
+		'mode' {
+			return "Usage: horneroctl mode <list|get|set|reset|status> [options]
+
+Experience modes (RFC 0001 section 5a): focus, everyday (default),
+signal, gaming, studio. The running shell owns the mode and its state;
+every verb asks it through `qs ipc call experience`. When the shell is
+not running the command explains that, exits 1, and reports nothing:
+no state is guessed and no state file is written.
+
+  list                  The five modes, the active one marked [--json]
+  get                   Print the active mode id
+  set <mode>            Switch mode [--dry-run]; needs no --yes, undo
+                        with another set
+  reset                 Restore the factory Everyday mode, Cockpit
+                        layout and Signal Night theme [--dry-run] [--yes]
+  status                Active mode, previous, source, auto-switch flag
+                        and the active mode's instrument deck
+
+`reset` keeps per-mode customisations (Control Center > Experience).
+
+Examples:
+  horneroctl mode list
+  horneroctl mode get --json
+  horneroctl mode set signal --dry-run
+  horneroctl mode set gaming
+  horneroctl mode reset --dry-run
+  horneroctl mode status --json
+"
+		}
+		'mode list' {
+			return 'Usage: horneroctl mode list [--json]
+
+List focus, everyday, signal, gaming and studio with the active mode
+marked and any customised fields. Needs the running shell.
+
+Examples:
+  horneroctl mode list
+  horneroctl mode list --json
+'
+		}
+		'mode get' {
+			return 'Usage: horneroctl mode get [--json]
+
+Print the active experience mode id. Needs the running shell.
+
+Examples:
+  horneroctl mode get
+  horneroctl mode get --json
+'
+		}
+		'mode set' {
+			return 'Usage: horneroctl mode set <focus|everyday|signal|gaming|studio> [--dry-run]
+
+Switch the experience mode through the running shell
+(`qs ipc call experience set <mode>`, recorded as source cli).
+Unknown names exit 2. The previous mode stays available for a one-step
+return; no --yes is needed. --dry-run previews without the shell.
+
+Examples:
+  horneroctl mode set signal --dry-run
+  horneroctl mode set focus
+  horneroctl mode set everyday
+'
+		}
+		'mode reset' {
+			return "Usage: horneroctl mode reset [--dry-run] [--yes]
+
+Restore the factory experience: Everyday mode, the Cockpit layout preset
+and the Signal Night theme. Per-mode customisations and the user's
+shell.json overrides are not deleted. Needs the running shell and --yes
+(layout presets rewrite bars); --dry-run previews.
+
+Examples:
+  horneroctl mode reset --dry-run
+  horneroctl mode reset --yes
+"
+		}
+		'mode status' {
+			return "Usage: horneroctl mode status [--json]
+
+Read-only: active mode, previous mode, change source, whether
+automatic fullscreen-game switching is enabled, the state file path
+and the active mode's instrument deck (as the shell exposes it).
+Needs the running shell.
+
+Examples:
+  horneroctl mode status
+  horneroctl mode status --json
+"
+		}
 		'welcome' {
 			return 'Usage: horneroctl welcome <status|set-show-on-login|mark-seen|open|reset> [options]
 
@@ -1588,7 +1679,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware bluetooth completion welcome wallpaper capture apps system studio gaming recovery agent help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware bluetooth completion welcome mode wallpaper capture apps system studio gaming recovery agent help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1602,7 +1693,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome wallpaper capture apps system assistant studio gaming recovery agent help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1624,6 +1715,7 @@ complete -c horneroctl -f -n __fish_use_subcommand -a hypr -d "Hyprland controls
 complete -c horneroctl -f -n __fish_use_subcommand -a hardware -d "Hardware controls"
 complete -c horneroctl -f -n __fish_use_subcommand -a completion -d "Completions"
 complete -c horneroctl -f -n __fish_use_subcommand -a welcome -d "First-run guidance"
+complete -c horneroctl -f -n __fish_use_subcommand -a mode -d "Experience modes"
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, recording, clipboard"
 complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"
