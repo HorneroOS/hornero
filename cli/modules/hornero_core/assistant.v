@@ -99,6 +99,112 @@ fn assistant_valid_port(port string) bool {
 	return n >= 1 && n <= 65535
 }
 
+// assistant_run_id_valid is the one run-id shape accepted anywhere a
+// run id reaches a URL path or an argv: 1-64 of [A-Za-z0-9._-], and
+// never a dot-only segment.
+pub fn assistant_run_id_valid(id string) bool {
+	if id.len == 0 || id.len > 64 || id == '.' || id == '..' {
+		return false
+	}
+	for c in id {
+		if !(c.is_letter() || c.is_digit() || c in [`.`, `_`, `-`]) {
+			return false
+		}
+	}
+	return true
+}
+
+// assistant_cut cuts s to at most n bytes without splitting a UTF-8
+// sequence.
+pub fn assistant_cut(s string, n int) string {
+	if s.len <= n {
+		return s
+	}
+	mut end := n
+	for end > 0 && (s[end] & 0xC0) == 0x80 {
+		end--
+	}
+	return s[..end]
+}
+
+// assistant_redact_tokens masks secret-shaped tokens that the
+// key=value redactor misses: provider key prefixes and the value
+// after a secret-looking flag.
+pub fn assistant_redact_tokens(s string) string {
+	if s.len == 0 {
+		return s
+	}
+	words := s.split(' ')
+	mut out := []string{cap: words.len}
+	mut mask_next := false
+	for w in words {
+		mut word := w
+		if mask_next && word.len > 0 {
+			word = '[redacted]'
+			mask_next = false
+		} else {
+			lower := word.to_lower()
+			if lower in ['--password', '--token', '--api-key', '--apikey', '--secret', '-p'] {
+				mask_next = lower != '-p'
+			}
+			for prefix in ['sk-', 'ghp_', 'gho_', 'ghs_', 'ghu_', 'github_pat_', 'xoxb-', 'xoxp-',
+				'akia', 'aiza'] {
+				idx := lower.index(prefix) or { continue }
+				if lower.len - idx >= prefix.len + 16 {
+					word = word[..idx] + '[redacted]'
+					break
+				}
+			}
+		}
+		out << word
+	}
+	return redact_secrets(out.join(' '))
+}
+
+// ---- per-run mode registry ----------------------------------------
+// The mode a run was created with is recorded by run id so a later
+// `events`/`approve` (a restart, a follow) enforces the RUN's mode,
+// not a default. Unknown run = 'ask' (non-escalating, no tools): fail
+// closed. Bounded to the newest 200 runs, 0600.
+
+pub fn assistant_run_modes_file() string {
+	env := os.getenv('HORNERO_ASSISTANT_RUN_MODES_FILE')
+	if env.len > 0 {
+		return env
+	}
+	return os.join_path(assistant_dir(), 'assistant-run-modes.tsv')
+}
+
+pub fn assistant_run_mode_record(run_id string, mode string) {
+	if !assistant_run_id_valid(run_id) {
+		return
+	}
+	path := assistant_run_modes_file()
+	mut lines := []string{}
+	if existing := os.read_file(path) {
+		lines = existing.split('\n').filter(it.len > 0)
+	}
+	lines << '${run_id}\t${assistant_session_effective_mode(mode)}'
+	if lines.len > 200 {
+		lines = lines[lines.len - 200..]
+	}
+	os.mkdir_all(os.dir(path)) or { return }
+	os.write_file(path, lines.join('\n') + '\n') or { return }
+	os.chmod(path, 0o600) or {}
+}
+
+pub fn assistant_run_mode(run_id string) string {
+	content := os.read_file(assistant_run_modes_file()) or { return 'ask' }
+	mut found := ''
+	for line in content.split('\n') {
+		parts := line.split('\t')
+		if parts.len == 2 && parts[0] == run_id && parts[1] in ['ask', 'agent', 'chat'] {
+			found = parts[1]
+		}
+	}
+	return if found.len > 0 { found } else { 'ask' }
+}
+
 pub struct AssistantEvent {
 pub:
 	kind string
@@ -541,7 +647,7 @@ pub fn assistant_events_report(run_id string) CommandResult {
 	if !settings.enabled {
 		return fail_result('assistant events', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
 	}
-	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+	if !assistant_run_id_valid(run_id) {
 		return fail_result('assistant events', 'Missing or invalid run id. Example: horneroctl assistant events run_abc123')
 	}
 	resp := assistant_http(settings, .get, '/v1/runs/${run_id}/events', '') or {
@@ -551,7 +657,7 @@ pub fn assistant_events_report(run_id string) CommandResult {
 		return fail_result('assistant events', 'Hermes returned no events for run ${run_id} (HTTP ${resp.status_code}). The run id may be wrong or expired.')
 	}
 	events := parse_sse_events(resp.body)
-	result := assistant_events_outcome('assistant events', run_id, events)
+	result := assistant_events_outcome_mode('assistant events', run_id, events, assistant_run_mode(run_id))
 	assistant_log_append('events', run_id, '', if result.ok { 'ok' } else { 'not-completed' })
 	return result
 }
@@ -564,6 +670,11 @@ pub fn assistant_events_report(run_id string) CommandResult {
 // never the model's raw chain-of-thought (providers do not expose it).
 // Returns (kind, text) with kind thinking|tool|commentary, or ('','').
 pub fn assistant_event_trace(event AssistantEvent) (string, string) {
+	kind, text := assistant_event_trace_raw(event)
+	return kind, if text.len > 0 { assistant_redact_tokens(text) } else { text }
+}
+
+fn assistant_event_trace_raw(event AssistantEvent) (string, string) {
 	decoded := json2.decode[json2.Any](event.data) or { return '', '' }
 	if decoded !is map[string]json2.Any {
 		return '', ''
@@ -607,7 +718,11 @@ pub fn assistant_event_trace(event AssistantEvent) (string, string) {
 			}
 			preview := field(root, 'preview')
 			if preview.len > 0 {
-				short := if preview.len > 120 { preview[..120] + '…' } else { preview }
+				short := if preview.len > 120 {
+					assistant_cut(preview, 120) + '…'
+				} else {
+					preview
+				}
 				return 'tool', '▸ ${tool_name}: ${short}'
 			}
 			return 'tool', '▸ ${tool_name}'
@@ -653,7 +768,7 @@ pub fn assistant_trace_text(events []AssistantEvent) string {
 	}
 	joined := lines.join('\n')
 	if joined.len > 8192 {
-		return joined[..8192]
+		return assistant_cut(joined, 8192)
 	}
 	return joined
 }
@@ -1132,10 +1247,29 @@ pub fn assistant_mode_tool_violation(command string, run_id string, events []Ass
 
 fn assistant_events_outcome_mode(command string, run_id string, events []AssistantEvent, mode string) CommandResult {
 	mut pending := assistant_pending_request(events)
-	if pending.kind == 'approval' && !assistant_approval_still_pending(assistant_load_settings(), run_id, 0) {
-		// Already decided (the log still holds the old request).
-		pending = AssistantPending{
-			kind: 'none'
+	settings := assistant_load_settings()
+	mut control := AssistantPendingControl{}
+	if pending.kind == 'approval' {
+		if !assistant_mode_escalates(mode) {
+			// Non-escalating modes ALWAYS deny, independent of any
+			// status check: the status only decides display, never
+			// whether authority is withheld.
+			assistant_approve_report(run_id, 'deny', '')
+			assistant_log_append('mode-deny', run_id, pending.detail, mode)
+			shown := assistant_redact_tokens(pending.detail)
+			return fail_result_data(command, 'Approval denied by ${mode} mode on run ${run_id}: ${shown}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
+				'mode':    mode
+				'runId':   run_id
+				'pending': 'denied-by-mode'
+				'detail':  shown
+			})
+		}
+		control = assistant_fetch_pending_control(settings, run_id)
+		if !assistant_approval_still_pending(settings, run_id, 0) {
+			// Already decided (the log still holds the old request).
+			pending = AssistantPending{
+				kind: 'none'
+			}
 		}
 	}
 	text := assistant_collect_text(events)
@@ -1150,19 +1284,24 @@ fn assistant_events_outcome_mode(command string, run_id string, events []Assista
 		data['trace'] = trace
 	}
 	if pending.kind == 'approval' {
-		shown := redact_secrets(pending.detail)
+		// Display the request the gateway reports as pending (the one
+		// the id binds); fall back to the event text.
+		shown := assistant_redact_tokens(if control.detail.len > 0 {
+			control.detail
+		} else {
+			pending.detail
+		})
 		data['detail'] = shown
-		if !assistant_mode_escalates(mode) {
-			assistant_approve_report(run_id, 'deny')
-			assistant_log_append('mode-deny', run_id, pending.detail, mode)
-			data['pending'] = 'denied-by-mode'
-			return fail_result_data(command, 'Approval denied by ${mode} mode on run ${run_id}: ${shown}. Ask/Chat modes never escalate; switch to an Agent session to act.', data)
+		if control.found {
+			data['promptId'] = control.prompt_id
+			data['generation'] = control.generation.str()
+			data['request'] = assistant_request_ref(control)
 		}
 		data['choices'] = pending.choices.join(',')
 		return fail_result_data(command, 'Hermes is waiting for approval on run ${run_id}: ${shown}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.', data)
 	}
 	if pending.kind == 'clarify' {
-		shown := redact_secrets(pending.detail)
+		shown := assistant_redact_tokens(pending.detail)
 		data['detail'] = shown
 		return fail_result_data(command, 'Hermes is asking on run ${run_id}: ${shown} Answer with: horneroctl assistant clarify ${run_id} "<answer>"', data)
 	}
@@ -1185,7 +1324,7 @@ pub fn assistant_events_stream_report(run_id string, emit fn (string)) CommandRe
 }
 
 pub fn assistant_events_stream_report_traced(run_id string, emit fn (string), on_trace fn (string, string)) CommandResult {
-	return assistant_events_stream_report_traced_mode(run_id, emit, on_trace, 'agent')
+	return assistant_events_stream_report_traced_mode(run_id, emit, on_trace, assistant_run_mode(run_id))
 }
 
 pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string), on_trace fn (string, string), mode string) CommandResult {
@@ -1193,13 +1332,15 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 	if !settings.enabled {
 		return fail_result('assistant events', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
 	}
-	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+	if !assistant_run_id_valid(run_id) {
 		return fail_result('assistant events', 'Missing or invalid run id. Example: horneroctl assistant events run_abc123')
 	}
+	// The run's mode (enforced server side), shown on the approval card.
+	on_trace('mode', mode)
 	// The closure only emits live deltas; event collection for the
 	// final outcome uses the assembled response body, so it does not
 	// depend on closure capture semantics.
-	on_event := fn [emit, on_trace, settings, run_id] (ev AssistantEvent) {
+	on_event := fn [emit, on_trace, settings, run_id, mode] (ev AssistantEvent) {
 		delta := assistant_event_text(ev)
 		if delta.len > 0 {
 			emit(delta)
@@ -1210,12 +1351,29 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 		}
 		// Typed pending frames: the UI learns about a blocking
 		// request the moment it arrives, even while the gateway keeps
-		// the stream open waiting for the decision. Detail is
-		// redacted; nothing here answers the request.
+		// the stream open waiting for the decision. Nothing here
+		// answers a request in an escalating mode.
 		pending := assistant_pending_request([ev])
-		if pending.kind == 'clarify'
-			|| (pending.kind == 'approval' && assistant_approval_still_pending(settings, run_id, 2)) {
-			on_trace(pending.kind, redact_secrets(pending.detail))
+		if pending.kind == 'approval' && !assistant_mode_escalates(mode) {
+			// Ask/Chat: always deny, no frame, independent of status.
+			assistant_approve_report(run_id, 'deny', '')
+			assistant_log_append('mode-deny', run_id, pending.detail, mode)
+			return
+		}
+		if pending.kind == 'clarify' {
+			on_trace('clarify', assistant_redact_tokens(pending.detail))
+		} else if pending.kind == 'approval'
+			&& assistant_approval_still_pending(settings, run_id, 2) {
+			ctl := assistant_fetch_pending_control(settings, run_id)
+			if ctl.found {
+				// The request id this card binds, sent before the text.
+				on_trace('approval.control', assistant_request_ref(ctl))
+			}
+			on_trace('approval', assistant_redact_tokens(if ctl.detail.len > 0 {
+				ctl.detail
+			} else {
+				pending.detail
+			}))
 		}
 	}
 	resp := assistant_stream_events(settings, run_id, on_event) or {
@@ -1614,38 +1772,56 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 	} else {
 		''
 	}
-	if run_id.len == 0 {
-		return fail_result('assistant ask', 'Hermes did not return a run id.')
+	if !assistant_run_id_valid(run_id) {
+		return fail_result('assistant ask', 'Hermes did not return a usable run id.')
 	}
+	assistant_run_mode_record(run_id, assistant_resolve_ask_mode(explicit_mode, session_id))
 	events_resp := assistant_http(settings, .get, '/v1/runs/${run_id}/events', '') or {
 		return fail_result('assistant ask', 'Run ${run_id} started but its events could not be read: ${err.msg()}. Cancel with: horneroctl assistant stop ${run_id}')
 	}
 	events := parse_sse_events(events_resp.body)
+	ask_mode := assistant_resolve_ask_mode(explicit_mode, session_id)
 	mut pending := assistant_pending_request(events)
-	if pending.kind == 'approval' && !assistant_approval_still_pending(settings, run_id, 1) {
-		pending = AssistantPending{
-			kind: 'none'
+	mut control := AssistantPendingControl{}
+	if pending.kind == 'approval' {
+		if !assistant_mode_escalates(ask_mode) {
+			// Ask/Chat always deny, independent of any status check.
+			assistant_approve_report(run_id, 'deny', '')
+			assistant_log_append('mode-deny', run_id, pending.detail, ask_mode)
+			return fail_result_data('assistant ask', 'Approval denied by ${ask_mode} mode on run ${run_id}: ${assistant_redact_tokens(pending.detail)}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
+				'runId':   run_id
+				'mode':    ask_mode
+				'pending': 'denied-by-mode'
+				'detail':  assistant_redact_tokens(pending.detail)
+			})
+		}
+		control = assistant_fetch_pending_control(settings, run_id)
+		if !assistant_approval_still_pending(settings, run_id, 1) {
+			pending = AssistantPending{
+				kind: 'none'
+			}
 		}
 	}
 	if pending.kind == 'approval' {
-		mode := assistant_resolve_ask_mode(explicit_mode, session_id)
-		if !assistant_mode_escalates(mode) {
-			assistant_approve_report(run_id, 'deny')
-			assistant_log_append('mode-deny', run_id, pending.detail, mode)
-			return fail_result_data('assistant ask', 'Approval denied by ${mode} mode on run ${run_id}: ${redact_secrets(pending.detail)}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
-				'runId':   run_id
-				'mode':    mode
-				'pending': 'denied-by-mode'
-				'detail':  redact_secrets(pending.detail)
-			})
-		}
-		assistant_log_append('ask', run_id, 'pending approval: ${pending.detail}', 'pending')
-		return fail_result_data('assistant ask', 'Hermes is waiting for approval on run ${run_id}: ${redact_secrets(pending.detail)}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.', {
-			'runId':   run_id
-			'pending': 'approval'
-			'detail':  redact_secrets(pending.detail)
-			'choices': pending.choices.join(',')
+		shown := assistant_redact_tokens(if control.detail.len > 0 {
+			control.detail
+		} else {
+			pending.detail
 		})
+		assistant_log_append('ask', run_id, 'pending approval: ${shown}', 'pending')
+		mut d := {
+			'runId':   run_id
+			'mode':    ask_mode
+			'pending': 'approval'
+			'detail':  shown
+			'choices': pending.choices.join(',')
+		}
+		if control.found {
+			d['promptId'] = control.prompt_id
+			d['generation'] = control.generation.str()
+			d['request'] = assistant_request_ref(control)
+		}
+		return fail_result_data('assistant ask', 'Hermes is waiting for approval on run ${run_id}: ${shown}. Decide with: horneroctl assistant approve ${run_id} approve (or deny). Nothing is auto-approved.', d)
 	}
 	if pending.kind == 'clarify' {
 		assistant_log_append('ask', run_id, 'pending clarify: ${pending.detail}', 'pending')
@@ -1724,9 +1900,10 @@ pub fn assistant_ask_stream_report_traced_mode(prompt string, attach []string, s
 	} else {
 		''
 	}
-	if run_id.len == 0 {
-		return fail_result('assistant ask', 'Hermes did not return a run id.')
+	if !assistant_run_id_valid(run_id) {
+		return fail_result('assistant ask', 'Hermes did not return a usable run id.')
 	}
+	assistant_run_mode_record(run_id, assistant_resolve_ask_mode(explicit_mode, session_id))
 	// Typed `run` frame first: the UI needs the run id immediately so
 	// Stop works server-side during streaming (not only after the
 	// final line), and so approvals can be bound to the run.
@@ -1745,7 +1922,7 @@ pub fn assistant_ask_stream_report_traced_mode(prompt string, attach []string, s
 
 pub fn assistant_stop_report(run_id string) CommandResult {
 	settings := assistant_load_settings()
-	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+	if !assistant_run_id_valid(run_id) {
 		return fail_result('assistant stop', 'Missing or invalid run id. Example: horneroctl assistant stop run_abc123')
 	}
 	resp := assistant_http(settings, .post, '/v1/runs/${run_id}/stop', '{}') or {
@@ -1775,14 +1952,26 @@ pub fn assistant_approval_choice(decision string) string {
 // (prompt_id + execution_generation) from a run-status body. The
 // gateway's authority path requires exactly these fields alongside
 // the choice (api_server_authority_runs.respond_run).
-pub fn assistant_pending_control(status_body string) (string, i64) {
-	decoded := json2.decode[json2.Any](status_body) or { return '', 0 }
+pub struct AssistantPendingControl {
+pub:
+	found      bool
+	prompt_id  string
+	generation i64
+	detail     string
+}
+
+// assistant_pending_control_full reads the pending approval control
+// of a run-status body: its request id, execution generation and the
+// request text the gateway itself reports (`command`/`description`).
+// The UI displays THIS, so what the user reads is what the id binds.
+pub fn assistant_pending_control_full(status_body string) AssistantPendingControl {
+	decoded := json2.decode[json2.Any](status_body) or { return AssistantPendingControl{} }
 	if decoded !is map[string]json2.Any {
-		return '', 0
+		return AssistantPendingControl{}
 	}
 	root := decoded.as_map()
 	if 'pending_controls' !in root || root['pending_controls'] !is []json2.Any {
-		return '', 0
+		return AssistantPendingControl{}
 	}
 	for control in root['pending_controls'].as_array() {
 		if control !is map[string]json2.Any {
@@ -1805,22 +1994,74 @@ pub fn assistant_pending_control(status_body string) (string, i64) {
 					else { i64(0) }
 				}
 			}
-			return prompt_id, gen
+			mut detail := ''
+			for key in ['command', 'description'] {
+				if key in c && c[key] is string && c[key].str().len > 0 {
+					detail = c[key].str()
+					break
+				}
+			}
+			return AssistantPendingControl{
+				found:      prompt_id.len > 0
+				prompt_id:  prompt_id
+				generation: gen
+				detail:     detail
+			}
 		}
 	}
-	return '', 0
+	return AssistantPendingControl{}
 }
 
-pub fn assistant_approve_report(run_id string, decision string) CommandResult {
+pub fn assistant_pending_control(status_body string) (string, i64) {
+	c := assistant_pending_control_full(status_body)
+	return c.prompt_id, c.generation
+}
+
+fn assistant_fetch_pending_control(settings AssistantSettings, run_id string) AssistantPendingControl {
+	resp := assistant_http(settings, .get, '/v1/runs/${run_id}', '') or {
+		return AssistantPendingControl{}
+	}
+	if resp.status_code >= 400 {
+		return AssistantPendingControl{}
+	}
+	return assistant_pending_control_full(resp.body)
+}
+
+// assistant_request_ref is the display/CLI form of a control:
+// prompt_id@generation.
+pub fn assistant_request_ref(c AssistantPendingControl) string {
+	return '${c.prompt_id}@${c.generation}'
+}
+
+// assistant_request_ref_valid accepts prompt_id or prompt_id@digits.
+pub fn assistant_request_ref_valid(ref string) bool {
+	parts := ref.split('@')
+	if parts.len > 2 || !assistant_run_id_valid(parts[0]) {
+		return false
+	}
+	if parts.len == 2 && (parts[1].len == 0 || parts[1].len > 12 || !parts[1].bytes().all(it.is_digit())) {
+		return false
+	}
+	return true
+}
+
+// request_ref (optional) is the request the caller DISPLAYED
+// (prompt_id[@generation]). When given, the decision is refused unless
+// exactly that request is still the pending one, so a click on card #1
+// can never approve request #2.
+pub fn assistant_approve_report(run_id string, decision string, request_ref string) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant approve', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
 	}
-	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+	if !assistant_run_id_valid(run_id) {
 		return fail_result('assistant approve', 'Missing or invalid run id. Example: horneroctl assistant approve run_abc123 approve')
 	}
 	if decision !in ['approve', 'deny'] {
 		return fail_result('assistant approve', 'Decision must be approve or deny. Example: horneroctl assistant approve ${run_id} deny')
+	}
+	if request_ref.len > 0 && !assistant_request_ref_valid(request_ref) {
+		return fail_result('assistant approve', 'Invalid --request value. Expected prompt-id or prompt-id@generation.')
 	}
 	choice := assistant_approval_choice(decision)
 	// Authority-path gateways require the exact pending-control
@@ -1831,7 +2072,19 @@ pub fn assistant_approve_report(run_id string, decision string) CommandResult {
 		return fail_result('assistant approve', 'Cannot reach the Hermes gateway: ${err.msg()}')
 	}
 	if status_resp.status_code < 400 {
-		prompt_id, gen := assistant_pending_control(status_resp.body)
+		ctl := assistant_pending_control_full(status_resp.body)
+		prompt_id := ctl.prompt_id
+		gen := ctl.generation
+		if request_ref.len > 0 {
+			parts := request_ref.split('@')
+			if !ctl.found || ctl.prompt_id != parts[0] || (parts.len == 2 && parts[1].i64() != ctl.generation) {
+				assistant_log_append('approve', run_id, 'request changed', 'refused')
+				return fail_result_data('assistant approve', 'The pending request on run ${run_id} is not the one that was shown (it changed or was already answered). Nothing was decided; review the current request.', {
+					'runId':   run_id
+					'pending': 'changed'
+				})
+			}
+		}
 		if prompt_id.len > 0 {
 			body = json2.encode({
 				'request_id':           json2.Any(prompt_id)
@@ -1839,6 +2092,9 @@ pub fn assistant_approve_report(run_id string, decision string) CommandResult {
 				'choice':               json2.Any(choice)
 			}, escape_unicode: true)
 		}
+	}
+	if body.len == 0 && request_ref.len > 0 {
+		return fail_result('assistant approve', 'Cannot confirm which request is pending on run ${run_id}; nothing was decided.')
 	}
 	if body.len == 0 {
 		body = json2.encode({
@@ -1864,7 +2120,7 @@ pub fn assistant_clarify_report(run_id string, answer string) CommandResult {
 	if !settings.enabled {
 		return fail_result('assistant clarify', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
 	}
-	if run_id.len == 0 || run_id.contains('/') || run_id.contains(' ') {
+	if !assistant_run_id_valid(run_id) {
 		return fail_result('assistant clarify', 'Missing or invalid run id. Example: horneroctl assistant clarify run_abc123 "use the dark theme"')
 	}
 	if answer.trim_space().len == 0 {

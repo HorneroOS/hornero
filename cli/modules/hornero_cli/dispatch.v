@@ -333,7 +333,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 		}
 		'usage' { render(hornero_core.assistant_usage_report(), mode) }
 		'approve' {
-			render(hornero_core.assistant_approve_report(opts.arg1, opts.arg2), mode)
+			render(hornero_core.assistant_approve_report(opts.arg1, opts.arg2, opts.request), mode)
 		}
 		'events' {
 			if opts.stream {

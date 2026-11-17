@@ -113,9 +113,11 @@ fn start_mock_gateway(routes map[string]string) (&MockGateway, map[string]string
 	spawn mock.serve(listener)
 
 	saved := {
-		'XDG_CONFIG_HOME':                 os.getenv('XDG_CONFIG_HOME')
-		'HORNERO_ASSISTANT_KEY':           os.getenv('HORNERO_ASSISTANT_KEY')
-		'HORNERO_ASSISTANT_SESSIONS_FILE': os.getenv('HORNERO_ASSISTANT_SESSIONS_FILE')
+		'XDG_CONFIG_HOME':                  os.getenv('XDG_CONFIG_HOME')
+		'HORNERO_ASSISTANT_KEY':            os.getenv('HORNERO_ASSISTANT_KEY')
+		'HORNERO_ASSISTANT_SESSIONS_FILE':  os.getenv('HORNERO_ASSISTANT_SESSIONS_FILE')
+		'HORNERO_ASSISTANT_RUN_MODES_FILE': os.getenv('HORNERO_ASSISTANT_RUN_MODES_FILE')
+		'HORNERO_ASSISTANT_LOG_FILE':       os.getenv('HORNERO_ASSISTANT_LOG_FILE')
 	}
 	tmp := os.join_path(os.temp_dir(), 'hornero-contract-${port}')
 	os.mkdir_all(os.join_path(tmp, 'hornero')) or { panic(err) }
@@ -125,6 +127,8 @@ fn start_mock_gateway(routes map[string]string) (&MockGateway, map[string]string
 	os.setenv('XDG_CONFIG_HOME', tmp, true)
 	os.setenv('HORNERO_ASSISTANT_KEY', 'contract-test-key', true)
 	os.setenv('HORNERO_ASSISTANT_SESSIONS_FILE', os.join_path(tmp, 'sessions.json'), true)
+	os.setenv('HORNERO_ASSISTANT_RUN_MODES_FILE', os.join_path(tmp, 'run-modes.tsv'), true)
+	os.setenv('HORNERO_ASSISTANT_LOG_FILE', os.join_path(tmp, 'assistant.log'), true)
 	return mock, saved
 }
 
@@ -171,7 +175,7 @@ fn test_contract_approve_sends_once_with_pending_control() {
 		'POST /v1/runs/run_1/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
-	result := assistant_approve_report('run_1', 'approve')
+	result := assistant_approve_report('run_1', 'approve', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
 	assert reqs.len == 2
@@ -190,7 +194,7 @@ fn test_contract_deny_sends_deny_and_no_widening() {
 		'POST /v1/runs/run_2/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
-	result := assistant_approve_report('run_2', 'deny')
+	result := assistant_approve_report('run_2', 'deny', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
 	assert reqs.len == 2
@@ -205,7 +209,7 @@ fn test_contract_approve_falls_back_to_plain_choice() {
 		'POST /v1/runs/run_3/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
-	result := assistant_approve_report('run_3', 'approve')
+	result := assistant_approve_report('run_3', 'approve', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
 	assert reqs.len == 2
@@ -249,6 +253,7 @@ fn test_contract_events_pending_approval_is_not_auto_answered() {
 		'GET /v1/runs/run_6/events': sse
 	})
 	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_6', 'agent')
 	result := assistant_events_report('run_6')
 	assert !result.ok
 	assert result.message.contains('waiting for approval')
@@ -339,7 +344,7 @@ fn test_contract_ask_approve_stop_write_redacted_audit_log() {
 
 	prompt := 'a very secret prompt about my diary'
 	assert assistant_ask_report_attached_session(prompt, [], '').ok
-	assert assistant_approve_report('run_9', 'approve').ok
+	assert assistant_approve_report('run_9', 'approve', '').ok
 	assert assistant_stop_report('run_9').ok
 	_ = mock
 
@@ -363,6 +368,7 @@ fn test_contract_pending_approval_result_carries_structured_data() {
 		'GET /v1/runs/run_pd/events': sse
 	})
 	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_pd', 'agent')
 	result := assistant_events_report('run_pd')
 	assert !result.ok
 	assert result.data['runId'] == 'run_pd'
@@ -379,6 +385,7 @@ fn test_contract_pending_clarify_result_carries_structured_data() {
 		'GET /v1/runs/run_cl/events': sse
 	})
 	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_cl', 'agent')
 	result := assistant_events_report('run_cl')
 	assert !result.ok
 	assert result.data['runId'] == 'run_cl'
@@ -437,9 +444,126 @@ fn test_contract_already_decided_approval_in_event_log_is_not_pending() {
 		'GET /v1/runs/run_dec':        '{"status":"completed","pending_controls":[]}'
 	})
 	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_dec', 'agent')
 	result := assistant_events_report('run_dec')
 	assert result.ok
 	assert result.data['text'] == 'installed'
 	assert result.data['pending'] == 'none'
 	_ = mock
+}
+
+fn test_run_id_shape_is_strict() {
+	assert assistant_run_id_valid('run_abc-1.2')
+	for bad in ['', '.', '..', 'a/b', 'a b', 'a?x=1', 'a%2f', 'run\n1', 'é', 'x'.repeat(65)] {
+		assert !assistant_run_id_valid(bad), bad
+	}
+	assert assistant_request_ref_valid('p1') && assistant_request_ref_valid('p1@12')
+	assert !assistant_request_ref_valid('p1@') && !assistant_request_ref_valid('p1@x')
+		&& !assistant_request_ref_valid('a/b@1')
+}
+
+fn test_token_shapes_and_utf8_cut() {
+	r := assistant_redact_tokens('curl -H sk-abcdefghijklmnopqrstuvwxyz1234 ghp_abcdefghijklmnopqrstuv --password hunter2 x')
+	assert !r.contains('abcdefghijklmnopqrstuv') && !r.contains('hunter2')
+	assert assistant_redact_tokens('ls -la /home') == 'ls -la /home'
+	// never split a multi-byte rune
+	cut := assistant_cut('ééééé', 3)
+	assert cut == 'é'
+	assert cut.len == 2
+}
+
+fn test_run_mode_registry_unknown_is_non_escalating() {
+	_, saved := start_mock_gateway({})
+	defer { mock_restore_env(saved) }
+	assert assistant_run_mode('run_never_seen') == 'ask'
+	assistant_run_mode_record('run_m1', 'agent')
+	assistant_run_mode_record('run_m2', 'chat')
+	assert assistant_run_mode('run_m1') == 'agent'
+	assert assistant_run_mode('run_m2') == 'chat'
+	assert !assistant_mode_escalates(assistant_run_mode('run_unknown'))
+}
+
+fn test_contract_events_for_unknown_run_deny_approval_even_without_status() {
+	// H2/H4: no recorded mode -> non-escalating; the approval is denied
+	// server-side regardless of what the status says.
+	sse := 'data: {"type":"approval.request","command":"rm -rf /"}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_unk/events':    sse
+		'GET /v1/runs/run_unk':           '{"status":"completed","pending_controls":[]}'
+		'POST /v1/runs/run_unk/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	result := assistant_events_report('run_unk')
+	assert !result.ok
+	assert result.data['pending'] == 'denied-by-mode'
+	reqs := mock_wait_requests(mock, 2)
+	posts := reqs.filter(it.method == 'POST')
+	assert posts.len == 1 && posts[0].path == '/v1/runs/run_unk/approval'
+	assert posts[0].body.contains('deny') && !posts[0].body.contains('once')
+}
+
+fn test_contract_ask_mode_stream_denies_and_emits_no_approval_frame() {
+	sse := 'data: {"type":"approval.request","command":"pacman -S x"}\n\n'
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':                 '{"run_id":"run_ak","status":"queued"}'
+		'GET /v1/runs/run_ak/events':    sse
+		'GET /v1/runs/run_ak':           '{"status":"completed","pending_controls":[]}'
+		'POST /v1/runs/run_ak/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	mut holder := &FrameSink{}
+	result := assistant_ask_stream_report_traced_mode('install x', [], '', 'ask', fn (_ string) {},
+		fn [mut holder] (kind string, text string) {
+			holder.items << '${kind}:${text}'
+		})
+	assert !result.ok && result.data['pending'] == 'denied-by-mode'
+	assert holder.items.all(!it.starts_with('approval'))
+	assert 'mode:ask' in holder.items
+	reqs := mock_wait_requests(mock, 3)
+	assert reqs.any(it.method == 'POST' && it.path == '/v1/runs/run_ak/approval' && it.body.contains('deny'))
+	assert assistant_run_mode('run_ak') == 'ask'
+}
+
+fn test_contract_pending_result_binds_request_id_and_shows_gateway_text() {
+	// H1: the displayed text/id come from the pending control.
+	sse := 'data: {"type":"approval.request","command":"event text"}\n\n'
+	status := '{"pending_controls":[{"kind":"approval","prompt_id":"p7","execution_generation":3,"command":"gateway text"}]}'
+	_, saved := start_mock_gateway({
+		'GET /v1/runs/run_h1/events': sse
+		'GET /v1/runs/run_h1':        status
+	})
+	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_h1', 'agent')
+	result := assistant_events_report('run_h1')
+	assert result.data['request'] == 'p7@3'
+	assert result.data['promptId'] == 'p7' && result.data['generation'] == '3'
+	assert result.data['detail'] == 'gateway text'
+}
+
+fn test_contract_approve_refuses_when_pending_request_changed() {
+	status := '{"pending_controls":[{"kind":"approval","prompt_id":"p2","execution_generation":4}]}'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_sw':           status
+		'POST /v1/runs/run_sw/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	// the card showed p1; the gateway now waits on p2
+	r := assistant_approve_report('run_sw', 'approve', 'p1@3')
+	assert !r.ok && r.data['pending'] == 'changed'
+	// generation mismatch is refused too
+	assert !assistant_approve_report('run_sw', 'approve', 'p2@3').ok
+	reqs := mock_wait_requests(mock, 2)
+	assert reqs.all(it.method == 'GET')
+	// the exact displayed request goes through, once
+	ok := assistant_approve_report('run_sw', 'approve', 'p2@4')
+	assert ok.ok
+	posts := mock_wait_requests(mock, 5).filter(it.method == 'POST')
+	assert posts.len == 1 && posts[0].body.contains('"request_id":"p2"') && posts[0].body.contains('once')
+}
+
+fn test_contract_approve_with_request_but_no_status_fails_closed() {
+	_, saved := start_mock_gateway({})
+	defer { mock_restore_env(saved) }
+	r := assistant_approve_report('run_nostatus', 'approve', 'p1@1')
+	assert !r.ok
 }

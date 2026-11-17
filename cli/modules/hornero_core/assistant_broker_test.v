@@ -1,5 +1,19 @@
 module hornero_core
 
+import os
+
+// isolate_broker_env keeps broker tests (which append to the audit log
+// and read the policy) away from the developer's real ~/.config/hornero.
+fn isolate_broker_env() {
+	root := os.join_path(os.temp_dir(), 'hornero-broker-test-${os.getpid()}')
+	os.mkdir_all(os.join_path(root, 'config')) or {}
+	os.setenv('HOME', root, true)
+	os.setenv('XDG_CONFIG_HOME', os.join_path(root, 'config'), true)
+	os.setenv('XDG_STATE_HOME', os.join_path(root, 'state'), true)
+	os.setenv('XDG_DATA_HOME', os.join_path(root, 'data'), true)
+	os.setenv('HORNERO_ASSISTANT_LOG_FILE', os.join_path(root, 'assistant.log'), true)
+}
+
 fn test_broker_catalogue_is_typed_and_closed() {
 	_, found := assistant_broker_tool('shell')
 	assert !found
@@ -29,6 +43,7 @@ fn test_broker_argv_validation() {
 }
 
 fn test_broker_policy_gate_denies_without_preset() {
+	isolate_broker_env()
 	// Default (no policy file) is the read-only preset: mutations denied,
 	// and dry-run proves nothing executed even when policy would allow.
 	denied := assistant_broker_exec_report('theme_set', 'hornero-signal-day', 'agent', false, false)
@@ -42,6 +57,7 @@ fn test_broker_policy_gate_denies_without_preset() {
 }
 
 fn test_broker_screenshot_is_policy_gated() {
+	isolate_broker_env()
 	t, found := assistant_broker_tool('screenshot')
 	assert found && t.action == 'desktop.screenshot'
 	// Read-only preset denies screenshots outright: nothing is captured.
