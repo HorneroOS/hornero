@@ -783,9 +783,9 @@ fn community_plugin_set_enabled_report(opts CommunityPluginOptions, enable bool)
 	}
 	state := if enable { 'enabled' } else { 'disabled' }
 	return ok_result('plugin ${verb}', 'plugin ${id} ${state}. ${if enable {
-		'The Shell may load it at next start. Reminder: plugin QML runs with your user privileges; it is not sandboxed.'
+		'A running shell picks it up with `qs ipc call plugins reload` (or Settings > Extensions > Reload plugin list), otherwise at next start. Reminder: plugin QML runs with your user privileges; it is not sandboxed.'
 	} else {
-		'The Shell will not load it at next start.'
+		'A running shell stops hosting it after `qs ipc call plugins reload` (or Settings > Extensions > Reload plugin list); it is not loaded at next start.'
 	}}', {
 		'id':      id
 		'enabled': enable.str()
@@ -1520,7 +1520,7 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		if os.is_dir(previous) { os.rename(previous, destination) or {} }
 		return fail_result('plugin catalog update', 'cannot save plugin receipt')
 	}
-	return ok_result('plugin catalog update', 'updated ${found.name} from ${old_version} to ${found.version} [${found.trust}] from the official catalogue. Previous payload kept for `plugin catalog rollback ${id}`. Enabled state is ${if record.enabled {
+	return ok_result('plugin catalog update', 'updated ${found.name} from ${old_version} to ${found.version} [${found.trust}] from the official catalogue. Previous payload kept for `plugin catalog rollback ${id}`. A running shell applies this without a restart: run `qs ipc call plugins reload` (or Settings > Extensions > Reload plugin list). Enabled state is ${if record.enabled {
 		'enabled'
 	} else {
 		'disabled'
@@ -1628,7 +1628,7 @@ pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginO
 		return fail_result('plugin catalog rollback', 'cannot save plugin receipt')
 	}
 	os.rmdir_all(staged_current) or {}
-	return ok_result('plugin catalog rollback', 'rolled back ${id} to the kept previous payload (version ${prev_version}). Enabled state unchanged (${if enabled_before {
+	return ok_result('plugin catalog rollback', 'rolled back ${id} to the kept previous payload (version ${prev_version}). A running shell applies this without a restart: run `qs ipc call plugins reload` (or Settings > Extensions > Reload plugin list). Enabled state unchanged (${if enabled_before {
 		'enabled'
 	} else {
 		'disabled'
