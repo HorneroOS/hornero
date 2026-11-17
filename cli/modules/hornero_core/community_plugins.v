@@ -90,12 +90,73 @@ fn community_plugin_declared_capabilities(record CommunityPluginReceipt, plugin_
 	return json2.Any(map[string]json2.Any{})
 }
 
+// Manifest schema this horneroctl installs and enables. A validator that
+// does not declare support for it (via `--info`) is a different Shell
+// generation and must not judge packages for this one.
+const plugin_validator_schema = 3
+
+// community_plugin_validator_candidates lists the validators that could
+// judge a package, best first: the one shipped in the running Shell's own
+// tree (always the version of the PluginKit actually being run), then the
+// packaged one, then PATH. HORNERO_PLUGIN_VALIDATOR is handled separately
+// because an explicit override is never second-guessed.
+pub fn community_plugin_validator_candidates() []string {
+	mut found := []string{}
+	tree := os.join_path(resolve_quickshell_config_dir(), 'scripts', 'validate_plugin.py')
+	for candidate in [tree, '/usr/lib/hornero/hornero-shell-plugin-validate',
+		find_on_path('hornero-shell-plugin-validate')] {
+		if candidate.len > 0 && os.is_file(candidate) && candidate !in found {
+			found << candidate
+		}
+	}
+	return found
+}
+
+fn community_plugin_validator_spec(validator string, args []string, timeout_sec int) ExecSpec {
+	if validator.ends_with('.py') && !os.is_executable(validator) {
+		return ExecSpec{
+			prog:        'python3'
+			args:        [validator, ...args]
+			timeout_sec: timeout_sec
+		}
+	}
+	return ExecSpec{
+		prog:        validator
+		args:        args
+		timeout_sec: timeout_sec
+	}
+}
+
+// community_plugin_validator_supports asks a validator which manifest
+// schemas it accepts. Validators that predate `--info` fail the probe and
+// are treated as an older generation.
+fn community_plugin_validator_supports(validator string) bool {
+	report := run_exec(community_plugin_validator_spec(validator, ['--info'], 5))
+	if !report.ok {
+		return false
+	}
+	info := json2.decode[map[string]json2.Any](report.output.trim_space()) or { return false }
+	versions := info['schemaVersions'] or { return false }
+	if versions is []json2.Any {
+		for version in versions {
+			if version.int() == plugin_validator_schema {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 pub fn resolve_community_plugin_validator() string {
 	override := os.getenv('HORNERO_PLUGIN_VALIDATOR')
 	if override.len > 0 { return override }
-	installed := '/usr/lib/hornero/hornero-shell-plugin-validate'
-	if os.is_file(installed) { return installed }
-	return find_on_path('hornero-shell-plugin-validate')
+	candidates := community_plugin_validator_candidates()
+	for candidate in candidates {
+		if community_plugin_validator_supports(candidate) { return candidate }
+	}
+	// No candidate matches this generation: hand back the first one so the
+	// caller can name it in the mismatch error.
+	return if candidates.len > 0 { candidates[0] } else { '' }
 }
 
 fn community_plugin_roots() (string, string) {
@@ -157,9 +218,12 @@ fn community_plugin_manifest(path string) !map[string]json2.Any {
 fn community_plugin_run_validator(path string) !string {
 	validator := resolve_community_plugin_validator()
 	if validator.len == 0 || !os.is_file(validator) {
-		return error('Hornero Shell plugin validator is not installed. Install a compatible hornero-shell package first.')
+		return error('Hornero Shell plugin validator is not installed. Install a compatible hornero-shell package first, or point HORNERO_PLUGIN_VALIDATOR at scripts/validate_plugin.py of the running Shell.')
 	}
-	report := run_exec(ExecSpec{ prog: validator, args: [path], timeout_sec: 20 })
+	if os.getenv('HORNERO_PLUGIN_VALIDATOR').len == 0 && !community_plugin_validator_supports(validator) {
+		return error('plugin validator ${validator} is older than this horneroctl (it does not accept manifest schemaVersion ${plugin_validator_schema}). Update the hornero-shell package, or set HORNERO_PLUGIN_VALIDATOR to scripts/validate_plugin.py from the Shell you are running.')
+	}
+	report := run_exec(community_plugin_validator_spec(validator, [path], 20))
 	if !report.ok { return error('plugin validation failed: ${report.output}') }
 	return report.output
 }
