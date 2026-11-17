@@ -38,3 +38,18 @@ fn test_studio_mode_unknown_subcommand_fails() {
 	assert dispatch(['horneroctl', 'studio', 'mode', 'nope']) != 0
 	assert dispatch(['horneroctl', 'studio', 'mode', 'audio']) != 0
 }
+
+fn test_studio_audio_help_is_discoverable() {
+	h := command_help('studio audio')
+	assert h.contains('Examples:')
+	assert h.contains('studio audio revert')
+	assert h.contains('not physical round-trip latency')
+	assert command_help('studio').contains('audio')
+}
+
+fn test_studio_audio_usage_errors() {
+	assert dispatch(['horneroctl', 'studio', 'audio', 'nope']) != 0
+	assert dispatch(['horneroctl', 'studio', 'audio', 'apply', '--bogus']) != 0
+	// apply without --yes is refused before touching anything.
+	assert dispatch(['horneroctl', 'studio', 'audio', 'apply']) != 0
+}

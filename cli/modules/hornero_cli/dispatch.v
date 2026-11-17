@@ -595,7 +595,7 @@ fn run_recovery(args []string, mode hornero_core.RenderMode) int {
 fn run_gaming(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('gaming.usage',
-			'expected a subcommand: doctor, selection.\nExample: horneroctl gaming doctor --json'),
+			'expected a subcommand: doctor, selection, launch-options.\nExample: horneroctl gaming doctor --json'),
 			mode)
 	}
 	match args[0] {
@@ -605,6 +605,71 @@ fn run_gaming(args []string, mode hornero_core.RenderMode) int {
 					'unexpected argument: ${args[1]}.\nExample: horneroctl gaming doctor'), mode)
 			}
 			return render(hornero_core.gaming_doctor_result(), mode)
+		}
+		'launch-options' {
+			mut req := hornero_core.LaunchOptionsRequest{}
+			mut gm := false
+			mut mh := false
+			mut gs := false
+			mut w := 0
+			mut h := 0
+			mut r := 0
+			mut fs := false
+			mut i := 1
+			for i < args.len {
+				match args[i] {
+					'--gamemode' {
+						gm = true
+						i++
+					}
+					'--mangohud' {
+						mh = true
+						i++
+					}
+					'--gamescope' {
+						gs = true
+						i++
+					}
+					'--fullscreen' {
+						fs = true
+						i++
+					}
+					'--width', '--height', '--refresh' {
+						if i + 1 >= args.len || args[i + 1].int() <= 0 {
+							return render_error(hornero_core.err_usage('gaming.usage',
+								'${args[i]} needs a positive integer.\nExample: horneroctl gaming launch-options --gamescope --width 2560 --height 1440 --refresh 144'),
+								mode)
+						}
+						v := args[i + 1].int()
+						if args[i] == '--width' {
+							w = v
+						} else if args[i] == '--height' {
+							h = v
+						} else {
+							r = v
+						}
+						i += 2
+					}
+					else {
+						return render_error(hornero_core.err_usage('gaming.usage',
+							'unexpected argument: ${args[i]}.\nExample: horneroctl gaming launch-options --gamemode --mangohud'),
+							mode)
+					}
+				}
+			}
+			if !gm && !mh && !gs {
+				gm = true
+			}
+			req = hornero_core.LaunchOptionsRequest{
+				gamemode:   gm
+				mangohud:   mh
+				gamescope:  gs
+				width:      w
+				height:     h
+				refresh:    r
+				fullscreen: fs
+			}
+			return render(hornero_core.gaming_launch_options_result(req), mode)
 		}
 		'selection' {
 			if args.len == 1 || args[1] == 'show' {
@@ -652,7 +717,7 @@ fn run_gaming(args []string, mode hornero_core.RenderMode) int {
 fn run_studio(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('studio.usage',
-			'expected a subcommand: doctor, selection, jobs, mode.\nExample: horneroctl studio doctor --json'),
+			'expected a subcommand: doctor, selection, jobs, mode, audio.\nExample: horneroctl studio doctor --json'),
 			mode)
 	}
 	match args[0] {
@@ -701,6 +766,32 @@ fn run_studio(args []string, mode hornero_core.RenderMode) int {
 				else {
 					return render_error(hornero_core.err_usage('studio.usage',
 						'unknown studio mode subcommand: ${args[1]}.\nExample: horneroctl studio mode audio low-latency --yes'),
+						mode)
+				}
+			}
+		}
+		'audio' {
+			if args.len == 1 || args[1] == 'status' {
+				return render(hornero_core.studio_audio_status_result(), mode)
+			}
+			match args[1] {
+				'apply' {
+					for a in args[2..] {
+						if a !in ['--yes', '--dry-run'] {
+							return render_error(hornero_core.err_usage('studio.usage',
+								'unexpected argument: ${a}.\nExample: horneroctl studio audio apply --yes'),
+								mode)
+						}
+					}
+					return render(hornero_core.studio_audio_apply_result('--yes' in args,
+						'--dry-run' in args), mode)
+				}
+				'revert' {
+					return render(hornero_core.studio_audio_revert_result(), mode)
+				}
+				else {
+					return render_error(hornero_core.err_usage('studio.usage',
+						'unknown studio audio subcommand: ${args[1]}.\nExample: horneroctl studio audio status'),
 						mode)
 				}
 			}
