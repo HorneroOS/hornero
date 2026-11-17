@@ -23,7 +23,7 @@ fn json_f64(m map[string]json2.Any, key string) f64 {
 
 fn json_strs(m map[string]json2.Any, key string) []string {
 	mut out := []string{}
-	for v in (m[key] or { panic('missing ${key}') }).arr() {
+	for v in (m[key] or { panic('missing ${key}') }).as_array() {
 		out << v.str()
 	}
 	return out
@@ -98,8 +98,8 @@ fn test_gate_levels_match_the_config_table() {
 		assert json_strs(text, 'on') == gate_text_surfaces, name
 		assert json_strs(boundary, 'on') == gate_boundary_surfaces, name
 		mut pairs := [][]string{}
-		for p in (on_pairs['pairs'] or { panic('pairs') }).arr() {
-			pairs << p.arr().map(it.str())
+		for p in (on_pairs['pairs'] or { panic('pairs') }).as_array() {
+			pairs << p.as_array().map(it.str())
 		}
 		assert pairs == gate_on_pairs, name
 	}
@@ -118,8 +118,8 @@ fn test_terminal_and_chromatic_extra_match_the_config_table() {
 	assert json_f64(sep, 'minDeltaEOK') == gate_separation_min_de_ok
 	assert json_f64(sep, 'minHueDeg') == gate_separation_min_hue
 	mut pairs := [][]string{}
-	for p in (sep['pairs'] or { panic('pairs') }).arr() {
-		pairs << p.arr().map(it.str())
+	for p in (sep['pairs'] or { panic('pairs') }).as_array() {
+		pairs << p.as_array().map(it.str())
 	}
 	assert pairs == gate_separation_pairs
 }
