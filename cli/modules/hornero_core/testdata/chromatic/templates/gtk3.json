@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "gtk3",
+  "template": "gtk3-colors.css.tmpl",
+  "output": "${XDG_CONFIG_HOME}/gtk-3.0/gtk.css",
+  "when": "chromatic",
+  "adapter": "gtk3"
+}

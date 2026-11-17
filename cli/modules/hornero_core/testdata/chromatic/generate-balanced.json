@@ -1,0 +1,200 @@
+{
+ "schemaVersion": 1,
+ "engine": {
+  "name": "hornero-chromatic",
+  "version": "1.0.0",
+  "algorithm": 1
+ },
+ "request": {
+  "source": "image",
+  "path": "/abs/wall.jpg",
+  "seeds": [],
+  "variant": "auto",
+  "mode": "auto",
+  "contrast": "standard",
+  "surfaceDepth": "standard",
+  "chroma": 1.0,
+  "hueShift": 0
+ },
+ "analysis": {
+  "sourceKey": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "kind": "still",
+  "meanL": 0.31,
+  "L5": 0.05,
+  "L50": 0.28,
+  "L95": 0.74,
+  "C90": 0.081,
+  "C95": 0.11,
+  "hueEntropy": 2.9,
+  "detail": 0.05,
+  "top": {
+   "meanL": 0.22,
+   "stdL": 0.06
+  },
+  "bottom": {
+   "meanL": 0.35,
+   "stdL": 0.1
+  },
+  "seeds": [
+   {
+    "hex": "#D98A3A",
+    "oklch": [
+     0.7,
+     0.13,
+     62.1
+    ],
+    "share": 0.21,
+    "score": 7.4
+   }
+  ],
+  "neutralHue": 248.0,
+  "achromatic": false
+ },
+ "inference": {
+  "mode": "dark",
+  "variant": "balanced",
+  "contrast": "standard",
+  "reasons": [
+   "fixture"
+  ],
+  "confidence": 0.83,
+  "personality": "fixture",
+  "chromaClass": "rich",
+  "temperature": "warm",
+  "suggestion": null
+ },
+ "scheme": {
+  "schemaVersion": 2,
+  "id": "hornero-chromatic",
+  "mode": "dark",
+  "palette": {
+   "ground": "#140D0C",
+   "sunken": "#191110",
+   "base": "#1E1413",
+   "panel": "#241A18",
+   "raised": "#2E2120",
+   "lifted": "#392B2A",
+   "rule": "#3C2E2D",
+   "ruleStrong": "#887675",
+   "ink": "#DCE9EB",
+   "inkMuted": "#A6ACAC",
+   "inkFaint": "#74797A",
+   "signal": "#FF8EB7",
+   "cue": "#00D2CA",
+   "phosphor": "#98CF8B",
+   "alert": "#ED7668",
+   "signalWell": "#3E212B",
+   "onSignalWell": "#FFD4E1",
+   "onSignal": "#1C0C11",
+   "cueWell": "#0B3230",
+   "onCueWell": "#ADF0EB",
+   "onCue": "#011614",
+   "phosphorWell": "#22301F",
+   "onPhosphorWell": "#CFEBC8",
+   "onPhosphor": "#0A1508",
+   "alertWell": "#40221E",
+   "onAlertWell": "#FFD6D0",
+   "onAlert": "#1D0C0A",
+   "inverse": "#DCE9EB",
+   "onInverse": "#241A18",
+   "inverseSignal": "#8F4460",
+   "scrim": "#000000",
+   "shadow": "#000000",
+   "focus": "#00D2CA",
+   "glow": "#FFABC7"
+  },
+  "terminal": [
+   "#2B2120",
+   "#FF9083",
+   "#82CA72",
+   "#E8A63D",
+   "#90B3FF",
+   "#EB90D7",
+   "#00D1B8",
+   "#B6C8CA",
+   "#7A6A69",
+   "#FFC4BB",
+   "#AAE89D",
+   "#FFCA7F",
+   "#C0D4FF",
+   "#FFBBEF",
+   "#6EEED7",
+   "#E7F1F2"
+  ],
+  "chromatic": {
+   "version": 1,
+   "engine": "1.0.0",
+   "algorithm": 1,
+   "fingerprint": "sha256:7790647a265b67eaabdce8e264cb38471045d0738e5d1cd88c6450d3f1fd1443",
+   "request": {
+    "source": "image",
+    "variant": "auto",
+    "mode": "auto",
+    "contrast": "standard",
+    "surfaceDepth": "standard",
+    "chroma": 1.0,
+    "hueShift": 0
+   },
+   "resolved": {
+    "mode": "dark",
+    "variant": "balanced",
+    "contrast": "standard"
+   },
+   "seeds": [
+    "#FF8EB7"
+   ],
+   "sourceKey": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "minSurfaceAlpha": {
+   "sunken": 0.8,
+   "base": 0.82,
+   "panel": 0.86,
+   "raised": 0.86,
+   "lifted": 0.88
+  },
+  "clearInk": {
+   "light": {
+    "ink": "#10131A",
+    "inkMuted": "#2A2F3A",
+    "signal": "#7A2447",
+    "alert": "#9A2418",
+    "halo": "#F5F2EE"
+   },
+   "dark": {
+    "ink": "#F4F7FA",
+    "inkMuted": "#C9D0D8",
+    "signal": "#FFA0C4",
+    "alert": "#FF9083",
+    "halo": "#0A0C10"
+   }
+  }
+ },
+ "gates": {
+  "level": "standard",
+  "passed": true,
+  "rows": [
+   [
+    "ink on sunken",
+    14.97,
+    4.5
+   ],
+   [
+    "ink on base",
+    14.51,
+    4.5
+   ],
+   [
+    "ink on panel",
+    13.67,
+    4.5
+   ],
+   [
+    "ink on raised",
+    12.48,
+    4.5
+   ]
+  ]
+ },
+ "adjustments": [],
+ "fingerprint": "sha256:7790647a265b67eaabdce8e264cb38471045d0738e5d1cd88c6450d3f1fd1443"
+}

@@ -1,0 +1,53 @@
+{
+ "schemaVersion": 1,
+ "variants": [
+  {
+   "id": "balanced",
+   "label": "Balanced",
+   "description": "balanced",
+   "darkOnly": false
+  },
+  {
+   "id": "vibrant",
+   "label": "Vibrant",
+   "description": "vibrant",
+   "darkOnly": false
+  },
+  {
+   "id": "expressive",
+   "label": "Expressive",
+   "description": "expressive",
+   "darkOnly": false
+  },
+  {
+   "id": "faithful",
+   "label": "Faithful",
+   "description": "faithful",
+   "darkOnly": false
+  },
+  {
+   "id": "muted",
+   "label": "Muted",
+   "description": "muted",
+   "darkOnly": false
+  },
+  {
+   "id": "monochrome",
+   "label": "Monochrome",
+   "description": "monochrome",
+   "darkOnly": false
+  },
+  {
+   "id": "high-contrast",
+   "label": "High-Contrast",
+   "description": "high-contrast",
+   "darkOnly": false
+  },
+  {
+   "id": "neon",
+   "label": "Neon",
+   "description": "neon",
+   "darkOnly": true
+  }
+ ]
+}

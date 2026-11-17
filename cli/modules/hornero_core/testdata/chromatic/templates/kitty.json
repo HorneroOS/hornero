@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "name": "kitty",
+  "template": "kitty.conf.tmpl",
+  "output": "${XDG_CONFIG_HOME}/kitty/hornero-chromatic.conf",
+  "when": "chromatic",
+  "adapter": "kitty",
+  "requires": "${XDG_CONFIG_HOME}/kitty"
+}

@@ -1,0 +1,16 @@
+{
+ "schemaVersion": 1,
+ "engine": {
+  "name": "hornero-chromatic",
+  "version": "1.0.0",
+  "algorithm": 1
+ },
+ "qt": "6.11.0",
+ "formats": [
+  "png",
+  "jpeg",
+  "webp",
+  "gif"
+ ],
+ "ffmpeg": "/usr/bin/ffmpeg"
+}

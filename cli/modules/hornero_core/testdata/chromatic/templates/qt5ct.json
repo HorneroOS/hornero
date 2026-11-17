@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "name": "qt5ct",
+  "template": "qt5ct.conf.tmpl",
+  "output": "${XDG_CONFIG_HOME}/qt5ct/colors/hornero-chromatic.conf",
+  "when": "chromatic",
+  "adapter": "qt5ct",
+  "requires": "${XDG_CONFIG_HOME}/qt5ct"
+}

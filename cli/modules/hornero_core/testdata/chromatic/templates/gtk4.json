@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "gtk4",
+  "template": "gtk4-recolor.css.tmpl",
+  "output": "${XDG_CONFIG_HOME}/gtk-4.0/gtk.css",
+  "when": "chromatic",
+  "adapter": "gtk4"
+}
