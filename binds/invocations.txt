@@ -32,7 +32,6 @@ apps switcher daemon
 apps switcher next
 apps switcher prev
 apps terminal-file
-assistant approve
 assistant ask
 assistant clarify
 assistant disable
@@ -63,6 +62,7 @@ assistant stop
 assistant usage
 assistant workspace create
 assistant workspace list
+assistant workspace reveal
 assistant workspace use
 backup create
 capture clipboard
