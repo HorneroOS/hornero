@@ -193,8 +193,18 @@ fn test_mode_escalation_gate() {
 	assert assistant_mode_escalates('agent')
 	assert !assistant_mode_escalates('ask')
 	assert !assistant_mode_escalates('chat')
-	// Unrecognised modes fail closed to agent only at the session layer;
-	// the escalation check itself treats unknown as non-agent input here.
-	assert assistant_session_effective_mode('bogus') == 'agent'
 	assert assistant_session_effective_mode('ask') == 'ask'
+}
+
+fn test_unknown_mode_fails_closed_to_ask() {
+	// K1: anything unrecognised resolves to the least-privileged mode.
+	for bogus in ['bogus', 'Agent', 'AGENT', 'agent ', 'root', 'yolo', 'agent\t'] {
+		assert assistant_session_effective_mode(bogus) == 'ask', bogus
+		assert !assistant_mode_escalates(bogus), bogus
+		assert !assistant_mode_allows_tools(bogus), bogus
+	}
+	// Only the documented legacy empty value keeps Agent behaviour.
+	assert assistant_session_effective_mode('') == 'agent'
+	assert assistant_session_effective_mode('agent') == 'agent'
+	assert assistant_session_effective_mode('chat') == 'chat'
 }

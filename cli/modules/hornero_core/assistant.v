@@ -884,10 +884,17 @@ pub:
 	workspace string // workspace id at creation ('' = legacy, unbound)
 }
 
-// assistant_session_effective_mode normalises a stored mode: anything
-// unrecognised fails closed to the least-privileged conversational mode.
+// assistant_session_effective_mode normalises a stored mode. The empty
+// string is the documented legacy default (rows and callers from
+// before hornero#414 carry no mode and keep Agent behaviour). Any
+// other unrecognised value — a typo, a hand-edited registry, a mode
+// from a newer client — fails closed to Ask, the least-privileged
+// mode: it never escalates an approval and never runs tools.
 pub fn assistant_session_effective_mode(mode string) string {
-	return if mode in ['ask', 'agent', 'chat'] { mode } else { 'agent' }
+	if mode in ['ask', 'agent', 'chat'] {
+		return mode
+	}
+	return if mode.len == 0 { 'agent' } else { 'ask' }
 }
 
 // assistant_mode_escalates reports whether a mode may surface an

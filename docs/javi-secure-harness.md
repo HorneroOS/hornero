@@ -114,7 +114,10 @@ Session modes cap authority before policy: Ask is read-only and
 auto-denies approvals, Chat has no machine authority, Agent uses the
 full policy. Switching modes never widens permissions
 (`assistant.v`: `assistant_session_effective_mode`,
-`assistant_mode_escalates`).
+`assistant_mode_escalates`). A stored or requested mode that is not
+exactly `ask`, `agent` or `chat` fails closed to Ask; only the empty
+legacy value (rows and callers from before hornero#414) keeps the
+Agent default.
 
 `assistant ask --mode ask|agent|chat` (hornero#414) applies the same
 modes per run; without `--mode` the session mode, else the legacy
