@@ -503,7 +503,7 @@ fn test_contract_events_for_unknown_run_deny_approval_even_without_status() {
 		'POST /v1/runs/run_unk/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
-	result := assistant_events_report('run_unk')
+	result := assistant_events_report_opts('run_unk', true)
 	assert !result.ok
 	assert result.data['pending'] == 'denied-by-mode'
 	reqs := mock_wait_requests(mock, 2)
@@ -590,7 +590,7 @@ fn test_contract_failed_deny_stops_the_run_reports_failure_and_does_not_log_deni
 	})
 	defer { mock_restore_env(saved) }
 	assistant_run_mode_record('run_df', 'ask') or { panic(err) }
-	result := assistant_events_report('run_df')
+	result := assistant_events_report_opts('run_df', true)
 	assert !result.ok
 	assert result.data['pending'] == 'deny-failed'
 	assert !result.message.contains('denied by')
@@ -845,4 +845,115 @@ fn test_run_mode_registry_reads_legacy_tsv_and_prunes() {
 	}
 	names := (os.ls(assistant_run_modes_dir()) or { [] }).filter(!it.starts_with('.'))
 	assert names.len == assistant_run_modes_keep
+}
+
+fn k2_posts(mock &MockGateway, path string) int {
+	return mock.recorded().filter(it.method == 'POST' && it.path == path).len
+}
+
+fn test_contract_ask_stream_denies_each_request_once() {
+	// K2: the live stream denies; the final replay must not deny again
+	// (that second deny used to fail and stop the run spuriously).
+	sse := 'data: {"type":"approval.request","command":"pacman -S x"}\n\n'
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':                  '{"run_id":"run_k2a","status":"queued"}'
+		'GET /v1/runs/run_k2a/events':    sse
+		'GET /v1/runs/run_k2a':           '{"status":"running","pending_controls":[]}'
+		'POST /v1/runs/run_k2a/approval': '{}'
+		'POST /v1/runs/run_k2a/stop':     '{}'
+	})
+	defer { mock_restore_env(saved) }
+	mut holder := &FrameSink{}
+	result := assistant_ask_stream_report_traced_mode('install x', [], '', 'ask', fn (_ string) {},
+		fn [mut holder] (kind string, text string) {
+			holder.items << '${kind}:${text}'
+		})
+	assert !result.ok && result.data['pending'] == 'denied-by-mode'
+	mock_wait_requests(mock, 3)
+	assert k2_posts(mock, '/v1/runs/run_k2a/approval') == 1
+	assert k2_posts(mock, '/v1/runs/run_k2a/stop') == 0
+	assert holder.items.all(!it.starts_with('deny-failed'))
+	// A later follow (new invocation) replays the log: still no deny,
+	// no stop — the ledger remembers '#1'.
+	follow := assistant_events_stream_report_traced('run_k2a', fn (_ string) {}, fn (_ string, _ string) {})
+	assert follow.data['pending'] == 'denied-by-mode'
+	assert k2_posts(mock, '/v1/runs/run_k2a/approval') == 1
+	assert k2_posts(mock, '/v1/runs/run_k2a/stop') == 0
+	assert '#1' in assistant_denials_load('run_k2a')
+}
+
+fn test_contract_deny_dedupes_by_request_id_and_generation() {
+	sse := 'data: {"type":"approval.request","request_id":"p1","execution_generation":2,"command":"a"}\n\ndata: {"type":"approval.request","request_id":"p1","execution_generation":2,"command":"a"}\n\ndata: {"type":"approval.request","request_id":"p2","execution_generation":3,"command":"b"}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_k2b/events':    sse
+		'POST /v1/runs/run_k2b/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	reqs := assistant_approval_requests(parse_sse_events(sse))
+	assert reqs.map(it.ref) == ['p1@2', 'p1@2', 'p2@3']
+	assistant_run_mode_record('run_k2b', 'chat') or { panic(err) }
+	r := assistant_events_report_opts('run_k2b', true)
+	assert r.data['pending'] == 'denied-by-mode'
+	assert k2_posts(mock, '/v1/runs/run_k2b/approval') == 2
+	again := assistant_events_report_opts('run_k2b', true)
+	assert again.data['pending'] == 'denied-by-mode'
+	assert k2_posts(mock, '/v1/runs/run_k2b/approval') == 2
+}
+
+fn test_contract_plain_events_is_read_only() {
+	// K2: plain `events` never denies or stops; --enforce does.
+	sse := 'data: {"type":"approval.request","command":"rm -rf /"}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_k2c/events':    sse
+		'POST /v1/runs/run_k2c/approval': '{}'
+		'POST /v1/runs/run_k2c/stop':     '{}'
+	})
+	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_k2c', 'ask') or { panic(err) }
+	ro := assistant_events_report('run_k2c')
+	assert !ro.ok && ro.data['pending'] == 'needs-deny'
+	assert ro.message.contains('--enforce')
+	assert mock.recorded().all(it.method == 'GET')
+	enforced := assistant_events_report_opts('run_k2c', true)
+	assert enforced.data['pending'] == 'denied-by-mode'
+	assert k2_posts(mock, '/v1/runs/run_k2c/approval') == 1
+	// Once denied, the read-only view reports it as denied.
+	after := assistant_events_report('run_k2c')
+	assert after.data['pending'] == 'denied-by-mode'
+	assert k2_posts(mock, '/v1/runs/run_k2c/approval') == 1
+}
+
+fn test_contract_plain_events_reports_tool_violation_without_stop() {
+	sse := 'data: {"type":"tool.started","tool":"terminal","preview":"echo hi"}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_k2d/events': sse
+		'POST /v1/runs/run_k2d/stop':  '{}'
+	})
+	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_k2d', 'ask') or { panic(err) }
+	ro := assistant_events_report('run_k2d')
+	assert !ro.ok && ro.data['pending'] == 'tool-violation'
+	assert mock.recorded().all(it.method == 'GET')
+	enforced := assistant_events_report_opts('run_k2d', true)
+	assert !enforced.ok
+	assert k2_posts(mock, '/v1/runs/run_k2d/stop') == 1
+}
+
+fn test_contract_rejected_deny_with_nothing_pending_is_stale_not_failure() {
+	// The request was resolved elsewhere (e.g. the user denied it); the
+	// gateway rejects our deny and status proves nothing is pending.
+	sse := 'data: {"type":"approval.request","command":"x"}\n\n'
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_k2e/events':    sse
+		'GET /v1/runs/run_k2e':           '{"status":"completed","pending_controls":[]}'
+		'POST /v1/runs/run_k2e/approval': '!500'
+		'POST /v1/runs/run_k2e/stop':     '{}'
+	})
+	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_k2e', 'ask') or { panic(err) }
+	r := assistant_events_report_opts('run_k2e', true)
+	assert r.data['pending'] == 'denied-by-mode'
+	assert k2_posts(mock, '/v1/runs/run_k2e/stop') == 0
+	log := os.read_file(assistant_log_file()) or { '' }
+	assert log.contains('mode-deny-stale')
 }
