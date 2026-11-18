@@ -216,7 +216,7 @@ Examples:
 			return "Usage: horneroctl assistant events <run-id> [--stream]\n\nShow a Hermes run's collected answer, or the approval /\nclarification it is waiting on. With --stream (human output\nonly), deltas print live as they arrive. Approvals are never\nanswered automatically; use assistant approve / clarify.\n\nExamples:\n  horneroctl assistant events run_abc123\n  horneroctl assistant events run_abc123 --stream\n"
 		}
 		'assistant approve' {
-			return 'Usage: horneroctl assistant approve <run-id> <approve|deny>\n\nAnswer a Hermes approval request for a running run. Nothing is\never auto-approved; this records exactly the decision you type.\n\nExamples:\n  horneroctl assistant approve run_abc123 approve\n  horneroctl assistant approve run_abc123 deny\n'
+			return 'Usage: horneroctl assistant approve <run-id> <approve|deny> [--request <prompt-id[@generation]>]\n\nAnswer a Hermes approval request for a running run. Nothing is\never auto-approved; this records exactly the decision you type.\nWith --request the decision is refused unless that exact request is\nstill the pending one (a UI passes the request it displayed).\n\nExamples:\n  horneroctl assistant approve run_abc123 approve\n  horneroctl assistant approve run_abc123 approve --request p1@2\n  horneroctl assistant approve run_abc123 deny\n'
 		}
 		'assistant clarify' {
 			return 'Usage: horneroctl assistant clarify <run-id> "<answer>"\n\nAnswer a Hermes clarification question for a running run.\n\nExamples:\n  horneroctl assistant clarify run_abc123 "use the dark theme"\n'

@@ -19,6 +19,7 @@ pub:
 	command        string
 	has_command    bool
 	workspace      string
+	request        string
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -44,10 +45,31 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut command := ''
 	mut has_command := false
 	mut workspace := ''
+	mut request := ''
+	mut literal := false
 	mut i := 1
 	for i < args.len {
 		arg := args[i]
 		i++
+		// `--` ends option parsing: everything after it is positional
+		// text (a prompt or answer that starts with a dash is data,
+		// never a flag).
+		if literal {
+			parts << arg
+			continue
+		}
+		if arg == '--' {
+			literal = true
+			continue
+		}
+		if arg == '--request' {
+			if i >= args.len {
+				return error('--request needs a request id.\nExample: horneroctl assistant approve run_abc123 approve --request p1@2')
+			}
+			request = args[i]
+			i++
+			continue
+		}
 		if arg == '--mode' {
 			if i >= args.len {
 				return error('--mode needs ask, agent or chat.\nExample: horneroctl assistant ask "hi" --mode ask')
@@ -189,6 +211,9 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if leaf == 'setup' && value.len > 0 {
 		return error('setup takes no argument.\nExample: horneroctl assistant setup --dry-run')
 	}
+	if request.len > 0 && leaf != 'approve' {
+		return error('--request only applies to approve.\nExample: horneroctl assistant approve run_abc123 approve --request p1@2')
+	}
 	if has_command && leaf != 'shell-proposal' {
 		return error('--command only applies to shell-proposal.\nExample: horneroctl assistant shell-proposal --command "ls -la"')
 	}
@@ -224,5 +249,6 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		command:        command
 		has_command:    has_command
 		workspace:      workspace
+		request:        request
 	}
 }

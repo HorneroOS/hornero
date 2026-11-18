@@ -29,7 +29,7 @@ pub fn assistant_log_file() string {
 fn assistant_log_clean_field(s string) string {
 	mut out := redact_secrets(s).replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
 	if out.len > 160 {
-		out = out[..160]
+		out = assistant_cut(out, 160)
 	}
 	return out
 }

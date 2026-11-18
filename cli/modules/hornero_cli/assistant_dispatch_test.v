@@ -3,7 +3,28 @@ module hornero_cli
 import os
 import time
 
+// isolate_env points every location horneroctl may write at a fresh
+// temp dir, so dispatching real subcommands in tests can never touch
+// the developer's ~/.config/hornero (audit log, policy, sessions).
+fn isolate_env() {
+	root := os.join_path(os.temp_dir(), 'hornero-dispatch-test-${os.getpid()}')
+	os.mkdir_all(os.join_path(root, 'config')) or {}
+	os.setenv('HOME', root, true)
+	os.setenv('XDG_CONFIG_HOME', os.join_path(root, 'config'), true)
+	os.setenv('XDG_STATE_HOME', os.join_path(root, 'state'), true)
+	os.setenv('XDG_DATA_HOME', os.join_path(root, 'data'), true)
+	os.setenv('XDG_CACHE_HOME', os.join_path(root, 'cache'), true)
+	os.setenv('HORNERO_ASSISTANT_LOG_FILE', os.join_path(root, 'assistant.log'), true)
+	os.setenv('HORNERO_ASSISTANT_SESSIONS_FILE', os.join_path(root, 'sessions.json'), true)
+	os.setenv('HORNERO_ASSISTANT_RUN_MODES_FILE', os.join_path(root, 'run-modes.tsv'), true)
+	// a throwaway Hermes home so `model set` tests never read the real one
+	os.mkdir_all(os.join_path(root, 'hermes')) or {}
+	os.write_file(os.join_path(root, 'hermes', 'config.yaml'), 'model:\n  default: test-model\n  provider: test\n') or {}
+	os.setenv('HERMES_HOME', os.join_path(root, 'hermes'), true)
+}
+
 fn test_assistant_help_has_examples() {
+	isolate_env()
 	help := command_help('assistant')
 	assert help.contains('horneroctl assistant <status|health|enable|disable|setup|gateway|tools|knowledge|sessions|model|usage|ask|stop|approve|clarify|events|log|policy|workspace|profile|prompt|tool|shell-proposal|delegate>')
 	assert help.contains('Examples:')
@@ -13,6 +34,7 @@ fn test_assistant_help_has_examples() {
 }
 
 fn test_assistant_parser_rules() {
+	isolate_env()
 	opts := parse_assistant(['enable', '--dry-run']) or { panic(err) }
 	assert opts.leaf == 'enable' && opts.dry_run && !opts.yes
 	knowledge := parse_assistant(['knowledge']) or { panic(err) }
@@ -58,17 +80,20 @@ fn test_assistant_parser_rules() {
 }
 
 fn test_assistant_usage_errors_exit_two() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant']) == 2
 	assert dispatch(['horneroctl', 'assistant', 'fly']) == 2
 	assert dispatch(['horneroctl', 'assistant', 'ask']) == 2
 }
 
 fn test_assistant_tools_dispatch_ok() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant', 'tools']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'tools', '--json']) == 0
 }
 
 fn test_assistant_approve_clarify_parser_rules() {
+	isolate_env()
 	ok := parse_assistant(['approve', 'run_1', 'deny']) or { panic(err) }
 	assert ok.arg1 == 'run_1' && ok.arg2 == 'deny'
 	cl := parse_assistant(['clarify', 'run_1', 'use', 'dark']) or { panic(err) }
@@ -84,6 +109,7 @@ fn test_assistant_approve_clarify_parser_rules() {
 }
 
 fn test_assistant_events_parser_rules() {
+	isolate_env()
 	ok := parse_assistant(['events', 'run_1']) or { panic(err) }
 	assert ok.value == 'run_1'
 	if _ := parse_assistant(['events']) {
@@ -105,6 +131,7 @@ fn test_assistant_stream_flag_rules() {
 }
 
 fn test_assistant_ask_mode_parser_rules() {
+	isolate_env()
 	// hornero#414: --mode on ask accepts exactly the session modes.
 	for m in ['ask', 'agent', 'chat'] {
 		opts := parse_assistant(['ask', 'hi', '--mode', m]) or { panic(err) }
@@ -129,6 +156,7 @@ fn test_assistant_ask_mode_parser_rules() {
 }
 
 fn test_assistant_setup_parser_rules() {
+	isolate_env()
 	setup_help := command_help('assistant setup')
 	assert setup_help.contains('horneroctl assistant setup --adopt-dotfiles --dry-run')
 	setup := parse_assistant(['setup', '--dry-run']) or { panic(err) }
@@ -157,6 +185,7 @@ fn test_assistant_setup_parser_rules() {
 }
 
 fn test_assistant_dotfiles_adoption_dispatch_dry_run_uses_isolated_paths() {
+	isolate_env()
 	root := os.join_path(os.temp_dir(), 'hornero-cli-adopt-dry-${os.getpid()}-${time.now().unix_milli()}')
 	defer { os.rmdir_all(root) or {} }
 	old_config := os.getenv('XDG_CONFIG_HOME')
@@ -188,6 +217,7 @@ fn test_assistant_dotfiles_adoption_dispatch_dry_run_uses_isolated_paths() {
 }
 
 fn test_assistant_gateway_parser_rules() {
+	isolate_env()
 	gw := parse_assistant(['gateway']) or { panic(err) }
 	assert gw.leaf == 'gateway' && gw.arg1 == ''
 	start := parse_assistant(['gateway', 'start', '--yes']) or { panic(err) }
@@ -207,6 +237,7 @@ fn test_assistant_gateway_parser_rules() {
 }
 
 fn test_assistant_enable_dry_run_dispatch_ok() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant', 'enable', '--dry-run']) == 0
 }
 
@@ -227,6 +258,7 @@ fn test_stream_trace_frame_shapes() {
 }
 
 fn test_assistant_policy_workspace_dispatch() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant', 'policy', '--help']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'workspace', '--help']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'policy']) == 0
@@ -241,6 +273,7 @@ fn test_assistant_policy_workspace_dispatch() {
 }
 
 fn test_assistant_profile_prompt_dispatch() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant', 'profile', '--help']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'prompt', '--help']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'prompt', 'history']) == 0
@@ -248,6 +281,7 @@ fn test_assistant_profile_prompt_dispatch() {
 }
 
 fn test_assistant_tool_dispatch() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant', 'tool', '--help']) == 0
 	// Unknown tools are refused by the broker (exit 1), never executed.
 	assert dispatch(['horneroctl', 'assistant', 'tool', 'rm_rf', '/']) == 1
@@ -256,11 +290,13 @@ fn test_assistant_tool_dispatch() {
 }
 
 fn test_assistant_prompt_set_text_dispatch() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.']) == 1
 	assert dispatch(['horneroctl', 'assistant', 'prompt', 'set-text', 'You are Javi.', '--dry-run']) == 0
 }
 
 fn test_assistant_shell_proposal_dispatch() {
+	isolate_env()
 	assert command_help('assistant shell-proposal').contains('Examples:')
 	assert command_help('assistant delegate').contains('Examples:')
 	assert dispatch(['horneroctl', 'assistant', 'shell-proposal', '--help']) == 0
@@ -278,6 +314,7 @@ fn test_assistant_shell_proposal_dispatch() {
 }
 
 fn test_assistant_delegate_dispatch() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant', 'delegate', 'codex', '--workspace', os.temp_dir(),
 		'review the parser']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'delegate', 'nope', '--workspace', os.temp_dir(),
@@ -297,7 +334,23 @@ fn test_assistant_delegate_dispatch() {
 }
 
 fn test_assistant_model_set_dispatch() {
+	isolate_env()
 	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'gpt-5']) == 1
 	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'gpt-5', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'assistant', 'model', 'set', 'bad model', '--dry-run']) == 1
+}
+
+fn test_assistant_double_dash_and_request_parser_rules() {
+	a := parse_assistant(['ask', '--', '--yes', '-x']) or { panic(err) }
+	assert !a.yes && a.value == '--yes -x'
+	c := parse_assistant(['clarify', 'run_1', '--', '--dry-run']) or { panic(err) }
+	assert !c.dry_run && c.arg2 == '--dry-run'
+	r := parse_assistant(['approve', 'run_1', 'approve', '--request', 'p1@2']) or { panic(err) }
+	assert r.request == 'p1@2'
+	if _ := parse_assistant(['ask', 'hi', '--request', 'p1']) {
+		assert false, '--request only applies to approve'
+	}
+	if _ := parse_assistant(['approve', 'run_1', 'approve', '--request']) {
+		assert false, '--request needs a value'
+	}
 }
