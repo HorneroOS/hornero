@@ -140,6 +140,20 @@ text, the card shows an explicit "not described" notice and results
 carry `detailBound: "false"`. The event-log text is never shown under
 a control id, because it can describe an earlier or different request.
 
+The mode each run was created with is recorded per run in
+`~/.config/hornero/assistant-run-modes.d/<run_id>` (one 0600 file
+holding exactly `ask|agent|chat`, inside a 0700 directory), written
+through an `O_EXCL` temp file and an atomic rename, so concurrent
+writers never lose a record and there is no lock to time out or take
+over. If a record cannot be written, the new run is stopped and `ask`
+fails (`pending: mode-record-failed`); it is never dropped silently
+(that would later read as Ask and auto-deny an Agent run). Records
+that are not regular, user-owned, private files with the exact
+content — or that sit in a directory with group/other bits — read as
+Ask. Trust boundary: processes running as the same user can rewrite
+these files; they are inside the user's trust envelope, and the
+checks only stop other users, symlink tricks and corrupt records.
+
 The full user-configurable system prompt is Hermes' `SOUL.md`, edited
 through `assistant prompt` with horneroctl-side version snapshots and
 rollback. It changes behaviour only: policy, hard denies and sandbox
