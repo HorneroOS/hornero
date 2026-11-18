@@ -26,6 +26,8 @@ import time
 //   off     never touch this toolkit's files
 
 pub const qt_toolkits = ['qt6ct', 'qt5ct']
+// qt_consumer_names are the opt-out units of `appearance set-qt`.
+pub const qt_consumer_names = ['qt6ct', 'qt5ct', 'kde']
 pub const qt_scheme_name = 'hornero-signal.conf'
 const qt_marker = '; hornero-managed: custom_palette, color_scheme_path (horneroctl appearance set-qt <toolkit>=off to opt out)'
 
@@ -354,13 +356,15 @@ pub fn qt_sync_toolkit(toolkit string, theme SignalTheme, dry_run bool) QtSyncRe
 // qt_sync_all themes every enabled toolkit from the live scheme.
 pub fn qt_sync_all(dry_run bool) []QtSyncReport {
 	theme := read_signal_scheme() or {
-		return qt_toolkits.map(QtSyncReport{
+		return qt_consumer_names.map(QtSyncReport{
 			toolkit: it
 			status:  'no-scheme'
 			detail:  err.msg()
 		})
 	}
-	return qt_toolkits.map(qt_sync_toolkit(it, theme, dry_run))
+	mut reports := qt_toolkits.map(qt_sync_toolkit(it, theme, dry_run))
+	reports << kde_sync(theme, dry_run)
+	return reports
 }
 
 // sync_qt6ct_palette keeps the historical hook name used by theme apply and
@@ -404,8 +408,8 @@ pub fn appearance_sync_qt_native(dry_run bool) CommandResult {
 pub fn appearance_set_qt_native(spec string, dry_run bool) CommandResult {
 	toolkit := spec.all_before('=')
 	policy := spec.all_after('=')
-	if toolkit !in qt_toolkits || policy !in ['follow', 'force', 'off'] || !spec.contains('=') {
-		return fail_result('appearance set-qt', 'Usage: horneroctl appearance set-qt <qt6ct|qt5ct>=<follow|force|off>.\nExample: horneroctl appearance set-qt qt6ct=off --dry-run')
+	if toolkit !in qt_consumer_names || policy !in ['follow', 'force', 'off'] || !spec.contains('=') {
+		return fail_result('appearance set-qt', 'Usage: horneroctl appearance set-qt <qt6ct|qt5ct|kde>=<follow|force|off>.\nExample: horneroctl appearance set-qt qt6ct=off --dry-run')
 	}
 	if dry_run {
 		return ok_result('appearance set-qt', 'would persist ${toolkit}Consumer=${policy} in ${scheme_state_file()} and re-sync',
@@ -504,6 +508,7 @@ pub fn qt_doctor_checks() []DoctorCheck {
 			detail: '${live.id} (${live.mode}) applied via ${scheme}'
 		}
 	}
+	checks << kde_doctor_check(live)
 	env := os.getenv('QT_QPA_PLATFORMTHEME')
 	if env.len > 0 {
 		missing := qt_toolkits.filter(qt_toolkit_present(it) && qt_policy(it) != 'off'

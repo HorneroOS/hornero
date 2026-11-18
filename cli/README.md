@@ -175,10 +175,15 @@ synthesis; setting a wallpaper never changes a colour.
   stale pre-Signal config (no custom palette, or a retired Hornero scheme)
   is backed up to `~/.local/state/hornero/qt/backups/<toolkit>/` before it
   is migrated; a user's own palette is left alone. A toolkit that is not
-  installed is skipped. `appearance set-qt <qt6ct|qt5ct>=<follow|force|off>
+  installed is skipped. KDE Frameworks apps (Dolphin, Kate, Okular) ignore
+  the qt6ct window/view colours and fall back to Breeze Light outside Plasma,
+  so the consumer also renders `~/.local/share/color-schemes/HorneroSignal.colors`
+  and manages one kdeglobals key, `[UiSettings] ColorScheme` (stale or unset
+  kdeglobals is backed up first; a scheme you picked yourself is kept).
+  `appearance set-qt <qt6ct|qt5ct|kde>=<follow|force|off>
   --yes` persists the per-toolkit policy (`off` never touches that
   toolkit; `force` takes over a custom palette). Kvantum is not managed.
-  `appearance doctor` reports `qt-qt6ct`, `qt-qt5ct`, `qt-platformtheme`
+  `appearance doctor` reports `qt-qt6ct`, `qt-qt5ct`, `qt-kde`, `qt-platformtheme`
   and `qt-kvantum`: missing or stale config and drift from the live theme
   fail, a user palette, an env list lacking a toolkit or a Kvantum style
   warn. Qt apps pick the change up when they start (the platform theme

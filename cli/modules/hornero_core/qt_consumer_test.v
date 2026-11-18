@@ -31,6 +31,8 @@ fn with_qt_env(name string, body fn (tmp string)) {
 	os.setenv('XDG_STATE_HOME', os.join_path(tmp, 'state'), true)
 	os.setenv('XDG_CACHE_HOME', os.join_path(tmp, 'cache'), true)
 	os.setenv('HORNERO_QT_PLUGIN_DIRS', os.join_path(tmp, 'plugins'), true)
+	os.setenv('HORNERO_KDE_LIB_DIRS', os.join_path(tmp, 'kdelib'), true)
+	os.mkdir_all(os.join_path(tmp, 'kdelib')) or {}
 	os.mkdir_all(os.join_path(tmp, 'plugins')) or {}
 	body(tmp)
 	for n in ['XDG_CONFIG_HOME', 'XDG_CONFIG_DIRS', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME',
@@ -248,5 +250,66 @@ fn test_doctor_flags_kvantum_style() {
 		os.write_file(qt_conf_file('qt6ct'), conf) or {}
 		k := qt_doctor_checks().filter(it.name == 'qt-kvantum')
 		assert k.len == 1 && k[0].warn
+	})
+}
+
+fn qt_install_kde(tmp string) {
+	os.write_file(os.join_path(tmp, 'kdelib', 'libKF6ColorScheme.so.6'), '') or { panic(err) }
+}
+
+fn test_kde_scheme_selected_and_rendered_dark_and_light() {
+	with_qt_env('kde', fn (tmp string) {
+		qt_install_kde(tmp)
+		qt_live('hornero-signal-night')
+		r := qt_sync_all(false).filter(it.toolkit == 'kde')[0]
+		assert r.status == 'synced'
+		globals := os.read_file(kde_globals_file()) or { panic(err) }
+		assert qt_ini_value(globals, 'UiSettings', 'ColorScheme') == 'HorneroSignal'
+		night := os.read_file(kde_scheme_file()) or { panic(err) }
+		t := qt_theme('hornero-signal-night')
+		assert qt_ini_value(night, 'Colors:View', 'BackgroundNormal') == kde_rgb(t.role('sunken'))
+		assert qt_ini_value(night, 'Colors:Selection', 'BackgroundNormal') == kde_rgb(t.role('cue'))
+		assert kde_doctor_check(t).ok
+		qt_live('hornero-signal-day')
+		assert !kde_doctor_check(qt_theme('hornero-signal-day')).ok
+		qt_sync_all(false)
+		day := os.read_file(kde_scheme_file()) or { panic(err) }
+		assert day != night
+		assert kde_doctor_check(qt_theme('hornero-signal-day')).ok
+	})
+}
+
+fn test_kde_preserves_other_groups_backs_up_and_respects_user_scheme() {
+	with_qt_env('kde-user', fn (tmp string) {
+		qt_install_kde(tmp)
+		qt_live('hornero-signal-night')
+		os.mkdir_all(gtk_config_home()) or {}
+		old := '[KDE]\nSingleClick=false\n\n[UiSettings]\n'
+		os.write_file(kde_globals_file(), old) or { panic(err) }
+		r := kde_sync(qt_theme('hornero-signal-night'), false)
+		assert r.status == 'synced'
+		assert (os.read_file(r.backup) or { '' }) == old
+		g := os.read_file(kde_globals_file()) or { '' }
+		assert g.contains('SingleClick=false')
+		assert qt_ini_value(g, 'UiSettings', 'ColorScheme') == 'HorneroSignal'
+		// a user-selected scheme is left alone until forced
+		mine := '[UiSettings]\nColorScheme=BreezeDark\n'
+		os.write_file(kde_globals_file(), mine) or { panic(err) }
+		assert kde_sync(qt_theme('hornero-signal-night'), false).status == 'user-palette'
+		assert (os.read_file(kde_globals_file()) or { '' }) == mine
+		assert kde_doctor_check(qt_theme('hornero-signal-night')).warn
+		appearance_set_qt_native('kde=force', false)
+		assert qt_ini_value(os.read_file(kde_globals_file()) or { '' }, 'UiSettings', 'ColorScheme') == 'HorneroSignal'
+		appearance_set_qt_native('kde=off', false)
+		assert kde_sync(qt_theme('hornero-signal-night'), false).status == 'off'
+	})
+}
+
+fn test_kde_absent_writes_nothing() {
+	with_qt_env('kde-none', fn (tmp string) {
+		qt_live('hornero-signal-night')
+		assert kde_sync(qt_theme('hornero-signal-night'), false).status == 'not-installed'
+		assert !os.is_file(kde_globals_file())
+		assert kde_doctor_check(qt_theme('hornero-signal-night')).ok
 	})
 }

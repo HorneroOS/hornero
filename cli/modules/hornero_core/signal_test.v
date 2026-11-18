@@ -450,11 +450,12 @@ fn test_appearance_doctor_checks_scheme_and_fonts() {
 	os.setenv('HORNERO_FONT_DIRS', '${sg_root}/fonts', true)
 	// hermetic: no Qt platform-theme plugin is visible to the Qt checks
 	os.setenv('HORNERO_QT_PLUGIN_DIRS', '${sg_root}/no-qt-plugins', true)
+	os.setenv('HORNERO_KDE_LIB_DIRS', '${sg_root}/no-kde-libs', true)
 	checks := appearance_doctor_checks()
 	// signal-scheme, signal-fonts, chromatic-helper, then the Qt consumer
-	// checks (qt-qt6ct, qt-qt5ct, qt-platformtheme).
-	assert checks.len == 6
-	assert checks[3..].map(it.name) == ['qt-qt6ct', 'qt-qt5ct', 'qt-platformtheme']
+	// checks (qt-qt6ct, qt-qt5ct, qt-kde, qt-platformtheme).
+	assert checks.len == 7
+	assert checks[3..].map(it.name) == ['qt-qt6ct', 'qt-qt5ct', 'qt-kde', 'qt-platformtheme']
 	assert checks[0].name == 'signal-scheme'
 	assert checks[2].name == 'chromatic-helper'
 	assert !checks[0].ok
@@ -470,6 +471,7 @@ fn test_appearance_doctor_checks_scheme_and_fonts() {
 	report := appearance_doctor_native()
 	assert !report.message.contains('materialyoucolor')
 	os.unsetenv('HORNERO_QT_PLUGIN_DIRS')
+	os.unsetenv('HORNERO_KDE_LIB_DIRS')
 	sg_teardown()
 }
 

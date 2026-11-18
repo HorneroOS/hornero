@@ -432,10 +432,10 @@ Examples:
                       Set the icon theme (needs --yes)
   set-gtk-color-scheme <policy> [--dry-run]
                       Set the GTK color-scheme policy (needs --yes)
-  sync-qt [--dry-run] Re-render the live theme into qt6ct/qt5ct (needs --yes);
-                      migrates stale configs with a backup
+  sync-qt [--dry-run] Re-render the live theme into qt6ct/qt5ct and the KDE
+                      colour scheme (needs --yes); backs up stale configs
   set-qt <toolkit>=<follow|force|off> [--dry-run]
-                      Per-toolkit Qt policy: follow (default), force (take
+                      toolkit: qt6ct|qt5ct|kde. Policy: follow (default), force (take
                       over a custom palette), off (never touch) (needs --yes)
   theme ...           Hornero Signal theme packs (list, show, get, apply, set)
   chromatic ...       Hornero Chromatic: palettes generated from a wallpaper,
