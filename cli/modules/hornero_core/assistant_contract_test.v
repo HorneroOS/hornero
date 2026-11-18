@@ -654,3 +654,16 @@ fn test_run_mode_registry_survives_concurrent_writers() {
 	}
 	assert !os.exists(assistant_run_modes_file() + '.lock')
 }
+
+fn test_session_with_unknown_stored_mode_resolves_to_ask() {
+	// K1: a hand-edited/corrupt session row must not grant Agent authority.
+	_, saved := start_mock_gateway({})
+	defer { mock_restore_env(saved) }
+	os.write_file(assistant_sessions_file(), 'current\ts1\nsession\ts1\tT\t2026-01-01\tsuperuser\t\n') or {
+		panic(err)
+	}
+	assert assistant_session_mode('s1') == 'ask'
+	assert assistant_resolve_ask_mode('', 's1') == 'ask'
+	assistant_run_mode_record('run_k1', 'superuser')
+	assert assistant_run_mode('run_k1') == 'ask'
+}
