@@ -432,6 +432,11 @@ Examples:
                       Set the icon theme (needs --yes)
   set-gtk-color-scheme <policy> [--dry-run]
                       Set the GTK color-scheme policy (needs --yes)
+  sync-qt [--dry-run] Re-render the live theme into qt6ct/qt5ct and the KDE
+                      colour scheme (needs --yes); backs up stale configs
+  set-qt <toolkit>=<follow|force|off> [--dry-run]
+                      toolkit: qt6ct|qt5ct|kde. Policy: follow (default), force (take
+                      over a custom palette), off (never touch) (needs --yes)
   theme ...           Hornero Signal theme packs (list, show, get, apply, set)
   chromatic ...       Hornero Chromatic: palettes generated from a wallpaper,
                       image or seed colours (status, preview, apply, follow,
@@ -464,6 +469,8 @@ Examples:
   horneroctl appearance sync --dry-run
   horneroctl appearance sync --yes
   horneroctl appearance doctor
+  horneroctl appearance sync-qt --dry-run
+  horneroctl appearance set-qt qt6ct=off --yes
   horneroctl appearance theme list
   horneroctl appearance theme apply hornero-signal-night --yes
   horneroctl appearance scheme status

@@ -1,0 +1,8 @@
+; qt6ct colour scheme for hornero-signal-night — GENERATED from schema-v2 roles
+; (lib/hornero/signal_render.py via scripts/generate-appearance.py).
+; Default wallpaper: hornero-signal-night-01.png.
+; Roles follow QPalette::ColorRole order. Selection = cue, Accent = signal.
+[ColorScheme]
+active_colors=#ffece6da, #ff1f252e, #ff283039, #ff242a34, #ff101419, #ff707a85, #ffece6da, #ffffffff, #ffece6da, #ff101419, #ff13171d, #ff000000, #ff7ec1ea, #ff06151f, #ff7ec1ea, #ffa8abad, #ff181d24, #ff000000, #ff283039, #ffece6da, #ffa8abad, #fff2a33a
+inactive_colors=#ffece6da, #ff1f252e, #ff283039, #ff242a34, #ff101419, #ff707a85, #ffece6da, #ffffffff, #ffece6da, #ff101419, #ff13171d, #ff000000, #ff7ec1ea, #ff06151f, #ff7ec1ea, #ffa8abad, #ff181d24, #ff000000, #ff283039, #ffece6da, #ffa8abad, #fff2a33a
+disabled_colors=#ff737980, #ff1f252e, #ff283039, #ff242a34, #ff101419, #ff707a85, #ff737980, #ffffffff, #ff737980, #ff101419, #ff13171d, #ff000000, #ff16303f, #ff737980, #ff7ec1ea, #ffa8abad, #ff181d24, #ff000000, #ff283039, #ffece6da, #ff737980, #ff3a2a12

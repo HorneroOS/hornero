@@ -167,6 +167,27 @@ synthesis; setting a wallpaper never changes a colour.
   `hornero-light` to day, `neon-city`, `vapor-dreams`, `soft-morning`
   and `warm-sunset` to night) and rewrites the live scheme and derived files from the selected theme.
   Typed retired ids are rejected with their replacement, not rewritten.
+- `appearance sync-qt --yes` is the Qt consumer (also run by every theme
+  apply, `appearance sync` and Chromatic). It renders the live Signal or
+  Chromatic scheme into `~/.config/<qt6ct|qt5ct>/colors/hornero-signal.conf`
+  and manages only two keys of the user's `[Appearance]` group,
+  `custom_palette` and `color_scheme_path`; every other key survives. A
+  stale pre-Signal config (no custom palette, or a retired Hornero scheme)
+  is backed up to `~/.local/state/hornero/qt/backups/<toolkit>/` before it
+  is migrated; a user's own palette is left alone. A toolkit that is not
+  installed is skipped. KDE Frameworks apps (Dolphin, Kate, Okular) ignore
+  the qt6ct window/view colours and fall back to Breeze Light outside Plasma,
+  so the consumer also renders `~/.local/share/color-schemes/HorneroSignal.colors`
+  and manages one kdeglobals key, `[UiSettings] ColorScheme` (stale or unset
+  kdeglobals is backed up first; a scheme you picked yourself is kept).
+  `appearance set-qt <qt6ct|qt5ct|kde>=<follow|force|off>
+  --yes` persists the per-toolkit policy (`off` never touches that
+  toolkit; `force` takes over a custom palette). Kvantum is not managed.
+  `appearance doctor` reports `qt-qt6ct`, `qt-qt5ct`, `qt-kde`, `qt-platformtheme`
+  and `qt-kvantum`: missing or stale config and drift from the live theme
+  fail, a user palette, an env list lacking a toolkit or a Kvantum style
+  warn. Qt apps pick the change up when they start (the platform theme
+  also reloads running apps on a config write).
 - `appearance scheme status|current`, `appearance status`, `appearance
   colors status|concept|export` and `appearance doctor` are read-only.
 - `shell preset apply` falls back to the `cockpit` preset, and its safe
