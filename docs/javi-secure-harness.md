@@ -129,6 +129,17 @@ events show tool execution (`assistant_mode_tool_violation`).
 Gateway-side suppression requires a Hermes per-run toolset/mode
 field or a `run_mode` capability in `/v1/capabilities`.
 
+Mode denials are idempotent: each approval request of an Ask/Chat run
+is denied at most once, keyed by its `request_id@generation` (or its
+ordinal among the run's approval events when the event carries no
+id), remembered for the command and in a per-run ledger
+(`~/.config/hornero/assistant-run-denials.d/<run_id>`, 0600 in a 0700
+directory). A deny the gateway rejects while run status proves nothing
+is pending is logged as `mode-deny-stale` and is not a failure; any
+other rejected deny still stops the run. Plain `assistant events` is
+read-only — it reports `needs-deny` or `tool-violation` and changes
+nothing; `--enforce` (and every `--stream` follow) applies the mode.
+
 The full user-configurable system prompt is Hermes' `SOUL.md`, edited
 through `assistant prompt` with horneroctl-side version snapshots and
 rollback. It changes behaviour only: policy, hard denies and sandbox
