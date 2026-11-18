@@ -667,3 +667,65 @@ fn test_session_with_unknown_stored_mode_resolves_to_ask() {
 	assistant_run_mode_record('run_k1', 'superuser')
 	assert assistant_run_mode('run_k1') == 'ask'
 }
+
+fn test_approval_display_binds_text_to_control_id() {
+	// K5: event text is never shown under a control id it may not match.
+	no_ctl := AssistantPendingControl{}
+	t0, b0 := assistant_approval_display(no_ctl, 'event text')
+	assert t0 == 'event text' && b0
+	with_text := AssistantPendingControl{
+		found:      true
+		prompt_id:  'p1'
+		generation: 2
+		detail:     'gateway text'
+	}
+	t1, b1 := assistant_approval_display(with_text, 'event text')
+	assert t1 == 'gateway text' && b1
+	no_text := AssistantPendingControl{
+		found:      true
+		prompt_id:  'p1'
+		generation: 2
+	}
+	t2, b2 := assistant_approval_display(no_text, 'event text')
+	assert !b2 && t2 == assistant_unbound_approval_text && !t2.contains('event text')
+}
+
+fn test_contract_stream_never_pairs_event_text_with_control_id() {
+	// K5: the status advertises p9@1 without text; the event says
+	// something else. The card must not show the event text with p9@1.
+	sse := 'data: {"type":"approval.request","command":"harmless ls"}\n\n'
+	status := '{"pending_controls":[{"kind":"approval","prompt_id":"p9","execution_generation":1}]}'
+	_, saved := start_mock_gateway({
+		'POST /v1/runs':              '{"run_id":"run_k5","status":"queued"}'
+		'GET /v1/runs/run_k5/events': sse
+		'GET /v1/runs/run_k5':        status
+	})
+	defer { mock_restore_env(saved) }
+	mut holder := &FrameSink{}
+	result := assistant_ask_stream_report_traced_mode('x', [], '', 'agent', fn (_ string) {},
+		fn [mut holder] (kind string, text string) {
+			holder.items << '${kind}:${text}'
+		})
+	assert 'approval.control:p9@1' in holder.items
+	assert 'approval:${assistant_unbound_approval_text}' in holder.items
+	assert holder.items.all(!it.contains('harmless ls'))
+	assert result.data['request'] == 'p9@1'
+	assert result.data['detail'] == assistant_unbound_approval_text
+	assert result.data['detailBound'] == 'false'
+}
+
+fn test_contract_buffered_ask_never_pairs_event_text_with_control_id() {
+	sse := 'data: {"type":"approval.request","command":"harmless ls"}\n\n'
+	status := '{"pending_controls":[{"kind":"approval","prompt_id":"p9","execution_generation":1}]}'
+	_, saved := start_mock_gateway({
+		'POST /v1/runs':               '{"run_id":"run_k5b","status":"queued"}'
+		'GET /v1/runs/run_k5b/events': sse
+		'GET /v1/runs/run_k5b':        status
+	})
+	defer { mock_restore_env(saved) }
+	result := assistant_ask_report_attached_session_mode('x', [], '', 'agent')
+	assert result.data['request'] == 'p9@1'
+	assert result.data['detail'] == assistant_unbound_approval_text
+	assert result.data['detailBound'] == 'false'
+	assert !result.message.contains('harmless ls')
+}
