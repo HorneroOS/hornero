@@ -12,9 +12,11 @@ import time
 // the action class, the run id and the outcome, so a user can
 // audit what the assistant did or approved on their behalf.
 //
-// Rotation: once the file passes assistant_log_max_bytes it is
-// rewritten keeping the newest lines within half the cap, so the
-// log is bounded without an external rotator.
+// Writes are O_APPEND single writes under an exclusive flock(2)
+// (see assistant_log_append). Rotation: once the file passes
+// assistant_log_max_bytes it is rewritten, under the same lock,
+// keeping the newest lines within half the cap, so the log is bounded
+// without an external rotator.
 
 pub const assistant_log_max_bytes = 256 * 1024
 
@@ -59,25 +61,104 @@ pub fn assistant_log_rotate_text(content string, cap_bytes int) string {
 		kept << line
 		total += line.len + 1
 	}
-	kept.reverse()
+	// `reverse()` returns a copy; the newest-first list must be flipped
+	// in place or the rotated log comes out in reverse order.
+	kept.reverse_in_place()
 	return kept.join('\n') + '\n'
 }
 
 // assistant_log_append records one boundary event. Best-effort by
 // design: a logging failure must never change the outcome of the
 // assistant command itself.
+//
+// Concurrency: the line is written with ONE write(2) on an O_APPEND
+// descriptor, so concurrent horneroctl processes (stream follower,
+// approval click, broker) never overwrite each other's entries — the
+// old read-modify-write lost lines under concurrency. An exclusive
+// flock(2) on the log itself serialises writers with rotation; after
+// taking it the writer checks that its descriptor still names the
+// current file (a rotation may have replaced it) and reopens if not,
+// so no line lands in a rotated-away inode.
 pub fn assistant_log_append(action string, run_id string, detail string, status string) {
 	path := assistant_log_file()
 	os.mkdir_all(os.dir(path)) or { return }
 	line := assistant_log_line(time.now().custom_format('YYYY-MM-DDTHH:mm:ss'), action,
 		run_id, detail, status)
-	mut content := os.read_file(path) or { '' }
-	content += line
-	if content.len > assistant_log_max_bytes {
-		content = assistant_log_rotate_text(content, assistant_log_max_bytes / 2)
+	for _ in 0 .. 5 {
+		mut f := os.open_file(path, 'a', 0o600) or { return }
+		locked := assistant_log_lock(f.fd)
+		if locked && !assistant_log_fd_is_current(f.fd, path) {
+			// Rotated between open and lock: append to the new file.
+			f.close()
+			continue
+		}
+		f.write_string(line) or {
+			f.close()
+			return
+		}
+		f.flush()
+		os.chmod(path, 0o600) or {}
+		if locked && assistant_log_fd_size(f.fd) > assistant_log_max_bytes {
+			assistant_log_rotate_locked(path)
+		}
+		f.close() // releases the flock
+		return
 	}
-	os.write_file(path, content) or { return }
-	os.chmod(path, 0o600) or {}
+}
+
+// assistant_log_lock takes an exclusive flock, waiting at most ~2 s.
+// On timeout the caller still appends (O_APPEND keeps the line intact)
+// but skips rotation, which needs the lock.
+fn assistant_log_lock(fd int) bool {
+	for _ in 0 .. 100 {
+		if C.flock(fd, lock_ex | lock_nb) == 0 {
+			return true
+		}
+		time.sleep(20 * time.millisecond)
+	}
+	return false
+}
+
+fn C.fstat(fd int, buf &C.stat) int
+
+fn assistant_log_fd_stat(fd int) ?C.stat {
+	mut st := C.stat{}
+	if C.fstat(fd, &st) != 0 {
+		return none
+	}
+	return st
+}
+
+fn assistant_log_fd_size(fd int) i64 {
+	st := assistant_log_fd_stat(fd) or { return 0 }
+	return i64(st.st_size)
+}
+
+// assistant_log_fd_is_current reports whether fd still refers to the
+// file at path (same device and inode).
+fn assistant_log_fd_is_current(fd int, path string) bool {
+	st := assistant_log_fd_stat(fd) or { return false }
+	cur := os.stat(path) or { return false }
+	return u64(st.st_ino) == cur.inode && u64(st.st_dev) == cur.dev
+}
+
+// assistant_log_rotate_locked rewrites the log keeping the newest
+// lines within half the cap. Caller holds the flock; the new file is
+// written privately (0600) and renamed over the log, so readers see
+// either the old or the new file, never a partial one.
+fn assistant_log_rotate_locked(path string) {
+	content := os.read_file(path) or { return }
+	rotated := assistant_log_rotate_text(content, assistant_log_max_bytes / 2)
+	tmp := os.join_path(os.dir(path), '.${os.file_name(path)}.rotate.${os.getpid()}')
+	mut t := os.open_file(tmp, 'w', 0o600) or { return }
+	t.write_string(rotated) or {
+		t.close()
+		os.rm(tmp) or {}
+		return
+	}
+	t.close()
+	os.chmod(tmp, 0o600) or {}
+	os.rename(tmp, path) or { os.rm(tmp) or {} }
 }
 
 // assistant_log_filter_lines keeps lines containing filter
