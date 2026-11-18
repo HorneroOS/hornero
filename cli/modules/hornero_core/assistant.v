@@ -37,6 +37,9 @@ pub mut:
 	endpoint string
 	// Stored endpoint that failed validation (never persisted, never used).
 	rejected_endpoint string
+	// approvals.requirePresence: approve needs a presence proof
+	// (assistant_presence.v). Missing or non-boolean = ON.
+	require_presence bool = true
 }
 
 // Structural loopback validation for the gateway endpoint (hornero#169).
@@ -210,14 +213,32 @@ pub fn assistant_load_settings() AssistantSettings {
 		enabled:           'enabled' in root && root['enabled'] is bool && root['enabled'].bool()
 		endpoint:          if valid { endpoint.trim_right('/') } else { assistant_default_endpoint }
 		rejected_endpoint: if valid { '' } else { endpoint }
+		require_presence:  assistant_settings_require_presence(root)
 	}
+}
+
+// assistant_settings_require_presence reads approvals.requirePresence;
+// only an explicit boolean false turns the requirement off.
+fn assistant_settings_require_presence(root map[string]json2.Any) bool {
+	if 'approvals' !in root || root['approvals'] !is map[string]json2.Any {
+		return true
+	}
+	approvals := root['approvals'].as_map()
+	if 'requirePresence' in approvals && approvals['requirePresence'] is bool {
+		return approvals['requirePresence'].bool()
+	}
+	return true
 }
 
 fn assistant_save_settings(settings AssistantSettings) ! {
 	os.mkdir_all(assistant_dir())!
+	// approvals.requirePresence is preserved across enable/disable.
 	body := json2.encode({
-		'enabled':  json2.Any(settings.enabled)
-		'endpoint': json2.Any(settings.endpoint)
+		'enabled':   json2.Any(settings.enabled)
+		'endpoint':  json2.Any(settings.endpoint)
+		'approvals': json2.Any({
+			'requirePresence': json2.Any(settings.require_presence)
+		})
 	}, escape_unicode: true)
 	os.write_file(assistant_settings_file(), body + '\n')!
 	os.chmod(assistant_settings_file(), 0o600) or {}
@@ -1503,6 +1524,7 @@ pub fn assistant_status_report() CommandResult {
 		'isolation': assistant_gateway_effective_isolation()
 		'workspace': assistant_workspace_active().root
 	}
+	data['requirePresence'] = settings.require_presence.str()
 	if settings.rejected_endpoint.len > 0 {
 		data['endpointRejected'] = settings.rejected_endpoint
 		data['endpointWarning'] = 'stored endpoint is not a loopback http URL; using ${assistant_default_endpoint} instead'
@@ -2090,6 +2112,16 @@ pub fn assistant_pending_control(status_body string) (string, i64) {
 	return c.prompt_id, c.generation
 }
 
+// assistant_pending_approval_control returns the approval the gateway
+// reports as pending for a run (for an interactive confirmation that
+// must show, and bind to, exactly that request).
+pub fn assistant_pending_approval_control(run_id string) AssistantPendingControl {
+	if !assistant_run_id_valid(run_id) {
+		return AssistantPendingControl{}
+	}
+	return assistant_fetch_pending_control(assistant_load_settings(), run_id)
+}
+
 fn assistant_fetch_pending_control(settings AssistantSettings, run_id string) AssistantPendingControl {
 	resp := assistant_http(settings, .get, '/v1/runs/${run_id}', '') or {
 		return AssistantPendingControl{}
@@ -2145,6 +2177,13 @@ pub fn assistant_request_ref_valid(ref string) bool {
 // exactly that request is still the pending one, so a click on card #1
 // can never approve request #2.
 pub fn assistant_approve_report(run_id string, decision string, request_ref string) CommandResult {
+	return assistant_approve_report_presence(run_id, decision, request_ref, AssistantApprovalPresence{})
+}
+
+// assistant_approve_report_presence is approve with a user-presence
+// proof (assistant_presence.v). A deny never needs one; an approve does
+// when approvals.requirePresence is on (the default).
+pub fn assistant_approve_report_presence(run_id string, decision string, request_ref string, presence AssistantApprovalPresence) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant approve', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -2163,6 +2202,24 @@ pub fn assistant_approve_report(run_id string, decision string, request_ref stri
 	}
 	if request_ref.len > 0 && !assistant_request_ref_valid(request_ref) {
 		return fail_result('assistant approve', 'Invalid --request value. Expected prompt-id or prompt-id@generation.')
+	}
+	presence_needed := decision == 'approve' && settings.require_presence
+	if presence_needed && presence.token.len == 0 && !presence.tty_confirmed {
+		assistant_log_append('approve', run_id, 'no presence proof', 'refused')
+		return fail_result_data('assistant approve', 'Approving run ${run_id} needs proof that you are present: approve from the Hornero approval card, or run this command in an interactive terminal and confirm. Nothing was decided. (assistant.json approvals.requirePresence)', {
+			'runId':   run_id
+			'pending': 'presence-required'
+		})
+	}
+	if presence_needed && presence.token.len > 0 {
+		reason := assistant_presence_check(run_id, request_ref, presence.token)
+		if reason.len > 0 {
+			assistant_log_append('approve', run_id, 'presence: ${reason}', 'refused')
+			return fail_result_data('assistant approve', 'Presence check failed for run ${run_id}: ${reason}. Nothing was decided.', {
+				'runId':   run_id
+				'pending': 'presence-invalid'
+			})
+		}
 	}
 	choice := assistant_approval_choice(decision)
 	// Authority-path gateways require the exact pending-control
@@ -2197,6 +2254,16 @@ pub fn assistant_approve_report(run_id string, decision string, request_ref stri
 	if body.len == 0 && request_ref.len > 0 {
 		return fail_result('assistant approve', 'Cannot confirm which request is pending on run ${run_id}; nothing was decided.')
 	}
+	// Single use: the nonce is consumed only once the request it binds
+	// is confirmed pending, and before the decision is sent.
+	if presence_needed && presence.token.len > 0
+		&& !assistant_presence_consume(run_id, request_ref) {
+		assistant_log_append('approve', run_id, 'presence token already used', 'refused')
+		return fail_result_data('assistant approve', 'The presence token for run ${run_id} was already used. Nothing was decided.', {
+			'runId':   run_id
+			'pending': 'presence-invalid'
+		})
+	}
 	if body.len == 0 {
 		body = json2.encode({
 			'choice': json2.Any(choice)
@@ -2209,7 +2276,13 @@ pub fn assistant_approve_report(run_id string, decision string, request_ref stri
 		assistant_log_append('approve', run_id, 'choice ${choice}', 'rejected')
 		return fail_result('assistant approve', 'Hermes did not accept the ${decision} for run ${run_id} (HTTP ${resp.status_code}). The run may already be finished.')
 	}
-	assistant_log_append('approve', run_id, 'choice ${choice}', 'recorded')
+	assistant_log_append('approve', run_id, 'choice ${choice}', if !presence_needed {
+		'recorded'
+	} else if presence.token.len > 0 {
+		'recorded presence=token'
+	} else {
+		'recorded presence=tty'
+	})
 	return ok_result('assistant approve', 'Decision recorded for run ${run_id}: ${decision}.', {
 		'runId':    run_id
 		'decision': decision
