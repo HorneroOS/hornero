@@ -354,3 +354,28 @@ fn test_assistant_double_dash_and_request_parser_rules() {
 		assert false, '--request needs a value'
 	}
 }
+
+fn test_assistant_approve_presence_flag_rules() {
+	isolate_env()
+	ok := parse_assistant(['approve', 'run_1', 'approve', '--request', 'p1@2', '--presence', 'tok']) or { panic(err) }
+	assert ok.presence == 'tok' && ok.request == 'p1@2'
+	if _ := parse_assistant(['approve', 'run_1', 'approve', '--presence', 'tok']) {
+		panic('--presence without --request must be rejected')
+	}
+	if _ := parse_assistant(['events', 'run_1', '--presence', 'tok']) {
+		panic('--presence outside approve must be rejected')
+	}
+	assert dispatch(['horneroctl', 'assistant', 'approve', 'run_1', 'approve', '--presence']) == 2
+	help := command_help('assistant approve')
+	assert help.contains('--presence') && help.contains('requirePresence')
+	assert help.contains('Examples:')
+	// The TTY prompt is only offered to interactive humans approving.
+	appr := parse_assistant(['approve', 'run_1', 'approve']) or { panic(err) }
+	deny := parse_assistant(['approve', 'run_1', 'deny']) or { panic(err) }
+	assert approve_wants_tty_confirmation(appr, .human, true)
+	assert !approve_wants_tty_confirmation(appr, .human, false)
+	assert !approve_wants_tty_confirmation(appr, .json, true)
+	assert !approve_wants_tty_confirmation(appr, .quiet, true)
+	assert !approve_wants_tty_confirmation(deny, .human, true)
+	assert !approve_wants_tty_confirmation(ok, .human, true)
+}

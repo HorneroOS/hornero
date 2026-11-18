@@ -182,7 +182,7 @@ fn test_contract_approve_sends_once_with_pending_control() {
 	})
 	defer { mock_restore_env(saved) }
 	assistant_run_mode_record('run_1', 'agent')
-	result := assistant_approve_report('run_1', 'approve', '')
+	result := assistant_approve_report_presence('run_1', 'approve', '', k4_tty)
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
 	assert reqs.len == 2
@@ -218,7 +218,7 @@ fn test_contract_approve_falls_back_to_plain_choice() {
 	})
 	defer { mock_restore_env(saved) }
 	assistant_run_mode_record('run_3', 'agent')
-	result := assistant_approve_report('run_3', 'approve', '')
+	result := assistant_approve_report_presence('run_3', 'approve', '', k4_tty)
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
 	assert reqs.len == 2
@@ -354,7 +354,7 @@ fn test_contract_ask_approve_stop_write_redacted_audit_log() {
 	prompt := 'a very secret prompt about my diary'
 	assert assistant_ask_report_attached_session(prompt, [], '').ok
 	assistant_run_mode_record('run_9', 'agent')
-	assert assistant_approve_report('run_9', 'approve', '').ok
+	assert assistant_approve_report_presence('run_9', 'approve', '', k4_tty).ok
 	assert assistant_stop_report('run_9').ok
 	_ = mock
 
@@ -559,14 +559,14 @@ fn test_contract_approve_refuses_when_pending_request_changed() {
 	defer { mock_restore_env(saved) }
 	// the card showed p1; the gateway now waits on p2
 	assistant_run_mode_record('run_sw', 'agent')
-	r := assistant_approve_report('run_sw', 'approve', 'p1@3')
+	r := assistant_approve_report_presence('run_sw', 'approve', 'p1@3', k4_tty)
 	assert !r.ok && r.data['pending'] == 'changed'
 	// generation mismatch is refused too
-	assert !assistant_approve_report('run_sw', 'approve', 'p2@3').ok
+	assert !assistant_approve_report_presence('run_sw', 'approve', 'p2@3', k4_tty).ok
 	reqs := mock_wait_requests(mock, 2)
 	assert reqs.all(it.method == 'GET')
 	// the exact displayed request goes through, once
-	ok := assistant_approve_report('run_sw', 'approve', 'p2@4')
+	ok := assistant_approve_report_presence('run_sw', 'approve', 'p2@4', k4_tty)
 	assert ok.ok
 	posts := mock_wait_requests(mock, 5).filter(it.method == 'POST')
 	assert posts.len == 1 && posts[0].body.contains('"request_id":"p2"') && posts[0].body.contains('once')
@@ -576,7 +576,7 @@ fn test_contract_approve_with_request_but_no_status_fails_closed() {
 	_, saved := start_mock_gateway({})
 	defer { mock_restore_env(saved) }
 	assistant_run_mode_record('run_nostatus', 'agent')
-	r := assistant_approve_report('run_nostatus', 'approve', 'p1@1')
+	r := assistant_approve_report_presence('run_nostatus', 'approve', 'p1@1', k4_tty)
 	assert !r.ok
 }
 
@@ -629,11 +629,11 @@ fn test_contract_approve_refused_for_non_agent_runs_but_deny_allowed() {
 	defer { mock_restore_env(saved) }
 	for m in ['ask', 'chat'] {
 		assistant_run_mode_record('run_na', m)
-		r := assistant_approve_report('run_na', 'approve', 'p1@1')
+		r := assistant_approve_report_presence('run_na', 'approve', 'p1@1', k4_tty)
 		assert !r.ok && r.message.contains('not an Agent run')
 	}
 	// unknown run: refused too
-	assert !assistant_approve_report('run_never', 'approve', '').ok
+	assert !assistant_approve_report_presence('run_never', 'approve', '', k4_tty).ok
 	assert assistant_approve_report('run_na', 'deny', '').ok
 	posts := mock_wait_requests(mock, 2).filter(it.method == 'POST')
 	assert posts.len == 1 && posts[0].body.contains('deny')
@@ -653,4 +653,149 @@ fn test_run_mode_registry_survives_concurrent_writers() {
 		assert assistant_run_mode('run_c${i}') == 'agent'
 	}
 	assert !os.exists(assistant_run_modes_file() + '.lock')
+}
+
+const k4_tty = AssistantApprovalPresence{
+	tty_confirmed: true
+}
+
+const k4_token = 'k4-presence-token-0123456789abcdefABCDEF'
+
+fn k4_presence_env() (string, string) {
+	dir := os.join_path(os.dir(assistant_run_modes_file()), 'presence')
+	old := os.getenv('HORNERO_ASSISTANT_PRESENCE_DIR')
+	os.setenv('HORNERO_ASSISTANT_PRESENCE_DIR', dir, true)
+	os.mkdir_all(dir) or { panic(err) }
+	os.chmod(dir, 0o700) or { panic(err) }
+	return dir, old
+}
+
+fn k4_issue(run_id string, ref string, token string) string {
+	path := assistant_presence_file(run_id, ref)
+	os.write_file(path, token + '\n') or { panic(err) }
+	os.chmod(path, 0o600) or { panic(err) }
+	return path
+}
+
+const k4_status = '{"pending_controls":[{"kind":"approval","prompt_id":"p1","execution_generation":2,"command":"pacman -S x"}]}'
+
+fn test_contract_approve_requires_presence_by_default_but_deny_does_not() {
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_k4a':           k4_status
+		'POST /v1/runs/run_k4a/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_k4a', 'agent')
+	assert assistant_load_settings().require_presence
+	r := assistant_approve_report('run_k4a', 'approve', 'p1@2')
+	assert !r.ok && r.data['pending'] == 'presence-required'
+	assert mock.recorded().len == 0
+	d := assistant_approve_report('run_k4a', 'deny', '')
+	assert d.ok
+	posts := mock_wait_requests(mock, 2).filter(it.method == 'POST')
+	assert posts.len == 1 && posts[0].body.contains('deny')
+	log := os.read_file(assistant_log_file()) or { '' }
+	assert log.contains('no presence proof\trefused')
+}
+
+fn test_contract_presence_token_is_bound_and_single_use() {
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_k4b':           k4_status
+		'POST /v1/runs/run_k4b/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	_, old := k4_presence_env()
+	defer { os.setenv('HORNERO_ASSISTANT_PRESENCE_DIR', old, true) }
+	assistant_run_mode_record('run_k4b', 'agent')
+	path := k4_issue('run_k4b', 'p1@2', k4_token)
+	tok := AssistantApprovalPresence{
+		token: k4_token
+	}
+	// Wrong nonce, unbound ref and a ref without generation are refused
+	// and do not burn the token.
+	bad := AssistantApprovalPresence{
+		token: k4_token.replace('k4', 'x4')
+	}
+	assert assistant_approve_report_presence('run_k4b', 'approve', 'p1@2', bad).data['pending'] == 'presence-invalid'
+	assert !assistant_approve_report_presence('run_k4b', 'approve', '', tok).ok
+	assert !assistant_approve_report_presence('run_k4b', 'approve', 'p1', tok).ok
+	assert !assistant_approve_report_presence('run_other', 'approve', 'p1@2', tok).ok
+	assert os.exists(path)
+	assert mock.recorded().filter(it.method == 'POST').len == 0
+	ok := assistant_approve_report_presence('run_k4b', 'approve', 'p1@2', tok)
+	assert ok.ok, ok.message
+	assert !os.exists(path)
+	again := assistant_approve_report_presence('run_k4b', 'approve', 'p1@2', tok)
+	assert !again.ok && again.data['pending'] == 'presence-invalid'
+	posts := mock_wait_requests(mock, 3).filter(it.method == 'POST')
+	assert posts.len == 1 && posts[0].body.contains('once') && posts[0].body.contains('"request_id":"p1"')
+	log := os.read_file(assistant_log_file()) or { '' }
+	assert log.contains('recorded presence=token')
+}
+
+fn test_contract_presence_token_must_be_private_fresh_and_match_pending() {
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_k4c':           k4_status
+		'POST /v1/runs/run_k4c/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	dir, old := k4_presence_env()
+	defer { os.setenv('HORNERO_ASSISTANT_PRESENCE_DIR', old, true) }
+	assistant_run_mode_record('run_k4c', 'agent')
+	tok := AssistantApprovalPresence{
+		token: k4_token
+	}
+	path := k4_issue('run_k4c', 'p1@2', k4_token)
+	// world-readable file
+	os.chmod(path, 0o644) or {}
+	assert assistant_presence_check('run_k4c', 'p1@2', k4_token).contains('private')
+	os.chmod(path, 0o600) or {}
+	// expired
+	past := time.now().unix() - assistant_presence_ttl_seconds - 5
+	os.utime(path, int(past), int(past)) or { panic(err) }
+	assert assistant_presence_check('run_k4c', 'p1@2', k4_token).contains('expired')
+	k4_issue('run_k4c', 'p1@2', k4_token)
+	// wide directory
+	os.chmod(dir, 0o755) or {}
+	assert assistant_presence_check('run_k4c', 'p1@2', k4_token).contains('directory')
+	os.chmod(dir, 0o700) or {}
+	// short/odd tokens
+	assert !assistant_presence_token_shape_ok('short')
+	assert !assistant_presence_token_shape_ok('a/b' + 'c'.repeat(40))
+	assert assistant_presence_check('run_k4c', 'p1@2', k4_token) == ''
+	// A valid token for a request that is no longer pending is refused
+	// by the binding check and is not consumed.
+	k4_issue('run_k4c', 'p0@1', k4_token)
+	r := assistant_approve_report_presence('run_k4c', 'approve', 'p0@1', tok)
+	assert !r.ok && r.data['pending'] == 'changed'
+	assert os.exists(assistant_presence_file('run_k4c', 'p0@1'))
+	assert mock.recorded().filter(it.method == 'POST').len == 0
+}
+
+fn test_contract_require_presence_can_be_turned_off_and_survives_save() {
+	mock, saved := start_mock_gateway({
+		'GET /v1/runs/run_k4d':           k4_status
+		'POST /v1/runs/run_k4d/approval': '{}'
+	})
+	defer { mock_restore_env(saved) }
+	mut s := assistant_load_settings()
+	s.require_presence = false
+	assistant_save_settings(s) or { panic(err) }
+	raw := os.read_file(assistant_settings_file()) or { '' }
+	assert raw.contains('"requirePresence":false')
+	s2 := assistant_load_settings()
+	assert !s2.require_presence && s2.enabled
+	// enable/disable round-trips keep the user's choice
+	mut s3 := s2
+	s3.enabled = true
+	assistant_save_settings(s3) or { panic(err) }
+	assert !assistant_load_settings().require_presence
+	assistant_run_mode_record('run_k4d', 'agent')
+	assert assistant_approve_report('run_k4d', 'approve', 'p1@2').ok
+	assert mock_wait_requests(mock, 2).filter(it.method == 'POST').len == 1
+	// non-boolean values keep the safe default
+	os.write_file(assistant_settings_file(), '{"enabled":true,"approvals":{"requirePresence":"no"}}') or {
+		panic(err)
+	}
+	assert assistant_load_settings().require_presence
 }

@@ -134,6 +134,40 @@ through `assistant prompt` with horneroctl-side version snapshots and
 rollback. It changes behaviour only: policy, hard denies and sandbox
 binds are outside prompt text and cannot be overridden by it.
 
+## Approval user presence
+
+`assistant approve <run> approve` can be run by anything that runs
+commands as the user, including a prompt-injected tool or a delegated
+agent on the host. With `approvals.requirePresence` in
+`~/.config/hornero/assistant.json` (default **on**; only an explicit
+`false` turns it off; `assistant status --json` reports it), an
+approve needs proof that a human acted. A deny never does.
+
+- Shell approval card: at click time the Shell creates
+  `$XDG_RUNTIME_DIR/hornero/approval-presence/` (0700) and writes
+  `<runId>.<promptId>@<generation>` (0600) holding a fresh nonce of
+  32–128 `[A-Za-z0-9_-]` characters from a CSPRNG, then runs
+  `horneroctl assistant approve <runId> approve --request
+  <promptId>@<generation> --presence <nonce> --json`. horneroctl
+  accepts it only if the directory and file are private and owned by
+  the user, the file is at most 60 s old, the nonce matches (constant
+  time), and the request is still the pending one; it then consumes
+  the file before sending the decision, so each nonce works once.
+  Refusals report `pending: presence-required` or `presence-invalid`.
+- Terminal: on an interactive TTY (human output) horneroctl shows the
+  pending request and asks the user to type `approve`, bound to the
+  request it showed. Non-interactive callers without a nonce are
+  refused instead of prompted.
+
+Residual risk, stated plainly: this raises the bar against injected
+tools and agents that only run commands; it is not a boundary against
+arbitrary code running as the same user, which can read or create
+files in a 0700 directory it owns, drive a pseudo-terminal, or set
+`requirePresence` to `false`. The bubblewrap-sandboxed Hermes unit
+masks `$XDG_RUNTIME_DIR`, so its tools cannot reach the presence
+directory; an unsandboxed (`systemd-only`) gateway or host-side agent
+can.
+
 Audit is the append-only, redacted TSV at
 `~/.config/hornero/assistant.log` (0600, bounded rotation): broker
 calls with their policy outcome, approvals, policy preset/revoke,

@@ -20,6 +20,7 @@ pub:
 	has_command    bool
 	workspace      string
 	request        string
+	presence       string
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -46,6 +47,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut has_command := false
 	mut workspace := ''
 	mut request := ''
+	mut presence := ''
 	mut literal := false
 	mut i := 1
 	for i < args.len {
@@ -67,6 +69,14 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 				return error('--request needs a request id.\nExample: horneroctl assistant approve run_abc123 approve --request p1@2')
 			}
 			request = args[i]
+			i++
+			continue
+		}
+		if arg == '--presence' {
+			if i >= args.len {
+				return error('--presence needs the token from the approval card.\nExample: horneroctl assistant approve run_abc123 approve --request p1@2 --presence <token>')
+			}
+			presence = args[i]
 			i++
 			continue
 		}
@@ -214,6 +224,12 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	if request.len > 0 && leaf != 'approve' {
 		return error('--request only applies to approve.\nExample: horneroctl assistant approve run_abc123 approve --request p1@2')
 	}
+	if presence.len > 0 && leaf != 'approve' {
+		return error('--presence only applies to approve.\nExample: horneroctl assistant approve run_abc123 approve --request p1@2 --presence <token>')
+	}
+	if presence.len > 0 && request.len == 0 {
+		return error('--presence must be bound to a request with --request.\nExample: horneroctl assistant approve run_abc123 approve --request p1@2 --presence <token>')
+	}
 	if has_command && leaf != 'shell-proposal' {
 		return error('--command only applies to shell-proposal.\nExample: horneroctl assistant shell-proposal --command "ls -la"')
 	}
@@ -250,5 +266,6 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		has_command:    has_command
 		workspace:      workspace
 		request:        request
+		presence:       presence
 	}
 }
