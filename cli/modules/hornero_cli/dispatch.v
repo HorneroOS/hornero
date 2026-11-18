@@ -1,6 +1,7 @@
 module hornero_cli
 
 import hornero_core
+import os
 
 // Deferred groups (locked in docs/cli-architecture.md, no verified backend yet,
 // so no leaves here): device (monitors/compositor needs a pinned IPC path
@@ -32,8 +33,15 @@ pub fn dispatch(args []string) int {
 		argv = args[1..].clone()
 	}
 	mode, rest := split_globals(argv)
+	// --json/--quiet never get Signal styling, not even on help text.
+	if mode != .human {
+		os.setenv(style_plain_env, '1', true)
+	}
+	defer {
+		os.unsetenv(style_plain_env)
+	}
 	if rest.len == 0 {
-		print(root_help())
+		print_human(root_help())
 		return 0
 	}
 	first := rest[0]
@@ -41,19 +49,18 @@ pub fn dispatch(args []string) int {
 		if rest.len >= 2 {
 			h := command_help(rest[1])
 			if h.len == 0 {
-				eprintln('Unknown command: ${rest[1]}')
-				eprintln("Run 'horneroctl help' for usage.")
+				eprintln_human("Unknown command: ${rest[1]}\nRun 'horneroctl help' for usage.")
 				return 1
 			}
-			print(h)
+			print_human(h)
 			return 0
 		}
-		print(root_help())
+		print_human(root_help())
 		return 0
 	}
 	if first in ['-V', '--version', 'version'] {
 		if wants_help(rest) {
-			print(command_help('version'))
+			print_human(command_help('version'))
 			return 0
 		}
 		return render(hornero_core.version_result(), mode)
@@ -63,8 +70,7 @@ pub fn dispatch(args []string) int {
 			return render_error(hornero_core.err_usage('flag.unknown', "unknown flag: ${first}.\nRun 'horneroctl --help' for usage."),
 				mode)
 		}
-		eprintln('Unknown command: ${first}')
-		eprintln("Run 'horneroctl help' for usage.")
+		eprintln_human("Unknown command: ${first}\nRun 'horneroctl help' for usage.")
 		return 1
 	}
 	if wants_help(rest) {
@@ -75,11 +81,11 @@ pub fn dispatch(args []string) int {
 		if rest.len > 2 {
 			nested := command_help(first + ' ' + rest[1])
 			if nested.len > 0 {
-				print(nested)
+				print_human(nested)
 				return 0
 			}
 		}
-		print(command_help(first))
+		print_human(command_help(first))
 		return 0
 	}
 	return match first {
@@ -156,7 +162,7 @@ pub fn dispatch(args []string) int {
 			run_agent(rest[1..], mode)
 		}
 		'help' {
-			print(root_help())
+			print_human(root_help())
 			0
 		}
 		else {
@@ -920,14 +926,14 @@ fn run_system(args []string, mode hornero_core.RenderMode) int {
 fn run_shell(args []string, mode hornero_core.RenderMode) int {
 	if args.len > 0 && args[0] == 'lock-process' {
 		if wants_help(args) {
-			print(command_help('shell lock-process'))
+			print_human(command_help('shell lock-process'))
 			return 0
 		}
 		return run_shell_lock_process(args[1..], mode)
 	}
 	if args.len > 0 && args[0] == 'preset' {
 		if wants_help(args) {
-			print(command_help('shell preset'))
+			print_human(command_help('shell preset'))
 			return 0
 		}
 		return run_shell_preset(args[1..], mode)
@@ -1019,7 +1025,7 @@ fn run_appearance(args []string, mode hornero_core.RenderMode) int {
 		&& args[0] in ['theme', 'scheme', 'colors', 'night-mode', 'gtk', 'hyprlock', 'hyprland',
 			'chromatic'] {
 		if wants_help(args) {
-			print(command_help('appearance ' + args[0]))
+			print_human(command_help('appearance ' + args[0]))
 			return 0
 		}
 		if args[0] == 'chromatic' {
@@ -1303,28 +1309,28 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 	}
 	if args[0] == 'snapshot' {
 		if wants_help(args) {
-			print(command_help('config snapshot'))
+			print_human(command_help('config snapshot'))
 			return 0
 		}
 		return run_config_snapshot(args[1..], mode)
 	}
 	if args[0] == 'default-apps' {
 		if wants_help(args) {
-			print(command_help('config default-apps'))
+			print_human(command_help('config default-apps'))
 			return 0
 		}
 		return run_config_default_apps(args[1..], mode)
 	}
 	if args[0] == 'refresh-hypr' {
 		if wants_help(args) {
-			print(command_help('config refresh-hypr'))
+			print_human(command_help('config refresh-hypr'))
 			return 0
 		}
 		return run_config_refresh_hypr(args[1..], mode)
 	}
 	if args[0] == 'materialize' {
 		if wants_help(args) {
-			print(command_help('config materialize'))
+			print_human(command_help('config materialize'))
 			return 0
 		}
 		return run_config_materialize(args[1..], mode)
@@ -1345,7 +1351,7 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 	}
 	if args[0] == 'gui' {
 		if wants_help(args) {
-			print(command_help('config gui'))
+			print_human(command_help('config gui'))
 			return 0
 		}
 		return run_config_gui(args[1..], mode)
@@ -1614,7 +1620,7 @@ fn run_hypr(args []string, mode hornero_core.RenderMode) int {
 	if args.len > 0 && args[0] in ['animations', 'layout', 'monitors', 'workspace', 'plugins',
 		'windows', 'input', 'cursor'] {
 		if wants_help(args) {
-			print(command_help('hypr ' + args[0]))
+			print_human(command_help('hypr ' + args[0]))
 			return 0
 		}
 		match args[0] {
@@ -1649,7 +1655,7 @@ fn run_hypr(args []string, mode hornero_core.RenderMode) int {
 			mode)
 	}
 	if wants_help(args) {
-		print(command_help('hypr'))
+		print_human(command_help('hypr'))
 		return 0
 	}
 	return render_error(hornero_core.err_usage('hypr.usage', 'unknown hypr subcommand: ${args[0]}.\nRun: horneroctl hypr --help'),
@@ -1871,7 +1877,7 @@ fn run_hardware(args []string, mode hornero_core.RenderMode) int {
 			mode)
 	}
 	if wants_help(args) {
-		print(command_help('hardware ' + group))
+		print_human(command_help('hardware ' + group))
 		return 0
 	}
 	match group {
@@ -2208,7 +2214,7 @@ fn run_capture(args []string, mode hornero_core.RenderMode) int {
 fn run_apps(args []string, mode hornero_core.RenderMode) int {
 	if args.len > 0 && args[0] in apps_verbs {
 		if wants_help(args) {
-			print(command_help('apps ' + args[0]))
+			print_human(command_help('apps ' + args[0]))
 			return 0
 		}
 	}
