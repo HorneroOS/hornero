@@ -161,76 +161,6 @@ pub fn assistant_redact_tokens(s string) string {
 	return redact_secrets(out.join(' '))
 }
 
-// ---- per-run mode registry ----------------------------------------
-// The mode a run was created with is recorded by run id so a later
-// `events`/`approve` (a restart, a follow) enforces the RUN's mode,
-// not a default. Unknown run = 'ask' (non-escalating, no tools): fail
-// closed. Bounded to the newest 200 runs, 0600.
-
-pub fn assistant_run_modes_file() string {
-	env := os.getenv('HORNERO_ASSISTANT_RUN_MODES_FILE')
-	if env.len > 0 {
-		return env
-	}
-	return os.join_path(assistant_dir(), 'assistant-run-modes.tsv')
-}
-
-pub fn assistant_run_mode_record(run_id string, mode string) {
-	if !assistant_run_id_valid(run_id) {
-		return
-	}
-	path := assistant_run_modes_file()
-	os.mkdir_all(os.dir(path)) or { return }
-	// Lock: mkdir is atomic. A lock older than 5 s is stale (crashed
-	// writer) and is taken over.
-	lock_dir := path + '.lock'
-	mut got := false
-	for _ in 0 .. 100 {
-		os.mkdir(lock_dir) or {
-			if st := os.stat(lock_dir) {
-				if time.now().unix() - i64(st.mtime) > 5 {
-					os.rmdir(lock_dir) or {}
-				}
-			}
-			time.sleep(20 * time.millisecond)
-			continue
-		}
-		got = true
-		break
-	}
-	if !got {
-		return
-	}
-	defer {
-		os.rmdir(lock_dir) or {}
-	}
-	mut lines := []string{}
-	if existing := os.read_file(path) {
-		lines = existing.split('\n').filter(it.len > 0)
-	}
-	lines << '${run_id}\t${assistant_session_effective_mode(mode)}'
-	if lines.len > 200 {
-		lines = lines[lines.len - 200..]
-	}
-	// Atomic replace: write a private temp file, then rename over.
-	tmp := '${path}.tmp.${os.getpid()}'
-	os.write_file(tmp, lines.join('\n') + '\n') or { return }
-	os.chmod(tmp, 0o600) or {}
-	os.mv(tmp, path, overwrite: true) or { os.rm(tmp) or {} }
-}
-
-pub fn assistant_run_mode(run_id string) string {
-	content := os.read_file(assistant_run_modes_file()) or { return 'ask' }
-	mut found := ''
-	for line in content.split('\n') {
-		parts := line.split('\t')
-		if parts.len == 2 && parts[0] == run_id && parts[1] in ['ask', 'agent', 'chat'] {
-			found = parts[1]
-		}
-	}
-	return if found.len > 0 { found } else { 'ask' }
-}
-
 pub struct AssistantEvent {
 pub:
 	kind string
@@ -1785,6 +1715,28 @@ fn assistant_run_create(settings AssistantSettings, body string, session_id stri
 	return assistant_http(settings, .post, '/v1/runs', body)
 }
 
+// assistant_record_run_mode_or_stop records a new run's mode. If that
+// fails the run is stopped and a failure is returned: continuing would
+// leave a run whose mode later reads as 'ask', so a follow/restore
+// would auto-deny an Agent run's approvals (or an approve would be
+// refused) without the user ever learning why.
+fn assistant_record_run_mode_or_stop(command string, run_id string, mode string) ?CommandResult {
+	assistant_run_mode_record(run_id, mode) or {
+		stopped := assistant_stop_report(run_id)
+		assistant_log_append('run-mode', run_id, err.msg(), if stopped.ok {
+			'record-failed-stopped'
+		} else {
+			'record-failed-stop-failed'
+		})
+		return fail_result_data(command, 'Run ${run_id} was stopped: its ${mode} mode could not be recorded (${err.msg()}). Nothing else ran on its behalf; fix the assistant config directory and retry.', {
+			'runId':   run_id
+			'mode':    mode
+			'pending': 'mode-record-failed'
+		})
+	}
+	return none
+}
+
 pub fn assistant_ask_report(prompt string) CommandResult {
 	return assistant_ask_report_attached(prompt, [])
 }
@@ -1832,7 +1784,11 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 	if !assistant_run_id_valid(run_id) {
 		return fail_result('assistant ask', 'Hermes did not return a usable run id.')
 	}
-	assistant_run_mode_record(run_id, assistant_resolve_ask_mode(explicit_mode, session_id))
+	if failed := assistant_record_run_mode_or_stop('assistant ask', run_id, assistant_resolve_ask_mode(explicit_mode,
+		session_id))
+	{
+		return failed
+	}
 	events_resp := assistant_http(settings, .get, '/v1/runs/${run_id}/events', '') or {
 		return fail_result('assistant ask', 'Run ${run_id} started but its events could not be read: ${err.msg()}. Cancel with: horneroctl assistant stop ${run_id}')
 	}
@@ -1961,7 +1917,11 @@ pub fn assistant_ask_stream_report_traced_mode(prompt string, attach []string, s
 	if !assistant_run_id_valid(run_id) {
 		return fail_result('assistant ask', 'Hermes did not return a usable run id.')
 	}
-	assistant_run_mode_record(run_id, assistant_resolve_ask_mode(explicit_mode, session_id))
+	if failed := assistant_record_run_mode_or_stop('assistant ask', run_id, assistant_resolve_ask_mode(explicit_mode,
+		session_id))
+	{
+		return failed
+	}
 	// Typed `run` frame first: the UI needs the run id immediately so
 	// Stop works server-side during streaming (not only after the
 	// final line), and so approvals can be bound to the run.

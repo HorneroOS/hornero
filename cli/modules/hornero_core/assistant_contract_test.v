@@ -181,7 +181,7 @@ fn test_contract_approve_sends_once_with_pending_control() {
 		'POST /v1/runs/run_1/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_1', 'agent')
+	assistant_run_mode_record('run_1', 'agent') or { panic(err) }
 	result := assistant_approve_report('run_1', 'approve', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
@@ -201,7 +201,7 @@ fn test_contract_deny_sends_deny_and_no_widening() {
 		'POST /v1/runs/run_2/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_2', 'agent')
+	assistant_run_mode_record('run_2', 'agent') or { panic(err) }
 	result := assistant_approve_report('run_2', 'deny', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
@@ -217,7 +217,7 @@ fn test_contract_approve_falls_back_to_plain_choice() {
 		'POST /v1/runs/run_3/approval': '{}'
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_3', 'agent')
+	assistant_run_mode_record('run_3', 'agent') or { panic(err) }
 	result := assistant_approve_report('run_3', 'approve', '')
 	assert result.ok
 	reqs := mock_wait_requests(mock, 2)
@@ -262,7 +262,7 @@ fn test_contract_events_pending_approval_is_not_auto_answered() {
 		'GET /v1/runs/run_6/events': sse
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_6', 'agent')
+	assistant_run_mode_record('run_6', 'agent') or { panic(err) }
 	result := assistant_events_report('run_6')
 	assert !result.ok
 	assert result.message.contains('waiting for approval')
@@ -353,7 +353,7 @@ fn test_contract_ask_approve_stop_write_redacted_audit_log() {
 
 	prompt := 'a very secret prompt about my diary'
 	assert assistant_ask_report_attached_session(prompt, [], '').ok
-	assistant_run_mode_record('run_9', 'agent')
+	assistant_run_mode_record('run_9', 'agent') or { panic(err) }
 	assert assistant_approve_report('run_9', 'approve', '').ok
 	assert assistant_stop_report('run_9').ok
 	_ = mock
@@ -378,7 +378,7 @@ fn test_contract_pending_approval_result_carries_structured_data() {
 		'GET /v1/runs/run_pd/events': sse
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_pd', 'agent')
+	assistant_run_mode_record('run_pd', 'agent') or { panic(err) }
 	result := assistant_events_report('run_pd')
 	assert !result.ok
 	assert result.data['runId'] == 'run_pd'
@@ -395,7 +395,7 @@ fn test_contract_pending_clarify_result_carries_structured_data() {
 		'GET /v1/runs/run_cl/events': sse
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_cl', 'agent')
+	assistant_run_mode_record('run_cl', 'agent') or { panic(err) }
 	result := assistant_events_report('run_cl')
 	assert !result.ok
 	assert result.data['runId'] == 'run_cl'
@@ -454,7 +454,7 @@ fn test_contract_already_decided_approval_in_event_log_is_not_pending() {
 		'GET /v1/runs/run_dec':        '{"status":"completed","pending_controls":[]}'
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_dec', 'agent')
+	assistant_run_mode_record('run_dec', 'agent') or { panic(err) }
 	result := assistant_events_report('run_dec')
 	assert result.ok
 	assert result.data['text'] == 'installed'
@@ -486,8 +486,8 @@ fn test_run_mode_registry_unknown_is_non_escalating() {
 	_, saved := start_mock_gateway({})
 	defer { mock_restore_env(saved) }
 	assert assistant_run_mode('run_never_seen') == 'ask'
-	assistant_run_mode_record('run_m1', 'agent')
-	assistant_run_mode_record('run_m2', 'chat')
+	assistant_run_mode_record('run_m1', 'agent') or { panic(err) }
+	assistant_run_mode_record('run_m2', 'chat') or { panic(err) }
 	assert assistant_run_mode('run_m1') == 'agent'
 	assert assistant_run_mode('run_m2') == 'chat'
 	assert !assistant_mode_escalates(assistant_run_mode('run_unknown'))
@@ -543,7 +543,7 @@ fn test_contract_pending_result_binds_request_id_and_shows_gateway_text() {
 		'GET /v1/runs/run_h1':        status
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_h1', 'agent')
+	assistant_run_mode_record('run_h1', 'agent') or { panic(err) }
 	result := assistant_events_report('run_h1')
 	assert result.data['request'] == 'p7@3'
 	assert result.data['promptId'] == 'p7' && result.data['generation'] == '3'
@@ -558,7 +558,7 @@ fn test_contract_approve_refuses_when_pending_request_changed() {
 	})
 	defer { mock_restore_env(saved) }
 	// the card showed p1; the gateway now waits on p2
-	assistant_run_mode_record('run_sw', 'agent')
+	assistant_run_mode_record('run_sw', 'agent') or { panic(err) }
 	r := assistant_approve_report('run_sw', 'approve', 'p1@3')
 	assert !r.ok && r.data['pending'] == 'changed'
 	// generation mismatch is refused too
@@ -575,7 +575,7 @@ fn test_contract_approve_refuses_when_pending_request_changed() {
 fn test_contract_approve_with_request_but_no_status_fails_closed() {
 	_, saved := start_mock_gateway({})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_nostatus', 'agent')
+	assistant_run_mode_record('run_nostatus', 'agent') or { panic(err) }
 	r := assistant_approve_report('run_nostatus', 'approve', 'p1@1')
 	assert !r.ok
 }
@@ -589,7 +589,7 @@ fn test_contract_failed_deny_stops_the_run_reports_failure_and_does_not_log_deni
 		'POST /v1/runs/run_df/stop':     '{}'
 	})
 	defer { mock_restore_env(saved) }
-	assistant_run_mode_record('run_df', 'ask')
+	assistant_run_mode_record('run_df', 'ask') or { panic(err) }
 	result := assistant_events_report('run_df')
 	assert !result.ok
 	assert result.data['pending'] == 'deny-failed'
@@ -628,7 +628,7 @@ fn test_contract_approve_refused_for_non_agent_runs_but_deny_allowed() {
 	})
 	defer { mock_restore_env(saved) }
 	for m in ['ask', 'chat'] {
-		assistant_run_mode_record('run_na', m)
+		assistant_run_mode_record('run_na', m) or { panic(err) }
 		r := assistant_approve_report('run_na', 'approve', 'p1@1')
 		assert !r.ok && r.message.contains('not an Agent run')
 	}
@@ -645,7 +645,7 @@ fn test_run_mode_registry_survives_concurrent_writers() {
 	mut threads := []thread{}
 	for i in 0 .. 8 {
 		threads << spawn fn (n int) {
-			assistant_run_mode_record('run_c${n}', 'agent')
+			assistant_run_mode_record('run_c${n}', 'agent') or { panic(err) }
 		}(i)
 	}
 	threads.wait()
@@ -653,4 +653,121 @@ fn test_run_mode_registry_survives_concurrent_writers() {
 		assert assistant_run_mode('run_c${i}') == 'agent'
 	}
 	assert !os.exists(assistant_run_modes_file() + '.lock')
+}
+
+fn test_run_mode_registry_is_private_per_run_files() {
+	// K3: one 0600 file per run in a 0700 dir; no lock files.
+	_, saved := start_mock_gateway({})
+	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_p1', 'agent') or { panic(err) }
+	dir := assistant_run_modes_dir()
+	dst := os.lstat(dir) or { panic(err) }
+	assert dst.mode & 0o777 == 0o700
+	fst := os.lstat(os.join_path(dir, 'run_p1')) or { panic(err) }
+	assert fst.mode & 0o777 == 0o600
+	assert (os.read_file(os.join_path(dir, 'run_p1')) or { '' }) == 'agent\n'
+	assert (os.ls(dir) or { [] }) == ['run_p1']
+	// A pre-existing wide directory is tightened on the next record.
+	os.chmod(dir, 0o755) or { panic(err) }
+	assistant_run_mode_record('run_p2', 'chat') or { panic(err) }
+	dst2 := os.lstat(dir) or { panic(err) }
+	assert dst2.mode & 0o777 == 0o700
+	assert assistant_run_mode('run_p2') == 'chat'
+}
+
+fn test_run_mode_registry_rejects_tampered_records() {
+	_, saved := start_mock_gateway({})
+	defer { mock_restore_env(saved) }
+	assistant_run_mode_record('run_t0', 'ask') or { panic(err) }
+	dir := assistant_run_modes_dir()
+	// Wrong shape, world-readable, symlinked and oversized records all
+	// read as 'ask', even when they claim agent.
+	os.write_file(os.join_path(dir, 'run_t1'), 'agent') or { panic(err) }
+	os.chmod(os.join_path(dir, 'run_t1'), 0o600) or {}
+	assert assistant_run_mode('run_t1') == 'ask'
+	os.write_file(os.join_path(dir, 'run_t2'), 'agent\n') or { panic(err) }
+	os.chmod(os.join_path(dir, 'run_t2'), 0o644) or {}
+	assert assistant_run_mode('run_t2') == 'ask'
+	target := os.join_path(os.dir(dir), 'elsewhere')
+	os.write_file(target, 'agent\n') or { panic(err) }
+	os.chmod(target, 0o600) or {}
+	os.symlink(target, os.join_path(dir, 'run_t3')) or { panic(err) }
+	assert assistant_run_mode('run_t3') == 'ask'
+	os.write_file(os.join_path(dir, 'run_t4'), 'agent\nagent\nagent\nagent\n') or { panic(err) }
+	os.chmod(os.join_path(dir, 'run_t4'), 0o600) or {}
+	assert assistant_run_mode('run_t4') == 'ask'
+	os.write_file(os.join_path(dir, 'run_t5'), 'root\n') or { panic(err) }
+	os.chmod(os.join_path(dir, 'run_t5'), 0o600) or {}
+	assert assistant_run_mode('run_t5') == 'ask'
+	// A wide registry directory invalidates every record in it.
+	os.write_file(os.join_path(dir, 'run_t6'), 'agent\n') or { panic(err) }
+	os.chmod(os.join_path(dir, 'run_t6'), 0o600) or {}
+	assert assistant_run_mode('run_t6') == 'agent'
+	os.chmod(dir, 0o777) or { panic(err) }
+	assert assistant_run_mode('run_t6') == 'ask'
+	os.chmod(dir, 0o700) or {}
+	// Path-shaped ids never reach the filesystem.
+	assert assistant_run_mode('../run_t6') == 'ask'
+	if _ := assistant_run_mode_record('../evil', 'agent') {
+		assert false
+	}
+}
+
+fn test_run_mode_record_failure_is_loud_and_refuses_symlinked_dir() {
+	_, saved := start_mock_gateway({})
+	defer { mock_restore_env(saved) }
+	dir := assistant_run_modes_dir()
+	real := dir + '-real'
+	os.mkdir_all(real) or { panic(err) }
+	os.chmod(real, 0o700) or {}
+	os.symlink(real, dir) or { panic(err) }
+	if _ := assistant_run_mode_record('run_s1', 'agent') {
+		assert false, 'a symlinked registry directory must be refused'
+	}
+	assert (os.ls(real) or { [] }).len == 0
+}
+
+fn test_contract_ask_stops_run_when_mode_cannot_be_recorded() {
+	// K3: never drop the record silently — the run is stopped and the
+	// ask fails, instead of a later follow auto-denying an Agent run.
+	sse := 'data: {"type":"response.output_text.delta","delta":"hi"}\n\n'
+	mock, saved := start_mock_gateway({
+		'POST /v1/runs':              '{"run_id":"run_rf","status":"queued"}'
+		'GET /v1/runs/run_rf/events': sse
+		'POST /v1/runs/run_rf/stop':  '{}'
+	})
+	defer { mock_restore_env(saved) }
+	// Make the registry path unusable: a regular file where the dir goes.
+	os.write_file(assistant_run_modes_dir(), 'not a dir') or { panic(err) }
+	result := assistant_ask_report_attached_session_mode('x', [], '', 'agent')
+	assert !result.ok
+	assert result.data['pending'] == 'mode-record-failed'
+	assert result.data['runId'] == 'run_rf'
+	reqs := mock_wait_requests(mock, 2)
+	assert reqs.any(it.method == 'POST' && it.path == '/v1/runs/run_rf/stop')
+	assert !reqs.any(it.path == '/v1/runs/run_rf/events')
+	log := os.read_file(assistant_log_file()) or { '' }
+	assert log.contains('record-failed-stopped')
+	// Streamed asks behave the same and never open the event stream.
+	mut holder := &FrameSink{}
+	streamed := assistant_ask_stream_report_traced_mode('x', [], '', 'agent', fn (_ string) {},
+		fn [mut holder] (kind string, text string) {
+			holder.items << '${kind}:${text}'
+		})
+	assert !streamed.ok && streamed.data['pending'] == 'mode-record-failed'
+}
+
+fn test_run_mode_registry_reads_legacy_tsv_and_prunes() {
+	_, saved := start_mock_gateway({})
+	defer { mock_restore_env(saved) }
+	os.write_file(assistant_run_modes_file(), 'run_old\tagent\n') or { panic(err) }
+	os.chmod(assistant_run_modes_file(), 0o600) or {}
+	assert assistant_run_mode('run_old') == 'agent'
+	os.chmod(assistant_run_modes_file(), 0o666) or {}
+	assert assistant_run_mode('run_old') == 'ask'
+	for i in 0 .. assistant_run_modes_keep + 5 {
+		assistant_run_mode_record('run_q${i}', 'chat') or { panic(err) }
+	}
+	names := (os.ls(assistant_run_modes_dir()) or { [] }).filter(!it.starts_with('.'))
+	assert names.len == assistant_run_modes_keep
 }
