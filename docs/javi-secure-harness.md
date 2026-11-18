@@ -129,6 +129,14 @@ events show tool execution (`assistant_mode_tool_violation`).
 Gateway-side suppression requires a Hermes per-run toolset/mode
 field or a `run_mode` capability in `/v1/capabilities`.
 
+Approval cards show only text bound to the request they decide. When
+run status advertises a pending control, the `approval.control` frame
+(`prompt_id@generation`) is followed by that control's own
+`command`/`description`; if the gateway reports the control without
+text, the card shows an explicit "not described" notice and results
+carry `detailBound: "false"`. The event-log text is never shown under
+a control id, because it can describe an earlier or different request.
+
 The full user-configurable system prompt is Hermes' `SOUL.md`, edited
 through `assistant prompt` with horneroctl-side version snapshots and
 rollback. It changes behaviour only: policy, hard denies and sandbox

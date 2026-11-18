@@ -1341,13 +1341,11 @@ fn assistant_events_outcome_mode(command string, run_id string, events []Assista
 	}
 	if pending.kind == 'approval' {
 		// Display the request the gateway reports as pending (the one
-		// the id binds); fall back to the event text.
-		shown := assistant_redact_tokens(if control.detail.len > 0 {
-			control.detail
-		} else {
-			pending.detail
-		})
+		// the id binds); never the event text under that id.
+		display, bound := assistant_approval_display(control, pending.detail)
+		shown := assistant_redact_tokens(display)
 		data['detail'] = shown
+		data['detailBound'] = bound.str()
 		if control.found {
 			data['promptId'] = control.prompt_id
 			data['generation'] = control.generation.str()
@@ -1426,11 +1424,10 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 				// The request id this card binds, sent before the text.
 				on_trace('approval.control', assistant_request_ref(ctl))
 			}
-			on_trace('approval', assistant_redact_tokens(if ctl.detail.len > 0 {
-				ctl.detail
-			} else {
-				pending.detail
-			}))
+			// Only the text the id binds (or an explicit "not
+			// described" notice) — never the event text under the id.
+			shown, _ := assistant_approval_display(ctl, pending.detail)
+			on_trace('approval', assistant_redact_tokens(shown))
 		}
 	}
 	resp := assistant_stream_events(settings, run_id, on_event) or {
@@ -1861,18 +1858,16 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 		}
 	}
 	if pending.kind == 'approval' {
-		shown := assistant_redact_tokens(if control.detail.len > 0 {
-			control.detail
-		} else {
-			pending.detail
-		})
+		display, bound := assistant_approval_display(control, pending.detail)
+		shown := assistant_redact_tokens(display)
 		assistant_log_append('ask', run_id, 'pending approval: ${shown}', 'pending')
 		mut d := {
-			'runId':   run_id
-			'mode':    ask_mode
-			'pending': 'approval'
-			'detail':  shown
-			'choices': pending.choices.join(',')
+			'runId':       run_id
+			'mode':        ask_mode
+			'pending':     'approval'
+			'detail':      shown
+			'detailBound': bound.str()
+			'choices':     pending.choices.join(',')
 		}
 		if control.found {
 			d['promptId'] = control.prompt_id
@@ -2089,6 +2084,28 @@ fn assistant_fetch_pending_control(settings AssistantSettings, run_id string) As
 // prompt_id@generation.
 pub fn assistant_request_ref(c AssistantPendingControl) string {
 	return '${c.prompt_id}@${c.generation}'
+}
+
+// assistant_unbound_approval_text is shown when the gateway reports a
+// pending control (the id a decision binds to) without its request
+// text. The event text cannot be shown in its place: it may describe
+// an earlier or different request than the one the id would decide.
+pub const assistant_unbound_approval_text = 'an action the gateway did not describe (deny unless you expected it)'
+
+// assistant_approval_display returns the text to show for a pending
+// approval and whether that text is the one the decision binds to.
+// With a pending control, only the control's own text is bound to its
+// request id; the event text is never paired with that id. Without
+// any control (gateways that do not advertise pending_controls) no id
+// is sent with the decision, so the event text is shown as before.
+pub fn assistant_approval_display(ctl AssistantPendingControl, event_detail string) (string, bool) {
+	if !ctl.found {
+		return event_detail, true
+	}
+	if ctl.detail.len > 0 {
+		return ctl.detail, true
+	}
+	return assistant_unbound_approval_text, false
 }
 
 // assistant_request_ref_valid accepts prompt_id or prompt_id@digits.
