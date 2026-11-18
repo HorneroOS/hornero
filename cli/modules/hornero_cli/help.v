@@ -705,6 +705,8 @@ Examples:
   snapshot ...        Configuration snapshots (create, list, restore)
   default-apps ...    Default applications (list, set)
   materialize ...     Install curated defaults into --dest (needs --yes)
+  export [--file F]   Export customisation as a look pack (read-only)
+  import <file>       Apply a look pack to shell.json (needs --yes)
   gui [--pane <name>] Open the settings hub
 
 Examples:
@@ -782,6 +784,32 @@ Examples:
   horneroctl config materialize --dest /tmp/hx-dest --dry-run
   horneroctl config materialize --dest /tmp/hx-dest --yes
   horneroctl config materialize --dest /tmp/hx-dest --dry-run --json
+'
+		}
+		'config export' {
+			return 'Usage: horneroctl config export [--file <path>] [--name <label>] [--factory <shell.default.json>]
+
+  Write the settings you changed from the HorneroOS defaults (looks, sizes,
+  behaviour; never apps, paths, favourites or layouts) as a look pack,
+  schema hornero/look-pack@1, the same format as Control Center >
+  Customisation. Without --file the pack is printed. Read-only.
+
+Examples:
+  horneroctl config export --file my-look.json
+  horneroctl config export --name Cozy --json
+'
+		}
+		'config import' {
+			return 'Usage: horneroctl config import <look-pack.json> [--factory <shell.default.json>] [--dry-run|--yes]
+
+  Apply a look pack to shell.json. Every entry is validated against the
+  factory defaults (known setting, same type, numbers clamped); unknown or
+  user-data entries are skipped and reported. Mutating: needs --yes;
+  --dry-run previews. The write is atomic and the shell reloads on change.
+
+Examples:
+  horneroctl config import my-look.json --dry-run
+  horneroctl config import my-look.json --yes
 '
 		}
 		'config gui' {

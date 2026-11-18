@@ -1329,6 +1329,20 @@ fn run_config(args []string, mode hornero_core.RenderMode) int {
 		}
 		return run_config_materialize(args[1..], mode)
 	}
+	if args[0] == 'export' {
+		if wants_help(args) {
+			print(command_help('config export'))
+			return 0
+		}
+		return run_config_export(args[1..], mode)
+	}
+	if args[0] == 'import' {
+		if wants_help(args) {
+			print(command_help('config import'))
+			return 0
+		}
+		return run_config_import(args[1..], mode)
+	}
 	if args[0] == 'gui' {
 		if wants_help(args) {
 			print(command_help('config gui'))
@@ -1380,6 +1394,69 @@ fn run_config_snapshot(args []string, mode hornero_core.RenderMode) int {
 		id:      opts.id
 		dry_run: opts.dry_run
 		yes:     opts.yes
+	}), mode)
+}
+
+// parse_look_pack_flags reads `--file/--factory/--name <value>` pairs and the
+// common --dry-run/--yes flags; positionals are returned separately.
+fn parse_look_pack_flags(args []string) !([]string, map[string]string, bool, bool) {
+	mut positional := []string{}
+	mut vals := map[string]string{}
+	mut dry_run := false
+	mut yes := false
+	mut i := 0
+	for i < args.len {
+		a := args[i]
+		if a in ['--file', '--factory', '--name'] {
+			if i + 1 >= args.len {
+				return error('${a} needs a value.\nExample: horneroctl config export --file look.json')
+			}
+			vals[a[2..]] = args[i + 1]
+			i += 2
+			continue
+		}
+		if a == '--dry-run' {
+			dry_run = true
+		} else if a == '--yes' {
+			yes = true
+		} else if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl config export --file look.json')
+		} else {
+			positional << a
+		}
+		i++
+	}
+	return positional, vals, dry_run, yes
+}
+
+fn run_config_export(args []string, mode hornero_core.RenderMode) int {
+	positional, vals, dry_run, yes := parse_look_pack_flags(args) or {
+		return render_error(hornero_core.err_usage('config.export.usage', err.msg()), mode)
+	}
+	if positional.len > 0 || dry_run || yes {
+		return render_error(hornero_core.err_usage('config.export.usage', 'unexpected argument.\nExample: horneroctl config export --file look.json'),
+			mode)
+	}
+	return render(hornero_core.config_look_export_report(hornero_core.LookPackExportOptions{
+		file:    vals['file']
+		factory: vals['factory']
+		name:    vals['name']
+	}), mode)
+}
+
+fn run_config_import(args []string, mode hornero_core.RenderMode) int {
+	positional, vals, dry_run, yes := parse_look_pack_flags(args) or {
+		return render_error(hornero_core.err_usage('config.import.usage', err.msg()), mode)
+	}
+	if positional.len != 1 || 'file' in vals || 'name' in vals {
+		return render_error(hornero_core.err_usage('config.import.usage', 'expected exactly one look pack file.\nExample: horneroctl config import look.json --dry-run'),
+			mode)
+	}
+	return render(hornero_core.config_look_import_report(hornero_core.LookPackImportOptions{
+		file:    positional[0]
+		factory: vals['factory']
+		dry_run: dry_run
+		yes:     yes
 	}), mode)
 }
 

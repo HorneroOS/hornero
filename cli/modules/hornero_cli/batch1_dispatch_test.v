@@ -188,3 +188,12 @@ fn test_dispatch_snapshot_never_touches_real_home() {
 	b1_dispatch_teardown()
 	assert !os.exists('/tmp/hx-batch1-dtest')
 }
+
+fn test_look_pack_help_has_examples_and_usage_errors() {
+	for cmd in ['config export', 'config import'] {
+		assert command_help(cmd).contains('Examples:')
+	}
+	assert dispatch(['horneroctl', 'config', 'import']) == 2
+	assert dispatch(['horneroctl', 'config', 'export', '--bogus']) == 2
+	assert dispatch(['horneroctl', 'config', 'import', 'x.json']) == 1
+}
