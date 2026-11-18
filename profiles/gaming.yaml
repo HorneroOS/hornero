@@ -3,7 +3,7 @@
 apiVersion: hornero.os/v1
 kind: EditionProfile
 name: gaming
-manifest: hornero-0.2.0-preview33
+manifest: hornero-0.2.0-preview34
 description: >-
   Gaming release profile. Extends desktop with the same pinned
   components; Gaming package composition, specializations, and

@@ -1,0 +1,20 @@
+# Hornero OS release: v0.2.0-preview34
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview34
+version: 0.2.0-preview34
+status: pre-release
+manifest: hornero-0.2.0-preview34
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview34-checklist.md
+summary: >-
+  Hornero Signal, delivered as AUR package updates for existing
+  installs (no ISO): hornero-shell 1.3.1, hornero-config 0.4.1
+  and signed horneroctl-bin 0.2.0_preview47 (user presence required
+  to approve assistant actions, on by default). Greeter unchanged.
+  The Preview 32 ISO remains the current installation medium.
+published: false
