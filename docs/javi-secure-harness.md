@@ -146,7 +146,9 @@ rollback. It changes behaviour only: policy, hard denies and sandbox
 binds are outside prompt text and cannot be overridden by it.
 
 Audit is the append-only, redacted TSV at
-`~/.config/hornero/assistant.log` (0600, bounded rotation): broker
+`~/.config/hornero/assistant.log` (0600; one `O_APPEND` write per entry
+under an exclusive `flock(2)`, so concurrent horneroctl processes
+never drop each other's lines; bounded rotation under the same lock): broker
 calls with their policy outcome, approvals, policy preset/revoke,
 prompt/model/workspace changes and ask/stop events. Prompts, answers
 and secrets are never written.
