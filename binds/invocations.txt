@@ -81,9 +81,11 @@ hardware brightness down
 hardware brightness up
 hardware keyboard keys
 hardware keyboard layout
+hardware keyboard rebind list
 hardware keyboard rebind reset
 hardware keyboard rebind set
 hardware keyboard rebind status
+hardware keyboard rebind undo
 hardware keyboard settings
 hypr cursor restore
 hypr cursor set

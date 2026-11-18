@@ -6,8 +6,8 @@ import os
 // keybindings-user.conf as `unbind`/`bind` pairs sourced after the
 // factory defaults (HorneroOS/config). The factory file is never
 // edited. Effective binds = defaults minus unbound combos plus the
-// override binds, applied in file order. Lua configs are read-only:
-// override syntax differs and is reported honestly.
+// override binds, applied in file order. Lua configs (the factory
+// default) use the managed overlay in hardware_keyboard_rebind_lua.v.
 
 pub struct BindEntry {
 pub:
@@ -22,6 +22,7 @@ pub struct RebindSetOptions {
 pub:
 	old_combo string
 	new_combo string
+	swap      bool
 	dry_run   bool
 	yes       bool
 }
@@ -195,10 +196,7 @@ fn hyprctl_keyword(bin string, name string, rhs string) ExecReport {
 
 pub fn keyboard_rebind_status_report() CommandResult {
 	if hypr_lua_config_enabled() {
-		return ok_result('hardware keyboard rebind', 'Lua keybindings are read-only (rebind supports hyprlang configs).', {
-			'managed':   'false'
-			'overrides': '0'
-		})
+		return lua_rebind_status_report()
 	}
 	_, defaults_text, user_text := rebind_read_inputs()
 	user := parse_bind_entries(user_text)
@@ -217,7 +215,13 @@ pub fn keyboard_rebind_status_report() CommandResult {
 // override file; applies live via `hyprctl keyword` when available.
 pub fn keyboard_rebind_set_report(opts RebindSetOptions) CommandResult {
 	if hypr_lua_config_enabled() {
-		return rebind_fail('Lua keybindings are read-only: rebind supports hyprlang configs only.')
+		return lua_rebind_set_report(LuaRebindSetOptions{
+			old_combo: opts.old_combo
+			new_combo: opts.new_combo
+			swap:      opts.swap
+			dry_run:   opts.dry_run
+			yes:       opts.yes
+		})
 	}
 	old_mods, old_key, ok_old := parse_combo(opts.old_combo)
 	new_mods, new_key, ok_new := parse_combo(opts.new_combo)
@@ -379,7 +383,7 @@ pub fn apply_overrides_to_lines(lines []string, user_text string) []string {
 // restores factory binds live.
 pub fn keyboard_rebind_reset_report(dry_run bool, yes bool) CommandResult {
 	if hypr_lua_config_enabled() {
-		return rebind_fail('Lua keybindings are read-only: rebind supports hyprlang configs only.')
+		return lua_rebind_reset_report(dry_run, yes)
 	}
 	user_path, defaults_text, user_text := rebind_read_inputs()
 	user := parse_bind_entries(user_text)

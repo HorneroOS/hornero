@@ -330,7 +330,8 @@ pub:
 	search         string
 	dry_run        bool
 	yes            bool
-	rebind_action  string // status | set | reset
+	rebind_action  string // status | list | set | reset | undo
+	swap           bool
 	old_combo      string
 	new_combo      string
 	layout_list    bool
@@ -478,16 +479,22 @@ fn parse_hardware_keyboard_rebind(args []string) !HardwareKeyboardOptions {
 		return error('missing rebind action.\nExample: horneroctl hardware keyboard rebind status')
 	}
 	action := args[1]
-	if action !in ['status', 'set', 'reset'] {
+	if action !in ['status', 'list', 'set', 'reset', 'undo'] {
 		return error('unknown rebind action: ${action}.\nRun: horneroctl hardware keyboard rebind --help')
 	}
 	mut old_combo := ''
 	mut new_combo := ''
 	mut dry_run := false
 	mut yes := false
+	mut swap := false
 	mut i := 2
 	for i < args.len {
 		a := args[i]
+		if a == '--swap' {
+			swap = true
+			i++
+			continue
+		}
 		if a == '--dry-run' {
 			dry_run = true
 			i++
@@ -518,14 +525,18 @@ fn parse_hardware_keyboard_rebind(args []string) !HardwareKeyboardOptions {
 	if action != 'set' && (old_combo.len > 0 || new_combo.len > 0) {
 		return error('rebind ${action} takes no --old/--new.')
 	}
-	if action == 'status' && yes {
-		return error('rebind status takes no --yes.')
+	if action in ['status', 'list'] && (yes || dry_run) {
+		return error('rebind ${action} is read-only; it takes no --yes/--dry-run.')
+	}
+	if swap && action != 'set' {
+		return error('--swap only applies to rebind set.')
 	}
 	return HardwareKeyboardOptions{
 		leaf:          'rebind'
 		dry_run:       dry_run
 		yes:           yes
 		rebind_action: action
+		swap:          swap
 		old_combo:     old_combo
 		new_combo:     new_combo
 	}

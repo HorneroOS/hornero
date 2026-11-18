@@ -481,7 +481,19 @@ fn lua_paren_balance(line string) int {
 // Dispatcher expressions are shown verbatim (trimmed of the call's
 // trailing parenthesis) — help must read what the session runs.
 fn parse_keybindings_lua(text string) []string {
-	mut out := []string{}
+	return parse_keybindings_lua_ctx(text).map(it.line)
+}
+
+// LuaBindLine is one rendered bind plus the submap it was defined in
+// (hl.define_submap("name", function() ... end) blocks; '' is global).
+struct LuaBindLine {
+	line   string
+	submap string
+}
+
+fn parse_keybindings_lua_ctx(text string) []LuaBindLine {
+	mut out := []LuaBindLine{}
+	mut submap := ''
 	mut stage := 0
 	mut candidate := ''
 	mut cat := ''
@@ -531,6 +543,20 @@ fn parse_keybindings_lua(text string) []string {
 			}
 			continue
 		}
+		if line.starts_with('hl.define_submap(') {
+			q := line.index('"') or { -1 }
+			if q >= 0 {
+				rest := line[q + 1..]
+				submap = rest.all_before('"')
+			}
+			stage = 0
+			continue
+		}
+		if line == 'end)' {
+			submap = ''
+			stage = 0
+			continue
+		}
 		if !line.starts_with('hl.bind(') {
 			stage = 0
 			continue
@@ -554,10 +580,14 @@ fn parse_keybindings_lua(text string) []string {
 		key := parts[parts.len - 1]
 		mods := parts[..parts.len - 1].join(' + ')
 		shown := if mods.len > 0 { '${mods} + ${key}' } else { key }
-		if cat.len > 0 {
-			out << '[${cat}] ${shown} -> ${action}'
+		rendered := if cat.len > 0 {
+			'[${cat}] ${shown} -> ${action}'
 		} else {
-			out << '${shown} -> ${action}'
+			'${shown} -> ${action}'
+		}
+		out << LuaBindLine{
+			line:   rendered
+			submap: submap
 		}
 	}
 	return out
@@ -698,6 +728,19 @@ pub:
 // --dry-run only previews.
 pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 	if !shell_ipc_bypassed() && quickshell_running() {
+		// The keybinding overlay (shell `keybinds` IPC target) first;
+		// shells without it fall back to the Settings pane.
+		overlay := ipc_report(IpcOptions{
+			passthrough: ['call', 'keybinds', 'toggle']
+			dry_run:     opts.dry_run
+		})
+		if overlay.ok && !overlay.message.contains('error') && !overlay.message.contains('not found') {
+			return ok_result('hardware keyboard keys', if opts.dry_run {
+				overlay.message
+			} else {
+				'keybinding overlay toggled'
+			}, overlay.data)
+		}
 		result := settings_gui_report(SettingsGuiOptions{
 			pane:    'system'
 			dry_run: opts.dry_run
@@ -718,7 +761,9 @@ pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 		return fail_result('hardware keyboard keys', '[ERROR] Keybindings configuration not found (${path}).')
 	}
 	mut lines := parse_keybindings_auto(path, text)
-	if !path.ends_with('.lua') {
+	if path.ends_with('.lua') {
+		lines = apply_lua_remaps_to_lines(lines, read_keybinds_overlay())
+	} else {
 		user_text := os.read_file(keybindings_user_path()) or { '' }
 		if user_text.trim_space().len > 0 {
 			lines = apply_overrides_to_lines(lines, user_text)
@@ -751,4 +796,39 @@ pub fn keyboard_keys_report(opts KeyboardKeysOptions) CommandResult {
 		'file':  path
 		'count': '${lines.len}'
 	})
+}
+
+// apply_lua_remaps_to_lines rewrites rendered `[cat] combo -> action`
+// lines to the combos the managed overlay moved them to (dropping
+// disabled ones), so `keys` shows what the session runs.
+fn apply_lua_remaps_to_lines(lines []string, remaps []KeybindRemap) []string {
+	if remaps.len == 0 {
+		return lines
+	}
+	mut out := []string{}
+	for line in lines {
+		mut prefix := ''
+		mut body := line
+		if line.starts_with('[') {
+			end := line.index('] ') or { -1 }
+			if end > 0 {
+				prefix = line[..end + 2]
+				body = line[end + 2..]
+			}
+		}
+		arrow := body.index(' -> ') or {
+			out << line
+			continue
+		}
+		target, remapped := remap_target(remaps, body[..arrow])
+		if !remapped {
+			out << line
+			continue
+		}
+		if target.len == 0 {
+			continue
+		}
+		out << prefix + display_combo(target) + body[arrow..]
+	}
+	return out
 }
