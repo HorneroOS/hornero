@@ -1,0 +1,19 @@
+# Hornero OS release: v0.2.0-preview35
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview35
+version: 0.2.0-preview35
+status: pre-release
+manifest: hornero-0.2.0-preview35
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview35-checklist.md
+summary: >-
+  Hornero Signal, delivered as AUR package updates for existing
+  installs (no ISO): hornero-shell 1.3.2 (Argentine Spanish UI),
+  hornero-config 0.4.2 and signed horneroctl-bin 0.2.0_preview48
+  (Qt apps follow the live palette). Greeter unchanged.
+published: false
