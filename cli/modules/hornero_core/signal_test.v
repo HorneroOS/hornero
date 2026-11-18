@@ -448,8 +448,13 @@ fn test_missing_ibm_plex_families() {
 fn test_appearance_doctor_checks_scheme_and_fonts() {
 	sg_setup()
 	os.setenv('HORNERO_FONT_DIRS', '${sg_root}/fonts', true)
+	// hermetic: no Qt platform-theme plugin is visible to the Qt checks
+	os.setenv('HORNERO_QT_PLUGIN_DIRS', '${sg_root}/no-qt-plugins', true)
 	checks := appearance_doctor_checks()
-	assert checks.len == 3
+	// signal-scheme, signal-fonts, chromatic-helper, then the Qt consumer
+	// checks (qt-qt6ct, qt-qt5ct, qt-platformtheme).
+	assert checks.len == 6
+	assert checks[3..].map(it.name) == ['qt-qt6ct', 'qt-qt5ct', 'qt-platformtheme']
 	assert checks[0].name == 'signal-scheme'
 	assert checks[2].name == 'chromatic-helper'
 	assert !checks[0].ok
@@ -464,6 +469,7 @@ fn test_appearance_doctor_checks_scheme_and_fonts() {
 	assert ok[1].ok
 	report := appearance_doctor_native()
 	assert !report.message.contains('materialyoucolor')
+	os.unsetenv('HORNERO_QT_PLUGIN_DIRS')
 	sg_teardown()
 }
 
