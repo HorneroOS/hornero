@@ -1,0 +1,8 @@
+; qt6ct colour scheme for hornero-signal-day — GENERATED from schema-v2 roles
+; (lib/hornero/signal_render.py via scripts/generate-appearance.py).
+; Default wallpaper: hornero-signal-day-01.png.
+; Roles follow QPalette::ColorRole order. Selection = cue, Accent = signal.
+[ColorScheme]
+active_colors=#ff1b1e22, #fffbf9f5, #ffffffff, #fffdfcfa, #ffdcd6c8, #ff736d62, #ff1b1e22, #ff000000, #ff1b1e22, #ffdcd6c8, #fff2eee5, #ff000000, #ff1a5f88, #ffffffff, #ff1a5f88, #ff4e545b, #fff7f4ee, #ff000000, #ffffffff, #ff1b1e22, #ff4e545b, #ff8f4b00
+inactive_colors=#ff1b1e22, #fffbf9f5, #ffffffff, #fffdfcfa, #ffdcd6c8, #ff736d62, #ff1b1e22, #ff000000, #ff1b1e22, #ffdcd6c8, #fff2eee5, #ff000000, #ff1a5f88, #ffffffff, #ff1a5f88, #ff4e545b, #fff7f4ee, #ff000000, #ffffffff, #ff1b1e22, #ff4e545b, #ff8f4b00
+disabled_colors=#ff7a8086, #fffbf9f5, #ffffffff, #fffdfcfa, #ffdcd6c8, #ff736d62, #ff7a8086, #ff000000, #ff7a8086, #ffdcd6c8, #fff2eee5, #ff000000, #ffd3e7f3, #ff7a8086, #ff1a5f88, #ff4e545b, #fff7f4ee, #ff000000, #ffffffff, #ff1b1e22, #ff7a8086, #fff6ddb8

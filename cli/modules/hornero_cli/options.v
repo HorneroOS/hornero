@@ -155,7 +155,7 @@ pub fn parse_appearance_cmd(args []string) !AppearanceCmdOptions {
 	}
 	sub := args[0]
 	if sub !in ['status', 'sync', 'doctor', 'set-wallpaper', 'set-gtk', 'set-icons',
-		'set-gtk-color-scheme'] {
+		'set-gtk-color-scheme', 'sync-qt', 'set-qt'] {
 		return error('unknown appearance subcommand: ${sub}.\nRun: horneroctl appearance --help')
 	}
 	mut value := ''

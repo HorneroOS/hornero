@@ -267,6 +267,18 @@ fn test_dispatch_appearance_sync_needs_yes() {
 	assert code == 1
 }
 
+fn test_dispatch_appearance_qt_verbs_guard_and_help() {
+	// Mutating Qt verbs refuse without --yes (exit 1) and keep their help.
+	assert dispatch(['horneroctl', 'appearance', 'sync-qt']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'set-qt', 'qt6ct=off']) == 1
+	assert dispatch(['horneroctl', 'appearance', 'set-qt', 'qt6ct=off', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'appearance', 'set-qt', 'qt4ct=off', '--dry-run']) == 1
+	help := command_help('appearance')
+	assert help.contains('sync-qt')
+	assert help.contains('set-qt <toolkit>=<follow|force|off>')
+	assert help.contains('Examples:')
+}
+
 fn test_dispatch_config_paths() {
 	assert dispatch(['horneroctl', 'config', 'paths']) == 0
 }

@@ -6,7 +6,7 @@ module hornero_core
 
 pub struct AppearanceOptions {
 pub:
-	action  string // status | sync | doctor | set-wallpaper | set-gtk | set-icons | set-gtk-color-scheme
+	action  string // status | sync | doctor | set-wallpaper | set-gtk | set-icons | set-gtk-color-scheme | sync-qt | set-qt
 	value   string
 	dry_run bool
 	yes     bool
@@ -52,6 +52,18 @@ pub fn appearance_report(opts AppearanceOptions) CommandResult {
 				return fail_result('appearance set-gtk-color-scheme', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance set-gtk-color-scheme follow --dry-run')
 			}
 			return appearance_set_gtk_policy_native(opts.value, opts.dry_run)
+		}
+		'sync-qt' {
+			if !opts.yes && !opts.dry_run {
+				return fail_result('appearance sync-qt', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance sync-qt --dry-run')
+			}
+			return appearance_sync_qt_native(opts.dry_run)
+		}
+		'set-qt' {
+			if !opts.yes && !opts.dry_run {
+				return fail_result('appearance set-qt', 'refusing to apply without --yes (preview with --dry-run).\nExample: horneroctl appearance set-qt qt6ct=off --dry-run')
+			}
+			return appearance_set_qt_native(opts.value, opts.dry_run)
 		}
 		else {
 			return fail_result('appearance', 'unknown action: ${opts.action}.\nRun: horneroctl appearance --help')

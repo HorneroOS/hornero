@@ -281,7 +281,7 @@ pub fn theme_apply_native_with(id string, wallpaper_override string, dry_run boo
 		}
 		gtk_label := if gtk_theme.len == 0 || gtk_theme == 'auto' { 'auto' } else { gtk_theme }
 		lines << 'would run: apply gtk ${gtk_label} icons ${icon_theme} policy ${policy}'
-		lines << 'would run: sync kitty include, gtk recolor, qt6ct palette; reload Hyprland and terminals'
+		lines << 'would run: sync kitty include, gtk recolor, qt5ct/qt6ct palette; reload Hyprland and terminals'
 		return ok_result('appearance theme apply', lines.join('\n'), {
 			'command_line': lines.join('\n')
 			'dry_run':      'true'
@@ -403,55 +403,6 @@ pub fn sync_gtk_recolor(gtk_theme string) {
 	dest := os.join_path(gtk_config_home(), 'gtk-4.0', 'gtk.css')
 	os.mkdir_all(os.dir(dest)) or { return }
 	os.cp(src, dest) or {}
-}
-
-// sync_qt6ct_palette points qt6ct at the theme's generated palette with
-// a comment-preserving line edit (silent no-op when absent).
-pub fn sync_qt6ct_palette(theme_id string) {
-	qt_dir := os.join_path(gtk_config_home(), 'qt6ct')
-	scheme := os.join_path(qt_dir, 'colors', theme_id + '.conf')
-	conf := os.join_path(qt_dir, 'qt6ct.conf')
-	if !os.is_file(scheme) || !os.is_file(conf) {
-		return
-	}
-	raw := os.read_file(conf) or { return }
-	mut out := []string{}
-	mut in_appearance := false
-	mut seen_palette := false
-	mut seen_path := false
-	for line in raw.split_into_lines() {
-		stripped := line.trim_space()
-		mut next := line
-		if stripped.starts_with('[') {
-			in_appearance = stripped == '[Appearance]'
-		} else if in_appearance {
-			if stripped.starts_with('custom_palette') {
-				next = 'custom_palette=true'
-				seen_palette = true
-			} else if stripped.starts_with('color_scheme_path') {
-				next = 'color_scheme_path=${scheme}'
-				seen_path = true
-			}
-		}
-		out << next
-	}
-	mut text := out.join('\n')
-	if !seen_palette || !seen_path {
-		mut extra := ''
-		if !seen_palette {
-			extra += 'custom_palette=true\n'
-		}
-		if !seen_path {
-			extra += 'color_scheme_path=${scheme}\n'
-		}
-		if text.contains('[Appearance]\n') {
-			text = text.replace('[Appearance]\n', '[Appearance]\n' + extra)
-		} else {
-			text = text.trim_space() + '\n[Appearance]\n' + extra
-		}
-		out = text.split_into_lines()
-	}
-	os.write_file(conf, out.join('\n') + '\n') or {}
 }
 
 // snappy_pack_best_effort hands the pack id to the sibling
@@ -689,6 +640,7 @@ pub fn appearance_sync_native(dry_run bool) CommandResult {
 		return fail_result('appearance sync', err.msg())
 	}
 	persist_state_theme(theme.id) or { return fail_result('appearance sync', err.msg()) }
+	qt_sync_all(false)
 	mut msg := 'appearance synced from ${theme.id} (${outputs.scheme})'
 	if migration.changes.len > 0 {
 		msg += '\nmigrated: ' + migration.changes.join('; ')
@@ -790,6 +742,7 @@ pub fn appearance_doctor_checks() []DoctorCheck {
 			'hornero-chromatic not found (optional; run: horneroctl appearance chromatic doctor)'
 		}
 	}
+	checks << qt_doctor_checks()
 	return checks
 }
 
@@ -804,6 +757,8 @@ pub fn appearance_doctor_native() CommandResult {
 		lines << '${c.name}: ${c.detail}'
 		if !c.ok {
 			fails << c.detail
+		} else if c.warn {
+			warns << c.detail
 		}
 	}
 	sel := resolve_signal_selection()
