@@ -51,7 +51,9 @@ Run `horneroctl --help` for the installed command list and
   HorneroOS extension catalogue. Catalogue installs verify payload hashes and
   keep extensions inert until separately enabled. `--revision <commit>` fetches
   and checks out that exact catalogue commit, so links pinned by the website
-  remain reproducible after `main` advances.
+  remain reproducible after `main` advances. The `--json` output, exit codes
+  and stable `data.error` codes that Control Center > Extensions relies on are
+  specified in [`docs/PLUGIN_LIFECYCLE_JSON.md`](../docs/PLUGIN_LIFECYCLE_JSON.md).
 
 `horneroctl system info` reads the immutable profile record installed by a
 HorneroOS installer composition. It reports the installed edition, role,

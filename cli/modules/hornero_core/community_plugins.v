@@ -64,6 +64,9 @@ struct CommunityPluginListEntry {
 	capabilities          json2.Any
 	capabilities_verified bool
 	rollback_available    bool
+	// Who vouches for this payload, in words: the official catalogue,
+	// a verified author key, a local trust record, or nobody ('').
+	signer string
 }
 
 fn community_plugin_declared_capabilities(record CommunityPluginReceipt, plugin_dir string) json2.Any {
@@ -629,6 +632,21 @@ fn community_plugin_rename_noreplace(source string, destination string) ! {
 	}
 }
 
+// plugin_fail is a failed lifecycle result with a stable machine code in
+// data.error (docs/PLUGIN_LIFECYCLE_JSON.md). Control Center maps the
+// code to guidance; the message stays the human explanation. Codes are
+// part of the JSON contract: rename one only with a deprecation.
+fn plugin_fail(command string, code string, message string) CommandResult {
+	return CommandResult{
+		command: command
+		ok:      false
+		message: message
+		data:    {
+			'error': code
+		}
+	}
+}
+
 fn community_plugin_json_string(value string) string {
 	return json2.encode(value, escape_unicode: true)
 }
@@ -668,6 +686,7 @@ pub fn community_plugin_list_report() CommandResult {
 				&& record.catalog_sha256.len > 0
 				&& community_plugin_payload_hash(payload) == record.catalog_sha256
 			rollback_available:    community_plugin_rollback_available(record, record.id, payload)
+			signer:                community_plugin_signer(record, payload)
 		}
 	}
 	data := json2.encode(list_entries, escape_unicode: true)
@@ -683,37 +702,66 @@ pub fn community_plugin_list_report() CommandResult {
 pub fn community_plugin_remove_report(opts CommunityPluginOptions) CommandResult {
 	id := opts.value
 	if !community_plugin_valid_id(id) {
-		return fail_result('plugin remove', 'invalid plugin id.\nExample: horneroctl plugin remove example-clock --dry-run')
+		return plugin_fail('plugin remove', 'invalid-id', 'invalid plugin id.\nExample: horneroctl plugin remove example-clock --dry-run')
 	}
 	if !opts.dry_run && !opts.yes {
-		return fail_result('plugin remove', 'refusing to remove a plugin without --yes (preview with --dry-run).\nExample: horneroctl plugin remove example-clock --dry-run')
+		return plugin_fail('plugin remove', 'confirmation-required', 'refusing to remove a plugin without --yes (preview with --dry-run).\nExample: horneroctl plugin remove example-clock --dry-run')
 	}
 	root, receipts := community_plugin_roots()
 	payload := os.join_path(root, id)
 	receipt := os.join_path(receipts, '${id}.json')
 	if os.is_link(payload) || os.is_link(receipt) {
-		return fail_result('plugin remove', 'refusing to follow a symbolic link in the owned plugin paths')
+		return plugin_fail('plugin remove', 'unsafe-path', 'refusing to follow a symbolic link in the owned plugin paths')
 	}
 	if !os.is_file(receipt) {
-		return fail_result('plugin remove', 'no Hornero receipt owns plugin ${id}')
+		return plugin_fail('plugin remove', 'not-installed', 'no Hornero receipt owns plugin ${id}')
 	}
 	record := json2.decode[CommunityPluginReceipt](os.read_file(receipt) or { '' }) or {
-		return fail_result('plugin remove', 'plugin receipt is malformed; refusing to remove unverified data')
+		return plugin_fail('plugin remove', 'receipt-invalid', 'plugin receipt is malformed; refusing to remove unverified data')
 	}
 	if record.schema_version != 1 || record.id != id {
-		return fail_result('plugin remove', 'plugin receipt does not own the requested plugin id')
+		return plugin_fail('plugin remove', 'receipt-invalid', 'plugin receipt does not own the requested plugin id')
 	}
+	// The rollback copy kept by `plugin catalog update` and a staged
+	// rollback leftover are receipt-owned too: removing the plugin must
+	// not strand them (a later install would otherwise inherit a stale
+	// rollback target).
+	mut siblings := []string{}
+	for suffix in ['.previous', '.rollback-current'] {
+		sibling := '${payload}${suffix}'
+		if os.is_link(sibling) {
+			return plugin_fail('plugin remove', 'unsafe-path', 'refusing to follow a symbolic link in the owned plugin paths')
+		}
+		if os.exists(sibling) {
+			siblings << sibling
+		}
+	}
+	was_enabled := record.enabled
 	if opts.dry_run {
-		return ok_result('plugin remove', 'would remove only the receipt-owned payload ${payload} and its receipt', {
-			'dry_run': 'true'
+		return ok_result('plugin remove', 'would remove only the receipt-owned payload ${payload}${if siblings.len > 0 {
+			', its kept rollback copy'
+		} else {
+			''
+		}} and its receipt. Its settings in the shell configuration are kept.', {
+			'dry_run':       'true'
+			'id':            id
+			'version':       record.version
+			'was_enabled':   was_enabled.str()
+			'rollback_copy': (siblings.len > 0).str()
 		})
 	}
 	if os.exists(payload) {
-		os.rmdir_all(payload) or { return fail_result('plugin remove', 'cannot remove owned plugin payload: ${err.msg()}') }
+		os.rmdir_all(payload) or { return plugin_fail('plugin remove', 'io-failed', 'cannot remove owned plugin payload: ${err.msg()}') }
 	}
-	os.rm(receipt) or { return fail_result('plugin remove', 'cannot remove plugin receipt: ${err.msg()}') }
-	return ok_result('plugin remove', 'removed Hornero-owned data for ${id}', {
-		'id': id
+	for sibling in siblings {
+		os.rmdir_all(sibling) or { return plugin_fail('plugin remove', 'io-failed', 'cannot remove the kept rollback copy: ${err.msg()}') }
+	}
+	os.rm(receipt) or { return plugin_fail('plugin remove', 'io-failed', 'cannot remove plugin receipt: ${err.msg()}') }
+	return ok_result('plugin remove', 'removed Hornero-owned data for ${id}. A running shell drops it after `qs ipc call plugins reload` (or Settings > Extensions > Reload plugin list). Its settings in the shell configuration are kept, so a reinstall picks them up.', {
+		'id':            id
+		'version':       record.version
+		'was_enabled':   was_enabled.str()
+		'rollback_copy': (siblings.len > 0).str()
 	})
 }
 
@@ -721,41 +769,41 @@ fn community_plugin_set_enabled_report(opts CommunityPluginOptions, enable bool)
 	verb := if enable { 'enable' } else { 'disable' }
 	id := opts.value
 	if !community_plugin_valid_id(id) {
-		return fail_result('plugin ${verb}', 'invalid plugin id.\nExample: horneroctl plugin ${verb} example-clock --dry-run')
+		return plugin_fail('plugin ${verb}', 'invalid-id', 'invalid plugin id.\nExample: horneroctl plugin ${verb} example-clock --dry-run')
 	}
 	if !opts.dry_run && !opts.yes {
-		return fail_result('plugin ${verb}', 'refusing to ${verb} a plugin without --yes (preview with --dry-run).\nExample: horneroctl plugin ${verb} ${id} --dry-run')
+		return plugin_fail('plugin ${verb}', 'confirmation-required', 'refusing to ${verb} a plugin without --yes (preview with --dry-run).\nExample: horneroctl plugin ${verb} ${id} --dry-run')
 	}
 	root, receipts := community_plugin_roots()
 	payload := os.join_path(root, id)
 	receipt_path := os.join_path(receipts, '${id}.json')
 	if os.is_link(payload) || os.is_link(receipt_path) {
-		return fail_result('plugin ${verb}', 'refusing to follow a symbolic link in the owned plugin paths')
+		return plugin_fail('plugin ${verb}', 'unsafe-path', 'refusing to follow a symbolic link in the owned plugin paths')
 	}
 	if !os.is_file(receipt_path) {
-		return fail_result('plugin ${verb}', 'no Hornero receipt owns plugin ${id}. Install it first: horneroctl plugin install <https-url> --yes')
+		return plugin_fail('plugin ${verb}', 'not-installed', 'no Hornero receipt owns plugin ${id}. Install it first: horneroctl plugin install <https-url> --yes')
 	}
 	mut record := json2.decode[CommunityPluginReceipt](os.read_file(receipt_path) or { '' }) or {
-		return fail_result('plugin ${verb}', 'plugin receipt is malformed; refusing to change lifecycle state')
+		return plugin_fail('plugin ${verb}', 'receipt-invalid', 'plugin receipt is malformed; refusing to change lifecycle state')
 	}
 	if record.schema_version != 1 || record.id != id {
-		return fail_result('plugin ${verb}', 'plugin receipt does not own the requested plugin id')
+		return plugin_fail('plugin ${verb}', 'receipt-invalid', 'plugin receipt does not own the requested plugin id')
 	}
 	if !os.is_dir(payload) {
-		return fail_result('plugin ${verb}', 'plugin payload is missing at ${payload}; reinstall the package before changing its state')
+		return plugin_fail('plugin ${verb}', 'payload-missing', 'plugin payload is missing at ${payload}; reinstall the package before changing its state')
 	}
 	if enable {
 		// Fail closed: an installed payload must still pass the static
 		// contract before it may be marked runnable.
 		community_plugin_run_validator(payload) or {
-			return fail_result('plugin enable', 'installed payload no longer validates, so it stays disabled: ${err.msg()}')
+			return plugin_fail('plugin enable', 'validation-failed', 'installed payload no longer validates, so it stays disabled: ${err.msg()}')
 		}
 		// Local trust model (shell#251): non-official plugins need an
 		// explicit, hash-pinned trust step before they may run.
 		// Official-catalogue installs carry reviewed provenance.
 		trust := community_plugin_trust_state(record, payload)
 		if !opts.dry_run && trust != 'official' && trust != 'trusted' && trust != 'signed' {
-			return fail_result('plugin enable', 'plugin ${id} is ${trust}: it did not come from the official catalogue, and no trust is recorded for the current payload. Review the code, then run: horneroctl plugin trust ${id} --yes')
+			return plugin_fail('plugin enable', 'trust-required', 'plugin ${id} is ${trust}: it did not come from the official catalogue, and no trust is recorded for the current payload. Review the code, then run: horneroctl plugin trust ${id} --yes')
 		}
 	}
 	if record.enabled == enable {
@@ -774,12 +822,12 @@ fn community_plugin_set_enabled_report(opts CommunityPluginOptions, enable bool)
 	record.enabled = enable
 	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
-		return fail_result('plugin ${verb}', 'cannot write plugin receipt: ${err.msg()}')
+		return plugin_fail('plugin ${verb}', 'io-failed', 'cannot write plugin receipt: ${err.msg()}')
 	}
 	os.chmod(tmp, 0o600) or {}
 	os.rename(tmp, receipt_path) or {
 		os.rm(tmp) or {}
-		return fail_result('plugin ${verb}', 'cannot save plugin receipt: ${err.msg()}')
+		return plugin_fail('plugin ${verb}', 'io-failed', 'cannot save plugin receipt: ${err.msg()}')
 	}
 	state := if enable { 'enabled' } else { 'disabled' }
 	return ok_result('plugin ${verb}', 'plugin ${id} ${state}. ${if enable {
@@ -910,38 +958,82 @@ fn community_plugin_trust_state(record CommunityPluginReceipt, payload string) s
 	return 'stale-trust'
 }
 
+// community_plugin_signer names who vouches for the current payload, for
+// display next to the trust state: the reviewed official catalogue, a
+// verified author key (minisign key id, as `minisign -V` prints it), or
+// a local trust record. Empty when nobody vouches for it.
+fn community_plugin_signer(record CommunityPluginReceipt, payload string) string {
+	trust := community_plugin_trust_state(record, payload)
+	match trust {
+		'official' {
+			return 'HorneroOS/plugins (official catalogue)'
+		}
+		'signed' {
+			key_id := community_plugin_signing_key_id(payload)
+			return if key_id.len > 0 { 'author key ${key_id}' } else { 'author key' }
+		}
+		'trusted' {
+			return 'you (local trust record)'
+		}
+		else {
+			return ''
+		}
+	}
+}
+
+// Minisign key id of the payload's signing key: the 8 id bytes after
+// the "Ed" prefix, printed as minisign does (little-endian, upper hex).
+fn community_plugin_signing_key_id(payload string) string {
+	manifest := community_plugin_manifest(payload) or { return '' }
+	signing := manifest['signing'] or { return '' }
+	if signing !is map[string]json2.Any {
+		return ''
+	}
+	signing_map := signing as map[string]json2.Any
+	public_key := (signing_map['publicKey'] or { json2.Any('') }).str()
+	raw := base64.decode(public_key)
+	if raw.len != 42 {
+		return ''
+	}
+	mut out := ''
+	for i := 9; i >= 2; i-- {
+		out += '${raw[i]:02X}'
+	}
+	return out
+}
+
 // `plugin trust <id>`: the explicit "I trust this code" step
 // (shell#251). Records the current payload hash in the receipt;
 // never enables. Any later payload change invalidates the trust.
 pub fn community_plugin_trust_report(opts CommunityPluginOptions) CommandResult {
 	id := opts.value
 	if !community_plugin_valid_id(id) {
-		return fail_result('plugin trust', 'invalid plugin id.\nExample: horneroctl plugin trust example-clock --dry-run')
+		return plugin_fail('plugin trust', 'invalid-id', 'invalid plugin id.\nExample: horneroctl plugin trust example-clock --dry-run')
 	}
 	root, receipts := community_plugin_roots()
 	payload := os.join_path(root, id)
 	receipt_path := os.join_path(receipts, '${id}.json')
 	if os.is_link(payload) || os.is_link(receipt_path) {
-		return fail_result('plugin trust', 'refusing to follow a symbolic link in the owned plugin paths')
+		return plugin_fail('plugin trust', 'unsafe-path', 'refusing to follow a symbolic link in the owned plugin paths')
 	}
 	if !os.is_file(receipt_path) {
-		return fail_result('plugin trust', 'no Hornero receipt owns plugin ${id}. Install it first: horneroctl plugin install <https-url> --yes')
+		return plugin_fail('plugin trust', 'not-installed', 'no Hornero receipt owns plugin ${id}. Install it first: horneroctl plugin install <https-url> --yes')
 	}
 	mut record := json2.decode[CommunityPluginReceipt](os.read_file(receipt_path) or { '' }) or {
-		return fail_result('plugin trust', 'plugin receipt is malformed; refusing to record trust')
+		return plugin_fail('plugin trust', 'receipt-invalid', 'plugin receipt is malformed; refusing to record trust')
 	}
 	if record.schema_version != 1 || record.id != id {
-		return fail_result('plugin trust', 'plugin receipt does not own the requested plugin id')
+		return plugin_fail('plugin trust', 'receipt-invalid', 'plugin receipt does not own the requested plugin id')
 	}
 	if !os.is_dir(payload) {
-		return fail_result('plugin trust', 'plugin payload is missing at ${payload}; reinstall before trusting it')
+		return plugin_fail('plugin trust', 'payload-missing', 'plugin payload is missing at ${payload}; reinstall before trusting it')
 	}
 	community_plugin_run_validator(payload) or {
-		return fail_result('plugin trust', 'payload does not validate, so it cannot be trusted: ${err.msg()}')
+		return plugin_fail('plugin trust', 'validation-failed', 'payload does not validate, so it cannot be trusted: ${err.msg()}')
 	}
 	hash := community_plugin_payload_hash(payload)
 	if hash.len == 0 {
-		return fail_result('plugin trust', 'cannot compute the payload hash for ${id}; refusing to record trust')
+		return plugin_fail('plugin trust', 'io-failed', 'cannot compute the payload hash for ${id}; refusing to record trust')
 	}
 	if opts.dry_run {
 		return ok_result('plugin trust', 'would record trust for plugin ${id} from ${record.source} (revision ${record.revision}) at payload hash ${hash}. Trusting is not enabling: this code would still need `plugin enable`. Plugin QML runs with your user privileges and is not sandboxed.', {
@@ -952,7 +1044,7 @@ pub fn community_plugin_trust_report(opts CommunityPluginOptions) CommandResult 
 		})
 	}
 	if !opts.yes {
-		return fail_result('plugin trust', 'refusing to record trust without --yes (preview with --dry-run).\nExample: horneroctl plugin trust ${id} --dry-run')
+		return plugin_fail('plugin trust', 'confirmation-required', 'refusing to record trust without --yes (preview with --dry-run).\nExample: horneroctl plugin trust ${id} --dry-run')
 	}
 	was_trusted := community_plugin_trust_state(record, payload) in ['official', 'trusted', 'signed']
 	record.trusted_hash = hash
@@ -962,12 +1054,12 @@ pub fn community_plugin_trust_report(opts CommunityPluginOptions) CommandResult 
 	if !was_trusted { record.enabled = false }
 	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
-		return fail_result('plugin trust', 'cannot write plugin receipt: ${err.msg()}')
+		return plugin_fail('plugin trust', 'io-failed', 'cannot write plugin receipt: ${err.msg()}')
 	}
 	os.chmod(tmp, 0o600) or {}
 	os.rename(tmp, receipt_path) or {
 		os.rm(tmp) or {}
-		return fail_result('plugin trust', 'cannot save plugin receipt: ${err.msg()}')
+		return plugin_fail('plugin trust', 'io-failed', 'cannot save plugin receipt: ${err.msg()}')
 	}
 	enabled_text := if record.enabled {
 		'It remains enabled.'
@@ -1013,6 +1105,13 @@ pub:
 	homepage       string
 	generated_from string
 	capabilities   json2.Any
+	// Store fields (HorneroOS/plugins gen_catalog.py): marketplace
+	// metadata, catalogue screenshots with SHA-256, and bilingual
+	// permission lines. Passed through as data; never executed.
+	marketplace json2.Any
+	screenshots json2.Any
+	permissions json2.Any
+	plugin_kit  int
 }
 
 pub fn plugin_catalog_entries(catalog_json string) []PluginCatalogEntry {
@@ -1060,12 +1159,34 @@ pub fn plugin_catalog_entries(catalog_json string) []PluginCatalogEntry {
 			} else {
 				json2.Any(map[string]json2.Any{})
 			}
+			marketplace:    if 'marketplace' in m && m['marketplace'] is map[string]json2.Any {
+				m['marketplace']
+			} else {
+				json2.Any(map[string]json2.Any{})
+			}
+			screenshots:    plugin_catalog_array_field(m, 'screenshots')
+			permissions:    plugin_catalog_array_field(m, 'permissions')
+			plugin_kit:     if 'pluginKit' in m { m['pluginKit'].int() } else { 3 }
 		}
 	}
 	return entries
 }
 
+// PluginCatalogInstallState is what the catalogue row needs to know
+// about a local install of the same id.
+struct PluginCatalogInstallState {
+	installed_version string
+	enabled           bool
+	update_available  bool
+	source            string
+}
+
 fn plugin_catalog_entry_json(entry PluginCatalogEntry, state string, rollback_available bool) json2.Any {
+	return plugin_catalog_row_json(entry, state, rollback_available, PluginCatalogInstallState{},
+		[]json2.Any{})
+}
+
+fn plugin_catalog_row_json(entry PluginCatalogEntry, state string, rollback_available bool, local PluginCatalogInstallState, screenshot_files []json2.Any) json2.Any {
 	return json2.Any({
 		'id':                 json2.Any(entry.id)
 		'name':               json2.Any(entry.name)
@@ -1082,7 +1203,110 @@ fn plugin_catalog_entry_json(entry PluginCatalogEntry, state string, rollback_av
 		'capabilities':       entry.capabilities
 		'state':              json2.Any(state)
 		'rollback_available': json2.Any(rollback_available)
+		'marketplace':        entry.marketplace
+		'screenshots':        entry.screenshots
+		'screenshot_files':   json2.Any(screenshot_files)
+		'permissions':        entry.permissions
+		'pluginKit':          json2.Any(entry.plugin_kit)
+		'signer':             json2.Any('HorneroOS/plugins (official catalogue)')
+		'installed_version':  json2.Any(local.installed_version)
+		'enabled':            json2.Any(local.enabled)
+		'update_available':   json2.Any(local.update_available)
+		'installed_source':   json2.Any(local.source)
 	})
+}
+
+// plugin_catalog_array_field returns m[key] when it is a JSON array and
+// an empty array otherwise (no smart cast: the array sum-type variant
+// trips the C backend when cast inside an if-expression).
+fn plugin_catalog_array_field(m map[string]json2.Any, key string) json2.Any {
+	value := m[key] or { return json2.Any([]json2.Any{}) }
+	listed := value is []json2.Any
+	if !listed {
+		return json2.Any([]json2.Any{})
+	}
+	return json2.Any(value.as_array())
+}
+
+const plugin_screenshot_max_bytes = 4 * 1024 * 1024
+
+fn plugin_screenshot_path_safe(path string) bool {
+	if !path.starts_with('docs/screenshots/') || path.contains('..') || path.contains('//')
+		|| path.contains('\\') {
+		return false
+	}
+	lower := path.to_lower()
+	if !(lower.ends_with('.png') || lower.ends_with('.jpg') || lower.ends_with('.jpeg')
+		|| lower.ends_with('.webp')) {
+		return false
+	}
+	for c in path.bytes() {
+		if !(c.is_alnum() || c in [`/`, `.`, `-`, `_`]) {
+			return false
+		}
+	}
+	return true
+}
+
+// plugin_catalog_cache_screenshots copies the catalogue screenshots of
+// one entry out of the staged catalogue into the user cache, keyed by
+// content hash, after checking path, size and SHA-256. The pane shows
+// these local files; it never fetches images itself. Anything that
+// fails a check is skipped, never cached.
+fn plugin_catalog_cache_screenshots(stage string, entry PluginCatalogEntry) []json2.Any {
+	mut out := []json2.Any{}
+	shots := entry.screenshots
+	listed := shots is []json2.Any
+	if !listed {
+		return out
+	}
+	cache := os.join_path(resolve_paths().cache_dir, 'hornero', 'plugins', 'catalog-screenshots')
+	for item in shots.as_array() {
+		if item !is map[string]json2.Any {
+			continue
+		}
+		shot := item.as_map()
+		path := (shot['path'] or { json2.Any('') }).str()
+		want := (shot['sha256'] or { json2.Any('') }).str()
+		alt := (shot['alt'] or { json2.Any('') }).str()
+		if !plugin_screenshot_path_safe(path) || want.len != 64 || !community_plugin_lower_hex(want) {
+			continue
+		}
+		source := os.join_path(stage, path)
+		if os.is_link(source) || !os.is_file(source) || os.file_size(source) > plugin_screenshot_max_bytes {
+			continue
+		}
+		bytes := os.read_bytes(source) or { continue }
+		if sha256.sum(bytes).hex() != want {
+			continue
+		}
+		ext := os.file_ext(path).to_lower()
+		target := os.join_path(cache, '${want}${ext}')
+		if !os.is_file(target) || os.is_link(target) {
+			os.mkdir_all(cache) or { continue }
+			tmp := '${target}.tmp-${os.getpid()}'
+			os.write_file_array(tmp, bytes) or { continue }
+			os.rename(tmp, target) or {
+				os.rm(tmp) or {}
+				continue
+			}
+		}
+		out << json2.Any({
+			'file':   json2.Any(target)
+			'alt':    json2.Any(alt)
+			'sha256': json2.Any(want)
+		})
+	}
+	return out
+}
+
+fn community_plugin_lower_hex(value string) bool {
+	for c in value.bytes() {
+		if !((c >= `0` && c <= `9`) || (c >= `a` && c <= `f`)) {
+			return false
+		}
+	}
+	return true
 }
 
 // Same framing as HorneroOS/plugins scripts/gen_catalog.py:
@@ -1247,13 +1471,13 @@ fn copy_dir(src string, dst string) ! {
 
 pub fn community_plugin_catalog_report() CommandResult {
 	stage, revision := community_plugin_clone_catalog('') or {
-		return fail_result('plugin catalog', err.msg())
+		return plugin_fail('plugin catalog', 'catalogue-unavailable', err.msg())
 	}
 	defer {
 		os.rmdir_all(stage) or {}
 	}
 	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
-		return fail_result('plugin catalog', 'catalogue has no catalog.json')
+		return plugin_fail('plugin catalog', 'catalogue-invalid', 'catalogue has no catalog.json')
 	}
 	entries := plugin_catalog_entries(raw)
 	root, receipts := community_plugin_roots()
@@ -1262,17 +1486,35 @@ pub fn community_plugin_catalog_report() CommandResult {
 	for e in entries {
 		receipt := os.join_path(receipts, '${e.id}.json')
 		state := if os.is_file(receipt) { 'installed' } else { 'available' }
-		lines << '${e.id} ${e.version} [${e.trust}/${e.placement}] ${e.name} — ${state}'
 		mut rollback_available := false
+		mut local := PluginCatalogInstallState{}
 		if state == 'installed' && !os.is_link(receipt) {
 			raw_receipt := os.read_file(receipt) or { '' }
 			record := json2.decode[CommunityPluginReceipt](raw_receipt) or {
 				CommunityPluginReceipt{}
 			}
-			rollback_available = community_plugin_rollback_available(record, e.id,
-				os.join_path(root, e.id))
+			payload := os.join_path(root, e.id)
+			rollback_available = community_plugin_rollback_available(record, e.id, payload)
+			// Update means: the catalogue now ships a different payload
+			// than the one this receipt recorded. URL installs of the same
+			// id are never offered a catalogue update (re-sourcing is
+			// refused by `plugin catalog update`).
+			local = PluginCatalogInstallState{
+				installed_version: record.version
+				enabled:           record.enabled && os.is_dir(payload)
+				update_available:  record.source == plugin_catalog_source
+					&& (record.version != e.version || record.catalog_sha256 != e.sha256)
+				source:            record.source
+			}
 		}
-		rows << plugin_catalog_entry_json(e, state, rollback_available)
+		update_note := if local.update_available {
+			' (update: ${local.installed_version} -> ${e.version})'
+		} else {
+			''
+		}
+		lines << '${e.id} ${e.version} [${e.trust}/${e.placement}] ${e.name} — ${state}${update_note}'
+		rows << plugin_catalog_row_json(e, state, rollback_available, local, plugin_catalog_cache_screenshots(stage,
+			e))
 	}
 	return ok_result('plugin catalog', 'Official HorneroOS catalogue (${entries.len} plugins):\n${lines.join('\n')}', {
 		'plugins':  json2.encode(rows, escape_unicode: true)
@@ -1283,22 +1525,22 @@ pub fn community_plugin_catalog_report() CommandResult {
 
 pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOptions) CommandResult {
 	if !community_plugin_valid_id(id) {
-		return fail_result('plugin catalog install', 'invalid plugin id.\nExample: horneroctl plugin catalog install hornero-pomodoro --dry-run')
+		return plugin_fail('plugin catalog install', 'invalid-id', 'invalid plugin id.\nExample: horneroctl plugin catalog install hornero-pomodoro --dry-run')
 	}
 	if !opts.dry_run && !opts.yes {
-		return fail_result('plugin catalog install', 'refusing to install without --yes (preview with --dry-run)')
+		return plugin_fail('plugin catalog install', 'confirmation-required', 'refusing to install without --yes (preview with --dry-run)')
 	}
 	stage, revision := community_plugin_clone_catalog(opts.expected_revision) or {
-		return fail_result('plugin catalog install', err.msg())
+		return plugin_fail('plugin catalog install', 'catalogue-unavailable', err.msg())
 	}
 	defer {
 		os.rmdir_all(stage) or {}
 	}
 	if opts.expected_revision.len > 0 && opts.expected_revision.to_lower() != revision.to_lower() {
-		return fail_result('plugin catalog install', 'catalogue changed since it was displayed; refresh the catalogue and review the new version before installing')
+		return plugin_fail('plugin catalog install', 'catalogue-changed', 'catalogue changed since it was displayed; refresh the catalogue and review the new version before installing')
 	}
 	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
-		return fail_result('plugin catalog install', 'catalogue has no catalog.json')
+		return plugin_fail('plugin catalog install', 'catalogue-invalid', 'catalogue has no catalog.json')
 	}
 	mut found := PluginCatalogEntry{}
 	for e in plugin_catalog_entries(raw) {
@@ -1307,18 +1549,18 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 		}
 	}
 	if found.id.len == 0 {
-		return fail_result('plugin catalog install', 'plugin ${id} is not in the official catalogue')
+		return plugin_fail('plugin catalog install', 'not-in-catalogue', 'plugin ${id} is not in the official catalogue')
 	}
 	pkg := os.join_path(stage, found.path)
 	if !os.is_dir(pkg) {
-		return fail_result('plugin catalog install', 'catalogue entry path missing: ${found.path}')
+		return plugin_fail('plugin catalog install', 'catalogue-invalid', 'catalogue entry path missing: ${found.path}')
 	}
 	manifest := community_plugin_manifest(pkg) or {
-		return fail_result('plugin catalog install', err.msg())
+		return plugin_fail('plugin catalog install', 'manifest-invalid', err.msg())
 	}
 	digest := plugin_payload_sha256(pkg, manifest)
 	if found.sha256.len == 0 || digest != found.sha256 {
-		return fail_result('plugin catalog install', 'payload hash mismatch for ${id} (catalog ${found.sha256}, computed ${digest}); refusing to install')
+		return plugin_fail('plugin catalog install', 'hash-mismatch', 'payload hash mismatch for ${id} (catalog ${found.sha256}, computed ${digest}); refusing to install')
 	}
 	if opts.dry_run {
 		return ok_result('plugin catalog install', 'would install ${found.name} ${found.version} [${found.trust}] from the official catalogue at ${revision}; hash verified. This copies inert data only — enabling is a separate consent step.', {
@@ -1329,16 +1571,16 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 		})
 	}
 	community_plugin_run_validator(pkg) or {
-		return fail_result('plugin catalog install', err.msg())
+		return plugin_fail('plugin catalog install', 'validation-failed', err.msg())
 	}
 	root, receipts := community_plugin_roots()
 	destination := os.join_path(root, id)
 	if os.exists(destination) || os.is_link(destination) {
-		return fail_result('plugin catalog install', 'plugin ${id} is already installed; remove it explicitly before reinstalling')
+		return plugin_fail('plugin catalog install', 'already-installed', 'plugin ${id} is already installed; remove it explicitly before reinstalling')
 	}
-	os.mkdir_all(root) or { return fail_result('plugin catalog install', 'cannot create plugin data directory') }
+	os.mkdir_all(root) or { return plugin_fail('plugin catalog install', 'io-failed', 'cannot create plugin data directory') }
 	copy_dir(pkg, destination) or {
-		return fail_result('plugin catalog install', 'cannot copy validated package: ${err.msg()}')
+		return plugin_fail('plugin catalog install', 'io-failed', 'cannot copy validated package: ${err.msg()}')
 	}
 	receipt := CommunityPluginReceipt{
 		schema_version:       1
@@ -1353,18 +1595,18 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 	}
 	os.mkdir_all(receipts) or {
 		os.rmdir_all(destination) or {}
-		return fail_result('plugin catalog install', 'cannot create plugin receipt directory')
+		return plugin_fail('plugin catalog install', 'io-failed', 'cannot create plugin receipt directory')
 	}
 	receipt_path := os.join_path(receipts, '${id}.json')
 	tmp := '${receipt_path}.tmp-${time.now().unix_milli()}'
 	os.write_file(tmp, json2.encode(receipt, escape_unicode: true) + '\n') or {
 		os.rmdir_all(destination) or {}
-		return fail_result('plugin catalog install', 'cannot write plugin receipt')
+		return plugin_fail('plugin catalog install', 'io-failed', 'cannot write plugin receipt')
 	}
 	os.chmod(tmp, 0o600) or {}
 	os.rename(tmp, receipt_path) or {
 		os.rmdir_all(destination) or {}
-		return fail_result('plugin catalog install', 'cannot save plugin receipt')
+		return plugin_fail('plugin catalog install', 'io-failed', 'cannot save plugin receipt')
 	}
 	return ok_result('plugin catalog install', 'installed ${found.name} ${found.version} [${found.trust}] as inert package data. QML is not loaded or sandboxed; enable explicitly when you have reviewed it.', {
 		'id':       id
@@ -1387,40 +1629,40 @@ pub fn community_plugin_catalog_install_report(id string, opts CommunityPluginOp
 // silently re-sourced.
 pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOptions) CommandResult {
 	if !community_plugin_valid_id(id) {
-		return fail_result('plugin catalog update', 'invalid plugin id.\nExample: horneroctl plugin catalog update hornero-pomodoro --dry-run')
+		return plugin_fail('plugin catalog update', 'invalid-id', 'invalid plugin id.\nExample: horneroctl plugin catalog update hornero-pomodoro --dry-run')
 	}
 	if !opts.dry_run && !opts.yes {
-		return fail_result('plugin catalog update', 'refusing to update without --yes (preview with --dry-run)')
+		return plugin_fail('plugin catalog update', 'confirmation-required', 'refusing to update without --yes (preview with --dry-run)')
 	}
 	root, receipts := community_plugin_roots()
 	receipt_path := os.join_path(receipts, '${id}.json')
 	destination := os.join_path(root, id)
 	if os.is_link(receipt_path) || os.is_link(destination) {
-		return fail_result('plugin catalog update', 'refusing to follow a symbolic link in the owned plugin paths')
+		return plugin_fail('plugin catalog update', 'unsafe-path', 'refusing to follow a symbolic link in the owned plugin paths')
 	}
 	if !os.is_file(receipt_path) {
-		return fail_result('plugin catalog update', 'plugin ${id} is not installed; install it first')
+		return plugin_fail('plugin catalog update', 'not-installed', 'plugin ${id} is not installed; install it first')
 	}
 	mut record := json2.decode[CommunityPluginReceipt](os.read_file(receipt_path) or { '' }) or {
-		return fail_result('plugin catalog update', 'plugin receipt is malformed; refusing to update unverified data')
+		return plugin_fail('plugin catalog update', 'receipt-invalid', 'plugin receipt is malformed; refusing to update unverified data')
 	}
 	if record.schema_version != 1 || record.id != id {
-		return fail_result('plugin catalog update', 'plugin receipt does not own the requested plugin id')
+		return plugin_fail('plugin catalog update', 'receipt-invalid', 'plugin receipt does not own the requested plugin id')
 	}
 	if record.source != plugin_catalog_source {
-		return fail_result('plugin catalog update', 'plugin ${id} was not installed from the official catalogue (source: ${record.source}); refusing to re-source it')
+		return plugin_fail('plugin catalog update', 'not-catalogue-source', 'plugin ${id} was not installed from the official catalogue (source: ${record.source}); refusing to re-source it')
 	}
 	stage, revision := community_plugin_clone_catalog(opts.expected_revision) or {
-		return fail_result('plugin catalog update', err.msg())
+		return plugin_fail('plugin catalog update', 'catalogue-unavailable', err.msg())
 	}
 	defer {
 		os.rmdir_all(stage) or {}
 	}
 	if opts.expected_revision.len > 0 && opts.expected_revision.to_lower() != revision.to_lower() {
-		return fail_result('plugin catalog update', 'catalogue changed since it was displayed; refresh the catalogue and review the new version before updating')
+		return plugin_fail('plugin catalog update', 'catalogue-changed', 'catalogue changed since it was displayed; refresh the catalogue and review the new version before updating')
 	}
 	raw := os.read_file(os.join_path(stage, 'catalog.json')) or {
-		return fail_result('plugin catalog update', 'catalogue has no catalog.json')
+		return plugin_fail('plugin catalog update', 'catalogue-invalid', 'catalogue has no catalog.json')
 	}
 	mut found := PluginCatalogEntry{}
 	for e in plugin_catalog_entries(raw) {
@@ -1429,18 +1671,18 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		}
 	}
 	if found.id.len == 0 {
-		return fail_result('plugin catalog update', 'plugin ${id} is no longer in the official catalogue; refusing to guess')
+		return plugin_fail('plugin catalog update', 'not-in-catalogue', 'plugin ${id} is no longer in the official catalogue; refusing to guess')
 	}
 	pkg := os.join_path(stage, found.path)
 	if !os.is_dir(pkg) {
-		return fail_result('plugin catalog update', 'catalogue entry path missing: ${found.path}')
+		return plugin_fail('plugin catalog update', 'catalogue-invalid', 'catalogue entry path missing: ${found.path}')
 	}
 	manifest := community_plugin_manifest(pkg) or {
-		return fail_result('plugin catalog update', err.msg())
+		return plugin_fail('plugin catalog update', 'manifest-invalid', err.msg())
 	}
 	digest := plugin_payload_sha256(pkg, manifest)
 	if found.sha256.len == 0 || digest != found.sha256 {
-		return fail_result('plugin catalog update', 'payload hash mismatch for ${id} (catalog ${found.sha256}, computed ${digest}); refusing to update')
+		return plugin_fail('plugin catalog update', 'hash-mismatch', 'payload hash mismatch for ${id} (catalog ${found.sha256}, computed ${digest}); refusing to update')
 	}
 	installed_payload_hash := community_plugin_payload_hash(destination)
 	if found.version == record.version && record.catalog_sha256 == digest && record.revision == revision && installed_payload_hash == digest {
@@ -1451,7 +1693,7 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		})
 	}
 	if found.version == record.version && installed_payload_hash != digest && record.trusted_hash != installed_payload_hash {
-		return fail_result('plugin catalog update', 'installed payload for ${id} differs from the official catalogue. Trust the current payload explicitly or reinstall the official package before updating')
+		return plugin_fail('plugin catalog update', 'locally-modified', 'installed payload for ${id} differs from the official catalogue. Trust the current payload explicitly or reinstall the official package before updating')
 	}
 	if opts.dry_run {
 		return ok_result('plugin catalog update', 'would update ${found.name} ${record.version} -> ${found.version} from the official catalogue at ${revision}; hash verified. The current payload is kept for rollback.', {
@@ -1463,7 +1705,7 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		})
 	}
 	community_plugin_run_validator(pkg) or {
-		return fail_result('plugin catalog update', err.msg())
+		return plugin_fail('plugin catalog update', 'validation-failed', err.msg())
 	}
 	previous := '${destination}.previous'
 	old_payload_digest := community_plugin_payload_hash(destination)
@@ -1475,12 +1717,12 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 	]
 	if os.exists(previous) || os.is_link(previous) {
 		os.rmdir_all(previous) or {
-			return fail_result('plugin catalog update', 'cannot clear the previous rollback copy')
+			return plugin_fail('plugin catalog update', 'io-failed', 'cannot clear the previous rollback copy')
 		}
 	}
 	if os.is_dir(destination) {
 		os.rename(destination, previous) or {
-			return fail_result('plugin catalog update', 'cannot preserve the current payload for rollback')
+			return plugin_fail('plugin catalog update', 'io-failed', 'cannot preserve the current payload for rollback')
 		}
 	}
 	copy_dir(pkg, destination) or {
@@ -1488,7 +1730,7 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 		if os.is_dir(previous) {
 			os.rename(previous, destination) or {}
 		}
-		return fail_result('plugin catalog update', 'cannot copy validated package: ${err.msg()}')
+		return plugin_fail('plugin catalog update', 'io-failed', 'cannot copy validated package: ${err.msg()}')
 	}
 	old_version := record.version
 	enabled_before := record.enabled
@@ -1511,14 +1753,14 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
 		os.rmdir_all(destination) or {}
 		if os.is_dir(previous) { os.rename(previous, destination) or {} }
-		return fail_result('plugin catalog update', 'cannot write plugin receipt')
+		return plugin_fail('plugin catalog update', 'io-failed', 'cannot write plugin receipt')
 	}
 	os.chmod(tmp, 0o600) or {}
 	os.rename(tmp, receipt_path) or {
 		os.rm(tmp) or {}
 		os.rmdir_all(destination) or {}
 		if os.is_dir(previous) { os.rename(previous, destination) or {} }
-		return fail_result('plugin catalog update', 'cannot save plugin receipt')
+		return plugin_fail('plugin catalog update', 'io-failed', 'cannot save plugin receipt')
 	}
 	return ok_result('plugin catalog update', 'updated ${found.name} from ${old_version} to ${found.version} [${found.trust}] from the official catalogue. Previous payload kept for `plugin catalog rollback ${id}`. A running shell applies this without a restart: run `qs ipc call plugins reload` (or Settings > Extensions > Reload plugin list). Enabled state is ${if record.enabled {
 		'enabled'
@@ -1541,37 +1783,37 @@ pub fn community_plugin_catalog_update_report(id string, opts CommunityPluginOpt
 // manifest; enabled state is preserved.
 pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginOptions) CommandResult {
 	if !community_plugin_valid_id(id) {
-		return fail_result('plugin catalog rollback', 'invalid plugin id.\nExample: horneroctl plugin catalog rollback hornero-pomodoro --dry-run')
+		return plugin_fail('plugin catalog rollback', 'invalid-id', 'invalid plugin id.\nExample: horneroctl plugin catalog rollback hornero-pomodoro --dry-run')
 	}
 	if !opts.dry_run && !opts.yes {
-		return fail_result('plugin catalog rollback', 'refusing to roll back without --yes (preview with --dry-run)')
+		return plugin_fail('plugin catalog rollback', 'confirmation-required', 'refusing to roll back without --yes (preview with --dry-run)')
 	}
 	root, receipts := community_plugin_roots()
 	receipt_path := os.join_path(receipts, '${id}.json')
 	destination := os.join_path(root, id)
 	previous := '${destination}.previous'
 	if os.is_link(receipt_path) || os.is_link(destination) || os.is_link(previous) {
-		return fail_result('plugin catalog rollback', 'refusing to follow a symbolic link in the owned plugin paths')
+		return plugin_fail('plugin catalog rollback', 'unsafe-path', 'refusing to follow a symbolic link in the owned plugin paths')
 	}
 	if !os.is_dir(previous) {
-		return fail_result('plugin catalog rollback', 'no previous payload is kept for ${id}; nothing to roll back to')
+		return plugin_fail('plugin catalog rollback', 'nothing-to-roll-back', 'no previous payload is kept for ${id}; nothing to roll back to')
 	}
 	if !os.is_file(receipt_path) {
-		return fail_result('plugin catalog rollback', 'plugin ${id} has a kept payload but no receipt; refusing to guess ownership')
+		return plugin_fail('plugin catalog rollback', 'not-installed', 'plugin ${id} has a kept payload but no receipt; refusing to guess ownership')
 	}
 	mut record := json2.decode[CommunityPluginReceipt](os.read_file(receipt_path) or { '' }) or {
-		return fail_result('plugin catalog rollback', 'plugin receipt is malformed; refusing to roll back unverified data')
+		return plugin_fail('plugin catalog rollback', 'receipt-invalid', 'plugin receipt is malformed; refusing to roll back unverified data')
 	}
 	if record.schema_version != 1 || record.id != id {
-		return fail_result('plugin catalog rollback', 'plugin receipt does not own the requested plugin id')
+		return plugin_fail('plugin catalog rollback', 'receipt-invalid', 'plugin receipt does not own the requested plugin id')
 	}
 	prev_manifest := community_plugin_manifest(previous) or {
-		return fail_result('plugin catalog rollback', 'kept payload is unreadable: ${err.msg()}')
+		return plugin_fail('plugin catalog rollback', 'payload-missing', 'kept payload is unreadable: ${err.msg()}')
 	}
 	prev_version := (prev_manifest['version'] or { json2.Any('') }).str()
 	prev_digest := community_plugin_payload_hash(previous)
 	if record.source == plugin_catalog_source && (record.previous_payload_sha256.len == 0 || prev_digest != record.previous_payload_sha256) {
-		return fail_result('plugin catalog rollback', 'kept payload does not match the previous catalogue hash; refusing to restore unverified data')
+		return plugin_fail('plugin catalog rollback', 'hash-mismatch', 'kept payload does not match the previous catalogue hash; refusing to restore unverified data')
 	}
 	if opts.dry_run {
 		return ok_result('plugin catalog rollback', 'would restore ${id} from the kept previous payload (version ${prev_version}); the current payload is discarded', {
@@ -1581,20 +1823,20 @@ pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginO
 		})
 	}
 	community_plugin_run_validator(previous) or {
-		return fail_result('plugin catalog rollback', err.msg())
+		return plugin_fail('plugin catalog rollback', 'validation-failed', err.msg())
 	}
 	staged_current := '${destination}.rollback-current'
 	if os.exists(staged_current) || os.is_link(staged_current) {
-		return fail_result('plugin catalog rollback', 'cannot safely stage the current payload for rollback')
+		return plugin_fail('plugin catalog rollback', 'io-failed', 'cannot safely stage the current payload for rollback')
 	}
 	if os.is_dir(destination) {
 		os.rename(destination, staged_current) or {
-			return fail_result('plugin catalog rollback', 'cannot preserve the current payload before rollback')
+			return plugin_fail('plugin catalog rollback', 'io-failed', 'cannot preserve the current payload before rollback')
 		}
 	}
 	os.rename(previous, destination) or {
 		if os.is_dir(staged_current) { os.rename(staged_current, destination) or {} }
-		return fail_result('plugin catalog rollback', 'cannot restore the kept payload')
+		return plugin_fail('plugin catalog rollback', 'io-failed', 'cannot restore the kept payload')
 	}
 	enabled_before := record.enabled
 	record.version = if record.previous_version.len > 0 {
@@ -1618,14 +1860,14 @@ pub fn community_plugin_catalog_rollback_report(id string, opts CommunityPluginO
 	os.write_file(tmp, json2.encode(record, escape_unicode: true) + '\n') or {
 		os.rename(destination, previous) or {}
 		if os.is_dir(staged_current) { os.rename(staged_current, destination) or {} }
-		return fail_result('plugin catalog rollback', 'cannot write plugin receipt')
+		return plugin_fail('plugin catalog rollback', 'io-failed', 'cannot write plugin receipt')
 	}
 	os.chmod(tmp, 0o600) or {}
 	os.rename(tmp, receipt_path) or {
 		os.rm(tmp) or {}
 		os.rename(destination, previous) or {}
 		if os.is_dir(staged_current) { os.rename(staged_current, destination) or {} }
-		return fail_result('plugin catalog rollback', 'cannot save plugin receipt')
+		return plugin_fail('plugin catalog rollback', 'io-failed', 'cannot save plugin receipt')
 	}
 	os.rmdir_all(staged_current) or {}
 	return ok_result('plugin catalog rollback', 'rolled back ${id} to the kept previous payload (version ${prev_version}). A running shell applies this without a restart: run `qs ipc call plugins reload` (or Settings > Extensions > Reload plugin list). Enabled state unchanged (${if enabled_before {
