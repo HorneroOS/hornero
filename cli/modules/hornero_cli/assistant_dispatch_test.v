@@ -116,6 +116,16 @@ fn test_assistant_events_parser_rules() {
 		panic('events without run id must be rejected')
 	}
 	assert dispatch(['horneroctl', 'assistant', 'events', '--help']) == 0
+	// K2: plain events is read-only; --enforce is explicit and scoped.
+	assert !ok.enforce
+	enf := parse_assistant(['events', 'run_1', '--enforce']) or { panic(err) }
+	assert enf.enforce && enf.value == 'run_1'
+	if _ := parse_assistant(['ask', 'hi', '--enforce']) {
+		panic('--enforce outside events must be rejected')
+	}
+	assert dispatch(['horneroctl', 'assistant', 'stop', 'run_1', '--enforce']) == 2
+	help := command_help('assistant events')
+	assert help.contains('--enforce') && help.contains('read-only') && help.contains('Examples:')
 }
 
 fn test_assistant_stream_flag_rules() {

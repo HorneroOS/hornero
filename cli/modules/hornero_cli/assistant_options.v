@@ -20,6 +20,7 @@ pub:
 	has_command    bool
 	workspace      string
 	request        string
+	enforce        bool
 }
 
 pub fn parse_assistant(args []string) !AssistantCmdOptions {
@@ -46,6 +47,7 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	mut has_command := false
 	mut workspace := ''
 	mut request := ''
+	mut enforce := false
 	mut literal := false
 	mut i := 1
 	for i < args.len {
@@ -142,6 +144,10 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 			stream = true
 			continue
 		}
+		if arg == '--enforce' {
+			enforce = true
+			continue
+		}
 		if arg.starts_with('-') {
 			return error('unknown flag: ${arg}.\nExample: horneroctl assistant enable --dry-run')
 		}
@@ -195,6 +201,9 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 	}
 	if stream && leaf !in ['ask', 'events'] {
 		return error('--stream only applies to ask and events.\nExample: horneroctl assistant ask "hi" --stream')
+	}
+	if enforce && leaf != 'events' {
+		return error('--enforce only applies to events.\nExample: horneroctl assistant events run_abc123 --enforce')
 	}
 	if dry_run && yes {
 		return error('--dry-run and --yes are mutually exclusive.\nExample: horneroctl assistant enable --dry-run')
@@ -250,5 +259,6 @@ pub fn parse_assistant(args []string) !AssistantCmdOptions {
 		has_command:    has_command
 		workspace:      workspace
 		request:        request
+		enforce:        enforce
 	}
 }

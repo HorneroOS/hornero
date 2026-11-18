@@ -349,7 +349,7 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 					emit_stream_trace(kind, txt, mode)
 				}), mode)
 			} else {
-				render(hornero_core.assistant_events_report(opts.value), mode)
+				render(hornero_core.assistant_events_report_opts(opts.value, opts.enforce), mode)
 			}
 		}
 		'clarify' {

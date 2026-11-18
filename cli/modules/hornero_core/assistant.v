@@ -598,7 +598,15 @@ fn assistant_approval_still_pending(settings AssistantSettings, run_id string, r
 	return false
 }
 
+// assistant_events_report is the read-only `events` view: it reports a
+// run's outcome and never denies or stops anything. Pass enforce (CLI
+// --enforce) to apply the run's mode — deny Ask/Chat approvals, stop
+// a run that ran tools — exactly like a live stream does.
 pub fn assistant_events_report(run_id string) CommandResult {
+	return assistant_events_report_opts(run_id, false)
+}
+
+pub fn assistant_events_report_opts(run_id string, enforce bool) CommandResult {
 	settings := assistant_load_settings()
 	if !settings.enabled {
 		return fail_result('assistant events', 'Assistant is disabled. Enable it first: horneroctl assistant enable --yes')
@@ -613,8 +621,14 @@ pub fn assistant_events_report(run_id string) CommandResult {
 		return fail_result('assistant events', 'Hermes returned no events for run ${run_id} (HTTP ${resp.status_code}). The run id may be wrong or expired.')
 	}
 	events := parse_sse_events(resp.body)
-	result := assistant_events_outcome_mode('assistant events', run_id, events, assistant_run_mode(run_id))
-	assistant_log_append('events', run_id, '', if result.ok { 'ok' } else { 'not-completed' })
+	mut tracker := &AssistantDenyTracker{}
+	result := assistant_events_outcome_mode_ex('assistant events', run_id, events, assistant_run_mode(run_id),
+		enforce, mut tracker)
+	assistant_log_append('events', run_id, if enforce { 'enforce' } else { 'read-only' }, if result.ok {
+		'ok'
+	} else {
+		'not-completed'
+	})
 	return result
 }
 
@@ -1190,6 +1204,13 @@ fn assistant_events_outcome(command string, run_id string, events []AssistantEve
 // assistant_run_body: this cannot un-execute a tool Hermes already
 // ran without an approval gate.
 pub fn assistant_mode_tool_violation(command string, run_id string, events []AssistantEvent, mode string) (CommandResult, bool) {
+	return assistant_mode_tool_violation_opts(command, run_id, events, mode, true)
+}
+
+// assistant_mode_tool_violation_opts is assistant_mode_tool_violation
+// with enforcement optional: a read-only view (enforce=false) reports
+// the violation but never stops the run.
+pub fn assistant_mode_tool_violation_opts(command string, run_id string, events []AssistantEvent, mode string, enforce bool) (CommandResult, bool) {
 	effective := assistant_session_effective_mode(mode)
 	if assistant_mode_allows_tools(effective) {
 		return CommandResult{}, false
@@ -1197,6 +1218,14 @@ pub fn assistant_mode_tool_violation(command string, run_id string, events []Ass
 	attempted, tool := assistant_tool_execution_attempted(events)
 	if !attempted {
 		return CommandResult{}, false
+	}
+	if !enforce {
+		return fail_result_data(command, 'Run ${run_id} (${effective} mode) shows tool execution: ${redact_secrets(tool)}. ${effective} mode never executes tools. This read-only view changed nothing; stop the run with: horneroctl assistant stop ${run_id}', {
+			'runId':   run_id
+			'mode':    effective
+			'pending': 'tool-violation'
+			'detail':  redact_secrets(tool)
+		}), true
 	}
 	assistant_stop_report(run_id)
 	assistant_log_append('mode-deny', run_id, tool, effective)
@@ -1208,24 +1237,44 @@ pub fn assistant_mode_tool_violation(command string, run_id string, events []Ass
 	}), true
 }
 
-// assistant_mode_deny denies a pending approval in a non-escalating
-// mode and CHECKS that the deny was accepted. When it was not, the run
-// is stopped (so nothing can proceed on a half-denied approval) and the
-// caller must report a failure, never "denied by mode". Logged only on
-// success ('mode-deny') or as 'mode-deny-failed'.
-fn assistant_mode_deny(run_id string, mode string, detail string) bool {
-	denied := assistant_approve_report(run_id, 'deny', '')
-	if denied.ok {
-		assistant_log_append('mode-deny', run_id, detail, mode)
-		return true
+// assistant_mode_handle_approvals handles every approval request of a
+// non-escalating (Ask/Chat) run. With enforce, each request is denied
+// at most once (assistant_mode_deny_once) and a deny that is neither
+// accepted nor provably stale stops the run and fails. Without enforce
+// (the read-only `events` view) nothing is sent: requests already
+// denied report as denied, others as `needs-deny` with the command to
+// deny them. Ask/Chat never surface an approval for the human.
+fn assistant_mode_handle_approvals(command string, run_id string, events []AssistantEvent, mode string, enforce bool, mut tracker AssistantDenyTracker) CommandResult {
+	reqs := assistant_approval_requests(events)
+	if reqs.len == 0 {
+		return fail_result(command, 'Run ${run_id} has no approval request.')
 	}
-	stopped := assistant_stop_report(run_id)
-	assistant_log_append('mode-deny-failed', run_id, detail, if stopped.ok {
-		'stop-requested'
+	if !enforce {
+		ledger := assistant_denials_load(run_id)
+		open := reqs.filter(!(tracker.done[it.ref] or { false }) && it.ref !in ledger)
+		if open.len > 0 {
+			shown := assistant_redact_tokens(open[0].detail)
+			return fail_result_data(command, 'Run ${run_id} is in ${mode} mode and has an approval request it will never grant: ${shown}. This read-only view changed nothing; deny it with: horneroctl assistant events ${run_id} --enforce (or: horneroctl assistant approve ${run_id} deny).', {
+				'mode':    mode
+				'runId':   run_id
+				'pending': 'needs-deny'
+				'detail':  shown
+			})
+		}
 	} else {
-		'stop-failed'
+		for req in reqs {
+			if assistant_mode_deny_once(run_id, mode, req, mut tracker) == .failed {
+				return assistant_deny_failed_result(command, run_id, mode, req.detail)
+			}
+		}
+	}
+	shown := assistant_redact_tokens(reqs[0].detail)
+	return fail_result_data(command, 'Approval denied by ${mode} mode on run ${run_id}: ${shown}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
+		'mode':    mode
+		'runId':   run_id
+		'pending': 'denied-by-mode'
+		'detail':  shown
 	})
-	return false
 }
 
 fn assistant_deny_failed_result(command string, run_id string, mode string, detail string) CommandResult {
@@ -1238,24 +1287,24 @@ fn assistant_deny_failed_result(command string, run_id string, mode string, deta
 }
 
 fn assistant_events_outcome_mode(command string, run_id string, events []AssistantEvent, mode string) CommandResult {
+	mut tracker := &AssistantDenyTracker{}
+	return assistant_events_outcome_mode_ex(command, run_id, events, mode, true, mut tracker)
+}
+
+// assistant_events_outcome_mode_ex applies the outcome rules. enforce
+// selects whether Ask/Chat violations are acted on (deny/stop) or only
+// reported; tracker carries the requests this command already denied.
+fn assistant_events_outcome_mode_ex(command string, run_id string, events []AssistantEvent, mode string, enforce bool, mut tracker AssistantDenyTracker) CommandResult {
 	mut pending := assistant_pending_request(events)
 	settings := assistant_load_settings()
 	mut control := AssistantPendingControl{}
 	if pending.kind == 'approval' {
 		if !assistant_mode_escalates(mode) {
-			// Non-escalating modes ALWAYS deny, independent of any
-			// status check: the status only decides display, never
-			// whether authority is withheld.
-			if !assistant_mode_deny(run_id, mode, pending.detail) {
-				return assistant_deny_failed_result(command, run_id, mode, pending.detail)
-			}
-			shown := assistant_redact_tokens(pending.detail)
-			return fail_result_data(command, 'Approval denied by ${mode} mode on run ${run_id}: ${shown}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
-				'mode':    mode
-				'runId':   run_id
-				'pending': 'denied-by-mode'
-				'detail':  shown
-			})
+			// Non-escalating modes ALWAYS deny (when enforcing),
+			// independent of any status check: the status only decides
+			// display, never whether authority is withheld.
+			return assistant_mode_handle_approvals(command, run_id, events, mode, enforce, mut
+				tracker)
 		}
 		control = assistant_fetch_pending_control(settings, run_id)
 		if !assistant_approval_still_pending(settings, run_id, 0) {
@@ -1296,7 +1345,7 @@ fn assistant_events_outcome_mode(command string, run_id string, events []Assista
 		data['detail'] = shown
 		return fail_result_data(command, 'Hermes is asking on run ${run_id}: ${shown} Answer with: horneroctl assistant clarify ${run_id} "<answer>"', data)
 	}
-	violation, denied := assistant_mode_tool_violation(command, run_id, events, mode)
+	violation, denied := assistant_mode_tool_violation_opts(command, run_id, events, mode, enforce)
 	if denied {
 		return violation
 	}
@@ -1331,7 +1380,10 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 	// The closure only emits live deltas; event collection for the
 	// final outcome uses the assembled response body, so it does not
 	// depend on closure capture semantics.
-	on_event := fn [emit, on_trace, settings, run_id, mode] (ev AssistantEvent) {
+	// One tracker for the live stream and the final replay, so each
+	// approval request is denied at most once (K2).
+	mut tracker := &AssistantDenyTracker{}
+	on_event := fn [emit, on_trace, settings, run_id, mode, mut tracker] (ev AssistantEvent) {
 		delta := assistant_event_text(ev)
 		if delta.len > 0 {
 			emit(delta)
@@ -1345,9 +1397,14 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 		// the stream open waiting for the decision. Nothing here
 		// answers a request in an escalating mode.
 		pending := assistant_pending_request([ev])
+		if pending.kind == 'approval' {
+			tracker.approvals_seen++
+		}
 		if pending.kind == 'approval' && !assistant_mode_escalates(mode) {
-			// Ask/Chat: always deny, no frame, independent of status.
-			if !assistant_mode_deny(run_id, mode, pending.detail) {
+			// Ask/Chat: always deny (once per request), no frame,
+			// independent of status.
+			req := assistant_event_approval(ev, tracker.approvals_seen) or { return }
+			if assistant_mode_deny_once(run_id, mode, req, mut tracker) == .failed {
 				on_trace('deny-failed', 'Could not deny the approval; the run was stopped.')
 			}
 			return
@@ -1374,7 +1431,8 @@ pub fn assistant_events_stream_report_traced_mode(run_id string, emit fn (string
 		return fail_result('assistant events', 'Hermes returned no events for run ${run_id} (HTTP ${resp.status_code}). The run id may be wrong or expired.')
 	}
 	events := parse_sse_events(resp.body)
-	outcome := assistant_events_outcome_mode('assistant events', run_id, events, mode)
+	outcome := assistant_events_outcome_mode_ex('assistant events', run_id, events, mode, true, mut
+		tracker)
 	if outcome.ok {
 		text := assistant_collect_text(events)
 		if text.len > 0 {
@@ -1802,16 +1860,11 @@ pub fn assistant_ask_report_attached_session_mode(prompt string, attach []string
 	mut control := AssistantPendingControl{}
 	if pending.kind == 'approval' {
 		if !assistant_mode_escalates(ask_mode) {
-			// Ask/Chat always deny, independent of any status check.
-			if !assistant_mode_deny(run_id, ask_mode, pending.detail) {
-				return assistant_deny_failed_result('assistant ask', run_id, ask_mode, pending.detail)
-			}
-			return fail_result_data('assistant ask', 'Approval denied by ${ask_mode} mode on run ${run_id}: ${assistant_redact_tokens(pending.detail)}. Ask/Chat modes never escalate; switch to an Agent session to act.', {
-				'runId':   run_id
-				'mode':    ask_mode
-				'pending': 'denied-by-mode'
-				'detail':  assistant_redact_tokens(pending.detail)
-			})
+			// Ask/Chat always deny (once per request), independent of
+			// any status check.
+			mut tracker := &AssistantDenyTracker{}
+			return assistant_mode_handle_approvals('assistant ask', run_id, events, ask_mode,
+				true, mut tracker)
 		}
 		control = assistant_fetch_pending_control(settings, run_id)
 		if !assistant_approval_still_pending(settings, run_id, 1) {
