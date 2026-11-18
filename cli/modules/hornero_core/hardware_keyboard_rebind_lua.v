@@ -366,8 +366,13 @@ fn effective_source_entries(binds []SourceBind, remaps []KeybindRemap) []Keybind
 		if target.len == 0 {
 			continue
 		}
-		k := entry_key(b.submap, target)
-		out = out.filter(entry_key(it.submap, it.combo) != k)
+		// Hyprland keeps every bind on a combo (they all fire) until an
+		// unbind; personal files unbind before rebinding, so a personal
+		// bind replaces the earlier one on its combo.
+		if b.source == 'personal' {
+			k := entry_key(b.submap, target)
+			out = out.filter(entry_key(it.submap, it.combo) != k)
+		}
 		out << KeybindEntry{
 			combo:    display_combo(target)
 			original: b.combo
@@ -394,11 +399,15 @@ pub fn keybind_entries() ([]KeybindEntry, bool) {
 		return sources, false
 	}
 	mut out := []KeybindEntry{}
+	mut used := []bool{len: sources.len}
 	for lb in live {
 		k := entry_key(lb.submap, lb.combo)
 		mut found := false
-		for s in sources {
-			if entry_key(s.submap, s.combo) == k {
+		// Each config bind explains one live bind, so two binds on one
+		// combo (both fire in Hyprland) show up as two distinct entries.
+		for i, s in sources {
+			if !used[i] && entry_key(s.submap, s.combo) == k {
+				used[i] = true
 				out << KeybindEntry{
 					...s
 					dispatcher: lb.dispatcher

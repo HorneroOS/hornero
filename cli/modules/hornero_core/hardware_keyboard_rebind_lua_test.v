@@ -15,6 +15,8 @@ hl.bind("SUPER + slash", hl.dsp.exec_cmd("horneroctl hardware keyboard keys"))
 hl.bind("SUPER + K", hl.dsp.focus({ direction = "up" }))
 hl.bind("SUPER + J", hl.dsp.focus({ direction = "down" }))
 hl.bind("SUPER + O", hl.dsp.exec_cmd("hyprctl dispatch scrolloverview:overview, toggle"))
+hl.bind("SUPER + L", hl.dsp.exec_cmd("horneroctl shell ipc -- call lock lock"))
+hl.bind("SUPER + L", hl.dsp.focus({ direction = "right" }))
 -- ============================================================================
 -- Window Resizing
 -- ============================================================================
@@ -39,7 +41,9 @@ const hx_lua_live = '[
 {"modmask":64,"submap":"","key":"O","dispatcher":"HL.Dispatcher(exec_cmd)","mouse":false},
 {"modmask":64,"submap":"","key":"R","dispatcher":"HL.Dispatcher(submap)","mouse":false},
 {"modmask":0,"submap":"resize","key":"escape","dispatcher":"HL.Dispatcher(submap)","mouse":false},
-{"modmask":64,"submap":"","key":"Tab","dispatcher":"function: 0x55","mouse":false}
+{"modmask":64,"submap":"","key":"Tab","dispatcher":"function: 0x55","mouse":false},
+{"modmask":64,"submap":"","key":"L","dispatcher":"HL.Dispatcher(exec_cmd)","mouse":false},
+{"modmask":64,"submap":"","key":"L","dispatcher":"HL.Dispatcher(focus)","mouse":false}
 ]'
 
 fn lua_rebind_setup() {
@@ -112,7 +116,11 @@ fn test_lua_list_merges_live_binds_with_config_metadata() {
 	}
 	entries, live := keybind_entries()
 	assert live
-	assert entries.len == 8
+	assert entries.len == 10
+	// Two binds on SUPER + L (both fire) stay two entries.
+	ls := entries.filter(it.combo == 'SUPER + L')
+	assert ls.len == 2
+	assert ls[0].action.contains('lock') && ls[1].action.contains('right')
 	term := entries.filter(it.combo == 'SUPER + Return')[0]
 	assert term.category == 'Essential Applications'
 	assert term.action.contains('TerminalEmulator')
