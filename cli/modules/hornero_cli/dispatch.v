@@ -2044,6 +2044,13 @@ fn run_hardware_keyboard(args []string, mode hornero_core.RenderMode) int {
 		if opts.rebind_action == 'status' {
 			return render(hornero_core.keyboard_rebind_status_report(), mode)
 		}
+		if opts.rebind_action == 'list' {
+			return render(hornero_core.keyboard_rebind_list_report(), mode)
+		}
+		if opts.rebind_action == 'undo' {
+			return render(hornero_core.keyboard_rebind_undo_report(opts.dry_run, opts.yes),
+				mode)
+		}
 		if opts.rebind_action == 'reset' {
 			return render(hornero_core.keyboard_rebind_reset_report(opts.dry_run,
 				opts.yes), mode)
@@ -2051,6 +2058,7 @@ fn run_hardware_keyboard(args []string, mode hornero_core.RenderMode) int {
 		return render(hornero_core.keyboard_rebind_set_report(hornero_core.RebindSetOptions{
 			old_combo: opts.old_combo
 			new_combo: opts.new_combo
+			swap:      opts.swap
 			dry_run:   opts.dry_run
 			yes:       opts.yes
 		}), mode)

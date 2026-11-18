@@ -1276,12 +1276,21 @@ Examples:
   keys [--category CAT] [--search TERM] [--dry-run]
                       List Hyprland keybindings, optionally filtered
   rebind status
-                      Count user keybinding overrides
-  rebind set --old COMBO --new COMBO [--dry-run] [--yes]
-                      Move a binding to a new combo (user overrides
-                      only; factory binds are never edited)
+                      Count managed rebinds (JSON: remaps, undo depth)
+  rebind list
+                      Every active binding with category, action,
+                      submap and remap state (JSON: data.entries);
+                      live from Hyprland when it runs
+  rebind set --old COMBO --new COMBO|none [--swap] [--dry-run] [--yes]
+                      Move a binding to a new combo (none disables
+                      it). A taken combo is refused and named;
+                      --swap exchanges the two. Factory and personal
+                      files are never edited
   rebind reset [--dry-run] [--yes]
-                      Remove all user overrides, restoring defaults
+                      Remove all managed rebinds, restoring defaults
+  rebind undo [--dry-run] [--yes]
+                      Restore the rebinds saved before the last
+                      set/reset (Lua sessions)
 
 Layout backend: hyprctl on Hyprland, else setxkbmap
 (HORNERO_HYPRCTL_BIN / HORNERO_SETXKBMAP_BIN). settings opens
@@ -1289,7 +1298,13 @@ lxqt-config-input detached (HORNERO_KEYBOARD_SETTINGS_BIN pin).
 keys parses the
 Hyprland keybindings file (HORNERO_KEYBINDINGS_FILE override),
 rewriting \$mainMod to SUPER; with Hornero Shell running it opens
-System Settings. HORNERO_BYPASS_QUICKSHELL=1 forces parsing.
+the keybinding overlay (older shells: System Settings).
+HORNERO_BYPASS_QUICKSHELL=1 forces parsing.
+On Lua sessions rebinds live in the generated
+~/.config/hypr/hornero-keybinds.lua (HORNERO_KEYBINDS_OVERLAY_FILE),
+applied by the config keybindings-overlay.lua and made live with
+hyprctl reload; undo snapshots live under
+~/.local/state/hornero/keybinds/undo (HORNERO_KEYBINDS_UNDO_DIR).
 
 Examples:
   horneroctl hardware keyboard layout --current
@@ -1304,6 +1319,9 @@ Examples:
   horneroctl hardware keyboard keys --category=Window
   horneroctl hardware keyboard rebind status
   horneroctl hardware keyboard rebind set --old "SUPER + Return" --new "SUPER + X" --dry-run
+  horneroctl hardware keyboard rebind list --json
+  horneroctl hardware keyboard rebind set --old "SUPER + K" --new "SUPER + J" --swap --yes
+  horneroctl hardware keyboard rebind undo --yes
   horneroctl hardware keyboard rebind reset --yes
 '
 		}
