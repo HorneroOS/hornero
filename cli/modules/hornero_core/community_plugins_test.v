@@ -1,6 +1,7 @@
 module hornero_core
 
 import crypto.ed25519
+import crypto.sha256
 import encoding.base64
 import os
 import time
@@ -1121,4 +1122,136 @@ fn test_community_plugin_validator_prefers_the_running_shell_tree() {
 	os.setenv('HORNERO_QUICKSHELL_CONFIG_DIR', shell, true)
 	assert community_plugin_validator_candidates()[0] == tree
 	assert resolve_community_plugin_validator() == tree
+}
+
+// Control Center store contract (competitive gap #4): the catalogue row
+// carries the store fields, the local install state and verified cached
+// screenshots; lifecycle failures carry a stable data.error code.
+fn test_catalog_report_carries_store_fields_update_state_and_verified_screenshots() {
+	root := community_plugins_test_new_root('store-fields')
+	saved := community_plugins_test_env(root)
+	saved_cache := os.getenv('XDG_CACHE_HOME')
+	os.setenv('XDG_CACHE_HOME', '${root}/cache', true)
+	defer {
+		community_plugins_test_restore(saved)
+		if saved_cache.len == 0 {
+			os.unsetenv('XDG_CACHE_HOME')
+		} else {
+			os.setenv('XDG_CACHE_HOME', saved_cache, true)
+		}
+		os.rmdir_all(root) or {}
+	}
+	catalog_root := os.join_path(root, 'catalog')
+	os.mkdir_all(os.join_path(catalog_root, 'docs', 'screenshots')) or { panic(err) }
+	good := 'PNG-good-bytes'
+	os.write_file(os.join_path(catalog_root, 'docs', 'screenshots', 'example-clock.png'), good) or {
+		panic(err)
+	}
+	os.write_file(os.join_path(catalog_root, 'docs', 'screenshots', 'other.png'), 'tampered') or {
+		panic(err)
+	}
+	good_hash := sha256.hexhash(good)
+	catalog := '{"plugins":[{"id":"example-clock","name":"Example Clock","version":"2.0.0","sha256":"${'b'.repeat(64)}","path":"plugins/example-clock",' +
+		'"marketplace":{"changelog":[{"version":"2.0.0","notes":"New face."}]},' +
+		'"permissions":[{"kind":"program","value":"date","en":"Reads the date.","es":"Lee la fecha."}],' +
+		'"screenshots":[{"path":"docs/screenshots/example-clock.png","sha256":"${good_hash}","alt":"Clock"},' +
+		'{"path":"docs/screenshots/other.png","sha256":"${'c'.repeat(64)}","alt":"Bad"},' +
+		'{"path":"docs/../../etc/passwd.png","sha256":"${good_hash}","alt":"Escape"}]}]}'
+	os.write_file(os.join_path(catalog_root, 'catalog.json'), catalog) or { panic(err) }
+	os.setenv('HORNERO_PLUGINS_CATALOG_URL', catalog_root, true)
+	receipts := os.join_path(root, 'state', 'hornero', 'plugins', 'receipts')
+	os.mkdir_all(receipts) or { panic(err) }
+	record := CommunityPluginReceipt{
+		schema_version: 1
+		id:             'example-clock'
+		name:           'Example Clock'
+		version:        '1.0.0'
+		source:         plugin_catalog_source
+		catalog_sha256: 'a'.repeat(64)
+	}
+	os.write_file(os.join_path(receipts, 'example-clock.json'), json2.encode(record)) or {
+		panic(err)
+	}
+	res := community_plugin_catalog_report()
+	assert res.ok, res.message
+	rows := json2.decode[[]json2.Any](res.data['plugins']) or { panic(err) }
+	row := rows[0].as_map()
+	assert row['installed_version']!.str() == '1.0.0'
+	assert row['update_available']! as bool
+	assert row['signer']!.str().contains('official catalogue')
+	assert row['permissions']!.as_array().len == 1
+	assert row['marketplace']!.as_map()['changelog']!.as_array().len == 1
+	files := row['screenshot_files']!.as_array()
+	assert files.len == 1, 'only the hash-verified, in-tree screenshot is cached'
+	cached := files[0].as_map()['file']!.str()
+	assert cached.starts_with('${root}/cache/hornero/plugins/catalog-screenshots/')
+	assert os.read_file(cached) or { '' } == good
+	assert res.message.contains('update: 1.0.0 -> 2.0.0')
+}
+
+fn test_remove_drops_the_kept_rollback_copy_and_reports_state() {
+	root := community_plugins_test_new_root('remove-previous')
+	saved := community_plugins_test_env(root)
+	defer {
+		community_plugins_test_restore(saved)
+		os.rmdir_all(root) or {}
+	}
+	data := os.join_path(root, 'data', 'hornero', 'plugins')
+	receipts := os.join_path(root, 'state', 'hornero', 'plugins', 'receipts')
+	for dir in ['${data}/example-clock', '${data}/example-clock.previous', receipts] {
+		os.mkdir_all(dir) or { panic(err) }
+	}
+	record := CommunityPluginReceipt{
+		schema_version: 1
+		id:             'example-clock'
+		version:        '2.0.0'
+		enabled:        true
+		source:         plugin_catalog_source
+	}
+	os.write_file(os.join_path(receipts, 'example-clock.json'), json2.encode(record)) or {
+		panic(err)
+	}
+	preview := community_plugin_remove_report(CommunityPluginOptions{ value: 'example-clock', dry_run: true })
+	assert preview.ok
+	assert preview.data['rollback_copy'] == 'true'
+	assert preview.data['was_enabled'] == 'true'
+	assert os.is_dir('${data}/example-clock.previous')
+	removed := community_plugin_remove_report(CommunityPluginOptions{ value: 'example-clock', yes: true })
+	assert removed.ok, removed.message
+	assert !os.exists('${data}/example-clock')
+	assert !os.exists('${data}/example-clock.previous')
+	assert !os.exists('${receipts}/example-clock.json')
+	again := community_plugin_remove_report(CommunityPluginOptions{ value: 'example-clock', yes: true })
+	assert !again.ok
+	assert again.data['error'] == 'not-installed'
+}
+
+fn test_lifecycle_failures_carry_stable_error_codes() {
+	assert community_plugin_remove_report(CommunityPluginOptions{ value: 'Bad Id' }).data['error'] == 'invalid-id'
+	assert community_plugin_remove_report(CommunityPluginOptions{ value: 'example-clock' }).data['error'] == 'confirmation-required'
+	assert community_plugin_catalog_install_report('example-clock', CommunityPluginOptions{}).data['error'] == 'confirmation-required'
+	assert community_plugin_catalog_update_report('example-clock', CommunityPluginOptions{}).data['error'] == 'confirmation-required'
+	assert community_plugin_catalog_rollback_report('example-clock', CommunityPluginOptions{}).data['error'] == 'confirmation-required'
+	encoded := json2.encode(community_plugin_catalog_rollback_report('Bad Id', CommunityPluginOptions{}))
+	assert encoded.contains('"ok":false')
+	assert encoded.contains('"error":"invalid-id"')
+}
+
+fn test_signing_key_id_is_printed_like_minisign() {
+	root := community_plugins_test_new_root('key-id')
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	mut raw := [u8(`E`), `d`]
+	for i in 0 .. 8 {
+		raw << u8(i + 1)
+	}
+	for _ in 0 .. 32 {
+		raw << u8(0)
+	}
+	key := base64.encode(raw)
+	os.write_file(os.join_path(root, 'manifest.json'), '{"signing":{"publicKey":"${key}","signature":"x"}}') or {
+		panic(err)
+	}
+	assert community_plugin_signing_key_id(root) == '0807060504030201'
 }

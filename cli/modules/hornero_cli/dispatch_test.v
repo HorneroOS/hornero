@@ -455,3 +455,15 @@ fn test_dispatch_welcome_mutations_need_yes() {
 	assert dispatch(['horneroctl', 'welcome', 'open', '--dry-run']) == 0
 	assert dispatch(['horneroctl', 'welcome', 'open', 'BAD PAGE!']) == 1
 }
+
+// Control Center store contract (docs/PLUGIN_LIFECYCLE_JSON.md): a refused
+// verb exits 1, a usage error exits 2, for every verb the GUI runs.
+fn test_plugin_lifecycle_verbs_have_stable_exit_codes() {
+	for args in [['plugin', 'catalog', 'install', 'hornero-x'],
+		['plugin', 'catalog', 'update', 'hornero-x'], ['plugin', 'catalog', 'rollback', 'hornero-x'],
+		['plugin', 'remove', 'hornero-x'], ['plugin', 'enable', 'hornero-x'],
+		['plugin', 'disable', 'hornero-x']] {
+		assert dispatch(['horneroctl', '--quiet', ...args]) == 1, args.str()
+		assert dispatch(['horneroctl', '--quiet', ...args, '--bogus']) == 2, args.str()
+	}
+}
