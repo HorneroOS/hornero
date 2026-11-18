@@ -16,4 +16,4 @@ summary: >-
   installs (no ISO): hornero-shell 1.3.0, hornero-config 0.4.0,
   hornero-greeter 1.1.0 and signed horneroctl-bin 0.2.0_preview46.
   The Preview 32 ISO remains the current installation medium.
-published: false
+published: true
