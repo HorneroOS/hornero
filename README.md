@@ -1,5 +1,9 @@
 # hornero
 
+[![composition-ci](https://github.com/HorneroOS/hornero/actions/workflows/composition-ci.yml/badge.svg)](https://github.com/HorneroOS/hornero/actions/workflows/composition-ci.yml)
+[![horneroctl-ci](https://github.com/HorneroOS/hornero/actions/workflows/horneroctl-ci.yml/badge.svg)](https://github.com/HorneroOS/hornero/actions/workflows/horneroctl-ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 HorneroOS is an Arch-based workstation operating-system family with a
 composable product model: **Desktop**, **Studio** and **Gaming**, all in
 Preview. Every edition shares a Wayland-first desktop powered by Hornero
@@ -23,6 +27,16 @@ released.
 - Release composition and profile metadata.
 - Integration between the HorneroOS repositories.
 - Top-level build, test and release orchestration.
+
+<img src="https://www.horneroos.com/captures/cap-cc-04.png" alt="Control Center Experience pane listing Focus, Everyday, Signal, Gaming and Studio, Everyday active" width="840">
+
+<sub>Five modes, one switch — not an edition picker. Real capture —
+maintainer machine, staged demo content.</sub>
+
+See also: [Website](https://horneroos.com/) ·
+[Editions](https://horneroos.com/editions/) ·
+[Releases](https://github.com/HorneroOS/hornero/releases) ·
+[Docs](https://horneroos.com/docs/)
 
 ## What does NOT live here
 
