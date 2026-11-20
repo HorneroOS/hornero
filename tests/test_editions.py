@@ -17,11 +17,11 @@ SPEC.loader.exec_module(resolver)
 def test_catalogue_has_the_five_user_facing_editions():
     catalogue = resolver.load_catalogue()
     assert set(catalogue["editions"]) == {"desktop", "server", "agents", "studio", "gaming"}
-    assert catalogue["editions"]["desktop"]["maturity"] == "preview"
+    assert catalogue["editions"]["desktop"]["maturity"] == "supported"
     assert catalogue["editions"]["server"]["maturity"] == "planned"
     assert catalogue["editions"]["agents"]["maturity"] == "planned"
-    assert catalogue["editions"]["studio"]["maturity"] == "preview"
-    assert catalogue["editions"]["gaming"]["maturity"] == "preview"
+    assert catalogue["editions"]["studio"]["maturity"] == "supported"
+    assert catalogue["editions"]["gaming"]["maturity"] == "supported"
 
 
 def test_desktop_uses_one_selected_compositor_backend():

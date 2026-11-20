@@ -17,5 +17,6 @@ components:
   - name: horneroctl
     role: System CLI built from this repository.
 notes: >-
-  Desktop is a Preview edition: it installs from the signed Preview
-  ISO (VM-validated, not Supported).
+  Desktop is a supported edition for everyday use: it installs from
+  the signed ISO published under its previewNN artifact name
+  (VM-validated; no physical-hardware validation claimed for that ISO).

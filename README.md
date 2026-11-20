@@ -5,8 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 HorneroOS is an Arch-based workstation operating-system family with a
-composable product model: **Desktop**, **Studio** and **Gaming**, all in
-Preview. Every edition shares a Wayland-first desktop powered by Hornero
+composable product model: **Desktop**, **Studio** and **Gaming**.
+HorneroOS is an operating system for everyday use: used and maintained
+daily, with concrete, declared limitations. Every edition shares a Wayland-first desktop powered by Hornero
 Shell and the
 [Hornero Signal](https://github.com/HorneroOS/docs/blob/main/development/rfc-0001-hornero-signal.md)
 visual language; Hyprland is the validated compositor backend, not the
@@ -75,9 +76,12 @@ repository that owns it:
 Composition is live: `horneroctl` builds from `cli/`, release manifests pin
 the shell/config sources, and `scripts/compose.sh` materializes and validates
 the pinned composition. The edition catalogue resolves five products from a
-shared base and role package sets. Desktop, Studio and Gaming are in Preview;
+shared base and role package sets. Desktop, Studio and Gaming are supported editions for everyday use;
 Hyprland is supported and Niri is experimental. Server and Agents are planned, not
-installable editions yet. Package resolution alone does not claim that an
+installable editions yet. Unvalidated paths stay declared as concrete
+limitations, not as a global label: LUKS, legacy BIOS and Niri sessions
+are not validated on the published ISO, and system rollback remains
+planned (see the release ledger). Package resolution alone does not claim that an
 edition is bootable or validated, and this repository does not produce images.
 
 ## License
