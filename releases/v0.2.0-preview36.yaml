@@ -15,7 +15,10 @@ summary: >-
   Hornero Signal, delivered as AUR package updates for existing
   installs (no ISO): hornero-shell 1.3.5 (Control Center Extensions
   pane), hornero-config 0.4.6 (owner-curated 57-file wallpaper
-  collection) and hornero-greeter 1.2.0. Signed horneroctl-bin
+  collection) and hornero-greeter 1.2.0. HorneroOS is in daily use
+  as an everyday system, with concrete declared limitations (LUKS,
+  legacy BIOS and Niri are not validated on the published ISO, and
+  system rollback remains planned). Signed horneroctl-bin
   unchanged at 0.2.0_preview49. The Preview 32 ISO remains the
   current installation medium.
 published: true

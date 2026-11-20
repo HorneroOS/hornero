@@ -18,7 +18,8 @@ components:
   - name: horneroctl
     role: System CLI built from this repository.
 notes: >-
-  Studio is a Preview edition: this profile records release composition
-  only. It installs from the signed Preview ISO (VM-validated, not
-  Supported), and it duplicates no package
+  Studio is a supported edition for everyday use: this profile records
+  release composition only. It installs from the signed ISO published
+  under its previewNN artifact name (VM-validated; no
+  physical-hardware validation claimed for that ISO), and it duplicates no package
   lists, workloads, or application selection from the edition catalogue.
