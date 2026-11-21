@@ -227,6 +227,48 @@ capabilities:
     defaultByEdition: {desktop: false, server: false, agents: false, studio: false, gaming: false}
     conflicts: []
     requires: []
+# GPU vendors (installer#115). Hardware-selected, never edition defaults:
+# no vendor package enters a plan unless the installer/user selects that
+# vendor (AMD/Intel may be pre-selected only from a real 03xx probe in the
+# installer; NVIDIA always needs an explicit proprietary opt-in). Arch no
+# longer ships the closed `nvidia-dkms` package: the DKMS variant is
+# `nvidia-open-dkms` (open kernel modules, MIT/GPL); the proprietary part
+# is nvidia-utils/lib32-nvidia-utils under the NVIDIA license agreement.
+# The DKMS module builds against the chosen kernel, so it requires that
+# kernel's headers (the resolver already adds exactly one headers package
+# per selected kernel). linux-hardened + NVIDIA stays warning-only until
+# hardware-proven.
+gpuVendors:
+  amd:
+    title: AMD GPU (open Mesa/RADV)
+    packages: [mesa, vulkan-radeon, lib32-mesa, lib32-vulkan-radeon]
+    proprietary: false
+    explicitOptIn: false
+  intel:
+    title: Intel GPU (open Mesa/ANV)
+    packages: [mesa, vulkan-intel, lib32-mesa, lib32-vulkan-intel]
+    proprietary: false
+    explicitOptIn: false
+  nvidia:
+    title: NVIDIA GPU (proprietary userspace, explicit opt-in only)
+    packages: [nvidia-utils, lib32-nvidia-utils]
+    kernelModules: {linux: nvidia-open, linux-lts: nvidia-open-lts}
+    dkmsModule: nvidia-open-dkms
+    dkmsRequiresHeaders: true
+    proprietary: true
+    explicitOptIn: true
+gpuProvenance:
+  mesa: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/mesa/", licenses: [MIT, BSD-3-Clause, SGI-B-2.0], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: planned}
+  lib32-mesa: {source: arch-multilib, sourceUrl: "https://archlinux.org/packages/multilib/x86_64/lib32-mesa/", licenses: [MIT, BSD-3-Clause, SGI-B-2.0], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: planned}
+  vulkan-radeon: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/vulkan-radeon/", licenses: [MIT, BSD-3-Clause, SGI-B-2.0], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: planned}
+  lib32-vulkan-radeon: {source: arch-multilib, sourceUrl: "https://archlinux.org/packages/multilib/x86_64/lib32-vulkan-radeon/", licenses: [MIT, BSD-3-Clause, SGI-B-2.0], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: planned}
+  vulkan-intel: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/vulkan-intel/", licenses: [MIT, BSD-3-Clause, SGI-B-2.0], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: planned}
+  lib32-vulkan-intel: {source: arch-multilib, sourceUrl: "https://archlinux.org/packages/multilib/x86_64/lib32-vulkan-intel/", licenses: [MIT, BSD-3-Clause, SGI-B-2.0], licenseClass: open-source, installMethod: pacman-repository, optional: true, support: planned}
+  nvidia-open: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/nvidia-open/", licenses: [MIT, GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository-opt-in, optional: true, support: planned}
+  nvidia-open-lts: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/nvidia-open-lts/", licenses: [MIT, GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository-opt-in, optional: true, support: planned}
+  nvidia-open-dkms: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/nvidia-open-dkms/", licenses: [MIT, GPL-2.0-only], licenseClass: open-source, installMethod: pacman-repository-opt-in, optional: true, support: planned}
+  nvidia-utils: {source: arch-extra, sourceUrl: "https://archlinux.org/packages/extra/x86_64/nvidia-utils/", licenses: [LicenseRef-NVIDIA-Driver-License-Agreement], licenseClass: proprietary, installMethod: pacman-repository-opt-in, optional: true, support: planned}
+  lib32-nvidia-utils: {source: arch-multilib, sourceUrl: "https://archlinux.org/packages/multilib/x86_64/lib32-nvidia-utils/", licenses: [LicenseRef-NVIDIA-Driver-License-Agreement], licenseClass: proprietary, installMethod: pacman-repository-opt-in, optional: true, support: planned}
 # Provenance for every kernel, bootloader, and capability package above,
 # in the same auditable shape as studioProvenance/gamingProvenance.
 installationProvenance:
