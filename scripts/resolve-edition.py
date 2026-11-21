@@ -157,6 +157,7 @@ def validate_catalogue(doc: object) -> list[str]:
     if isinstance(gaming, dict) and gaming.get("extends") != "desktop":
         errors.append("Gaming must derive from Desktop")
     errors.extend(_validate_gaming_provenance(doc, sets))
+    errors.extend(_validate_gpu_catalogue(doc))
     errors.extend(_validate_installation_model(doc, editions))
     desktop_names = {"hornero-shell", "hornero-config", "horneroctl-bin", "quickshell", "hyprland", "niri"}
     server_sets = ["server"]
@@ -471,6 +472,70 @@ def _gaming_application_is_proprietary(doc: dict, app_id: str) -> bool:
     )
 
 
+REQUIRED_GPU_VENDORS = {"amd", "intel", "nvidia"}
+
+
+def _validate_gpu_catalogue(doc: dict) -> list[str]:
+    errors: list[str] = []
+    vendors = doc.get("gpuVendors")
+    provenance = doc.get("gpuProvenance")
+    if not isinstance(vendors, dict) or set(vendors) != REQUIRED_GPU_VENDORS:
+        return ["gpuVendors must define exactly amd, intel, and nvidia"]
+    if not isinstance(provenance, dict) or not provenance:
+        return ["gpuProvenance must be a non-empty mapping"]
+    needed: set[str] = set()
+    for name, vendor in vendors.items():
+        if not isinstance(vendor, dict):
+            errors.append(f"gpu vendor '{name}' must be a mapping")
+            continue
+        packages = vendor.get("packages")
+        if not isinstance(packages, list) or not packages:
+            errors.append(f"gpu vendor '{name}' packages must be a non-empty list")
+        else:
+            needed.update(packages)
+        if not isinstance(vendor.get("proprietary"), bool) or not isinstance(vendor.get("explicitOptIn"), bool):
+            errors.append(f"gpu vendor '{name}' needs boolean proprietary/explicitOptIn")
+        if vendor.get("proprietary") is True and vendor.get("explicitOptIn") is not True:
+            errors.append(f"proprietary gpu vendor '{name}' must require explicit opt-in")
+    nvidia = vendors.get("nvidia") or {}
+    kernel_modules = nvidia.get("kernelModules") if isinstance(nvidia, dict) else None
+    if kernel_modules != {"linux": "nvidia-open", "linux-lts": "nvidia-open-lts"}:
+        errors.append("nvidia kernelModules must map linux->nvidia-open and linux-lts->nvidia-open-lts")
+    else:
+        needed.update(kernel_modules.values())
+    if not isinstance(nvidia, dict) or nvidia.get("dkmsModule") != "nvidia-open-dkms" or nvidia.get("dkmsRequiresHeaders") is not True:
+        errors.append("nvidia dkmsModule must be nvidia-open-dkms with dkmsRequiresHeaders true")
+    else:
+        needed.add(nvidia["dkmsModule"])
+    for package in sorted(needed):
+        if package not in provenance:
+            errors.append(f"gpu package '{package}' is missing gpuProvenance metadata")
+    for name, entry in provenance.items():
+        if name not in needed:
+            errors.append(f"gpuProvenance entry '{name}' does not match a GPU vendor package")
+            continue
+        if not isinstance(entry, dict):
+            errors.append(f"gpuProvenance entry '{name}' must be a mapping")
+            continue
+        if entry.get("source") not in PROVENANCE_SOURCES:
+            errors.append(f"gpuProvenance entry '{name}' has invalid source '{entry.get('source')}'")
+        if not isinstance(entry.get("sourceUrl"), str) or not entry["sourceUrl"].startswith("https://"):
+            errors.append(f"gpuProvenance entry '{name}' needs an https sourceUrl")
+        if not isinstance(entry.get("licenses"), list) or not entry["licenses"]:
+            errors.append(f"gpuProvenance entry '{name}' needs a non-empty licenses list")
+        if entry.get("licenseClass") not in LICENSE_CLASSES:
+            errors.append(f"gpuProvenance entry '{name}' has invalid licenseClass")
+        if entry.get("installMethod") not in INSTALL_METHODS:
+            errors.append(f"gpuProvenance entry '{name}' has invalid installMethod")
+        if entry.get("optional") is not True:
+            errors.append(f"gpuProvenance entry '{name}' must be optional (hardware-selected, never a default)")
+        if entry.get("support") not in MATURITIES:
+            errors.append(f"gpuProvenance entry '{name}' has invalid support maturity")
+        if entry.get("licenseClass") == "proprietary" and entry.get("installMethod") != "pacman-repository-opt-in":
+            errors.append(f"proprietary gpuProvenance entry '{name}' must use pacman-repository-opt-in")
+    return errors
+
+
 REQUIRED_KERNELS = {"linux", "linux-lts", "linux-zen", "linux-hardened"}
 REQUIRED_BOOTLOADERS = {"grub", "systemd-boot"}
 REQUIRED_CAPABILITIES = {"bluetooth", "printing", "openssh", "developer", "snapshots"}
@@ -600,6 +665,7 @@ def resolve_installation(
     capabilities: list[str] | tuple[str, ...] | None = None,
     disabled_capabilities: list[str] | tuple[str, ...] = (),
     proprietary_nvidia: bool = False,
+    gpu_vendor: str | None = None,
 ) -> dict:
     """Resolve an edition plus kernel/bootloader/capability selection.
 
@@ -731,24 +797,47 @@ def resolve_installation(
         for service in capability_map[name].get("services") or []:
             if service not in services:
                 services.append(service)
+    gpu_map = doc.get("gpuVendors") or {}
+    if gpu_vendor is not None and gpu_vendor not in gpu_map:
+        raise ValueError(f"unknown gpu vendor '{gpu_vendor}' (valid: {', '.join(sorted(gpu_map))})")
+    if proprietary_nvidia and gpu_vendor is None:
+        gpu_vendor = "nvidia"
+    if gpu_vendor == "nvidia" and not proprietary_nvidia:
+        raise ValueError("NVIDIA GPU packages are proprietary and require an explicit opt-in (proprietary_nvidia=True / --proprietary-nvidia); they never enter a plan by vendor selection alone")
     warnings: list[str] = []
     nvidia_module: str | None = None
+    gpu_packages: list[str] = []
+    if gpu_vendor in ("amd", "intel"):
+        gpu_packages = list(gpu_map[gpu_vendor].get("packages") or [])
     if proprietary_nvidia:
+        nvidia_vendor = gpu_map.get("nvidia") or {}
+        kernel_modules = nvidia_vendor.get("kernelModules") or {}
         if set(kernels) == {"linux"}:
-            nvidia_module = "nvidia-open"
+            nvidia_module = kernel_modules.get("linux", "nvidia-open")
         elif set(kernels) == {"linux-lts"}:
-            nvidia_module = "nvidia-open-lts"
+            nvidia_module = kernel_modules.get("linux-lts", "nvidia-open-lts")
         else:
-            nvidia_module = "nvidia-open-dkms"
+            # DKMS builds against every selected kernel; the resolver has
+            # already added each kernel's matching headers package above.
+            nvidia_module = nvidia_vendor.get("dkmsModule", "nvidia-open-dkms")
+        # The module/userspace must actually be installed when the user
+        # opted in; recording nvidiaModule without packages was the bug.
+        gpu_packages = [nvidia_module] + [p for p in (nvidia_vendor.get("packages") or []) if p != nvidia_module]
         if "linux-hardened" in kernels:
             warnings.append("linux-hardened with the proprietary NVIDIA driver is unsupported upstream and may fail to build or boot; prefer linux or linux-lts, or use the open kernel module at your own risk")
         if len(kernels) > 1:
             warnings.append(f"multiple kernels with NVIDIA use {nvidia_module} only; never combine per-kernel NVIDIA module packages")
+    for package in gpu_packages:
+        if package not in packages:
+            packages.append(package)
     provenance = doc.get("installationProvenance") or {}
+    gpu_provenance = doc.get("gpuProvenance") or {}
     merged_provenance = dict(base.get("packageProvenance") or {})
     for package in packages:
         if package in provenance:
             merged_provenance[package] = provenance[package]
+        if package in gpu_provenance:
+            merged_provenance[package] = gpu_provenance[package]
     esp = int(loader["espBaseMiB"]) + int(loader["perKernelMiB"]) * (len(kernels) - 1)
     return {
         "schemaVersion": 2,
@@ -767,6 +856,7 @@ def resolve_installation(
             "firmware": firmware,
             "encryption": encryption,
             "capabilities": selected_caps,
+            "gpuVendor": gpu_vendor,
         },
         "packages": packages,
         "packageSets": base["packageSets"],
@@ -1090,16 +1180,17 @@ def main() -> int:
     parser.add_argument("--capability", action="append", default=[], dest="capabilities", help="Capability id to add (repeatable, installation only)")
     parser.add_argument("--no-capability", action="append", default=[], dest="no_capabilities", help="Capability id to remove (repeatable, installation only)")
     parser.add_argument("--proprietary-nvidia", action="store_true", help="Plan for the proprietary NVIDIA driver (installation only)")
+    parser.add_argument("--gpu-vendor", choices=("amd", "intel", "nvidia"), default=None, help="GPU vendor to resolve drivers for (installation only; nvidia also needs --proprietary-nvidia)")
     args = parser.parse_args()
     try:
-        installation_requested = args.installation or bool(args.kernels or args.primary_kernel or args.fallback_kernel or args.bootloader or args.firmware or args.encryption or args.capabilities or args.no_capabilities or args.proprietary_nvidia)
+        installation_requested = args.installation or bool(args.kernels or args.primary_kernel or args.fallback_kernel or args.bootloader or args.firmware or args.encryption or args.capabilities or args.no_capabilities or args.proprietary_nvidia or args.gpu_vendor)
         if installation_requested:
             if args.specialization or args.application:
                 parser.error("--specialization/--application cannot be combined with installation options in one invocation")
             doc = load_catalogue()
             defaults = [name for name, cap in (doc.get("capabilities") or {}).items() if (cap.get("defaultByEdition") or {}).get(args.edition) is True]
             selected = list(dict.fromkeys(defaults + args.capabilities))
-            print(json.dumps(resolve_installation(doc, args.edition, args.compositor, kernels=args.kernels or None, primary_kernel=args.primary_kernel, fallback_kernel=args.fallback_kernel, bootloader=args.bootloader, firmware=args.firmware or "uefi", encryption=args.encryption or "none", capabilities=selected, disabled_capabilities=args.no_capabilities, proprietary_nvidia=args.proprietary_nvidia), indent=2))
+            print(json.dumps(resolve_installation(doc, args.edition, args.compositor, kernels=args.kernels or None, primary_kernel=args.primary_kernel, fallback_kernel=args.fallback_kernel, bootloader=args.bootloader, firmware=args.firmware or "uefi", encryption=args.encryption or "none", capabilities=selected, disabled_capabilities=args.no_capabilities, proprietary_nvidia=args.proprietary_nvidia, gpu_vendor=args.gpu_vendor), indent=2))
             return 0
         if args.specialization or args.application:
             if args.edition == "studio":

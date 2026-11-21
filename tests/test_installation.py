@@ -185,6 +185,63 @@ def test_cli_firmware_and_encryption_alone_trigger_installation_mode():
     assert plan["selection"]["encryption"] == "luks"
 
 
+GPU_PACKAGES = {
+    "mesa", "lib32-mesa", "vulkan-radeon", "lib32-vulkan-radeon",
+    "vulkan-intel", "lib32-vulkan-intel", "nvidia-open", "nvidia-open-lts",
+    "nvidia-open-dkms", "nvidia-utils", "lib32-nvidia-utils",
+}
+
+
+def test_default_plan_has_no_gpu_vendor_packages():
+    plan = resolver.resolve_installation(catalogue(), "desktop")
+    assert GPU_PACKAGES.isdisjoint(plan["packages"])
+    assert plan["nvidiaModule"] is None
+    assert plan["selection"]["gpuVendor"] is None
+
+
+def test_gpu_vendor_matrix_resolves_packages_and_provenance():
+    doc = catalogue()
+    amd = resolver.resolve_installation(doc, "desktop", gpu_vendor="amd", capabilities=[])
+    assert {"mesa", "vulkan-radeon", "lib32-mesa", "lib32-vulkan-radeon"} <= set(amd["packages"])
+    assert amd["packageProvenance"]["vulkan-radeon"]["source"] == "arch-extra"
+    intel = resolver.resolve_installation(doc, "desktop", gpu_vendor="intel", capabilities=[])
+    assert {"mesa", "vulkan-intel", "lib32-mesa", "lib32-vulkan-intel"} <= set(intel["packages"])
+    assert intel["selection"]["gpuVendor"] == "intel"
+
+
+def test_nvidia_opt_in_actually_installs_module_and_userspace():
+    doc = catalogue()
+    plan = resolver.resolve_installation(doc, "gaming", proprietary_nvidia=True)
+    assert {"nvidia-open", "nvidia-utils", "lib32-nvidia-utils"} <= set(plan["packages"])
+    assert plan["packageProvenance"]["nvidia-utils"]["licenseClass"] == "proprietary"
+    lts = resolver.resolve_installation(doc, "gaming", kernels=["linux-lts"], primary_kernel="linux-lts", proprietary_nvidia=True, capabilities=[])
+    assert "nvidia-open-lts" in lts["packages"] and "nvidia-open" not in lts["packages"]
+
+
+def test_nvidia_requires_explicit_opt_in_and_dkms_needs_headers():
+    doc = catalogue()
+    with pytest.raises(ValueError, match="explicit opt-in"):
+        resolver.resolve_installation(doc, "desktop", gpu_vendor="nvidia")
+    with pytest.raises(ValueError, match="unknown gpu vendor"):
+        resolver.resolve_installation(doc, "desktop", gpu_vendor="nouveau")
+    dkms = resolver.resolve_installation(
+        doc, "desktop", kernels=["linux-zen"], primary_kernel="linux-zen",
+        proprietary_nvidia=True, capabilities=[],
+    )
+    assert dkms["nvidiaModule"] == "nvidia-open-dkms"
+    assert "nvidia-open-dkms" in dkms["packages"]
+    assert "linux-zen-headers" in dkms["packages"]
+
+
+def test_gpu_catalogue_validation_rejects_missing_provenance():
+    broken = copy.deepcopy(catalogue())
+    del broken["gpuProvenance"]["vulkan-radeon"]
+    assert any("vulkan-radeon" in e for e in resolver.validate_catalogue(broken))
+    broken2 = copy.deepcopy(catalogue())
+    broken2["gpuProvenance"]["nvidia-utils"]["installMethod"] = "pacman-repository"
+    assert any("nvidia-utils" in e for e in resolver.validate_catalogue(broken2))
+
+
 def test_snapshots_capability_is_opt_in_and_resolves():
     doc = catalogue()
     # Default installs must not pull snapper in silently: the backend is
