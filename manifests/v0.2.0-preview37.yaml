@@ -1,0 +1,54 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview37
+#
+# Package-only Hornero Signal candidate (AUR), no ISO.
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview37
+date: "2026-11-21"
+description: >-
+  Post-Preview Hornero Signal package release. Ships hornero-shell
+  1.3.5 (unchanged in this record), hornero-config 0.4.8 (51-file
+  deduplicated wallpaper collection and the first-login consumer
+  for the installer-seeded appearance.json), the GPU driver
+  catalogue (hornero#466) and a new signed horneroctl-bin
+  0.2.0_preview50 built from this composition. HorneroOS editions
+  are Supported: used and maintained daily, with concrete declared
+  limitations; no ISO ships with this record. Distributed
+  through the AUR only:
+  no ISO is built or signed for this record, so the
+  installer and iso slots stay future. Editions are Supported in the catalogue (hornero#467).
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 5a219353f0649323b29b4547c7923d8a8e373bc5
+    status: pinned
+    subject: "docs: replace concept hero with real Dashboard capture (#706)"
+    notes: Frozen Signal shell main; tagged pkg/hornero-shell-v1.3.5 and v1.3.5 on this SHA.
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 466c2abaa5fbe276175beb744e936613051b63c0
+    status: pinned
+    subject: "feat(appearance): consume the installer-seeded appearance.json at first login (#179)"
+    notes: Frozen Signal config main; tagged pkg/hornero-config-v0.4.8 and v0.4.8 on this SHA.
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: >-
+      System CLI built from this repository, not pinned. New build for
+      this record: signed AUR horneroctl-bin 0.2.0_preview50-1 (annotated
+      tag horneroctl-v0.2.0-preview50 on the merge of hornero#466), built
+      and signed by the release workflow.
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. No installer build for this package-only record; the ISO build, signing and upload are maintainer actions.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot. No ISO ships with this record; preview32 remains the current signed Preview ISO.
