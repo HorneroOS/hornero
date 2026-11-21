@@ -174,9 +174,9 @@ def test_candidate_pointer_is_explicit_and_deterministic():
     import yaml
 
     filename = read_candidate_name(ROOT)
-    assert filename == "v0.2.0-preview37.yaml"
+    assert filename == "v0.2.0-preview36.yaml"
     doc = yaml.safe_load(read_text(ROOT / "manifests" / filename))
-    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview37"
+    assert candidate_manifest_name(ROOT) == doc["name"] == "hornero-0.2.0-preview36"
 
 
 def test_published_candidate_is_treated_as_immutable_history():
@@ -196,7 +196,7 @@ def test_candidate_manifest_pins_release_candidate():
 def test_profiles_track_candidate_manifest():
     import yaml
 
-    candidate = "hornero-0.2.0-preview37"
+    candidate = "hornero-0.2.0-preview36"
     assert candidate_manifest_name(ROOT) == candidate
     for edition in ("base", "desktop", "developer"):
         profile = yaml.safe_load(read_text(ROOT / "profiles" / f"{edition}.yaml"))
@@ -309,4 +309,4 @@ def test_studio_profile_records_composition_without_duplicating_packages():
     for package in ("ardour", "obs-studio", "pipewire", "blender"):
         assert package not in text
     catalogue = yaml.safe_load(read_text(ROOT / "editions" / "catalogue.yaml"))
-    assert catalogue["editions"]["studio"]["maturity"] == "supported"
+    assert catalogue["editions"]["studio"]["maturity"] == "preview"

@@ -302,3 +302,14 @@ fn test_gaming_ids_cover_catalogue_model() {
 	assert 'steam' in gaming_application_ids
 	assert 'steam' in gaming_opt_in_application_ids
 }
+
+fn test_lts_fallback_from_names() {
+	// Boot image visible (readable /boot).
+	assert lts_fallback_from_names(['vmlinuz-linux', 'vmlinuz-linux-lts'], [])
+	assert lts_fallback_from_names(['vmlinuz-linux-lts-fallback'], [])
+	// ESP mounted fmask=0077: /boot is unlistable unprivileged, but the
+	// installed LTS kernel still shows up under /usr/lib/modules.
+	assert lts_fallback_from_names([], ['6.18.64-1-lts', '7.3.5-arch1-1'])
+	assert lts_fallback_from_names([], ['7.3.5-arch1-1']) == false
+	assert lts_fallback_from_names([], []) == false
+}

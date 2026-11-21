@@ -448,6 +448,30 @@ fn gaming_selection_state() (GamingSelection, bool, string) {
 // report capability only. A missing controller never fails Desktop
 // Gaming readiness; it is reported as an observation because only the
 // Handheld specialization requires one, on qualified hardware.
+// lts_fallback_from_names reports whether an LTS kernel is present given the
+// names seen in /boot and under /usr/lib/modules. /boot alone is not enough:
+// a standard Arch ESP mounts vfat with fmask=0077, so an unprivileged doctor
+// cannot list it even when the LTS kernel is installed (or running).
+fn lts_fallback_from_names(boot_names []string, module_names []string) bool {
+	for name in boot_names {
+		if name.starts_with('vmlinuz-linux-lts') {
+			return true
+		}
+	}
+	for name in module_names {
+		if name.contains('-lts') {
+			return true
+		}
+	}
+	return false
+}
+
+fn lts_fallback_present() bool {
+	boot := os.ls('/boot') or { []string{} }
+	mods := os.ls('/usr/lib/modules') or { []string{} }
+	return lts_fallback_from_names(boot, mods)
+}
+
 pub fn gaming_doctor_checks() []DoctorCheck {
 	mut checks := []DoctorCheck{}
 	// An invalid selection fails its own check but never hides the
@@ -530,7 +554,7 @@ pub fn gaming_doctor_checks() []DoctorCheck {
 	}
 	// Recovery readiness is probed, never asserted: a fallback kernel
 	// image or a snapshot tool must actually be present.
-	lts_kernel := os.is_file('/boot/vmlinuz-linux-lts') || os.is_file('/boot/vmlinuz-linux-lts-fallback')
+	lts_kernel := lts_fallback_present()
 	snapshot_tool := bin_check('snapper', 'snapper').ok || bin_check('timeshift', 'timeshift').ok
 	checks << DoctorCheck{
 		name:   'recovery-readiness'
