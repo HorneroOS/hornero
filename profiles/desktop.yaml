@@ -3,7 +3,7 @@
 apiVersion: hornero.os/v1
 kind: EditionProfile
 name: desktop
-manifest: hornero-0.2.0-preview37
+manifest: hornero-0.2.0-preview36
 description: >-
   Full desktop edition for daily use on hardware. Extends base with
   the complete desktop defaults; same pinned components.
@@ -17,6 +17,5 @@ components:
   - name: horneroctl
     role: System CLI built from this repository.
 notes: >-
-  Desktop is a supported edition for everyday use: it installs from
-  the signed ISO published under its previewNN artifact name
-  (VM-validated; no physical-hardware validation claimed for that ISO).
+  Desktop is a Preview edition: it installs from the signed Preview
+  ISO (VM-validated, not Supported).

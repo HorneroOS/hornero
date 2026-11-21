@@ -50,4 +50,3 @@ files, not this ledger; regenerate when a release is cut.
 | v0.2.0-preview34 | 2026-11-18 | — | `manifests/v0.2.0-preview34.yaml` | `5a8ae86` | `dd68e89` | `releases/v0.2.0-preview34-checklist.md` |
 | v0.2.0-preview35 | 2026-11-18 | — | `manifests/v0.2.0-preview35.yaml` | `f300a91` | `5419e40` | `releases/v0.2.0-preview35-checklist.md` |
 | v0.2.0-preview36 | 2026-11-20 | — | `manifests/v0.2.0-preview36.yaml` | `5a21935` | `2311ab1` | `releases/v0.2.0-preview36-checklist.md` |
-| v0.2.0-preview37 | 2026-11-21 | — | `manifests/v0.2.0-preview37.yaml` | `5a21935` | `466c2ab` | `releases/v0.2.0-preview37-checklist.md` |
