@@ -50,7 +50,8 @@ fn test_agent_usage_help_and_empty_env() {
 	tmp := '/tmp/hx-agent-usage-dispatch-test'
 	os.rmdir_all(tmp) or {}
 	os.mkdir_all(tmp) or { assert false }
-	saved := ['HERMES_HOME', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'MUSE_DATA_DIR', 'OPENCODE_DB']
+	saved := ['HERMES_HOME', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'MUSE_DATA_DIR', 'OPENCODE_DB',
+		'CURSOR_STATE_DB', 'HORNERO_AGENT_USAGE_OFFLINE']
 	mut saved_vals := map[string]string{}
 	for k in saved {
 		saved_vals[k] = os.getenv(k)
@@ -60,6 +61,10 @@ fn test_agent_usage_help_and_empty_env() {
 	os.setenv('CLAUDE_CONFIG_DIR', tmp + '/claude', true)
 	os.setenv('MUSE_DATA_DIR', tmp + '/muse', true)
 	os.setenv('OPENCODE_DB', tmp + '/opencode.db', true)
+	os.setenv('CURSOR_STATE_DB', tmp + '/cursor.vscdb', true)
+	// Hermetic: quota probes (endpoint calls, `muse usage`) must not
+	// reach the developer machine's real signed-in accounts.
+	os.setenv('HORNERO_AGENT_USAGE_OFFLINE', '1', true)
 	defer {
 		for k in saved {
 			if saved_vals[k].len == 0 {

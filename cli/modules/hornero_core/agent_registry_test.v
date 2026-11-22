@@ -15,10 +15,11 @@ fn agent_set_file(tag string) string {
 	return path
 }
 
-fn test_agent_registry_has_six_truthful_specs() {
+fn test_agent_registry_has_seven_truthful_specs() {
 	registry := agent_registry()
-	assert registry.len == 6
-	assert agent_ids() == ['javi-hermes', 'codex', 'claude-code', 'muse', 'opencode', 'veasel']
+	assert registry.len == 7
+	assert agent_ids() == ['javi-hermes', 'codex', 'claude-code', 'muse', 'cursor', 'opencode',
+		'veasel']
 	mut seen := map[string]bool{}
 	for spec in registry {
 		assert !seen[spec.id]
