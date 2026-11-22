@@ -80,6 +80,49 @@ fn agent_usage_quota_cache_write(name string, payload string) {
 	os.chmod(path, 0o600) or {}
 }
 
+// --- whole-result cache: one collection for every UI surface ---
+
+fn agent_usage_records_cache_name(id string) string {
+	return 'records-${if id.len > 0 { id } else { 'all' }}'
+}
+
+fn agent_usage_records_cache_store(id string, res CommandResult) {
+	mut data := map[string]json2.Any{}
+	for k, v in res.data {
+		data[k] = v
+	}
+	mut m := map[string]json2.Any{}
+	m['ok'] = json2.Any(res.ok)
+	m['message'] = res.message
+	m['data'] = json2.Any(data)
+	agent_usage_quota_cache_write(agent_usage_records_cache_name(id),
+		json2.encode(m, escape_unicode: true))
+}
+
+fn agent_usage_records_cache_hit(id string) ?CommandResult {
+	payload, fetched := agent_usage_quota_cache_read(agent_usage_records_cache_name(id))
+	if payload.len == 0 || time.now().unix() - fetched >= agent_usage_records_cache_ttl_sec {
+		return none
+	}
+	decoded := json2.decode[json2.Any](payload) or { return none }
+	root := agent_usage_map(decoded)
+	data_any := agent_usage_child(root, 'data')
+	if json_str(data_any, 'schemaVersion') != agent_usage_schema_version.str() {
+		return none
+	}
+	mut data := map[string]string{}
+	for k, v in data_any {
+		data[k] = v.str()
+	}
+	ok_any := root['ok'] or { json2.Any(false) }
+	return CommandResult{
+		command: 'agent usage'
+		ok:      ok_any is bool && ok_any as bool
+		message: json_str(root, 'message')
+		data:    data
+	}
+}
+
 // agent_usage_parse_iso converts a provider RFC3339 timestamp to
 // unix seconds; unparseable or empty values stay unknown (0).
 fn agent_usage_parse_iso(s string) i64 {

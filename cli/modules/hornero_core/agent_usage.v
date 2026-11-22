@@ -45,6 +45,12 @@ pub const agent_usage_schema_version = 2
 pub const agent_usage_quota_cache_ttl_sec = 180
 pub const agent_usage_quota_stale_max_sec = 3600
 
+// Whole-result cache: horneroctl is the one shared data service for
+// every Agent Deck surface, so the bar, popover, card and full page
+// polling on their own timers collapse into one collection per TTL
+// window instead of rescanning session stores per reader.
+pub const agent_usage_records_cache_ttl_sec = 120
+
 // Collector scan caps: a workstation's local history can be large, so
 // JSONL collectors stop at the cap and say so in `errors` rather than
 // scanning unboundedly (the record then understates, never overstates,
@@ -772,7 +778,17 @@ pub fn agent_usage_result(id string) CommandResult {
 }
 
 pub fn agent_usage_result_opts(id string, force bool) CommandResult {
-	return agent_usage_render(agent_usage_collect_opts(id, force))
+	offline := os.getenv('HORNERO_AGENT_USAGE_OFFLINE') == '1'
+	if !force && !offline {
+		if cached := agent_usage_records_cache_hit(id) {
+			return cached
+		}
+	}
+	res := agent_usage_render(agent_usage_collect_opts(id, force))
+	if !offline {
+		agent_usage_records_cache_store(id, res)
+	}
+	return res
 }
 
 // agent_usage_render is the fixture-friendly render behind agent_usage_result.
