@@ -189,3 +189,36 @@ fn test_run_respects_cancellation_recorded_after_load() {
 	assert !os.exists(output)
 	assert studio_job_status_result(job_id).data['state'] == 'cancelled'
 }
+
+fn test_job_json_roundtrip_special_paths() {
+	// Valid filenames with JSON-hostile characters must survive an
+	// encode/parse round-trip byte-for-byte (HorneroOS/hornero#473).
+	cases := [
+		'/tmp/in "quoted".mov',
+		'/tmp/back\\slash.mp4',
+		'/tmp/tab\tname.mkv',
+		'/tmp/unicodé — ñandú.mp4',
+		"/tmp/it's a file.mov",
+	]
+	for path in cases {
+		job := StudioJob{
+			id:           'job-special-1'
+			adapter:      'ffmpeg-export'
+			input:        path
+			output:       path + '.out.mp4'
+			state:        'queued'
+			progress:     -1
+			created_unix: 42
+			updated_unix: 43
+		}
+		parsed := studio_parse_job(studio_encode_job(job)) or {
+			assert false, 'round-trip failed for ${path}: ${err.msg()}'
+			continue
+		}
+		assert parsed.input == path, parsed.input
+		assert parsed.output == path + '.out.mp4'
+		assert parsed.id == job.id
+		assert parsed.adapter == job.adapter
+		assert parsed.created_unix == 42
+	}
+}
