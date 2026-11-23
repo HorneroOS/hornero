@@ -503,11 +503,19 @@ fn run_agent(args []string, mode hornero_core.RenderMode) int {
 			return render(hornero_core.agent_launch_result(args[1]), mode)
 		}
 		'usage' {
-			if args.len > 2 {
-				return render_error(hornero_core.err_usage('agent.usage',
-					'unexpected argument: ${args[2]}.\nExample: horneroctl agent usage codex --json'), mode)
+			mut id := ''
+			mut force := false
+			for a in args[1..] {
+				if a == '--force-refresh' {
+					force = true
+				} else if id.len == 0 {
+					id = a
+				} else {
+					return render_error(hornero_core.err_usage('agent.usage',
+						'unexpected argument: ${a}.\nExample: horneroctl agent usage codex --json'),
+						mode)
+				}
 			}
-			id := if args.len == 2 { args[1] } else { '' }
 			if id.len > 0 {
 				hornero_core.agent_by_id(id) or {
 					return render_error(hornero_core.err_usage('agent.usage',
@@ -515,7 +523,7 @@ fn run_agent(args []string, mode hornero_core.RenderMode) int {
 						mode)
 				}
 			}
-			return render(hornero_core.agent_usage_result(id), mode)
+			return render(hornero_core.agent_usage_result_opts(id, force), mode)
 		}
 		'config' {
 			action := if args.len >= 2 { args[1] } else { 'status' }

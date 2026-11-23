@@ -102,7 +102,7 @@ pub fn agent_registry() []AgentSpec {
 			session:          '`claude --continue` / `claude --resume` (upstream-owned store)'
 			approval:         'upstream permission modes; horneroctl never passes a skip-permissions flag'
 			sandbox:          'upstream settings-level sandbox only; not a Hornero boundary'
-			usage:            'normalized local usage via `horneroctl agent usage claude-code` (CLI stats-cache.json aggregates; quota unknown)'
+			usage:            'normalized usage via `horneroctl agent usage claude-code` (stats-cache.json activity plus Anthropic OAuth quota windows, scope B)'
 			uninstall:        'remove the upstream package/binary yourself; ~/.claude config and sessions remain until you delete them'
 		},
 		AgentSpec{
@@ -123,8 +123,29 @@ pub fn agent_registry() []AgentSpec {
 			session:          '`muse resume` (upstream-owned session store)'
 			approval:         'upstream approval flow; horneroctl never passes an auto-approve flag'
 			sandbox:          'upstream `muse sandbox` OS sandbox support; not a Hornero boundary'
-			usage:            'normalized local usage via `horneroctl agent usage muse` (session-store usage records; quota unknown, key endpoint never probed)'
+			usage:            'normalized usage via `horneroctl agent usage muse` (session-store records plus first-party `muse usage --json` quota)'
 			uninstall:        'remove the upstream binary yourself; ~/.config/muse config and sessions remain until you delete them'
+		},
+		AgentSpec{
+			id:               'cursor'
+			name:             'Cursor'
+			exec:             'cursor-agent'
+			discovery:        'PATH lookup for `cursor-agent`/`cursor`; editor state under ~/.config/Cursor, CLI home ~/.cursor'
+			install_source:   'upstream Cursor editor and CLI; not installed by horneroctl'
+			arch:             'editor (Electron) plus `cursor-agent` CLI sharing one account sign-in'
+			auth_detectable:  'file-presence'
+			auth_path:        '~/.config/Cursor/User/globalStorage/state.vscdb'
+			config_path:      '~/.cursor/cli-config.json'
+			home_env:         ''
+			instruction_path: 'AGENTS.md / .muse/rules (project tree)'
+			skills_path:      '~/.cursor/skills'
+			mcp_format:       'JSON mcp servers in ~/.muse/mcp.json (editor-owned)'
+			acp:              'none known to Hornero'
+			session:          'editor/CLI chats owned by Cursor; horneroctl never reads chat contents'
+			approval:         'upstream approval modes; horneroctl never passes an auto-approve flag'
+			sandbox:          'upstream agent sandbox settings; not a Hornero boundary'
+			usage:            'normalized account usage via `horneroctl agent usage cursor` (dashboard period/plan RPCs with the stored sign-in, scope B)'
+			uninstall:        'remove the upstream editor/CLI yourself; ~/.cursor and ~/.config/Cursor remain until you delete them'
 		},
 		AgentSpec{
 			id:               'opencode'

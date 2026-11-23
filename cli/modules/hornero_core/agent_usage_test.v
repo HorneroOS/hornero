@@ -163,7 +163,7 @@ fn test_agent_usage_render_never_zeros_on_error() {
 	res := agent_usage_render([err_rec])
 	assert !res.ok
 	assert res.command == 'agent usage'
-	assert res.data['schemaVersion'] == '1'
+	assert res.data['schemaVersion'] == '2'
 	assert res.data['usage.codex.inputTokens'] == 'unknown'
 	assert res.data['usage.codex.quota'] == 'unknown'
 	assert res.data['usage.codex.errors'] == 'fixture failure'
@@ -178,4 +178,68 @@ fn test_agent_usage_render_never_zeros_on_error() {
 	assert mixed.ok
 	assert mixed.data['providers'] == 'codex,muse'
 	assert mixed.data['usage.muse.totalTokens'] == '4'
+}
+
+fn test_apply_muse_quota_fixture() {
+	mut r := agent_usage_base_ex('muse', 'muse', 'Muse Code', 'muse-session-jsonl', 'local')
+	r.status = 'ok'
+	raw := '{"allowance":{"asOfMs":1795373575582,"source":"mint","tier":"Fixture Max","weekly":{"resetsAtMs":1795392000000,"usedPercent":42},"window":{"resetsAtMs":1795391373000,"usedPercent":7}},"hint":null,"reason":null,"schemaVersion":1}'
+	assert agent_usage_apply_muse_quota(mut r, raw)
+	assert r.has_quota
+	assert r.windows.len == 2
+	assert r.windows[0].used_percent == 7.0
+	assert r.windows[1].used_percent == 42.0
+	assert r.windows[1].window_minutes == 10080
+	assert r.quota_used_percent == 7.0 // v1 legacy mirror = first window
+	assert r.plan == 'Fixture Max'
+	assert r.billing == 'subscription'
+	enc := agent_usage_encode([r])
+	assert enc.contains('"quotaWindows"')
+	assert enc.contains('"schemaVersion":2')
+	// No allowance: quota stays unknown, never zero-filled windows.
+	mut r2 := agent_usage_base_ex('muse', 'muse', 'Muse Code', 'muse-session-jsonl', 'local')
+	assert !agent_usage_apply_muse_quota(mut r2, '{"allowance":null,"reason":"signed-out"}')
+	assert !r2.has_quota
+	assert agent_usage_encode([r2]).contains('"quota":"unknown"')
+	assert !agent_usage_encode([r2]).contains('quotaWindows')
+}
+
+fn test_apply_claude_quota_fixture() {
+	mut r := agent_usage_base_ex('claude-code', 'claude-code', 'Claude Code', 'claude-stats-cache', 'local')
+	r.status = 'ok'
+	raw := '{"five_hour":{"utilization":12.5,"resets_at":"2026-11-22T19:00:00+00:00"},"seven_day":{"utilization":88,"resets_at":"2026-11-29T19:00:00+00:00"},"limits":[{"kind":"weekly_scoped","percent":3,"resets_at":"2026-11-29T19:00:00+00:00","scope":{"model":{"display_name":"Fable"}}}]}'
+	assert agent_usage_apply_claude_quota(mut r, raw)
+	assert r.windows.len == 3
+	assert r.windows[0].label == '5-hour'
+	assert r.windows[0].window_minutes == 300
+	// Utilization is already a percentage: 12.5 stays 12.5, never 1250.
+	assert r.windows[0].used_percent == 12.5
+	assert r.windows[2].label == 'Fable weekly'
+	assert agent_usage_claude_plan_label('max', 'default_claude_max_5x') == 'Max 5x'
+	assert agent_usage_claude_plan_label('team', 'default_claude_max_5x') == 'Team 5x'
+	assert agent_usage_claude_plan_label('pro', '') == 'Pro'
+	mut empty := agent_usage_base_ex('claude-code', 'claude-code', 'Claude Code', 'x', 'local')
+	assert !agent_usage_apply_claude_quota(mut empty, '{"five_hour":null}')
+	assert !empty.has_quota
+}
+
+fn test_apply_cursor_usage_fixture() {
+	mut r := agent_usage_base_ex('cursor', 'cursor', 'Cursor', 'cursor-dashboard-rpc', 'account')
+	period := '{"billingCycleStart":"1793400000000","billingCycleEnd":"1795994928000","planUsage":{"totalPercentUsed":25,"autoPercentUsed":10,"apiPercentUsed":40},"spendLimitUsage":{"individualLimit":20000,"individualRemaining":15000}}'
+	plan := '{"planInfo":{"planName":"Pro+","includedUsagePeriod":"INCLUDED_USAGE_PERIOD_MONTHLY"}}'
+	assert agent_usage_apply_cursor_usage(mut r, period, plan)
+	assert r.status == 'ok'
+	assert r.plan == 'Pro+'
+	assert r.scope == 'account'
+	assert r.windows.len == 4
+	assert r.windows[0].used_percent == 25.0
+	assert r.windows[3].id == 'on-demand'
+	assert r.windows[3].used_percent == 25.0 // (20000-15000)/20000
+	assert agent_usage_apply_cursor_events(mut r, '{"aggregations":[{"modelIntent":"gpt-5","inputTokens":"100","outputTokens":"20","cacheReadTokens":"5","cacheWriteTokens":"1"}]}')
+	assert r.has_tokens
+	assert r.input_tokens == 100
+	assert r.models == 'gpt-5:120'
+	mut bad := agent_usage_base_ex('cursor', 'cursor', 'Cursor', 'cursor-dashboard-rpc', 'account')
+	assert !agent_usage_apply_cursor_usage(mut bad, '{"nope":true}', '')
+	assert !bad.has_quota
 }

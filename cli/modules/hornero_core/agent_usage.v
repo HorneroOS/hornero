@@ -14,19 +14,42 @@ import x.json2
 //
 // Truthfulness rules, enforced by construction here:
 // - No invented quota/limits/resets/costs. `quota` is 'unknown' (and
-//   numeric quota fields are omitted) unless the provider's own local
-//   record actually carries them (today: only a Codex rollout's latest
-//   `token_count.rate_limits`). There is no cost field at all.
-// - Account is 'unknown': deriving it would mean reading credential
-//   files, which this module never does. Collectors read only the
-//   usage stores named in `source`; credential contents are never
-//   read, returned, or logged, and errors never embed file contents.
+//   numeric quota fields are omitted) unless the provider itself
+//   reported the figures: a Codex rollout's recorded `rate_limits`,
+//   Muse's first-party `muse usage --json`, Anthropic's OAuth usage
+//   endpoint, or Cursor's dashboard period/plan RPCs. There is no
+//   cost field at all, and unknown quota is never zero percent.
+// - Schema v2 (credential scope B, user-approved 2026-11-22): the
+//   backend — never the QML UI — may reuse an existing stored Claude
+//   Code / Cursor sign-in read-only and in memory only to ask that
+//   provider about the account's own usage. Tokens are never
+//   returned, logged, cached, refreshed, revoked, or used to switch
+//   accounts, and no inference request is ever made to probe quota.
+//   Every other collector still reads only local usage stores.
+// - Account stays a safe local identifier ('unknown' unless a
+//   provider record names a display-safe one); emails are never
+//   emitted. Harness and billing provider are separate fields, and
+//   `scope` ('local' vs 'account') stops account-global figures from
+//   being summed with machine-local activity.
 // - Errors are never zeros: a missing/unreadable/empty source yields
 //   status 'unavailable'/'error' with an `errors` entry and NO numeric
-//   token fields (flat keys report 'unknown').
-// - Everything is local and read-only: no network, no subprocess.
+//   token fields (flat keys report 'unknown'). Provider probe failures
+//   keep local usage and explain themselves in `note`.
 
-pub const agent_usage_schema_version = 1
+pub const agent_usage_schema_version = 2
+
+// Quota probe cache: subscription endpoints (Anthropic in particular)
+// rate-limit readily, so a fresh probe is reused briefly and a failed
+// one may fall back to last-known-good provider payloads — labelled
+// stale through `quotaCollectedAtUnix`, never presented as fresh.
+pub const agent_usage_quota_cache_ttl_sec = 180
+pub const agent_usage_quota_stale_max_sec = 3600
+
+// Whole-result cache: horneroctl is the one shared data service for
+// every Agent Deck surface, so the bar, popover, card and full page
+// polling on their own timers collapse into one collection per TTL
+// window instead of rescanning session stores per reader.
+pub const agent_usage_records_cache_ttl_sec = 120
 
 // Collector scan caps: a workstation's local history can be large, so
 // JSONL collectors stop at the cap and say so in `errors` rather than
@@ -34,16 +57,38 @@ pub const agent_usage_schema_version = 1
 // and is labelled with the truncation).
 const agent_usage_max_files = 5000
 
+// One provider-reported quota window (schema v2). `used_percent` is
+// the provider's own percentage; -1 window minutes and 0 resets mean
+// the provider did not report them (fields are then omitted in JSON).
+pub struct AgentUsageWindow {
+pub:
+	id             string
+	label          string
+	used_percent   f64
+	window_minutes i64 // -1 = not reported (e.g. a billing cycle)
+	resets_at_unix i64 // 0 = not reported
+	note           string
+}
+
 pub struct AgentUsageRecord {
 pub:
-	provider string // agent registry id: javi-hermes, codex, claude-code, muse, opencode
-	account  string // always 'unknown' in this slice (see header)
+	provider string // billing/usage provider id (registry id today)
+	harness  string // coding application id; the harness is not always the quota owner
+	name     string // human label, e.g. 'Claude Code'
+	account  string // safe local identifier or 'unknown'; never an email
 	source   string // collector source kind, e.g. 'hermes-state-db'
+	scope    string // 'local' machine activity, 'account' provider-global
 pub mut:
 	status               string // 'ok', 'unavailable', or 'error'
+	auth_status          string // 'signed-in', 'authorization-needed', or 'unknown'
+	plan                 string // provider-reported plan/tier, '' = unknown
+	billing              string // 'subscription', 'api', or 'unknown'
+	note                 string // plain-language caveat (stale quota, probe refused, ...)
 	period_start         string // '' = unknown/all recorded history
 	period_end           string
-	measured_at_unix     i64 // source mtime, 0 = unknown
+	measured_at_unix     i64 // local source mtime, 0 = unknown
+	collected_at_unix    i64 // when this record was collected, 0 = unset (fixtures)
+	quota_at_unix        i64 // when quota windows were fetched, 0 = unknown/local record
 	has_tokens           bool
 	input_tokens         i64
 	output_tokens        i64
@@ -53,7 +98,8 @@ pub mut:
 	sessions             i64    // -1 = unknown
 	api_calls            i64    // -1 = unknown
 	models               string // 'name:tokens' joined by ',', '' = unknown
-	quota_used_percent   f64
+	windows              []AgentUsageWindow
+	quota_used_percent   f64 // v1 legacy mirror of windows[0]
 	quota_window_minutes i64
 	quota_resets_at_unix i64
 	has_quota            bool
@@ -61,14 +107,57 @@ pub mut:
 	errors               []string
 }
 
-fn agent_usage_base(provider string, source string) AgentUsageRecord {
+fn agent_usage_base_ex(provider string, harness string, name string, source string, scope string) AgentUsageRecord {
 	return AgentUsageRecord{
-		provider:  provider
-		account:   'unknown'
-		source:    source
-		status:    'unavailable'
-		sessions:  -1
-		api_calls: -1
+		provider:           provider
+		harness:            harness
+		name:               name
+		account:            'unknown'
+		source:             source
+		scope:              scope
+		status:             'unavailable'
+		auth_status:        'unknown'
+		billing:            'unknown'
+		sessions:           -1
+		api_calls:          -1
+		windows:            []AgentUsageWindow{}
+		errors:             []string{}
+		quota_at_unix:      0
+		quota_used_percent: 0
+	}
+}
+
+// agent_usage_base keeps the v1 two-argument call sites: harness and
+// namespace default to the provider id and scope to local activity.
+fn agent_usage_base(provider string, source string) AgentUsageRecord {
+	return agent_usage_base_ex(provider, provider, provider, source, 'local')
+}
+
+// agent_usage_sync_legacy mirrors the first quota window into the v1
+// scalar fields, so pre-v2 consumers keep seeing one honest window.
+fn agent_usage_sync_legacy(mut r AgentUsageRecord) {
+	if r.windows.len == 0 {
+		r.has_quota = false
+		return
+	}
+	r.has_quota = true
+	r.quota_used_percent = r.windows[0].used_percent
+	r.quota_window_minutes = if r.windows[0].window_minutes > 0 {
+		r.windows[0].window_minutes
+	} else {
+		i64(0)
+	}
+	r.quota_resets_at_unix = r.windows[0].resets_at_unix
+}
+
+// agent_usage_window_label names a reported window length; unknown
+// lengths (billing cycles) keep the caller's label untouched.
+fn agent_usage_window_label(minutes i64, fallback string) string {
+	return match minutes {
+		300 { '5-hour' }
+		10080 { 'Weekly' }
+		43200 { 'Monthly' }
+		else { fallback }
 	}
 }
 
@@ -96,14 +185,31 @@ pub fn agent_usage_record_json(r AgentUsageRecord) map[string]json2.Any {
 	mut m := map[string]json2.Any{}
 	m['schemaVersion'] = json2.Any(agent_usage_schema_version)
 	m['provider'] = r.provider
+	m['harness'] = r.harness
+	m['name'] = r.name
 	m['account'] = r.account
+	m['authStatus'] = r.auth_status
+	m['billing'] = r.billing
+	if r.plan.len > 0 {
+		m['plan'] = r.plan
+	}
 	m['source'] = r.source
+	m['scope'] = r.scope
 	m['status'] = r.status
 	m['freshness'] = r.freshness()
+	if r.note.len > 0 {
+		m['note'] = r.note
+	}
 	m['periodStart'] = r.period_start
 	m['periodEnd'] = r.period_end
 	if r.measured_at_unix > 0 {
 		m['measuredAtUnix'] = json2.Any(r.measured_at_unix)
+	}
+	if r.collected_at_unix > 0 {
+		m['collectedAtUnix'] = json2.Any(r.collected_at_unix)
+	}
+	if r.quota_at_unix > 0 {
+		m['quotaCollectedAtUnix'] = json2.Any(r.quota_at_unix)
 	}
 	if r.has_tokens {
 		m['inputTokens'] = json2.Any(r.input_tokens)
@@ -127,6 +233,27 @@ pub fn agent_usage_record_json(r AgentUsageRecord) map[string]json2.Any {
 		m['quotaUsedPercent'] = json2.Any(r.quota_used_percent)
 		m['quotaWindowMinutes'] = json2.Any(r.quota_window_minutes)
 		m['quotaResetsAtUnix'] = json2.Any(r.quota_resets_at_unix)
+	}
+	if r.windows.len > 0 {
+		mut wins := []json2.Any{cap: r.windows.len}
+		for w in r.windows {
+			mut wm := map[string]json2.Any{}
+			wm['id'] = w.id
+			wm['label'] = w.label
+			wm['usedPercent'] = json2.Any(w.used_percent)
+			wm['metricKind'] = 'official'
+			if w.window_minutes >= 0 {
+				wm['windowMinutes'] = json2.Any(w.window_minutes)
+			}
+			if w.resets_at_unix > 0 {
+				wm['resetsAtUnix'] = json2.Any(w.resets_at_unix)
+			}
+			if w.note.len > 0 {
+				wm['note'] = w.note
+			}
+			wins << json2.Any(wm)
+		}
+		m['quotaWindows'] = json2.Any(wins)
 	}
 	m['balance'] = if r.balance.len > 0 { r.balance } else { 'unknown' }
 	mut errs := []json2.Any{cap: r.errors.len}
@@ -160,7 +287,14 @@ fn agent_usage_flat(mut data map[string]string, r AgentUsageRecord) {
 	data['${p}.outputTokens'] = agent_usage_num(r.has_tokens, r.output_tokens)
 	data['${p}.totalTokens'] = agent_usage_num(r.has_tokens, r.total_tokens())
 	data['${p}.sessions'] = agent_usage_num(r.sessions >= 0, r.sessions)
+	data['${p}.name'] = r.name
+	data['${p}.harness'] = r.harness
+	data['${p}.authStatus'] = r.auth_status
+	data['${p}.billing'] = r.billing
+	data['${p}.plan'] = if r.plan.len > 0 { r.plan } else { 'unknown' }
+	data['${p}.scope'] = r.scope
 	data['${p}.quota'] = if r.has_quota { 'available' } else { 'unknown' }
+	data['${p}.quotaWindows'] = r.windows.len.str()
 	data['${p}.quotaResetsAtUnix'] = agent_usage_num(r.has_quota, r.quota_resets_at_unix)
 	data['${p}.balance'] = if r.balance.len > 0 { r.balance } else { 'unknown' }
 	data['${p}.errors'] = r.errors.join('; ')
@@ -198,6 +332,16 @@ pub fn agent_usage_muse_sessions() string {
 		return os.join_path(data, 'sessions')
 	}
 	return os.join_path(resolve_paths().data_dir, 'muse', 'sessions')
+}
+
+// agent_usage_cursor_db resolves the Cursor editor's state database.
+pub fn agent_usage_cursor_db() string {
+	db := os.getenv('CURSOR_STATE_DB')
+	if db.len > 0 {
+		return db
+	}
+	return os.join_path(resolve_paths().config_dir, 'Cursor', 'User', 'globalStorage',
+		'state.vscdb')
 }
 
 // agent_usage_opencode_db resolves $OPENCODE_DB (or the XDG default).
@@ -253,7 +397,7 @@ fn agent_usage_jsonl_files(dir string) ([]string, bool) {
 // --- Hermes collector: reuses the existing assistant usage contract ---
 
 pub fn collect_hermes_usage_at(db_path string) AgentUsageRecord {
-	mut r := agent_usage_base('javi-hermes', 'hermes-state-db')
+	mut r := agent_usage_base_ex('javi-hermes', 'javi-hermes', 'Javi (Hermes)', 'hermes-state-db', 'local')
 	r.measured_at_unix = agent_usage_mtime(db_path)
 	res := assistant_usage_report_at(db_path)
 	if !res.ok {
@@ -280,7 +424,7 @@ pub fn collect_hermes_usage_at(db_path string) AgentUsageRecord {
 // snapshot — the only quota this contract ever reports. ---
 
 pub fn collect_codex_usage_at(sessions_dir string) AgentUsageRecord {
-	mut r := agent_usage_base('codex', 'codex-rollout-jsonl')
+	mut r := agent_usage_base_ex('codex', 'codex', 'Codex', 'codex-rollout-jsonl', 'local')
 	if !os.is_dir(sessions_dir) {
 		r.errors << 'No Codex sessions directory (Codex not used on this machine?).'
 		return r
@@ -331,12 +475,28 @@ pub fn collect_codex_usage_at(sessions_dir string) AgentUsageRecord {
 					r.period_start = ts
 				}
 				limits := agent_usage_child(payload, 'rate_limits')
-				primary := agent_usage_child(limits, 'primary')
-				if primary.len > 0 && 'resets_at' in primary {
-					r.has_quota = true
-					r.quota_used_percent = (primary['used_percent'] or { json2.Any(0) }).f64()
-					r.quota_window_minutes = agent_usage_i64(primary, 'window_minutes')
-					r.quota_resets_at_unix = agent_usage_i64(primary, 'resets_at')
+				mut wins := []AgentUsageWindow{}
+				for key in ['primary', 'secondary'] {
+					bucket := agent_usage_child(limits, key)
+					if bucket.len > 0 && 'used_percent' in bucket {
+						minutes := agent_usage_i64(bucket, 'window_minutes')
+						wins << AgentUsageWindow{
+							id:             key
+							label:          agent_usage_window_label(minutes, 'Window')
+							used_percent:   (bucket['used_percent'] or { json2.Any(0) }).f64()
+							window_minutes: minutes
+							resets_at_unix: agent_usage_i64(bucket, 'resets_at')
+						}
+					}
+				}
+				if wins.len > 0 {
+					r.windows = wins
+					agent_usage_sync_legacy(mut r)
+				}
+				plan_type := json_str(limits, 'plan_type')
+				if plan_type.len > 0 {
+					r.plan = plan_type
+					r.billing = 'subscription'
 				}
 				credits := agent_usage_child(limits, 'credits')
 				if credits.len > 0 {
@@ -371,6 +531,11 @@ pub fn collect_codex_usage_at(sessions_dir string) AgentUsageRecord {
 	r.has_tokens = true
 	r.sessions = sessions
 	r.api_calls = calls
+	// Presence only (contents never read): a recorded plan already
+	// implies the ChatGPT sign-in Codex wrote the rollout under.
+	if os.exists(os.join_path(os.dir(sessions_dir), 'auth.json')) {
+		r.auth_status = 'signed-in'
+	}
 	return r
 }
 
@@ -380,7 +545,7 @@ pub fn collect_codex_usage_at(sessions_dir string) AgentUsageRecord {
 // cache's costUSD is never surfaced; there is no cost field. ---
 
 pub fn collect_claude_usage_at(claude_dir string) AgentUsageRecord {
-	mut r := agent_usage_base('claude-code', 'claude-stats-cache')
+	mut r := agent_usage_base_ex('claude-code', 'claude-code', 'Claude Code', 'claude-stats-cache', 'local')
 	path := os.join_path(claude_dir, 'stats-cache.json')
 	r.measured_at_unix = agent_usage_mtime(path)
 	raw := os.read_file(path) or {
@@ -425,12 +590,12 @@ pub fn collect_claude_usage_at(claude_dir string) AgentUsageRecord {
 
 // --- Muse collector: session.jsonl usage records
 // (payload.event.record.quantity), deduplicated by usage_id so a
-// record copied into a subagent log counts once. Muse's key-endpoint
-// quota is deliberately NOT probed: that needs the OAuth credential,
-// and credential contents are never read here — quota stays unknown. ---
+// record copied into a subagent log counts once. Quota comes from
+// Muse's own first-party `muse usage --json` in agent_usage_quota.v;
+// no Muse credential is ever read by Hornero. ---
 
 pub fn collect_muse_usage_at(sessions_dir string) AgentUsageRecord {
-	mut r := agent_usage_base('muse', 'muse-session-jsonl')
+	mut r := agent_usage_base_ex('muse', 'muse', 'Muse Code', 'muse-session-jsonl', 'local')
 	if !os.is_dir(sessions_dir) {
 		r.errors << 'No Muse sessions directory (Muse not used on this machine?).'
 		return r
@@ -511,7 +676,7 @@ pub fn collect_muse_usage_at(sessions_dir string) AgentUsageRecord {
 // column is never read into this contract (no cost field exists). ---
 
 pub fn collect_opencode_usage_at(db_path string) AgentUsageRecord {
-	mut r := agent_usage_base('opencode', 'opencode-session-db')
+	mut r := agent_usage_base_ex('opencode', 'opencode', 'OpenCode', 'opencode-session-db', 'local')
 	r.measured_at_unix = agent_usage_mtime(db_path)
 	if !os.exists(db_path) {
 		r.errors << 'No OpenCode database (OpenCode not used on this machine?).'
@@ -538,6 +703,10 @@ pub fn collect_opencode_usage_at(db_path string) AgentUsageRecord {
 	t := rows[0].vals
 	r.status = 'ok'
 	r.has_tokens = true
+	// Presence only: configured providers exist (contents never read).
+	if os.exists(os.join_path(resolve_paths().data_dir, 'opencode', 'auth.json')) {
+		r.auth_status = 'signed-in'
+	}
 	r.sessions = t[0].i64()
 	r.input_tokens = t[1].i64()
 	r.output_tokens = t[2].i64()
@@ -550,21 +719,62 @@ pub fn collect_opencode_usage_at(db_path string) AgentUsageRecord {
 // --- aggregate entry point ---
 
 pub fn agent_usage_collect(id string) []AgentUsageRecord {
-	match id {
-		'javi-hermes' { return [collect_hermes_usage_at(agent_usage_hermes_db())] }
-		'codex' { return [collect_codex_usage_at(agent_usage_codex_sessions())] }
-		'claude-code' { return [collect_claude_usage_at(agent_usage_claude_dir())] }
-		'muse' { return [collect_muse_usage_at(agent_usage_muse_sessions())] }
-		'opencode' { return [collect_opencode_usage_at(agent_usage_opencode_db())] }
-		else {}
+	return agent_usage_collect_opts(id, false)
+}
+
+// agent_usage_collect_opts runs every collector plus its isolated
+// quota probe (agent_usage_quota.v). One provider's probe failing,
+// hanging, or being rate-limited never changes another record.
+pub fn agent_usage_collect_opts(id string, force bool) []AgentUsageRecord {
+	// Offline switch: local collectors only, no endpoint probe and no
+	// quota subprocess. Used by hermetic tests and available to anyone
+	// who wants monitoring with zero network egress.
+	offline := os.getenv('HORNERO_AGENT_USAGE_OFFLINE') == '1'
+	mut cursor_offline := agent_usage_base_ex('cursor', 'cursor', 'Cursor',
+		'cursor-dashboard-rpc', 'account')
+	cursor_offline.errors << 'Cursor usage needs its dashboard; offline mode is on.'
+	collect := fn [offline, force, cursor_offline] (provider string) AgentUsageRecord {
+		return match provider {
+			'javi-hermes' { collect_hermes_usage_at(agent_usage_hermes_db()) }
+			'codex' { collect_codex_usage_at(agent_usage_codex_sessions()) }
+			'claude-code' {
+				if offline {
+					collect_claude_usage_at(agent_usage_claude_dir())
+				} else {
+					collect_claude_usage_full(force)
+				}
+			}
+			'muse' {
+				if offline {
+					collect_muse_usage_at(agent_usage_muse_sessions())
+				} else {
+					collect_muse_usage_full(force)
+				}
+			}
+			'cursor' {
+				if offline { cursor_offline } else { collect_cursor_usage(force) }
+			}
+			else { collect_opencode_usage_at(agent_usage_opencode_db()) }
+		}
 	}
-	return [
-		collect_hermes_usage_at(agent_usage_hermes_db()),
-		collect_codex_usage_at(agent_usage_codex_sessions()),
-		collect_claude_usage_at(agent_usage_claude_dir()),
-		collect_muse_usage_at(agent_usage_muse_sessions()),
-		collect_opencode_usage_at(agent_usage_opencode_db()),
-	]
+	// A single id runs only its own collector (v1 behaviour): session
+	// scans are the slow part and must not run for other providers.
+	ids := if id.len > 0 {
+		[id]
+	} else {
+		['javi-hermes', 'codex', 'claude-code', 'muse', 'cursor', 'opencode']
+	}
+	mut out := []AgentUsageRecord{cap: ids.len}
+	now := time.now().unix()
+	for provider in ids {
+		mut r := collect(provider)
+		r.collected_at_unix = now
+		// Historical activity alone never proves a current sign-in:
+		// auth_status is set only by an actual probe or an auth-file
+		// presence check inside each collector.
+		out << r
+	}
+	return out
 }
 
 // agent_usage_result renders the normalized records for
@@ -574,6 +784,20 @@ pub fn agent_usage_collect(id string) []AgentUsageRecord {
 // consumers keep per-provider truth even on exit 1.
 pub fn agent_usage_result(id string) CommandResult {
 	return agent_usage_render(agent_usage_collect(id))
+}
+
+pub fn agent_usage_result_opts(id string, force bool) CommandResult {
+	offline := os.getenv('HORNERO_AGENT_USAGE_OFFLINE') == '1'
+	if !force && !offline {
+		if cached := agent_usage_records_cache_hit(id) {
+			return cached
+		}
+	}
+	res := agent_usage_render(agent_usage_collect_opts(id, force))
+	if !offline {
+		agent_usage_records_cache_store(id, res)
+	}
+	return res
 }
 
 // agent_usage_render is the fixture-friendly render behind agent_usage_result.
@@ -588,7 +812,12 @@ pub fn agent_usage_render(records []AgentUsageRecord) CommandResult {
 		agent_usage_flat(mut data, r)
 		if r.status == 'ok' {
 			any_ok = true
-			lines << '${r.provider}: ${r.input_tokens} in / ${r.output_tokens} out (source ${r.source}, ${r.freshness()}); quota ${data['usage.${r.provider}.quota']}'
+			activity := if r.has_tokens {
+				'${r.input_tokens} in / ${r.output_tokens} out'
+			} else {
+				'no token activity reported'
+			}
+			lines << '${r.provider}: ${activity} (source ${r.source}, ${r.freshness()}); quota ${data['usage.${r.provider}.quota']}'
 		} else {
 			lines << '${r.provider}: ${r.status} — ${r.errors.join('; ')}'
 		}
