@@ -1,0 +1,22 @@
+# Hornero OS release: v0.2.0-preview38
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview38
+version: 0.2.0-preview38
+status: pre-release
+manifest: hornero-0.2.0-preview38
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview38-checklist.md
+summary: >-
+  Hornero Signal, delivered as AUR package updates for existing
+  installs (no ISO): hornero-shell 1.3.6 (PluginKit 5 dashboard
+  pages), hornero-config 0.4.8, hornero-greeter 1.2.0 and signed
+  horneroctl-bin 0.2.0_preview51 (agent usage schema v2). The
+  Agent Deck flagship extension (hornero-ai-usage 4.2.0) ships
+  through the plugin catalogue. The preview32 ISO remains the
+  current installation medium.
+published: false
