@@ -21,6 +21,8 @@ fn test_studio_unknown_subcommand_fails() {
 fn test_studio_jobs_help_is_discoverable() {
 	assert command_help('studio jobs').contains('studio jobs submit')
 	assert command_help('studio jobs').contains('ffmpeg-export')
+	assert command_help('studio jobs').contains('kdenlive-render')
+	assert command_help('studio jobs').contains('melt-render')
 	assert command_help('studio').contains('jobs')
 }
 

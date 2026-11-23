@@ -269,10 +269,40 @@ pub fn studio_doctor_checks() []DoctorCheck {
 		detail: 'recorded: ${mode_state.audio_mode} (Balanced is the device default; Low Latency and Advanced are explicit opt-ins; quantum is a scheduling period, not physical latency)'
 	}
 	checks << studio_audio_doctor_checks()
+	checks << studio_creative_doctor_checks()
 	checks << DoctorCheck{
 		name:   'studio-package-apply'
 		ok:     true
 		detail: 'not executed by horneroctl studio yet; selections are recorded intent only'
+	}
+	return checks
+}
+
+// studio_creative_doctor_checks reports optional creative tooling used by
+// the Studio job adapters and by portable creative workflows (Agent
+// Toolkit Creative Studio). Absence is a warn, never a failure: Studio
+// selections vary, and no creative capability may become a mandatory
+// Desktop dependency. Presence is reported with the resolved path only;
+// versions are the tools' own business and are never invented here.
+pub fn studio_creative_doctor_checks() []DoctorCheck {
+	tools := [['ffmpeg', 'media inspection, loudness and ffmpeg-export jobs'],
+		['ffprobe', 'media metadata probing'], ['melt', 'melt-render jobs (MLT engine)'],
+		['kdenlive', 'kdenlive-render jobs and editable video projects'],
+		['blender', 'blender-render jobs and motion graphics']]
+	mut checks := []DoctorCheck{}
+	for tool in tools {
+		prog, purpose := tool[0], tool[1]
+		found := find_on_path(prog)
+		checks << DoctorCheck{
+			name:   'studio-creative-${prog}'
+			ok:     true
+			warn:   found.len == 0
+			detail: if found.len > 0 {
+				'${found} (${purpose})'
+			} else {
+				'not installed — optional, needed only for ${purpose}'
+			}
+		}
 	}
 	return checks
 }

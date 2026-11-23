@@ -23,6 +23,13 @@ fn jobs_setup(tag string) (string, string) {
 	fake := '#!/bin/sh\nfor last; do :; done\nprintf "fake-output\\n" > "$last"\nK=abc123\necho "export done token=\$K"\n'
 	os.write_file('${bin_dir}/ffmpeg', fake) or { assert false }
 	os.chmod('${bin_dir}/ffmpeg', 0o755) or {}
+	// Fake kdenlive --render: last argument is the output file.
+	os.write_file('${bin_dir}/kdenlive', fake) or { assert false }
+	os.chmod('${bin_dir}/kdenlive', 0o755) or {}
+	// Fake melt: output is embedded in the avformat:<path> consumer arg.
+	fake_melt := '#!/bin/sh\nfor a in "$@"; do case "$a" in avformat:*) printf "fake-output\\n" > "\${a#avformat:}";; esac; done\necho "melt done"\n'
+	os.write_file('${bin_dir}/melt', fake_melt) or { assert false }
+	os.chmod('${bin_dir}/melt', 0o755) or {}
 	os.setenv('PATH', '${bin_dir}:${os.getenv('PATH')}', true)
 	return root, jobs_dir
 }
@@ -121,4 +128,64 @@ fn test_job_cancel_and_interrupted_reconcile() {
 	assert loaded.state == 'interrupted'
 	// ...and an interrupted job may be retried safely (output absent).
 	assert studio_job_status_result('job-stale-1').data['state'] == 'interrupted'
+}
+
+fn test_kdenlive_and_melt_adapters() {
+	root, _ := jobs_setup('kdenlive-melt')
+	defer {
+		jobs_teardown()
+	}
+	project := '${root}/project/edit.kdenlive'
+	os.write_file(project, '<mlt/>') or { assert false }
+
+	// Fixed argv shapes, verified against the real tools' CLI contracts.
+	kargv := studio_adapter_argv('kdenlive-render', project, '${root}/final.mp4') or {
+		assert false
+		[]string{}
+	}
+	assert kargv == ['kdenlive', '--render', project, '${root}/final.mp4']
+	margv := studio_adapter_argv('melt-render', project, '${root}/preview.mp4') or {
+		assert false
+		[]string{}
+	}
+	assert margv == ['melt', project, '-consumer', 'avformat:${root}/preview.mp4']
+
+	// Validation: wrong source types, wrong outputs, option injection.
+	assert !studio_job_submit_result('kdenlive-render', '${root}/project/in.mov', '${root}/x.mp4', false, false).ok
+	assert !studio_job_submit_result('melt-render', project, '${root}/x.avi', false, false).ok
+	if _ := studio_adapter_argv('ffmpeg-export', '-i', '${root}/x.mp4') {
+		assert false, 'dash-prefixed input must be refused'
+	}
+
+	// Execute both new adapters end to end with the fakes on PATH.
+	kjob := studio_job_submit_result('kdenlive-render', project, '${root}/final.mp4', true, true)
+	assert kjob.ok, kjob.message
+	assert os.exists('${root}/final.mp4')
+	mjob := studio_job_submit_result('melt-render', project, '${root}/preview.mp4', true, true)
+	assert mjob.ok, mjob.message
+	assert os.exists('${root}/preview.mp4')
+	// The native project source is never modified by rendering.
+	assert (os.read_file(project) or { '' }) == '<mlt/>'
+}
+
+fn test_run_respects_cancellation_recorded_after_load() {
+	root, _ := jobs_setup('cancel-race')
+	defer {
+		jobs_teardown()
+	}
+	input := '${root}/project/in.mov'
+	output := '${root}/project/race.mp4'
+	os.write_file(input, 'video') or { assert false }
+	queued := studio_job_submit_result('ffmpeg-export', input, output, false, false)
+	assert queued.ok
+	job_id := queued.data['id']
+	stale := studio_load_job(job_id) or { assert false }
+	// Another invocation cancels after we loaded the job.
+	assert studio_job_cancel_result(job_id).ok
+	// Running from the stale in-memory copy must not execute or overwrite
+	// the cancelled state with a stale verdict.
+	ran := studio_job_run(stale)
+	assert !ran.ok
+	assert !os.exists(output)
+	assert studio_job_status_result(job_id).data['state'] == 'cancelled'
 }

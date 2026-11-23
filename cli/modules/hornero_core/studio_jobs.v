@@ -11,6 +11,15 @@ import x.json2
 // injection is ever accepted, and no background service starts without a
 // user submitting a job. Executing a job never overwrites existing
 // output and never touches the source project file.
+//
+// Jobs run synchronously inside the invoking horneroctl process; there is
+// no durable background worker. Cancelling therefore cannot kill a live
+// subprocess: it is a persisted-state transition. A queued job that is
+// cancelled never runs, and studio_job_run re-reads the persisted state
+// before and after execution so a cancellation recorded by another
+// horneroctl invocation is never silently overwritten by a stale
+// succeeded/failed write. True process-group cancellation would require
+// owning the child PID across invocations and is deliberately not claimed.
 
 pub const studio_jobs_schema_version = 1
 
@@ -44,9 +53,20 @@ fn studio_job_log_file(id string) string {
 	return os.join_path(studio_jobs_dir(), '${id}.log')
 }
 
+pub const studio_adapter_ids = ['blender-render', 'ffmpeg-export', 'kdenlive-render', 'melt-render']
+
+fn studio_video_output_ext_ok(output string) bool {
+	return os.file_ext(output).to_lower() in ['.mp4', '.mkv', '.mov', '.webm']
+}
+
 // studio_adapter_argv is the allow-list. Each adapter validates its own
 // inputs and returns a fixed argv (program separate from arguments).
+// Paths beginning with '-' are refused for every adapter so a file name
+// can never be re-interpreted as an option by the underlying tool.
 pub fn studio_adapter_argv(adapter string, input string, output string) ![]string {
+	if input.starts_with('-') || output.starts_with('-') {
+		return error('studio job paths must not start with - (option injection guard)')
+	}
 	match adapter {
 		'blender-render' {
 			if !input.to_lower().ends_with('.blend') {
@@ -55,21 +75,44 @@ pub fn studio_adapter_argv(adapter string, input string, output string) ![]strin
 			return ['blender', '-b', input, '-o', output, '-a']
 		}
 		'ffmpeg-export' {
-			ext := os.file_ext(output).to_lower()
-			if ext !in ['.mp4', '.mkv', '.mov', '.webm'] {
+			if !studio_video_output_ext_ok(output) {
 				return error('ffmpeg-export output must end in .mp4, .mkv, .mov, or .webm')
 			}
 			return ['ffmpeg', '-hide_banner', '-nostdin', '-i', input, output]
 		}
+		'kdenlive-render' {
+			// Renders a native Kdenlive project with Kdenlive itself
+			// (default MP4-H264/AAC preset when none is named). The
+			// .kdenlive source is opened read-only by the renderer.
+			if !input.to_lower().ends_with('.kdenlive') {
+				return error('kdenlive-render input must be a .kdenlive project file')
+			}
+			if !studio_video_output_ext_ok(output) {
+				return error('kdenlive-render output must end in .mp4, .mkv, .mov, or .webm')
+			}
+			return ['kdenlive', '--render', input, output]
+		}
+		'melt-render' {
+			// Renders MLT XML (a .kdenlive project is MLT XML) with the
+			// melt engine, without needing the Kdenlive GUI stack.
+			lower := input.to_lower()
+			if !lower.ends_with('.kdenlive') && !lower.ends_with('.mlt') {
+				return error('melt-render input must be a .kdenlive or .mlt file')
+			}
+			if !studio_video_output_ext_ok(output) {
+				return error('melt-render output must end in .mp4, .mkv, .mov, or .webm')
+			}
+			return ['melt', input, '-consumer', 'avformat:${output}']
+		}
 		else {
-			return error('unknown studio job adapter ${adapter} (valid: blender-render, ffmpeg-export)')
+			return error('unknown studio job adapter ${adapter} (valid: ${studio_adapter_ids.join(', ')})')
 		}
 	}
 }
 
 pub fn studio_validate_job_request(adapter string, input string, output string) ! {
 	if adapter.len == 0 {
-		return error('a studio job needs --adapter (blender-render or ffmpeg-export)')
+		return error('a studio job needs --adapter (${studio_adapter_ids.join(', ')})')
 	}
 	if input.len == 0 || output.len == 0 {
 		return error('a studio job needs --input and --output paths')
@@ -280,6 +323,15 @@ pub fn studio_job_run(job StudioJob) CommandResult {
 	argv := studio_adapter_argv(job.adapter, job.input, job.output) or {
 		return fail_result('studio jobs run', err.msg())
 	}
+	// A cancellation recorded after this job was loaded (by another
+	// horneroctl invocation) wins over starting the subprocess. This
+	// must be checked before persisting 'running', which would
+	// otherwise overwrite the cancellation.
+	fresh_pre := studio_load_job(job.id) or { job }
+	if fresh_pre.state == 'cancelled' {
+		return fail_result('studio jobs run',
+			'job ${job.id} was cancelled before execution started; nothing ran and no output was written')
+	}
 	mut running := job
 	running.state = 'running'
 	running.updated_unix = time.now().unix()
@@ -289,6 +341,15 @@ pub fn studio_job_run(job StudioJob) CommandResult {
 		args: argv[1..]
 	})
 	os.write_file(studio_job_log_file(job.id), rep.output) or {}
+	// Jobs run synchronously, so a cancellation recorded while the
+	// subprocess ran cannot have stopped it; honour it in the final
+	// state instead of overwriting it with a stale verdict.
+	fresh_post := studio_load_job(job.id) or { running }
+	if fresh_post.state == 'cancelled' {
+		return ok_result('studio jobs run',
+			'${job.id} was cancelled while running; the subprocess had already finished (exit ${rep.exit_code}) and any output at ${job.output} is not treated as a finished render. Cancellation is a state transition, not a process kill — see horneroctl studio jobs --help.',
+			studio_job_data(fresh_post))
+	}
 	mut done := running
 	done.state = if rep.ok { 'succeeded' } else { 'failed' }
 	done.updated_unix = time.now().unix()
@@ -347,7 +408,7 @@ pub fn studio_job_cancel_result(id string) CommandResult {
 	cancelled.updated_unix = time.now().unix()
 	studio_save_job(cancelled) or { return fail_result('studio jobs cancel', err.msg()) }
 	return ok_result('studio jobs cancel',
-		'Cancelled ${id}. No source file was touched; any partial output stays identified at ${job.output}.',
+		'Cancelled ${id}. Jobs run synchronously, so this records a state transition (a queued job will never run; a job already executing in another invocation finishes its subprocess but keeps the cancelled state). No source file was touched; any partial output stays identified at ${job.output}.',
 		studio_job_data(cancelled))
 }
 

@@ -124,3 +124,18 @@ fn test_studio_doctor_reports_selection_and_audio_default() {
 	assert audio.ok
 	assert audio.detail.contains('Balanced')
 }
+
+fn test_studio_creative_doctor_checks_are_optional_warns() {
+	checks := studio_creative_doctor_checks()
+	assert checks.len == 5
+	// Creative tooling is optional: absence warns, never fails, so the
+	// doctor verdict stays truthful on Desktop/Gaming machines.
+	for c in checks {
+		assert c.ok, c.name
+		assert c.name.starts_with('studio-creative-')
+		assert c.detail.len > 0
+	}
+	names := checks.map(it.name)
+	assert 'studio-creative-kdenlive' in names
+	assert 'studio-creative-melt' in names
+}
