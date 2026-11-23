@@ -531,6 +531,11 @@ pub fn collect_codex_usage_at(sessions_dir string) AgentUsageRecord {
 	r.has_tokens = true
 	r.sessions = sessions
 	r.api_calls = calls
+	// Presence only (contents never read): a recorded plan already
+	// implies the ChatGPT sign-in Codex wrote the rollout under.
+	if os.exists(os.join_path(os.dir(sessions_dir), 'auth.json')) {
+		r.auth_status = 'signed-in'
+	}
 	return r
 }
 
@@ -698,6 +703,10 @@ pub fn collect_opencode_usage_at(db_path string) AgentUsageRecord {
 	t := rows[0].vals
 	r.status = 'ok'
 	r.has_tokens = true
+	// Presence only: configured providers exist (contents never read).
+	if os.exists(os.join_path(resolve_paths().data_dir, 'opencode', 'auth.json')) {
+		r.auth_status = 'signed-in'
+	}
 	r.sessions = t[0].i64()
 	r.input_tokens = t[1].i64()
 	r.output_tokens = t[2].i64()
@@ -760,9 +769,9 @@ pub fn agent_usage_collect_opts(id string, force bool) []AgentUsageRecord {
 	for provider in ids {
 		mut r := collect(provider)
 		r.collected_at_unix = now
-		if r.status == 'ok' && r.auth_status == 'unknown' && r.provider != 'cursor' {
-			r.auth_status = 'signed-in'
-		}
+		// Historical activity alone never proves a current sign-in:
+		// auth_status is set only by an actual probe or an auth-file
+		// presence check inside each collector.
 		out << r
 	}
 	return out

@@ -136,7 +136,7 @@ pub fn agent_registry() []AgentSpec {
 			auth_detectable:  'file-presence'
 			auth_path:        '~/.config/Cursor/User/globalStorage/state.vscdb'
 			config_path:      '~/.cursor/cli-config.json'
-			home_env:         'CURSOR_STATE_DB'
+			home_env:         ''
 			instruction_path: 'AGENTS.md / .muse/rules (project tree)'
 			skills_path:      '~/.cursor/skills'
 			mcp_format:       'JSON mcp servers in ~/.muse/mcp.json (editor-owned)'

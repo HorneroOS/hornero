@@ -1,5 +1,6 @@
 module hornero_core
 
+import crypto.sha256
 import db.sqlite
 import net.http
 import os
@@ -54,6 +55,48 @@ fn agent_usage_http(method http.Method, url string, body string, headers map[str
 	}
 }
 
+// Cache identity: every cached payload is bound to the source that
+// produced it, so switching an account (another CLAUDE_CONFIG_DIR, a
+// re-login, a different Cursor state DB) can never attach one
+// account's quota to another's record. The fingerprint is stat-only
+// (path + mtime + size of the sign-in store) — no credential content
+// is read to compute it, and no secret enters a cache key.
+fn agent_usage_stat_fp(path string) string {
+	if !os.exists(path) {
+		return '${path}:missing'
+	}
+	st := os.stat(path) or { return '${path}:unstatable' }
+	return '${path}:${st.mtime}:${st.size}'
+}
+
+fn agent_usage_fp(parts []string) string {
+	return sha256.hexhash(parts.join('|'))[..16]
+}
+
+fn agent_usage_claude_cache_name() string {
+	cred := os.join_path(agent_usage_claude_dir(), '.credentials.json')
+	return 'claude-usage-${agent_usage_fp([agent_usage_stat_fp(cred)])}'
+}
+
+fn agent_usage_muse_cache_name() string {
+	return 'muse-usage-${agent_usage_fp([agent_usage_muse_sessions(), find_on_path('muse')])}'
+}
+
+fn agent_usage_cursor_cache_name(kind string) string {
+	return 'cursor-${kind}-${agent_usage_fp([agent_usage_stat_fp(agent_usage_cursor_db())])}'
+}
+
+fn agent_usage_source_fingerprint() string {
+	codex_env := os.getenv('CODEX_HOME')
+	codex_home := if codex_env.len > 0 { codex_env } else { os.join_path(os.home_dir(), '.codex') }
+	return agent_usage_fp([
+		agent_usage_stat_fp(os.join_path(agent_usage_claude_dir(), '.credentials.json')),
+		agent_usage_stat_fp(agent_usage_cursor_db()),
+		agent_usage_stat_fp(os.join_path(codex_home, 'auth.json')),
+		agent_usage_muse_sessions(),
+	])
+}
+
 fn agent_usage_quota_cache_dir() string {
 	return os.join_path(resolve_paths().cache_dir, 'hornero', 'agent-usage')
 }
@@ -83,7 +126,7 @@ fn agent_usage_quota_cache_write(name string, payload string) {
 // --- whole-result cache: one collection for every UI surface ---
 
 fn agent_usage_records_cache_name(id string) string {
-	return 'records-${if id.len > 0 { id } else { 'all' }}'
+	return 'records-${if id.len > 0 { id } else { 'all' }}-${agent_usage_source_fingerprint()}'
 }
 
 fn agent_usage_records_cache_store(id string, res CommandResult) {
@@ -220,7 +263,7 @@ pub fn collect_muse_usage_full(force bool) AgentUsageRecord {
 		return r
 	}
 	if !force {
-		cached, fetched := agent_usage_quota_cache_read('muse-usage')
+		cached, fetched := agent_usage_quota_cache_read(agent_usage_muse_cache_name())
 		if cached.len > 0 && time.now().unix() - fetched < agent_usage_quota_cache_ttl_sec {
 			if agent_usage_apply_muse_quota(mut r, cached) {
 				r.quota_at_unix = fetched
@@ -233,12 +276,13 @@ pub fn collect_muse_usage_full(force bool) AgentUsageRecord {
 		args:        ['usage', '--json']
 		timeout_sec: 20
 	})
-	if rep.ok && rep.output.len > 0 {
-		agent_usage_quota_cache_write('muse-usage', rep.output)
-		agent_usage_apply_muse_quota(mut r, rep.output)
+	if rep.ok && rep.output.len > 0 && agent_usage_apply_muse_quota(mut r, rep.output) {
+		// Cache only payloads that actually mapped to windows, so an
+		// empty/garbled 200 can never replace last-known-good quota.
+		agent_usage_quota_cache_write(agent_usage_muse_cache_name(), rep.output)
 		return r
 	}
-	cached, fetched := agent_usage_quota_cache_read('muse-usage')
+	cached, fetched := agent_usage_quota_cache_read(agent_usage_muse_cache_name())
 	if cached.len > 0 && time.now().unix() - fetched < agent_usage_quota_stale_max_sec {
 		if agent_usage_apply_muse_quota(mut r, cached) {
 			r.quota_at_unix = fetched
@@ -349,21 +393,28 @@ pub fn collect_claude_usage_full(force bool) AgentUsageRecord {
 		r.note = 'Sign in with `claude auth login` to see subscription quota.'
 		return r
 	}
+	// The stored sign-in names the plan even when its token lapsed;
+	// keep it visible beside the authorization-needed state.
+	stored_plan := agent_usage_claude_plan_label(json_str(oauth, 'subscriptionType'),
+		json_str(oauth, 'rateLimitTier'))
+	if stored_plan.len > 0 {
+		r.plan = stored_plan
+		r.billing = 'subscription'
+	}
 	expires_ms := agent_usage_i64(oauth, 'expiresAt')
 	if expires_ms > 0 && expires_ms < time.now().unix() * 1000 {
 		r.auth_status = 'authorization-needed'
 		r.note = 'Claude Code sign-in expired; run `claude auth login`. Local activity shown.'
 		return r
 	}
-	plan := agent_usage_claude_plan_label(json_str(oauth, 'subscriptionType'),
-		json_str(oauth, 'rateLimitTier'))
+	plan := stored_plan
 	if plan.len > 0 {
 		r.plan = plan
 		r.billing = 'subscription'
 		r.auth_status = 'signed-in'
 	}
 	if !force {
-		cached, fetched := agent_usage_quota_cache_read('claude-usage')
+		cached, fetched := agent_usage_quota_cache_read(agent_usage_claude_cache_name())
 		if cached.len > 0 && time.now().unix() - fetched < agent_usage_quota_cache_ttl_sec {
 			if agent_usage_apply_claude_quota(mut r, cached) {
 				r.quota_at_unix = fetched
@@ -375,9 +426,8 @@ pub fn collect_claude_usage_full(force bool) AgentUsageRecord {
 		'Authorization':  'Bearer ${token}'
 		'anthropic-beta': 'oauth-2025-04-20'
 	})
-	if !resp.failed && resp.status == 200 {
-		agent_usage_quota_cache_write('claude-usage', resp.body)
-		agent_usage_apply_claude_quota(mut r, resp.body)
+	if !resp.failed && resp.status == 200 && agent_usage_apply_claude_quota(mut r, resp.body) {
+		agent_usage_quota_cache_write(agent_usage_claude_cache_name(), resp.body)
 		return r
 	}
 	if resp.status == 401 || resp.status == 403 {
@@ -385,7 +435,7 @@ pub fn collect_claude_usage_full(force bool) AgentUsageRecord {
 		r.note = 'Anthropic refused the stored sign-in; run `claude auth login`.'
 		return r
 	}
-	cached, fetched := agent_usage_quota_cache_read('claude-usage')
+	cached, fetched := agent_usage_quota_cache_read(agent_usage_claude_cache_name())
 	if cached.len > 0 && time.now().unix() - fetched < agent_usage_quota_stale_max_sec {
 		if agent_usage_apply_claude_quota(mut r, cached) {
 			r.quota_at_unix = fetched
@@ -472,9 +522,9 @@ pub fn agent_usage_apply_cursor_usage(mut r AgentUsageRecord, period_raw string,
 	}
 	spend := agent_usage_child(period, 'spendLimitUsage')
 	limit_cents := agent_usage_f64(spend, 'individualLimit')
-	if limit_cents > 0 {
+	if limit_cents > 0 && ('individualUsed' in spend || 'individualRemaining' in spend) {
 		mut used_cents := agent_usage_f64(spend, 'individualUsed')
-		if 'individualUsed' !in spend && 'individualRemaining' in spend {
+		if 'individualUsed' !in spend {
 			used_cents = limit_cents - agent_usage_f64(spend, 'individualRemaining')
 		}
 		if used_cents >= 0 {
@@ -540,6 +590,32 @@ pub fn agent_usage_apply_cursor_events(mut r AgentUsageRecord, raw string) bool 
 	return true
 }
 
+// agent_usage_cursor_activity attaches billing-cycle token activity,
+// live when the dashboard answers and from the events cache when it
+// does not — so quota-cache hits keep their activity instead of
+// degrading to "no token activity reported" minutes later.
+fn agent_usage_cursor_activity(mut r AgentUsageRecord, token string, period_raw string) {
+	period := agent_usage_map(json2.decode[json2.Any](period_raw) or { json2.Any('') })
+	start_ms := agent_usage_ms(period, 'billingCycleStart') * 1000
+	end_ms := time.now().unix() * 1000
+	if start_ms <= 0 || start_ms >= end_ms {
+		return
+	}
+	events := agent_usage_cursor_call(token, 'GetAggregatedUsageEvents',
+		'{"startDate":"${start_ms}","endDate":"${end_ms}"}')
+	if !events.failed && events.status == 200 {
+		if agent_usage_apply_cursor_events(mut r, events.body) {
+			agent_usage_quota_cache_write(agent_usage_cursor_cache_name('events'),
+				events.body)
+		}
+		return
+	}
+	cached, fetched := agent_usage_quota_cache_read(agent_usage_cursor_cache_name('events'))
+	if cached.len > 0 && time.now().unix() - fetched < agent_usage_quota_stale_max_sec {
+		agent_usage_apply_cursor_events(mut r, cached)
+	}
+}
+
 pub fn collect_cursor_usage(force bool) AgentUsageRecord {
 	mut r := agent_usage_base_ex('cursor', 'cursor', 'Cursor', 'cursor-dashboard-rpc',
 		'account')
@@ -561,12 +637,13 @@ pub fn collect_cursor_usage(force bool) AgentUsageRecord {
 		r.auth_status = 'signed-in'
 	}
 	if !force {
-		period, fetched := agent_usage_quota_cache_read('cursor-period')
+		period, fetched := agent_usage_quota_cache_read(agent_usage_cursor_cache_name('period'))
 		if period.len > 0 && time.now().unix() - fetched < agent_usage_quota_cache_ttl_sec {
-			plan, _ := agent_usage_quota_cache_read('cursor-plan')
+			plan, _ := agent_usage_quota_cache_read(agent_usage_cursor_cache_name('plan'))
 			if agent_usage_apply_cursor_usage(mut r, period, plan) {
 				r.quota_at_unix = fetched
 				r.measured_at_unix = fetched
+				agent_usage_cursor_activity(mut r, token, period)
 				return r
 			}
 		}
@@ -578,12 +655,13 @@ pub fn collect_cursor_usage(force bool) AgentUsageRecord {
 		return r
 	}
 	if period_resp.failed || period_resp.status != 200 {
-		period, fetched := agent_usage_quota_cache_read('cursor-period')
+		period, fetched := agent_usage_quota_cache_read(agent_usage_cursor_cache_name('period'))
 		if period.len > 0 && time.now().unix() - fetched < agent_usage_quota_stale_max_sec {
-			plan, _ := agent_usage_quota_cache_read('cursor-plan')
+			plan, _ := agent_usage_quota_cache_read(agent_usage_cursor_cache_name('plan'))
 			if agent_usage_apply_cursor_usage(mut r, period, plan) {
 				r.quota_at_unix = fetched
 				r.measured_at_unix = fetched
+				agent_usage_cursor_activity(mut r, token, period)
 				r.note = 'Showing the last known Cursor usage; the dashboard did not answer just now.'
 				return r
 			}
@@ -598,25 +676,16 @@ pub fn collect_cursor_usage(force bool) AgentUsageRecord {
 	}
 	plan_resp := agent_usage_cursor_call(token, 'GetPlanInfo', '{}')
 	plan_raw := if !plan_resp.failed && plan_resp.status == 200 { plan_resp.body } else { '' }
-	agent_usage_quota_cache_write('cursor-period', period_resp.body)
-	if plan_raw.len > 0 {
-		agent_usage_quota_cache_write('cursor-plan', plan_raw)
-	}
 	if !agent_usage_apply_cursor_usage(mut r, period_resp.body, plan_raw) {
 		r.status = 'error'
 		r.errors << "Cursor's dashboard sent usage in a form Hornero does not read yet."
 		return r
 	}
-	// Account token activity for the current billing cycle (one call).
-	period := agent_usage_map(json2.decode[json2.Any](period_resp.body) or { json2.Any('') })
-	start_ms := agent_usage_ms(period, 'billingCycleStart') * 1000
-	end_ms := time.now().unix() * 1000
-	if start_ms > 0 && start_ms < end_ms {
-		events := agent_usage_cursor_call(token, 'GetAggregatedUsageEvents',
-			'{"startDate":"${start_ms}","endDate":"${end_ms}"}')
-		if !events.failed && events.status == 200 {
-			agent_usage_apply_cursor_events(mut r, events.body)
-		}
+	// Cache only payloads that mapped successfully.
+	agent_usage_quota_cache_write(agent_usage_cursor_cache_name('period'), period_resp.body)
+	if plan_raw.len > 0 {
+		agent_usage_quota_cache_write(agent_usage_cursor_cache_name('plan'), plan_raw)
 	}
+	agent_usage_cursor_activity(mut r, token, period_resp.body)
 	return r
 }
