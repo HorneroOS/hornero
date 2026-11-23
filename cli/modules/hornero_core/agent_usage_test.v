@@ -79,6 +79,17 @@ fn test_collect_codex_usage_fixture() {
 	assert missing.errors.len > 0
 }
 
+fn test_daily_encode_caps_at_ninety_days() {
+	mut daily := map[string]i64{}
+	for i in 0 .. 100 {
+		daily['2026-01-${(i % 28) + 1:02d}-${i:03d}'] = i64(i)
+	}
+	// 100 distinct keys sort lexicographically; only the last 90 stay.
+	encoded := agent_usage_daily_encode(daily)
+	assert encoded.split(',').len == 90
+	assert agent_usage_daily_encode(map[string]i64{}) == ''
+}
+
 fn test_collect_claude_usage_fixture() {
 	dir := agent_usage_tmp('claude')
 	defer {

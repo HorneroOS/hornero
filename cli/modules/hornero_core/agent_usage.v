@@ -135,7 +135,7 @@ fn agent_usage_base(provider string, source string) AgentUsageRecord {
 }
 
 // agent_usage_daily_encode renders real per-day token buckets as
-// 'YYYY-MM-DD:tokens,...' ascending, keeping the last 30 days. Only
+// 'YYYY-MM-DD:tokens,...' ascending, keeping the last 90 days. Only
 // collectors whose source carries genuine timestamps fill it; the UI
 // charts it verbatim and never interpolates missing days.
 fn agent_usage_daily_encode(daily map[string]i64) string {
@@ -144,8 +144,8 @@ fn agent_usage_daily_encode(daily map[string]i64) string {
 	}
 	mut days := daily.keys()
 	days.sort()
-	if days.len > 30 {
-		days = days[days.len - 30..]
+	if days.len > 90 {
+		days = days[days.len - 90..]
 	}
 	mut parts := []string{cap: days.len}
 	for d in days {

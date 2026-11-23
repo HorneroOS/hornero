@@ -50,7 +50,7 @@ standard envelope; `data.records` is the JSON array below and flat
 | `measuredAtUnix` | Local source mtime (seconds), omitted when unknown |
 | `collectedAtUnix` / `quotaCollectedAtUnix` | When the record / its quota windows were fetched |
 | token fields, `sessions`, `apiCalls`, `models` | As in v1; present only when measured |
-| `recentDays` | Real per-day token buckets `YYYY-MM-DD:tokens,...` (UTC, last 30 days, input+output), only when the source carries genuine timestamps (Codex rollouts, Muse `recorded_at`, Claude `dailyModelTokens`, OpenCode `time_created`); omitted otherwise — never interpolated |
+| `recentDays` | Real per-day token buckets `YYYY-MM-DD:tokens,...` (UTC, last 90 days, input+output), only when the source carries genuine timestamps (Codex rollouts, Muse `recorded_at`, Claude `dailyModelTokens`, OpenCode `time_created`); omitted otherwise — never interpolated |
 | `quota` | `unknown` unless the provider reported windows (`available`); **never a number, never 0%** |
 | `quotaWindows[]` | `{id, label, usedPercent, metricKind: "official", windowMinutes?, resetsAtUnix?, note?}` — each window independent (5-hour, weekly, monthly, model-scoped, on-demand) |
 | `quotaUsedPercent`, `quotaWindowMinutes`, `quotaResetsAtUnix` | v1 legacy mirror of the first window |
