@@ -98,6 +98,7 @@ pub mut:
 	sessions             i64    // -1 = unknown
 	api_calls            i64    // -1 = unknown
 	models               string // 'name:tokens' joined by ',', '' = unknown
+	recent_days          string // 'YYYY-MM-DD:tokens' joined by ',', '' = source has no per-day data
 	windows              []AgentUsageWindow
 	quota_used_percent   f64 // v1 legacy mirror of windows[0]
 	quota_window_minutes i64
@@ -131,6 +132,26 @@ fn agent_usage_base_ex(provider string, harness string, name string, source stri
 // namespace default to the provider id and scope to local activity.
 fn agent_usage_base(provider string, source string) AgentUsageRecord {
 	return agent_usage_base_ex(provider, provider, provider, source, 'local')
+}
+
+// agent_usage_daily_encode renders real per-day token buckets as
+// 'YYYY-MM-DD:tokens,...' ascending, keeping the last 30 days. Only
+// collectors whose source carries genuine timestamps fill it; the UI
+// charts it verbatim and never interpolates missing days.
+fn agent_usage_daily_encode(daily map[string]i64) string {
+	if daily.len == 0 {
+		return ''
+	}
+	mut days := daily.keys()
+	days.sort()
+	if days.len > 30 {
+		days = days[days.len - 30..]
+	}
+	mut parts := []string{cap: days.len}
+	for d in days {
+		parts << '${d}:${daily[d]}'
+	}
+	return parts.join(',')
 }
 
 // agent_usage_sync_legacy mirrors the first quota window into the v1
@@ -227,6 +248,9 @@ pub fn agent_usage_record_json(r AgentUsageRecord) map[string]json2.Any {
 	}
 	if r.models.len > 0 {
 		m['models'] = r.models
+	}
+	if r.recent_days.len > 0 {
+		m['recentDays'] = r.recent_days
 	}
 	m['quota'] = if r.has_quota { 'available' } else { 'unknown' }
 	if r.has_quota {
@@ -437,6 +461,7 @@ pub fn collect_codex_usage_at(sessions_dir string) AgentUsageRecord {
 	mut calls := i64(0)
 	mut parse_errors := 0
 	mut latest_ts := ''
+	mut daily := map[string]i64{}
 	for f in files {
 		lines := os.read_lines(f) or {
 			parse_errors++
@@ -463,12 +488,17 @@ pub fn collect_codex_usage_at(sessions_dir string) AgentUsageRecord {
 			}
 			file_calls++
 			calls++
-			r.input_tokens += agent_usage_i64(last, 'input_tokens')
-			r.output_tokens += agent_usage_i64(last, 'output_tokens')
+			inp_tok := agent_usage_i64(last, 'input_tokens')
+			out_tok := agent_usage_i64(last, 'output_tokens')
+			r.input_tokens += inp_tok
+			r.output_tokens += out_tok
 			r.cache_read_tokens += agent_usage_i64(last, 'cached_input_tokens')
 			r.cache_write_tokens += agent_usage_i64(last, 'cache_write_input_tokens')
 			r.reasoning_tokens += agent_usage_i64(last, 'reasoning_output_tokens')
 			ts := json_str(root, 'timestamp')
+			if ts.len >= 10 {
+				daily[ts[..10]] += inp_tok + out_tok
+			}
 			if ts > latest_ts {
 				latest_ts = ts
 				if r.period_start.len == 0 {
@@ -529,6 +559,7 @@ pub fn collect_codex_usage_at(sessions_dir string) AgentUsageRecord {
 	}
 	r.status = 'ok'
 	r.has_tokens = true
+	r.recent_days = agent_usage_daily_encode(daily)
 	r.sessions = sessions
 	r.api_calls = calls
 	// Presence only (contents never read): a recorded plan already
@@ -585,6 +616,26 @@ pub fn collect_claude_usage_at(claude_dir string) AgentUsageRecord {
 	}
 	r.period_start = json_str(root, 'firstSessionDate')
 	r.period_end = json_str(root, 'lastComputedDate')
+	// Real per-day buckets the CLI itself computed (dailyModelTokens).
+	if 'dailyModelTokens' in root && root['dailyModelTokens'] is []json2.Any {
+		mut daily := map[string]i64{}
+		for any_entry in root['dailyModelTokens'] as []json2.Any {
+			entry := agent_usage_map(any_entry)
+			date := json_str(entry, 'date')
+			if date.len != 10 {
+				continue
+			}
+			by_model := agent_usage_child(entry, 'tokensByModel')
+			mut sum := i64(0)
+			for _, v in by_model {
+				sum += v.i64()
+			}
+			if sum > 0 {
+				daily[date] += sum
+			}
+		}
+		r.recent_days = agent_usage_daily_encode(daily)
+	}
 	return r
 }
 
@@ -606,6 +657,7 @@ pub fn collect_muse_usage_at(sessions_dir string) AgentUsageRecord {
 	}
 	mut seen_ids := map[string]bool{}
 	mut session_ids := map[string]bool{}
+	mut daily := map[string]i64{}
 	mut calls := i64(0)
 	mut parse_errors := 0
 	for f in files {
@@ -644,8 +696,16 @@ pub fn collect_muse_usage_at(sessions_dir string) AgentUsageRecord {
 			}
 			calls++
 			file_used = true
-			r.input_tokens += agent_usage_i64(quantity, 'input_tokens')
-			r.output_tokens += agent_usage_i64(quantity, 'output_tokens')
+			inp_tok := agent_usage_i64(quantity, 'input_tokens')
+			out_tok := agent_usage_i64(quantity, 'output_tokens')
+			r.input_tokens += inp_tok
+			r.output_tokens += out_tok
+			// Envelope recorded_at is microseconds since epoch.
+			recorded_us := agent_usage_i64(root, 'recorded_at')
+			if recorded_us > 0 {
+				day := time.unix(recorded_us / 1000000).local_to_utc().custom_format('YYYY-MM-DD')
+				daily[day] += inp_tok + out_tok
+			}
 			r.cache_read_tokens += agent_usage_i64(quantity, 'cached_tokens')
 			r.reasoning_tokens += agent_usage_i64(quantity, 'reasoning_tokens')
 		}
@@ -666,6 +726,7 @@ pub fn collect_muse_usage_at(sessions_dir string) AgentUsageRecord {
 	}
 	r.status = 'ok'
 	r.has_tokens = true
+	r.recent_days = agent_usage_daily_encode(daily)
 	r.sessions = i64(session_ids.len)
 	r.api_calls = calls
 	return r
@@ -713,6 +774,20 @@ pub fn collect_opencode_usage_at(db_path string) AgentUsageRecord {
 	r.reasoning_tokens = t[3].i64()
 	r.cache_read_tokens = t[4].i64()
 	r.cache_write_tokens = t[5].i64()
+	// Per-day buckets from session creation times; older schemas
+	// without time_created simply have no daily series.
+	day_rows := db.exec("SELECT date(time_created/1000,'unixepoch'), COALESCE(SUM(tokens_input+tokens_output),0) FROM session WHERE time_created > 0 GROUP BY 1") or {
+		[]sqlite.Row{}
+	}
+	if day_rows.len > 0 {
+		mut daily := map[string]i64{}
+		for row in day_rows {
+			if row.vals.len >= 2 && row.vals[0].len == 10 {
+				daily[row.vals[0]] = row.vals[1].i64()
+			}
+		}
+		r.recent_days = agent_usage_daily_encode(daily)
+	}
 	return r
 }
 

@@ -67,6 +67,7 @@ fn test_collect_codex_usage_fixture() {
 	assert r.quota_resets_at_unix == 1800000000
 	assert r.quota_window_minutes == 300
 	assert r.balance == '3.00'
+	assert r.recent_days == '2026-11-13:55'
 	assert r.period_start == '2026-11-13T01:00:00Z'
 	assert r.period_end == '2026-11-13T02:00:00Z'
 	encoded := agent_usage_encode([r])
@@ -83,7 +84,7 @@ fn test_collect_claude_usage_fixture() {
 	defer {
 		os.rmdir_all(dir) or {}
 	}
-	cache := '{"firstSessionDate":"2026-09-01T00:00:00Z","lastComputedDate":"2026-11-10","totalSessions":7,"modelUsage":{"model-a":{"inputTokens":100,"outputTokens":20,"cacheReadInputTokens":9,"cacheCreationInputTokens":2,"costUSD":0},"model-b":{"inputTokens":5,"outputTokens":1,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"costUSD":0}}}'
+	cache := '{"firstSessionDate":"2026-09-01T00:00:00Z","lastComputedDate":"2026-11-10","totalSessions":7,"dailyModelTokens":[{"date":"2026-11-09","tokensByModel":{"model-a":100,"model-b":6}},{"date":"2026-11-10","tokensByModel":{"model-a":20}}],"modelUsage":{"model-a":{"inputTokens":100,"outputTokens":20,"cacheReadInputTokens":9,"cacheCreationInputTokens":2,"costUSD":0},"model-b":{"inputTokens":5,"outputTokens":1,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"costUSD":0}}}'
 	os.write_file(os.join_path(dir, 'stats-cache.json'), cache) or { panic(err) }
 	r := collect_claude_usage_at(dir)
 	assert r.status == 'ok'
@@ -93,6 +94,7 @@ fn test_collect_claude_usage_fixture() {
 	assert r.cache_write_tokens == 2
 	assert r.sessions == 7
 	assert r.models == 'model-a:120,model-b:6'
+	assert r.recent_days == '2026-11-09:106,2026-11-10:20'
 	assert !r.has_quota
 	assert !agent_usage_encode([r]).contains('costUSD')
 	bad_dir := agent_usage_tmp('claude-bad')
@@ -124,6 +126,8 @@ fn test_collect_muse_usage_fixture() {
 	assert r.cache_read_tokens == 3
 	assert r.sessions == 1
 	assert r.api_calls == 2
+	// recorded_at (µs) buckets deduped usage by UTC day.
+	assert r.recent_days == '2026-11-12:48'
 	// Muse quota needs its key endpoint + credential: never probed here.
 	assert !r.has_quota
 	missing := collect_muse_usage_at(os.join_path(dir, 'nope'))
@@ -137,11 +141,11 @@ fn test_collect_opencode_usage_fixture() {
 	}
 	db_path := os.join_path(dir, 'opencode.db')
 	mut db := sqlite.connect(db_path) or { panic(err) }
-	db.exec('CREATE TABLE session (id TEXT, cost REAL, tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER, tokens_cache_read INTEGER, tokens_cache_write INTEGER)') or {
+	db.exec('CREATE TABLE session (id TEXT, cost REAL, tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER, tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER)') or {
 		panic(err)
 	}
-	db.exec("INSERT INTO session VALUES ('a', 9.99, 100, 10, 1, 4, 2)") or { panic(err) }
-	db.exec("INSERT INTO session VALUES ('b', 9.99, 50, 5, 0, 0, 0)") or { panic(err) }
+	db.exec("INSERT INTO session VALUES ('a', 9.99, 100, 10, 1, 4, 2, 1794462645000)") or { panic(err) }
+	db.exec("INSERT INTO session VALUES ('b', 9.99, 50, 5, 0, 0, 0, 1794549045000)") or { panic(err) }
 	db.close()
 	r := collect_opencode_usage_at(db_path)
 	assert r.status == 'ok'
@@ -150,6 +154,7 @@ fn test_collect_opencode_usage_fixture() {
 	assert r.output_tokens == 15
 	assert r.reasoning_tokens == 1
 	assert r.cache_read_tokens == 4
+	assert r.recent_days == '2026-11-12:110,2026-11-13:55'
 	assert !agent_usage_encode([r]).contains('9.99')
 	missing := collect_opencode_usage_at(os.join_path(dir, 'nope.db'))
 	assert missing.status == 'unavailable'
