@@ -294,6 +294,29 @@ fn test_dispatch_completion() {
 	assert dispatch(['horneroctl', 'completion', 'powershell']) == 1
 }
 
+// Completions must name exactly the dispatchable top-level commands: a
+// missing entry hides a real command, an extra one completes a phantom.
+fn test_completions_match_known_commands() {
+	bash_words := bash_completion().split('cmds="')[1].split('"')[0].split(' ')
+	zsh_words := zsh_completion().split('cmds=(')[1].split(')')[0].split(' ')
+	for cmd in known_commands {
+		assert cmd in bash_words, 'bash completion misses ${cmd}'
+		assert cmd in zsh_words, 'zsh completion misses ${cmd}'
+		assert fish_completion().contains('-a ${cmd} '), 'fish completion misses ${cmd}'
+	}
+	assert bash_words.len == known_commands.len, 'bash completion has phantom commands'
+	assert zsh_words.len == known_commands.len, 'zsh completion has phantom commands'
+}
+
+fn test_dispatch_unknown_command_json_envelope() {
+	// Usage-class errors exit 2 (same as an unknown flag); JSON mode still
+	// gets the structured envelope instead of plain stderr.
+	assert dispatch(['horneroctl', '--json', 'frobnicate']) == 2
+	assert dispatch(['horneroctl', 'version', 'extra']) == 2
+	assert dispatch(['horneroctl', 'help', 'studio', 'mode']) == 0
+	assert command_help('studio mode').len > 0
+}
+
 fn test_every_help_has_examples() {
 	for cmd in ['version', 'doctor', 'shell', 'shell preset', 'shell lock-process', 'appearance',
 		'appearance theme', 'appearance chromatic', 'appearance scheme', 'appearance colors',

@@ -130,10 +130,12 @@ pub fn run_doctor() []DoctorCheck {
 			detail: cfg
 		}
 	} else {
+		// No user shell.json is a supported state, not a failure: the shell
+		// runs on its built-in defaults until the user changes a setting.
 		checks << DoctorCheck{
 			name:   'shell-config'
-			ok:     false
-			detail: '${cfg} not found (shell will use built-in defaults)'
+			ok:     true
+			detail: '${cfg} not found; shell will use built-in defaults'
 		}
 	}
 	checks << appearance_doctor_checks()

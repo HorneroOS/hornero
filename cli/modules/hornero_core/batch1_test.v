@@ -556,10 +556,12 @@ fn test_backup_list_reads_materialized_archives() {
 }
 
 fn test_backup_list_missing_dir_fails_cleanly() {
+	// A missing backup directory is the normal fresh-install state: the
+	// first `backup create` makes it, so listing reports zero entries.
 	os.setenv('HORNERO_BACKUP_DIR', '/nonexistent-backups-hornero-test', true)
 	r := backup_list_report()
-	assert !r.ok
-	assert r.message.contains('HORNERO_BACKUP_DIR')
+	assert r.ok
+	assert r.data['count'] == '0'
 	os.unsetenv('HORNERO_BACKUP_DIR')
 }
 

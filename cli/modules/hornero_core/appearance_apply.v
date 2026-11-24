@@ -621,8 +621,18 @@ pub fn appearance_set_wallpaper_native(path string, dry_run bool) CommandResult 
 pub fn appearance_sync_native(dry_run bool) CommandResult {
 	migration := plan_legacy_migration()
 	sel := resolve_signal_selection()
-	theme := load_signal_theme(sel.id) or {
-		return fail_result('appearance sync', 'selected theme ${sel.id} (${sel.source}) is not usable: ${err.msg()}\nRun: horneroctl appearance theme apply ${signal_default_theme_id} --yes')
+	// The chromatic live scheme IS its own theme: it is generated
+	// from the wallpaper by the chromatic engine, not loaded from a
+	// curated pack, so sync must rewrite outputs from the live
+	// scheme instead of failing with "Theme not found".
+	theme := if sel.id == chromatic_theme_id {
+		read_signal_scheme() or {
+			return fail_result('appearance sync', 'live chromatic scheme is not usable: ${err.msg()}\nRun: horneroctl appearance chromatic status')
+		}
+	} else {
+		load_signal_theme(sel.id) or {
+			return fail_result('appearance sync', 'selected theme ${sel.id} (${sel.source}) is not usable: ${err.msg()}\nRun: horneroctl appearance theme apply ${signal_default_theme_id} --yes')
+		}
 	}
 	if dry_run {
 		mut lines := []string{}

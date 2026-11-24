@@ -48,6 +48,7 @@ pub fn render_error(err hornero_core.DomainError, mode hornero_core.RenderMode) 
 pub fn error_json(err hornero_core.DomainError) string {
 	return json2.encode({
 		'ok':      json2.Any(false)
+		'command': json2.Any(err.code.split('.')[0])
 		'code':    json2.Any(err.code)
 		'message': json2.Any(err.message)
 	},

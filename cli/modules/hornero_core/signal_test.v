@@ -432,6 +432,23 @@ fn test_appearance_sync_migrates_and_materializes_default() {
 	sg_teardown()
 }
 
+fn test_appearance_sync_accepts_live_chromatic_scheme() {
+	sg_setup()
+	base := sg_fixture('hornero-signal-night')
+	t := SignalTheme{
+		id:       'hornero-chromatic'
+		name:     base.name
+		mode:     base.mode
+		palette:  base.palette
+		terminal: base.terminal
+	}
+	write_signal_scheme(t) or { panic(err) }
+	dry := appearance_sync_native(true)
+	assert dry.ok, dry.message
+	assert dry.data['theme'] == 'hornero-chromatic'
+	sg_teardown()
+}
+
 fn test_missing_ibm_plex_families() {
 	sg_setup()
 	fonts := '${sg_root}/fonts'
