@@ -39,8 +39,8 @@ fn test_proton_builds_scan_and_wording() {
 	ok := proton_check(true, builds)
 	assert ok.ok && !ok.warn
 	assert ok.detail.contains('not a per-game compatibility claim')
-	none := proton_check(true, [])
-	assert none.ok && none.warn
+	missing := proton_check(true, [])
+	assert missing.ok && missing.warn
 	assert proton_check(false, []).warn
 	os.rmdir_all(extras_root) or {}
 }

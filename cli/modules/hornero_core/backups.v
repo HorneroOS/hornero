@@ -26,10 +26,16 @@ pub:
 }
 
 // list_backups returns Hornero configuration archives sorted by name.
+// A missing backup directory is a normal state on a fresh install (the
+// first `backup create` makes it), so listing reports zero entries there;
+// a path that exists but is not a directory is a real error.
 pub fn list_backups() ![]BackupEntry {
 	dir := resolve_backup_dir()
+	if !os.exists(dir) {
+		return []BackupEntry{}
+	}
 	if !os.is_dir(dir) {
-		return error('no backups at ${dir}. Set HORNERO_BACKUP_DIR.\nExample: horneroctl backup list --json')
+		return error('${dir} is not a directory. Set HORNERO_BACKUP_DIR.\nExample: horneroctl backup list --json')
 	}
 	files := os.ls(dir)!
 	mut names := []string{}

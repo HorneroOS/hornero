@@ -25,8 +25,9 @@ pub:
 // scope first, then the packaged system copy. Override with
 // HORNERO_REFRESH_HYPR_HELPER.
 pub fn resolve_refresh_hypr_helper() string {
-	env := os.getenv('HORNERO_REFRESH_HYPR_HELPER')
-	if env.len > 0 {
+	// An explicitly set override wins, including an empty value, which
+	// disables the helper lookup entirely (used by tests and opt-outs).
+	if env := os.getenv_opt('HORNERO_REFRESH_HYPR_HELPER') {
 		return env
 	}
 	user := os.join_path(os.home_dir(), '.local', 'lib', 'hornero', 'refresh-hypr-entrypoint.py')

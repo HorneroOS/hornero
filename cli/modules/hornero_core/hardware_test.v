@@ -341,10 +341,13 @@ fn test_hw_keys_opens_hornero_system_settings_over_shell_ipc() {
 	os.unsetenv('HORNERO_BYPASS_QUICKSHELL')
 	preview := keyboard_keys_report(KeyboardKeysOptions{ dry_run: true })
 	assert preview.ok
-	assert preview.data['command_line'].contains('ipc call controlCenter open system')
+	// The keybinding overlay is tried first; shells without it fall back
+	// to the System settings pane.
+	assert preview.data['command_line'].contains('ipc call keybinds toggle')
 	actual := keyboard_keys_report(KeyboardKeysOptions{})
 	assert actual.ok
-	assert actual.message.contains('ipc call controlCenter open system')
+	assert actual.data['command_line'].contains('ipc call keybinds toggle')
+	assert actual.message.contains('keybinding overlay toggled')
 	hw_test_restore_env(saved)
 }
 

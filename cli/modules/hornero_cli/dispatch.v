@@ -47,7 +47,10 @@ pub fn dispatch(args []string) int {
 	first := rest[0]
 	if first in ['-h', '--help', 'help'] {
 		if rest.len >= 2 {
-			h := command_help(rest[1])
+			mut h := if rest.len >= 3 { command_help(rest[1] + ' ' + rest[2]) } else { '' }
+			if h.len == 0 {
+				h = command_help(rest[1])
+			}
 			if h.len == 0 {
 				eprintln_human("Unknown command: ${rest[1]}\nRun 'horneroctl help' for usage.")
 				return 1
@@ -59,6 +62,10 @@ pub fn dispatch(args []string) int {
 		return 0
 	}
 	if first in ['-V', '--version', 'version'] {
+		extra := rest[1..].filter(it !in ['--json', '--quiet', '-h', '--help'])
+		if extra.len > 0 {
+			return render_error(hornero_core.err_usage('version.usage', 'unexpected argument: ${extra[0]}.\nExample: horneroctl version'), mode)
+		}
 		if wants_help(rest) {
 			print_human(command_help('version'))
 			return 0
@@ -69,6 +76,9 @@ pub fn dispatch(args []string) int {
 		if first.starts_with('-') {
 			return render_error(hornero_core.err_usage('flag.unknown', "unknown flag: ${first}.\nRun 'horneroctl --help' for usage."),
 				mode)
+		}
+		if mode == .json {
+			return render_error(hornero_core.err_usage('${first}.unknown', "unknown command: ${first}.\nRun 'horneroctl help' for usage."), mode)
 		}
 		eprintln_human("Unknown command: ${first}\nRun 'horneroctl help' for usage.")
 		return 1
@@ -2186,6 +2196,10 @@ fn run_capture(args []string, mode hornero_core.RenderMode) int {
 			return render(hornero_core.capture_status_report(), mode)
 		}
 		'screenshot' {
+			if opts.fullscreen && opts.region {
+				return render_error(hornero_core.err_usage('capture.usage',
+					'--fullscreen and --region are alternatives.\nExample: horneroctl capture screenshot --fullscreen --dry-run'), mode)
+			}
 			return render(hornero_core.screenshot_report(hornero_core.ScreenshotOptions{
 				region:  opts.region
 				output:  opts.output

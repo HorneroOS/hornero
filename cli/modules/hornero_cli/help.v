@@ -942,7 +942,7 @@ Examples:
   status              Show session and power backend state (read-only)
 
 Mutating actions need --yes; --dry-run only previews. The lock plan
-prefers horneroctl lock --lock (HORNERO_LOCKSCREEN_BIN), then bare
+prefers horneroctl lock now (HORNERO_LOCKSCREEN_BIN), then bare
 hyprlock (HORNERO_HYPRLOCK_BIN), then loginctl lock-session;
 suspend/reboot/shutdown use systemctl (HORNERO_SYSTEMCTL_BIN) and
 logout uses loginctl (HORNERO_LOGINCTL_BIN).
@@ -1250,7 +1250,7 @@ Examples:
 
 Source: HORNERO_MIC_SOURCE, else the wpctl default-source
 placeholder (HORNERO_WPCTL_BIN override). The event-driven listen
-loop stays in horneroctl hardware microphone.
+loop stays in the mic panel (horneroctl hardware mic).
 
 Examples:
   horneroctl hardware mic status
@@ -1341,7 +1341,7 @@ Examples:
                       UP interface as wired/wireless (read-only)
 
 Target: 1.1.1.1; --timeout is the ping deadline
-in seconds. The polling loop stays in horneroctl hardware network check.
+in seconds. The polling loop stays in the network panel (horneroctl hardware network status).
 
 Examples:
   horneroctl hardware network status
@@ -1793,7 +1793,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr hardware bluetooth completion welcome mode wallpaper capture apps system studio gaming recovery agent help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1838,5 +1838,9 @@ complete -c horneroctl -f -n __fish_use_subcommand -a studio -d "Studio selectio
 complete -c horneroctl -f -n __fish_use_subcommand -a gaming -d "Gaming readiness diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a recovery -d "OS recovery readiness diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a agent -d "Agent registry"
+complete -c horneroctl -f -n __fish_use_subcommand -a plugin -d "Plugins"
+complete -c horneroctl -f -n __fish_use_subcommand -a assistant -d "Assistant"
+complete -c horneroctl -f -n __fish_use_subcommand -a bluetooth -d "Bluetooth"
+complete -c horneroctl -f -n __fish_use_subcommand -a help -d "Help"
 '
 }
