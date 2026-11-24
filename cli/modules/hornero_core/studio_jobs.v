@@ -134,14 +134,20 @@ fn studio_job_id(adapter string) string {
 }
 
 pub fn studio_encode_job(job StudioJob) string {
+	// String fields go through json2 encoding: interpolating raw paths
+	// would emit invalid JSON for valid filenames containing quotes,
+	// backslashes or control characters, breaking save/load round-trips.
+	enc := fn (value string) string {
+		return json2.encode(value, escape_unicode: true)
+	}
 	lines := [
 		'{',
 		'  "schemaVersion": ${studio_jobs_schema_version},',
-		'  "id": "${job.id}",',
-		'  "adapter": "${job.adapter}",',
-		'  "input": "${job.input}",',
-		'  "output": "${job.output}",',
-		'  "state": "${job.state}",',
+		'  "id": ${enc(job.id)},',
+		'  "adapter": ${enc(job.adapter)},',
+		'  "input": ${enc(job.input)},',
+		'  "output": ${enc(job.output)},',
+		'  "state": ${enc(job.state)},',
 		'  "progress": ${job.progress},',
 		'  "cancellable": ${job.cancellable},',
 		'  "createdUnix": ${job.created_unix},',
