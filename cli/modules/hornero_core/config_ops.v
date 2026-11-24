@@ -10,15 +10,29 @@ import os
 // shell-owned IPC contract; there is no helper executable or duplicate pane registry.
 // `config materialize` delegates to the config repo's materializer.
 
-// resolve_materialize_bin locates the config repo's `materialize.sh`.
-// Override with HORNERO_MATERIALIZE_BIN; otherwise resolve the
-// materializer from PATH.
+// resolve_materialize_bin locates a materialize backend. Override
+// with HORNERO_MATERIALIZE_BIN; otherwise prefer `materialize.sh`
+// from PATH (config checkout), then the packaged missing-only user
+// seed backend shipped by hornero-config
+// (/usr/share/hornero/seed-user.sh). Both honor the same
+// `--dest DIR [--dry-run]` contract; the packaged seed never
+// overwrites files the user already owns, which is what makes it
+// safe to run against an existing account on a package-only
+// (install-on-Arch) system.
 pub fn resolve_materialize_bin() string {
 	env := os.getenv('HORNERO_MATERIALIZE_BIN')
 	if env.len > 0 {
 		return env
 	}
-	return find_on_path('materialize.sh')
+	on_path := find_on_path('materialize.sh')
+	if on_path.len > 0 {
+		return on_path
+	}
+	packaged_seed := '/usr/share/hornero/seed-user.sh'
+	if os.is_file(packaged_seed) {
+		return packaged_seed
+	}
+	return ''
 }
 
 fn materialize_or_fail(helper string, dry_run bool) !string {
