@@ -172,6 +172,25 @@ fn test_collect_opencode_usage_fixture() {
 	assert !missing.has_tokens
 }
 
+fn test_veasel_and_unknown_usage_ids_never_fall_through_to_opencode() {
+	veasel := agent_usage_collect_opts('veasel', true)
+	assert veasel.len == 1
+	assert veasel[0].provider == 'veasel'
+	assert veasel[0].status == 'unavailable'
+	assert veasel[0].source == 'not-collected'
+	assert !veasel[0].has_tokens
+	assert veasel[0].sessions == -1
+	assert veasel[0].errors.join(' ').contains('Hornero does not yet collect normalized Veasel usage')
+	assert !agent_usage_render(veasel).ok
+
+	unknown := agent_usage_collect_opts('not-an-agent', true)
+	assert unknown.len == 1
+	assert unknown[0].provider == 'not-an-agent'
+	assert unknown[0].source == 'unsupported-provider'
+	assert unknown[0].status == 'unavailable'
+	assert !unknown[0].has_tokens
+}
+
 fn test_agent_usage_render_never_zeros_on_error() {
 	mut err_rec := agent_usage_base('codex', 'codex-rollout-jsonl')
 	err_rec.status = 'error'

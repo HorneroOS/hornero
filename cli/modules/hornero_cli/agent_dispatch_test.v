@@ -3,8 +3,15 @@ module hornero_cli
 import os
 
 fn test_agent_help_is_discoverable() {
-	assert command_help('agent').contains('horneroctl agent list')
+	help := command_help('agent')
+	assert help.contains('horneroctl agent list')
 	assert command_help('agent').contains('Examples:')
+	assert help.contains('cursor, opencode, veasel')
+	assert help.contains('auth is reported only when a verified signal exists')
+	assert help.contains('Veasel authentication is not detectable by Hornero')
+	assert command_help('agent status').contains('unknown otherwise')
+	assert command_help('agent config').contains('Veasel has no')
+	assert command_help('agent config').contains('refuses before')
 	assert command_help('agent list').contains('Read-only')
 	assert command_help('agent doctor').contains('Read-only')
 	assert command_help('agent launch').contains('Dry-run proposal only')
@@ -77,6 +84,9 @@ fn test_agent_usage_help_and_empty_env() {
 	}
 	assert dispatch(['horneroctl', 'agent', 'usage']) != 0
 	assert dispatch(['horneroctl', 'agent', 'usage', 'codex']) != 0
+	// Veasel is a known agent with usage explicitly unavailable, not an
+	// alias for OpenCode's local database collector.
+	assert dispatch(['horneroctl', 'agent', 'usage', 'veasel']) == 1
 	// Unknown id is a usage error, not an empty record set.
 	assert dispatch(['horneroctl', 'agent', 'usage', 'nope']) == 2
 }

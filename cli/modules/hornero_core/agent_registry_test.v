@@ -45,6 +45,45 @@ fn test_agent_registry_has_seven_truthful_specs() {
 	}
 }
 
+fn test_veasel_spec_reuses_native_hornero_ownership_boundaries() {
+	spec := agent_by_id('veasel') or {
+		assert false, 'Veasel must be discoverable'
+		return
+	}
+	assert spec.exec == 'veasel'
+	assert spec.arch.contains('on demand as a user app')
+	assert spec.arch.contains('never as a daemon or QML plugin')
+	assert spec.approval.contains('horneroctl never passes an auto-approve flag')
+	assert !spec.approval.contains('typed horneroctl contracts')
+	assert spec.sandbox.contains('no Hornero ABAC inheritance')
+	assert spec.usage.starts_with('unavailable')
+	assert spec.usage.contains('does not read its sessions or credentials')
+	assert spec.auth_detectable == 'not-detectable'
+	assert spec.auth_path == ''
+}
+
+fn test_veasel_data_dir_resolves_config_without_claiming_authentication() {
+	root := os.dir(agent_set_file('veasel-data-home'))
+	data_dir := os.join_path(root, 'data')
+	os.mkdir_all(data_dir) or { assert false, err.msg() }
+	settings := os.join_path(data_dir, 'model-settings.json')
+	os.write_file(settings, '{}') or { assert false, err.msg() }
+	os.setenv('VEASEL_DATA_DIR', data_dir, true)
+	defer {
+		os.rmdir_all(root) or {}
+		os.unsetenv('VEASEL_DATA_DIR')
+		os.unsetenv('HORNERO_AGENT_DEFAULT_FILE')
+	}
+	spec := agent_by_id('veasel') or {
+		assert false, 'Veasel must be discoverable'
+		return
+	}
+	assert agent_expand(spec, spec.config_path) == settings
+	st := agent_probe(spec)
+	assert st.config_present
+	assert st.auth_state == 'not-detectable'
+}
+
 fn test_agent_probe_missing_binary_is_not_installed() {
 	spec := AgentSpec{
 		id:          'fake'
@@ -104,4 +143,19 @@ fn test_agent_launch_is_proposal_only() {
 	assert !agent_launch_result('nope').ok
 	assert agent_status_result('codex').ok
 	assert !agent_status_result('nope').ok
+}
+
+fn test_agent_launch_missing_binary_is_successful_dry_run_without_execution() {
+	spec := AgentSpec{
+		id:             'fixture-agent'
+		name:           'Fixture agent'
+		exec:           'hx-no-such-agent-binary-xyz'
+		install_source: 'test fixture only'
+	}
+	res := agent_launch_proposal(spec)
+	assert res.ok
+	assert res.data['dry_run'] == 'true'
+	assert res.data['executed'] == 'false'
+	assert res.data['installed'] == 'false'
+	assert res.data['proposal'].contains('hx-no-such-agent-binary-xyz')
 }

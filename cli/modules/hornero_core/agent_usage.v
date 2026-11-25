@@ -134,6 +134,12 @@ fn agent_usage_base(provider string, source string) AgentUsageRecord {
 	return agent_usage_base_ex(provider, provider, provider, source, 'local')
 }
 
+fn agent_usage_unavailable(provider string, name string, source string, explanation string) AgentUsageRecord {
+	mut record := agent_usage_base_ex(provider, provider, name, source, 'local')
+	record.errors << explanation
+	return record
+}
+
 // agent_usage_daily_encode renders real per-day token buckets as
 // 'YYYY-MM-DD:tokens,...' ascending, keeping the last 90 days. Only
 // collectors whose source carries genuine timestamps fill it; the UI
@@ -829,7 +835,15 @@ pub fn agent_usage_collect_opts(id string, force bool) []AgentUsageRecord {
 			'cursor' {
 				if offline { cursor_offline } else { collect_cursor_usage(force) }
 			}
-			else { collect_opencode_usage_at(agent_usage_opencode_db()) }
+			'veasel' {
+				agent_usage_unavailable('veasel', 'Veasel Code', 'not-collected',
+					'Veasel owns its session and usage data; Hornero does not yet collect normalized Veasel usage.')
+			}
+			'opencode' { collect_opencode_usage_at(agent_usage_opencode_db()) }
+			else {
+				agent_usage_unavailable(provider, provider, 'unsupported-provider',
+					'No normalized usage collector is registered for ${provider}.')
+			}
 		}
 	}
 	// A single id runs only its own collector (v1 behaviour): session
@@ -837,7 +851,7 @@ pub fn agent_usage_collect_opts(id string, force bool) []AgentUsageRecord {
 	ids := if id.len > 0 {
 		[id]
 	} else {
-		['javi-hermes', 'codex', 'claude-code', 'muse', 'cursor', 'opencode']
+		['javi-hermes', 'codex', 'claude-code', 'muse', 'cursor', 'opencode', 'veasel']
 	}
 	mut out := []AgentUsageRecord{cap: ids.len}
 	now := time.now().unix()

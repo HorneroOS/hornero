@@ -19,7 +19,7 @@ fn agent_config_test_env(tag string) AgentConfigTestEnv {
 	os.rmdir_all(root) or {}
 	os.mkdir_all(root) or { assert false }
 	keys := ['HORNERO_AGENT_CONFIG_FILE', 'HORNERO_AGENT_CONFIG_STATE_DIR', 'CODEX_HOME',
-		'XDG_CONFIG_HOME', 'XDG_STATE_HOME']
+		'XDG_CONFIG_HOME', 'XDG_STATE_HOME', 'VEASEL_DATA_DIR']
 	mut saved := map[string]string{}
 	for key in keys {
 		saved[key] = os.getenv(key)
@@ -31,6 +31,7 @@ fn agent_config_test_env(tag string) AgentConfigTestEnv {
 	os.setenv('CODEX_HOME', os.join_path(root, 'codex'), true)
 	os.setenv('XDG_CONFIG_HOME', os.join_path(root, 'xdg-config'), true)
 	os.setenv('XDG_STATE_HOME', os.join_path(root, 'xdg-state'), true)
+	os.setenv('VEASEL_DATA_DIR', os.join_path(root, 'veasel-data'), true)
 	return AgentConfigTestEnv{
 		root:  root
 		cfg:   cfg
@@ -376,4 +377,24 @@ fn test_agent_config_apply_preflight_refuses_unsupported() {
 	assert dry.ok
 	assert (dry.data['issues'] or { '' }).int() > 0
 	assert !os.exists(os.join_path(codex_home, 'AGENTS.hornero.md'))
+}
+
+fn test_agent_config_veasel_projection_is_unsupported_and_writes_nothing() {
+	env := agent_config_test_env('veasel-unsupported')
+	defer {
+		agent_config_test_cleanup(env)
+	}
+	reg := '{"schemaVersion":1,"entries":[{"id":"i1","kind":"instruction","name":"I","targets":["veasel"],"content":"hi"},{"id":"s1","kind":"skill","name":"S","targets":["veasel"],"content":"safe skill"}]}'
+	os.write_file(env.cfg, reg) or { assert false }
+	targets := agent_config_render_targets(parse_agent_config_registry(reg) or { panic(err) }, 'veasel')
+	assert targets.len == 2
+	assert targets.all(it.format == 'unsupported')
+	assert targets.all(it.path == '')
+
+	res := agent_config_apply_result('veasel', false, true)
+	assert !res.ok
+	assert res.message.contains('veasel')
+	assert res.message.contains('Refusing to apply before any write')
+	assert !os.exists(os.join_path(os.getenv('VEASEL_DATA_DIR'), 'model-settings.json'))
+	assert !os.exists(os.join_path(os.getenv('VEASEL_DATA_DIR'), 'skills'))
 }

@@ -33,7 +33,8 @@ Run `horneroctl --help` for the installed command list and
 - `mode list|get|set|reset|status` for the shell's experience modes (focus,
   everyday, signal, gaming, studio); see [Experience modes](#experience-modes).
 - `agent list|status|doctor|default|launch` for the declarative Agent
-  Registry (javi-hermes, codex, claude-code, muse, opencode) as data:
+  Registry (`javi-hermes`, `codex`, `claude-code`, `muse`, `cursor`,
+  `opencode`, `veasel`) as data:
   executable/discovery/install-source/arch, config, instruction and
   skills paths, MCP format, ACP, session, approval, sandbox, usage and
   uninstall semantics. The read-only commands probe PATH and file

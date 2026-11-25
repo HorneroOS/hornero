@@ -29,6 +29,7 @@ pub:
 	auth_path        string // '~/...' path probed for presence only, '' if none
 	config_path      string // '~/...' primary config file/dir
 	home_env         string // env var overriding the agent home, '' if none
+	home_env_prefix  string // '~/' path prefix replaced by home_env when set
 	instruction_path string
 	skills_path      string
 	mcp_format       string
@@ -175,18 +176,19 @@ pub fn agent_registry() []AgentSpec {
 			discovery:        'PATH lookup for `veasel`; data home from $VEASEL_DATA_DIR or ~/.local/share/veasel'
 			install_source:   'upstream veasel-labs/veasel releases (OS package/tap/AUR); not installed by horneroctl'
 			arch:             'V-native CLI binary (TUI + local HTTP API on 127.0.0.1:4097); Hornero launches it on demand as a user app, never as a daemon or QML plugin'
-			auth_detectable:  'file-presence'
-			auth_path:        '~/.local/share/veasel/model-settings.json'
+			auth_detectable:  'not-detectable'
+			auth_path:        ''
 			config_path:      '~/.local/share/veasel/model-settings.json'
 			home_env:         'VEASEL_DATA_DIR'
+			home_env_prefix:  '.local/share/veasel'
 			instruction_path: 'AGENTS.md (project tree)'
 			skills_path:      'discovered SKILL.md packages via `veasel skills list` (Veasel-owned discovery)'
 			mcp_format:       'JSON MCP server config owned by Veasel (mcp-servers.json in Veasel data home)'
 			acp:              'unknown (not verified by Hornero; Veasel owns its HTTP API and installed-CLI adapters)'
 			session:          'Veasel-owned persistent sessions (SQLite store in Veasel data home); resumed via `veasel tui`/`veasel run`'
-			approval:         'Veasel execution policy (ask|auto-edit|sandbox-auto; MCP never auto); horneroctl never passes an auto-approve flag and Veasel actions on the OS go through typed horneroctl contracts only'
+			approval:         'Veasel execution policy (ask|auto-edit|sandbox-auto; MCP never auto); horneroctl never passes an auto-approve flag'
 			sandbox:          'Veasel-owned sandboxed shell (bubblewrap/seatbelt/windows where supported); not a Hornero boundary and no Hornero ABAC inheritance'
-			usage:            'unknown (no normalized horneroctl collector yet; Veasel reports adapter-reported usage only, never estimated)'
+			usage:            'unavailable (no normalized horneroctl collector; Veasel owns usage data and Hornero does not read its sessions or credentials)'
 			uninstall:        'remove the upstream package/binary yourself; ~/.local/share/veasel sessions and settings remain until you delete them'
 		},
 	]
@@ -215,6 +217,18 @@ pub fn agent_expand(spec AgentSpec, path string) string {
 	if spec.home_env.len > 0 {
 		override := os.getenv(spec.home_env)
 		if override.len > 0 {
+			if spec.home_env_prefix.len > 0 {
+				prefix := spec.home_env_prefix
+				if rest == prefix {
+					return override
+				}
+				if rest.starts_with('${prefix}/') {
+					return os.join_path(override, rest[prefix.len + 1..])
+				}
+				// A mismatched prefix is a registry error; keep using the normal
+				// home-relative path rather than rewriting an unrelated location.
+				return os.join_path(os.home_dir(), rest)
+			}
 			// auth/config paths are recorded relative to the agent home.
 			parts := rest.split('/')
 			if parts.len > 1 {
@@ -488,6 +502,10 @@ pub fn agent_launch_result(id string) CommandResult {
 	spec := agent_by_id(id) or {
 		return fail_result('agent launch', 'Unknown agent id: ${id}. Known: ${agent_ids().join(', ')}')
 	}
+	return agent_launch_proposal(spec)
+}
+
+fn agent_launch_proposal(spec AgentSpec) CommandResult {
 	st := agent_probe(spec)
 	prog := if st.installed { st.resolved_path } else { spec.exec }
 	proposal := command_line(prog, []string{})

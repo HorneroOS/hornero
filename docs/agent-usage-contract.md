@@ -34,7 +34,7 @@ standard envelope; `data.records` is the JSON array below and flat
 | Field | Meaning |
 | --- | --- |
 | `schemaVersion` | `2` |
-| `provider` | Billing/usage provider id: `javi-hermes`, `codex`, `claude-code`, `muse`, `cursor`, `opencode` |
+| `provider` | Billing/usage provider id: `javi-hermes`, `codex`, `claude-code`, `muse`, `cursor`, `opencode`, `veasel` |
 | `harness` | Coding application id (equals `provider` today) |
 | `name` | Human label (`Claude Code`, `Cursor`, …) |
 | `account` | Safe local identifier or `unknown`; never an email |
@@ -108,6 +108,7 @@ endpoints; `--force-refresh` bypasses the cache.
 | `muse` | `muse-session-jsonl` + `muse usage --json` | session window + weekly, tier as plan |
 | `cursor` | `cursor-dashboard-rpc` (scope `account`) | included-total / auto / named meters + on-demand budget; plan name; cycle token totals |
 | `opencode` | `opencode-session-db` | `unknown` (per-provider balances are credential scope C, not enabled) |
+| `veasel` | not collected | unavailable; Veasel owns its session/usage store, which Hornero does not inspect |
 
 JSONL scans are capped at 5 000 files; hitting the cap is reported in
 `errors` and totals then understate, never overstate.

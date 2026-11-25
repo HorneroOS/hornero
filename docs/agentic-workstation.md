@@ -14,11 +14,13 @@ control surface over agents that already exist:
   confined by Hornero (ABAC policy, bubblewrap/systemd sandbox, typed
   broker tools, workspaces, audit log). Disabled by default, never
   required, loopback only. See [javi-secure-harness.md](javi-secure-harness.md).
-- **A declarative registry of external agent CLIs** — `javi-hermes`,
-  `codex`, `claude-code`, `muse`, and `opencode` described as data
+- **A declarative registry of agent CLIs** — `javi-hermes`, `codex`,
+  `claude-code`, `muse`, `cursor`, `opencode`, and `veasel` described as data
   (executable, discovery, config/skills paths, MCP/ACP shape, session and
-  approval semantics). The registry installs, launches, and reads no
-  credentials; auth detection is file-presence only.
+  approval semantics). The registry does not install or launch processes;
+  `agent launch` only prints a dry-run proposal. It reads no credentials.
+  Authentication is reported only when a provider offers a verified
+  file-presence signal; Veasel authentication remains unknown to Hornero.
 - **A canonical config registry** that projects your instructions,
   skills, MCP, and ACP intent into those agents (below).
 - **Proposals, not execution**, for shell commands and delegation.
@@ -29,16 +31,18 @@ runs as root.
 
 ## Javi vs external agents
 
-| | Javi (Hermes) | External agents (Codex, Claude Code, Muse, OpenCode) |
+| | Javi (Hermes) | External agents (Codex, Claude Code, Muse, Cursor, OpenCode, Veasel) |
 |---|---|---|
-| Owner of the runtime | Pinned upstream Hermes, confined by Hornero | The upstream vendor; you install it yourself |
-| Security model | Hornero ABAC + sandbox (see harness doc) | The runtime's own approvals and sandbox |
+| Owner of the runtime | Pinned upstream Hermes, confined by Hornero | Each upstream runtime owns its sessions and execution policy |
+| Security model | Hornero ABAC + sandbox (see harness doc) | The runtime's own approvals and sandbox; Veasel does not inherit Hornero ABAC or privileged OS actions |
 | Model choice | Configured through the Hermes gateway | Owned by the external runtime, not Hornero |
-| Hornero's role | Runs and confines the gateway | Registry, config projection, launch proposals |
+| Hornero's role | Runs and confines the gateway | Read-only registry and config projection; launch proposals only |
 
-Delegating to an external agent never transfers Javi's policy: the
+Delegating to an external agent never transfers Javi's policy: each
 external runtime keeps its own security model and does **not** inherit
-Hornero ABAC, bubblewrap, or workspace policy.
+Hornero ABAC, bubblewrap, or workspace policy. Veasel may execute its own
+approved commands inside its own sandbox; Hornero does not mediate those
+commands or grant them Hornero's privileged OS capabilities.
 
 ## Install and select agents
 
@@ -81,6 +85,8 @@ never merges into an agent's primary config. Apply is idempotent,
 records an ownership receipt per file under
 `$XDG_STATE_HOME/hornero/agent-config/receipts/`, and backs up a
 pre-existing unmanaged file before replacing it (see Recovery).
+Veasel has no verified native projection target, so Veasel-targeted entries
+are reported as unsupported and block apply before any writes.
 
 ## Shell proposals and delegation
 
