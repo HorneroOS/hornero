@@ -257,8 +257,7 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 	if os.is_dir(os.join_path(state_home, 'hornero', 'signal')) {
 		ex := run_exec(ExecSpec{
 			prog: tar
-			args: ['-czf', os.join_path(dir, 'hornero-state.tar.gz'), '-C', state_home,
-				'hornero/signal']
+			args: ['-czf', os.join_path(dir, 'hornero-state.tar.gz'), '-C', state_home, 'hornero/signal']
 		})
 		if !ex.ok {
 			os.rmdir_all(dir) or {}
