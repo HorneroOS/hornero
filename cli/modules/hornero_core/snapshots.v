@@ -77,6 +77,18 @@ fn snapshot_config_home() string {
 	return os.join_path(os.home_dir(), '.config')
 }
 
+// snapshot_state_home mirrors snapshot_config_home for XDG state, where
+// the live appearance scheme lives (hornero/signal/scheme.json). Without
+// archiving it, a snapshot restore silently kept the newer theme
+// (HorneroOS/hornero#481).
+fn snapshot_state_home() string {
+	state_home := os.getenv('XDG_STATE_HOME')
+	if state_home.len > 0 {
+		return state_home
+	}
+	return os.join_path(os.home_dir(), '.local', 'state')
+}
+
 // read_snapshot parses one snapshot directory; the backend always writes
 // metadata.json, so directories without a parseable one are skipped,
 // mirroring how unparseable theme packs are skipped.
@@ -238,6 +250,21 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 			return fail_result(name, 'cannot archive Hornero configuration (exit ${ex.exit_code}):\n${ex.output}')
 		}
 	}
+	// Appearance state: the live Signal scheme (and Chromatic
+	// snapshots beside it) lives under XDG state, not config. Archive
+	// it when present so a restore really rolls the look back.
+	state_home := snapshot_state_home()
+	if os.is_dir(os.join_path(state_home, 'hornero', 'signal')) {
+		ex := run_exec(ExecSpec{
+			prog: tar
+			args: ['-czf', os.join_path(dir, 'hornero-state.tar.gz'), '-C', state_home,
+				'hornero/signal']
+		})
+		if !ex.ok {
+			os.rmdir_all(dir) or {}
+			return fail_result(name, 'cannot archive Hornero appearance state (exit ${ex.exit_code}):\n${ex.output}')
+		}
+	}
 	pacman := backend_or_empty('HORNERO_PACMAN_BIN', 'pacman')
 	if pacman.len > 0 {
 		ex := run_exec(ExecSpec{
@@ -317,6 +344,23 @@ pub fn snapshot_restore_native(id string, dry_run bool) CommandResult {
 	})
 	if !ex.ok {
 		return fail_result(name, 'cannot restore Hornero configuration (exit ${ex.exit_code}):\n${ex.output}')
+	}
+	state_tarball := os.join_path(dir, 'hornero-state.tar.gz')
+	if os.is_file(state_tarball) {
+		state_home := snapshot_state_home()
+		os.mkdir_all(state_home) or {
+			return fail_result(name, 'cannot create state directory ${state_home}: ${err.msg()}')
+		}
+		state_ex := run_exec(ExecSpec{
+			prog: tar
+			args: ['-xzf', state_tarball, '-C', state_home]
+		})
+		if !state_ex.ok {
+			return fail_result(name, 'configuration restored, but cannot restore Hornero appearance state (exit ${state_ex.exit_code}):\n${state_ex.output}')
+		}
+		lines << '  Appearance state restored (signal scheme).'
+	} else {
+		lines << '  Note: this snapshot predates appearance-state archiving; the active theme was not restored.'
 	}
 	lines << 'Restore completed!'
 	lines << '   You may need to restart your shell or reload configurations'

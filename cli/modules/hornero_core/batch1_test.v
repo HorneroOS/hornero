@@ -155,6 +155,49 @@ fn test_snapshot_restore_native_round_trip() {
 	os.rmdir_all(b1_root + '/native-snaps2') or {}
 }
 
+fn test_snapshot_restore_round_trips_appearance_state() {
+	// Regression (HorneroOS/hornero#481): snapshots archived only
+	// ~/.config, so a restore reported success while the live signal
+	// scheme under XDG state kept the newer theme. Create + restore
+	// must round-trip hornero/signal/scheme.json too.
+	os.rmdir_all(b1_root + '/native-snaps3') or {}
+	old_home := os.getenv('HOME')
+	old_state := os.getenv('XDG_STATE_HOME')
+	os.setenv('HOME', b1_root + '/fakehome3', true)
+	os.setenv('XDG_CONFIG_HOME', b1_root + '/fakehome3/.config', true)
+	os.setenv('XDG_STATE_HOME', b1_root + '/fakehome3/.local/state', true)
+	os.mkdir_all(b1_root + '/fakehome3/.config/hornero') or { assert false }
+	os.write_file(b1_root + '/fakehome3/.config/hornero/shell.json', 'v1') or { assert false }
+	os.mkdir_all(b1_root + '/fakehome3/.local/state/hornero/signal') or { assert false }
+	os.write_file(b1_root + '/fakehome3/.local/state/hornero/signal/scheme.json', 'scheme-v1') or {
+		assert false
+	}
+	os.setenv('HORNERO_SNAPSHOTS_DIR', b1_root + '/native-snaps3', true)
+	c := snapshot_create_report(SnapshotCreateOptions{ yes: true })
+	assert c.ok
+	assert os.is_file(c.data['dir'] + '/hornero-state.tar.gz')
+	os.write_file(b1_root + '/fakehome3/.local/state/hornero/signal/scheme.json', 'scheme-v2') or {
+		assert false
+	}
+	r := snapshot_restore_report(SnapshotRestoreOptions{
+		id:  c.data['id']
+		yes: true
+	})
+	assert r.ok
+	assert r.message.contains('Appearance state restored')
+	assert os.read_file(b1_root + '/fakehome3/.local/state/hornero/signal/scheme.json') or { '' } == 'scheme-v1'
+	os.setenv('HOME', old_home, true)
+	if old_state.len > 0 {
+		os.setenv('XDG_STATE_HOME', old_state, true)
+	} else {
+		os.unsetenv('XDG_STATE_HOME')
+	}
+	os.unsetenv('XDG_CONFIG_HOME')
+	os.unsetenv('HORNERO_SNAPSHOTS_DIR')
+	os.rmdir_all(b1_root + '/fakehome3') or {}
+	os.rmdir_all(b1_root + '/native-snaps3') or {}
+}
+
 fn test_snapshot_without_config_archive_is_not_reported_as_restored() {
 	root := b1_root + '/snapshot-without-config'
 	home := root + '/home'
