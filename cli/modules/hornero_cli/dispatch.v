@@ -23,7 +23,7 @@ import os
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'mode', 'wallpaper',
 	'capture', 'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery', 'agent',
-	'help']
+	'github', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -170,6 +170,9 @@ pub fn dispatch(args []string) int {
 		}
 		'agent' {
 			run_agent(rest[1..], mode)
+		}
+		'github' {
+			run_github(rest[1..], mode)
 		}
 		'help' {
 			print_human(root_help())
@@ -448,6 +451,29 @@ fn run_assistant(args []string, mode hornero_core.RenderMode) int {
 // --yes), `config apply` (explicit --yes), and `launch`, which is a
 // dry-run proposal only — it never executes an agent and never adds an
 // auto-approval flag.
+fn run_github(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_github_cmd(args) or {
+		return render_error(hornero_core.err_usage('github', err.msg()), mode)
+	}
+	if opts.clear {
+		return render(hornero_core.github_clear_cache_result(), mode)
+	}
+	return match opts.verb {
+		'status' { render(hornero_core.github_status_result(opts.options), mode) }
+		'stats' { render(hornero_core.github_stats_result(opts.options), mode) }
+		'inbox' { render(hornero_core.github_inbox_result(opts.options), mode) }
+		'refresh' { render(hornero_core.github_refresh_result(opts.options), mode) }
+		'export' {
+			render(hornero_core.github_export_result(opts.options, opts.format, opts.public,
+				opts.output), mode)
+		}
+		else {
+			render_error(hornero_core.err_usage('github', 'unknown github subcommand.\nExample: horneroctl github status --json'),
+				mode)
+		}
+	}
+}
+
 fn run_agent(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('agent.usage',

@@ -33,6 +33,7 @@ Commands:
   recovery      OS recovery readiness diagnostics (doctor)
   assistant     Optional Hermes AI assistant (status, enable, disable, tools, knowledge, ask, stop)
   agent         Agent registry (list, status, doctor, default, launch proposal)
+  github        GitHub activity via gh (status, stats, inbox, refresh, export)
   completion    Print shell completions
   help          Show help for a command
 
@@ -121,6 +122,24 @@ Examples:
 		}
 		'agent usage' {
 			return 'Usage: horneroctl agent usage [id] [--force-refresh] [--json|--quiet]\n\nRead-only normalized AI-agent usage records (schemaVersion 2,\ndocs/agent-usage-contract.md): one provider-independent record per\ndiscovered agent — local activity plus provider-reported quota\nwindows (percent used + reset) when the provider itself reports\nthem, else quota "unknown" (never 0%); there is no cost field.\nFor Claude Code and Cursor the backend reuses the stored sign-in\nread-only in memory to ask that provider about its own account\n(credential scope B): tokens are never printed, stored, refreshed\nor used to switch accounts, and no model request is made to probe\nquota. Quota answers are cached briefly; --force-refresh re-asks\nnow. Errors are explicit per-provider states, never zeroed counters.\nWithout an id, every collector runs; exit 1 when none produced data.\n\nExamples:\n  horneroctl agent usage\n  horneroctl agent usage codex --json\n  horneroctl agent usage --force-refresh --json\n'
+		}
+		'github' {
+			return 'Usage: horneroctl github <status|stats|inbox|refresh|export> [options]\n\nRead-only GitHub development activity (Dev Pulse, docs/github-contract.md)\nthrough the official gh CLI: gh owns authentication, no token is\never requested, printed, logged or cached, and nothing on GitHub\nis mutated. status discovers the authenticated account; stats\nreports contributions, PR/issue totals and streaks over a window;\ninbox lists open authored PRs, review requests, assigned issues\nand failing checks; refresh re-fetches past the short cache;\nexport writes a local json|csv|markdown report (--public-only\ndrops private repositories). Unknown metrics are omitted, never\nzero-filled; search totals come from total_count, not item counts.\n\n  status              Authenticated account via gh (or how to log in)\n  stats [--days N] [--org O] [--repo owner/name] [--visibility all|public|private]\n  inbox               Actionable open items with GitHub URLs\n  refresh [--clear-cache]  Re-fetch (or clear the local cache)\n  export [--format json|csv|markdown] [--output FILE] [--public-only]\n\nExamples:\n  horneroctl github status --json\n  horneroctl github stats --days 30 --json\n  horneroctl github inbox --json\n  horneroctl github refresh --json\n  horneroctl github export --format markdown --output report.md\n'
+		}
+		'github status' {
+			return 'Usage: horneroctl github status [--json|--quiet]\n\nRead-only: the GitHub account gh is authenticated as, or an\nunavailable record explaining how to install gh and log in.\nNo token is ever shown.\n\nExamples:\n  horneroctl github status\n  horneroctl github status --json\n'
+		}
+		'github stats' {
+			return 'Usage: horneroctl github stats [--days N] [--org O] [--repo owner/name] [--visibility all|public|private] [--force-refresh] [--json|--quiet]\n\nRead-only normalized GitHub activity records (schemaVersion 1):\ncontribution calendar totals, streaks, per-repo commit\ncontributions, and search-partitioned PR/issue totals over the\nwindow. Dates are actual event dates; missing data is an error\nentry, never a zero.\n\nExamples:\n  horneroctl github stats --json\n  horneroctl github stats --days 365 --org HorneroOS --json\n'
+		}
+		'github inbox' {
+			return 'Usage: horneroctl github inbox [--org O] [--repo owner/name] [--json|--quiet]\n\nRead-only actionable items: my open PRs (with check state),\nreview requests, assigned open issues and failing checks, each\nwith its real GitHub URL. Summaries flag truncation honestly.\n\nExamples:\n  horneroctl github inbox --json\n'
+		}
+		'github refresh' {
+			return 'Usage: horneroctl github refresh [--clear-cache] [--json|--quiet]\n\nRe-fetch stats and inbox past the local cache (or clear the\ncache with --clear-cache). Writes only Hornero cache files.\n\nExamples:\n  horneroctl github refresh --json\n  horneroctl github refresh --clear-cache\n'
+		}
+		'github export' {
+			return 'Usage: horneroctl github export [--format json|csv|markdown] [--output FILE] [--public-only] [--days N] [--json|--quiet]\n\nWrite a local Dev Pulse report. --public-only drops private\nrepository names. Exports stay local unless you share them.\n\nExamples:\n  horneroctl github export --format markdown --output report.md\n  horneroctl github export --format csv --public-only\n'
 		}
 		'recovery' {
 			return 'Usage: horneroctl recovery <doctor> [options]\n\nOS recovery readiness diagnostics for the contracted Btrfs\nsnapshot backend (docs/SNAPSHOT_BACKEND_CONTRACT.md). This is\nabout operating-system rollback readiness only; configuration\nsnapshots under `horneroctl config` are settings archives and\nare never OS rollback. Nothing here creates or restores a\nsnapshot, and readiness is not proof that a restore works.\n\n  doctor              Read-only recovery readiness checks\n\nExamples:\n  horneroctl recovery doctor\n  horneroctl recovery doctor --json\n'
@@ -1793,7 +1812,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent github help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1807,7 +1826,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent github help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1838,6 +1857,7 @@ complete -c horneroctl -f -n __fish_use_subcommand -a studio -d "Studio selectio
 complete -c horneroctl -f -n __fish_use_subcommand -a gaming -d "Gaming readiness diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a recovery -d "OS recovery readiness diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a agent -d "Agent registry"
+complete -c horneroctl -f -n __fish_use_subcommand -a github -d "GitHub activity via gh"
 complete -c horneroctl -f -n __fish_use_subcommand -a plugin -d "Plugins"
 complete -c horneroctl -f -n __fish_use_subcommand -a assistant -d "Assistant"
 complete -c horneroctl -f -n __fish_use_subcommand -a bluetooth -d "Bluetooth"
