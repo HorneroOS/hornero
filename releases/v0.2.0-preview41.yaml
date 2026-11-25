@@ -1,0 +1,24 @@
+# Hornero OS release: v0.2.0-preview41
+
+apiVersion: hornero.os/v1
+kind: Release
+name: v0.2.0-preview41
+version: 0.2.0-preview41
+status: pre-release
+manifest: hornero-0.2.0-preview41
+profiles:
+  - base
+  - desktop
+  - developer
+checklist: releases/v0.2.0-preview41-checklist.md
+summary: >-
+  Product-readiness package release through the AUR (no ISO):
+  hornero-shell 1.3.9 (qt6-multimedia and PipeWire session-stack
+  dependencies so Install-on-Arch adopters get a loading shell and
+  working audio; companion one-shot/placement/switch fixes from
+  graphical validation), hornero-config 0.4.10 (missing-only user
+  seed for Install-on-Arch) and horneroctl with the packaged seed
+  resolver (signed bin follows at the next horneroctl tag). The
+  greetd greeter (hornero-greeter-greetd 0.1.1) also shipped in this
+  window. The preview32 ISO remains the current installation medium.
+published: true
