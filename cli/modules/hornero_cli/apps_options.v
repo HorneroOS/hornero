@@ -9,7 +9,7 @@ module hornero_cli
 // --json; default-apps set stays a deferral under `config default-apps`.
 
 pub const apps_verbs = ['files', 'terminal-file', 'git-status', 'audit', 'launch', 'toggle', 'switcher',
-	'performance']
+	'performance', 'webapp', 'tui']
 
 // AppsCmdOptions covers `apps <verb>`: the verb routes, the rest parses
 // per verb.
@@ -604,5 +604,207 @@ pub fn parse_apps_performance(args []string) !PerformanceCmdOptions {
 		profile: profile
 		dry_run: dry_run
 		yes:     yes
+	}
+}
+
+// WebappCmdOptions covers `apps webapp <add|remove|list> ...`.
+pub struct WebappCmdOptions {
+pub:
+	leaf    string // add | remove | list
+	id      string
+	name    string
+	url     string
+	icon    string
+	browser string
+}
+
+pub fn parse_apps_webapp(args []string) !WebappCmdOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl apps webapp list')
+	}
+	leaf := args[0]
+	if leaf !in ['add', 'remove', 'list'] {
+		return error('unknown webapp subcommand: ${leaf}.\nExample: horneroctl apps webapp list')
+	}
+	mut id := ''
+	mut name := ''
+	mut url := ''
+	mut icon := ''
+	mut browser := ''
+	mut positional := []string{}
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		if a == '--name' && i + 1 < args.len {
+			name = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--name=') {
+			name = a.all_after('=')
+			i++
+			continue
+		}
+		if a == '--url' && i + 1 < args.len {
+			url = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--url=') {
+			url = a.all_after('=')
+			i++
+			continue
+		}
+		if a == '--icon' && i + 1 < args.len {
+			icon = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--icon=') {
+			icon = a.all_after('=')
+			i++
+			continue
+		}
+		if a == '--browser' && i + 1 < args.len {
+			browser = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--browser=') {
+			browser = a.all_after('=')
+			i++
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl apps webapp add github --name GitHub --url https://github.com')
+		}
+		positional << a
+		i++
+	}
+	if leaf == 'add' {
+		if positional.len == 0 {
+			return error('missing webapp id.\nExample: horneroctl apps webapp add github --name GitHub --url https://github.com')
+		}
+		id = positional[0]
+		if name.len == 0 {
+			name = id
+		}
+		if url.len == 0 {
+			return error('missing --url.\nExample: horneroctl apps webapp add github --name GitHub --url https://github.com')
+		}
+	} else if leaf == 'remove' {
+		if positional.len == 0 {
+			return error('missing webapp id.\nExample: horneroctl apps webapp remove github')
+		}
+		id = positional[0]
+	}
+	return WebappCmdOptions{
+		leaf:    leaf
+		id:      id
+		name:    name
+		url:     url
+		icon:    icon
+		browser: browser
+	}
+}
+
+// TuiCmdOptions covers `apps tui <add|remove|list> ...`.
+pub struct TuiCmdOptions {
+pub:
+	leaf     string // add | remove | list
+	id       string
+	name     string
+	command  string
+	icon     string
+	terminal string
+}
+
+pub fn parse_apps_tui(args []string) !TuiCmdOptions {
+	if args.len == 0 {
+		return error('missing subcommand.\nExample: horneroctl apps tui list')
+	}
+	leaf := args[0]
+	if leaf !in ['add', 'remove', 'list'] {
+		return error('unknown tui subcommand: ${leaf}.\nExample: horneroctl apps tui list')
+	}
+	mut id := ''
+	mut name := ''
+	mut command := ''
+	mut icon := ''
+	mut terminal := ''
+	mut positional := []string{}
+	mut i := 1
+	for i < args.len {
+		a := args[i]
+		if a == '--name' && i + 1 < args.len {
+			name = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--name=') {
+			name = a.all_after('=')
+			i++
+			continue
+		}
+		if a == '--command' && i + 1 < args.len {
+			command = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--command=') {
+			command = a.all_after('=')
+			i++
+			continue
+		}
+		if a == '--icon' && i + 1 < args.len {
+			icon = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--icon=') {
+			icon = a.all_after('=')
+			i++
+			continue
+		}
+		if a == '--terminal' && i + 1 < args.len {
+			terminal = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--terminal=') {
+			terminal = a.all_after('=')
+			i++
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl apps tui add lazygit --name Lazygit --command lazygit')
+		}
+		positional << a
+		i++
+	}
+	if leaf == 'add' {
+		if positional.len == 0 {
+			return error('missing tui app id.\nExample: horneroctl apps tui add lazygit --name Lazygit --command lazygit')
+		}
+		id = positional[0]
+		if name.len == 0 {
+			name = id
+		}
+		if command.len == 0 {
+			return error('missing --command.\nExample: horneroctl apps tui add lazygit --name Lazygit --command lazygit')
+		}
+	} else if leaf == 'remove' {
+		if positional.len == 0 {
+			return error('missing tui app id.\nExample: horneroctl apps tui remove lazygit')
+		}
+		id = positional[0]
+	}
+	return TuiCmdOptions{
+		leaf:     leaf
+		id:       id
+		name:     name
+		command:  command
+		icon:     icon
+		terminal: terminal
 	}
 }

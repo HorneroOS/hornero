@@ -406,9 +406,11 @@ fn github_collect_inbox(o GithubOptions) []map[string]json2.Any {
 	mut records := []map[string]json2.Any{}
 	for pair in [['mine', 'mine'], ['review', 'review'], ['assigned', 'assigned']] {
 		bucket := agent_usage_child(data, pair[0])
-		if 'nodes' in bucket && bucket['nodes'] is []json2.Any {
-			for n in bucket['nodes'] as []json2.Any {
-				github_inbox_items(mut records, agent_usage_map(n), pair[1], login)
+		if nodes_val := bucket['nodes'] {
+			if nodes_val is []json2.Any {
+				for n in nodes_val {
+					github_inbox_items(mut records, agent_usage_map(n), pair[1], login)
+				}
 			}
 		}
 		mut summary := github_base_record('inbox-summary')

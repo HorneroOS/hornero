@@ -668,3 +668,46 @@ pub fn parse_hardware_bluetooth(args []string) !HardwareBluetoothOptions {
 		yes:     yes
 	}
 }
+
+// HardwareRollcallOptions covers `hardware rollcall [--list] [--markdown] [--json] [category...]`.
+pub struct HardwareRollcallOptions {
+pub:
+	categories []string
+	list_only  bool
+	markdown   bool
+	json_mode  bool
+}
+
+pub fn parse_hardware_rollcall(args []string) !HardwareRollcallOptions {
+	mut categories := []string{}
+	mut list_only := false
+	mut markdown := false
+	mut json_mode := false
+	for a in args {
+		if a == '--list' {
+			list_only = true
+			continue
+		}
+		if a == '--markdown' {
+			markdown = true
+			continue
+		}
+		if a == '--json' {
+			json_mode = true
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl hardware rollcall --markdown')
+		}
+		if a !in hornero_core.rollcall_categories {
+			return error('unknown rollcall category: ${a}.\nRun: horneroctl hardware rollcall --list')
+		}
+		categories << a
+	}
+	return HardwareRollcallOptions{
+		categories: categories
+		list_only:  list_only
+		markdown:   markdown
+		json_mode:  json_mode
+	}
+}
