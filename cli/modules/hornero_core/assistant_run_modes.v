@@ -101,7 +101,7 @@ fn assistant_write_exclusive(path string, content string) ! {
 	if fd < 0 {
 		return error('cannot create ${path}: ${os.posix_get_error_msg(C.errno)}')
 	}
-	written := C.write(fd, content.str, uint(content.len))
+	written := C.write(fd, content.str, usize(content.len))
 	synced := C.fsync(fd)
 	C.close(fd)
 	if written != content.len || synced != 0 {
