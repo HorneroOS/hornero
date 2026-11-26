@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import os.filelock
 import time
 import x.json2
 
@@ -72,10 +73,15 @@ fn github_cache_write(name string, payload string) {
 	dir := github_cache_dir()
 	os.mkdir_all(dir) or { return }
 	os.chmod(dir, 0o700) or {}
+	path := os.join_path(dir, '${name}.json')
+	mut lock_file := filelock.new_file('${path}.lock')
+	lock_file.acquire() or { return }
+	defer {
+		lock_file.release()
+	}
 	mut m := map[string]json2.Any{}
 	m['fetchedAtUnix'] = json2.Any(time.now().unix())
 	m['payload'] = payload
-	path := os.join_path(dir, '${name}.json')
 	os.write_file(path, json2.encode(m, escape_unicode: true)) or { return }
 	os.chmod(path, 0o600) or {}
 }

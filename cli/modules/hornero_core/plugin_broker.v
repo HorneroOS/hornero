@@ -1,6 +1,7 @@
 module hornero_core
 
 import os
+import os.filelock
 import time
 import x.json2
 
@@ -239,7 +240,14 @@ fn plugin_broker_log_file() string {
 
 fn plugin_broker_log_append(plugin_id string, action string, detail string, status string) {
 	path := plugin_broker_log_file()
-	os.mkdir_all(os.dir(path)) or { return }
+	dir := os.dir(path)
+	os.mkdir_all(dir) or { return }
+	os.chmod(dir, 0o700) or {}
+	mut lock_file := filelock.new_file('${path}.lock')
+	lock_file.acquire() or { return }
+	defer {
+		lock_file.release()
+	}
 	line := assistant_log_line(time.now().custom_format('YYYY-MM-DDTHH:mm:ss'),
 		'plugin.${plugin_id}.${action}', '', detail, status)
 	mut content := os.read_file(path) or { '' }

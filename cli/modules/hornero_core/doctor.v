@@ -150,12 +150,24 @@ pub fn doctor_result(checks []DoctorCheck) CommandResult {
 	mut failed := 0
 	mut data := map[string]string{}
 	for c in checks {
-		mark := if c.ok { 'ok' } else { 'FAIL' }
+		mark := if !c.ok {
+			'FAIL'
+		} else if c.warn {
+			'warn'
+		} else {
+			'ok'
+		}
 		if !c.ok {
 			failed++
 		}
 		lines << '${mark}  ${c.name}: ${redact_secrets(c.detail)}'
-		data[c.name] = if c.ok { 'ok' } else { 'fail' }
+		data[c.name] = if !c.ok {
+			'fail'
+		} else if c.warn {
+			'warn'
+		} else {
+			'ok'
+		}
 	}
 	if failed == 0 {
 		lines << 'doctor: all ${checks.len} checks passed'

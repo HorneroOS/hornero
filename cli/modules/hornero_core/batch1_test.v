@@ -512,6 +512,46 @@ fn test_aur_helper_resolution_prefers_yay_then_falls_back_to_paru() {
 	os.rmdir_all(root) or {}
 }
 
+fn test_package_updates_treats_checkupdates_exit_2_and_aur_exit_1_as_zero_updates() {
+	root := b1_package_root('zero-updates-exit-codes')
+	os.rmdir_all(root) or {}
+	old_path := os.getenv('PATH')
+	defer {
+		os.unsetenv('HORNERO_CHECKUPDATES_BIN')
+		os.unsetenv('HORNERO_AUR_HELPER_BIN')
+		os.unsetenv('HORNERO_PACMAN_CONF_BIN')
+		os.setenv('PATH', old_path, true)
+		os.rmdir_all(root) or {}
+	}
+	b1_setup_timeout(root)
+	checkupdates := '${root}/bin/checkupdates'
+	yay := '${root}/bin/yay'
+	pacman_conf := '${root}/bin/pacman-conf'
+	b1_write(checkupdates, '#!/bin/sh\nexit 2\n')
+	b1_write(yay, '#!/bin/sh\nexit 1\n')
+	b1_write(pacman_conf, '#!/bin/sh\nexit 0\n')
+	os.chmod(checkupdates, 0o755) or { assert false }
+	os.chmod(yay, 0o755) or { assert false }
+	os.chmod(pacman_conf, 0o755) or { assert false }
+	os.setenv('PATH', '${root}/bin', true)
+	os.setenv('HORNERO_CHECKUPDATES_BIN', checkupdates, true)
+	os.setenv('HORNERO_AUR_HELPER_BIN', yay, true)
+	os.setenv('HORNERO_PACMAN_CONF_BIN', pacman_conf, true)
+	r := package_updates_report(PackageCheckOptions{})
+	assert r.ok, r.message
+	assert r.data['repository_count'] == '0'
+	assert r.data['aur_count'] == '0'
+	assert r.data['count'] == '0'
+}
+
+fn test_classify_update_lanes_includes_greeter_greetd_and_profile_packages() {
+	hornero, system := classify_update_lanes('hornero-greeter-greetd 0.1 -> 0.2\nhornero-profile-desktop-hyprland 0.1 -> 0.2\nlinux 6.12 -> 6.13\n',
+		'')
+	assert 'hornero-greeter-greetd' in hornero
+	assert 'hornero-profile-desktop-hyprland' in hornero
+	assert 'linux' in system
+}
+
 fn test_package_updates_include_read_only_aur_helper_results() {
 	root := b1_package_root('aur')
 	os.rmdir_all(root) or {}

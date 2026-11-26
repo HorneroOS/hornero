@@ -282,8 +282,13 @@ pub fn snapshot_create_native(dry_run bool) CommandResult {
 		}
 	}
 	latest := os.join_path(base, 'latest')
-	os.rm(latest) or {}
-	os.symlink(dir, latest) or {}
+	tmp_latest := os.join_path(base, '.latest.tmp.${os.getpid()}')
+	os.rm(tmp_latest) or {}
+	if _ := os.symlink(dir, tmp_latest) {
+		os.mv(tmp_latest, latest) or {
+			os.rm(tmp_latest) or {}
+		}
+	}
 	return ok_result(name, 'Snapshot created: ${id}\nLocation: ${dir}', {
 		'id':  id
 		'dir': dir

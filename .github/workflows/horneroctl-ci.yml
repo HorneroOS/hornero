@@ -1,5 +1,8 @@
 name: horneroctl-ci
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -44,7 +47,7 @@ jobs:
         run: v test modules/hornero_core/community_registry_test.v
       - name: Build
         working-directory: cli
-        run: ./make.vsh build-cli && ./build/horneroctl version && ./build/horneroctl config paths
+        run: ./make.vsh build-cli && ./out/horneroctl version && ./out/horneroctl config paths
 
   signing-smoke:
     name: Release signing smoke

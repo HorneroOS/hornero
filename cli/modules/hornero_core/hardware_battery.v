@@ -254,8 +254,8 @@ pub fn battery_monitor_report(opts BatteryMonitorOptions) CommandResult {
 		return fail_result('hardware battery monitor', 'refusing to start the battery monitor without --yes (preview with --dry-run).\nExample: horneroctl hardware battery monitor --dry-run')
 	}
 	self := os.executable()
-	detached := 'nohup ${command_line(self, ['hardware', 'battery', 'monitor', '--low=${opts.low}',
-		'--crit=${opts.crit}', '--interval=${opts.interval}'])} >/dev/null 2>&1 &'
+	detached := 'nohup ${command_line(self, ['hardware', 'battery', 'monitor', '--yes',
+		'--low=${opts.low}', '--crit=${opts.crit}', '--interval=${opts.interval}'])} >/dev/null 2>&1 &'
 	if opts.dry_run {
 		if opts.daemon {
 			return ok_result('hardware battery monitor', 'would run (detached): ${detached}',

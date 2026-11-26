@@ -457,11 +457,12 @@ pub fn collect_claude_usage_full(force bool) AgentUsageRecord {
 // the Cursor editor state DB. Only the access token and membership
 // keys are ever queried; the token never leaves process memory.
 fn agent_usage_cursor_state(db_path string, key string) string {
-	mut db := sqlite.connect(db_path) or { return '' }
+	mut db := sqlite.connect_full(db_path, [.readonly], '') or { return '' }
 	defer {
 		db.close()
 	}
-	rows := db.exec("SELECT value FROM ItemTable WHERE key='${key}'") or { return '' }
+	safe_key := key.replace("'", "''")
+	rows := db.exec("SELECT value FROM ItemTable WHERE key='${safe_key}'") or { return '' }
 	if rows.len == 0 || rows[0].vals.len == 0 {
 		return ''
 	}

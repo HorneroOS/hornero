@@ -162,7 +162,7 @@ fn test_scheme_parser_accepts_only_read_only_views() {
 }
 
 fn test_dispatch_unknown_command_exit_one() {
-	assert dispatch(['horneroctl', 'not-a-real-command']) == 1
+	assert dispatch(['horneroctl', 'not-a-real-command']) == 2
 }
 
 fn test_dispatch_unknown_flag_exit_two() {
@@ -382,7 +382,7 @@ fn test_dispatch_appearance_scheme_and_alias() {
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'current']) == 0
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'set-mode', 'dark', '--dry-run']) == 2
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'status', '--yes']) == 2
-	assert dispatch(['horneroctl', 'scheme', 'status']) == 1
+	assert dispatch(['horneroctl', 'scheme', 'status']) == 2
 	assert dispatch(['horneroctl', 'appearance', 'scheme', 'bogus']) == 2
 	p2_dispatch_teardown()
 }

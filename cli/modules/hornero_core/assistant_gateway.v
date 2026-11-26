@@ -134,9 +134,27 @@ pub fn assistant_gateway_bwrap_argv(hermes string, home string, workspace string
 	return argv
 }
 
+fn systemd_escape_exec_arg(arg string) string {
+	if arg.len == 0 {
+		return '""'
+	}
+	mut needs_quote := false
+	for b in arg.bytes() {
+		if b in [` `, `\t`, `"`, `'`, `\\`, `\n`, `\r`, `%`, `;`] {
+			needs_quote = true
+			break
+		}
+	}
+	if !needs_quote {
+		return arg
+	}
+	escaped := arg.replace('\\', '\\\\').replace('"', '\\"').replace('%', '%%')
+	return '"${escaped}"'
+}
+
 fn assistant_gateway_unit_content_for(hermes string, bwrap string, workspace string) string {
 	home := os.home_dir()
-	mut exec := '${hermes} gateway run'
+	mut exec := [hermes, 'gateway', 'run'].map(systemd_escape_exec_arg(it)).join(' ')
 	mut isolation := 'systemd-only (not sandboxed)'
 	// RestrictSUIDSGID and an empty CapabilityBoundingSet prevent
 	// bubblewrap from creating its user/mount namespace (host-verified:
@@ -147,7 +165,7 @@ fn assistant_gateway_unit_content_for(hermes string, bwrap string, workspace str
 	if bwrap.len > 0 {
 		mut argv := assistant_gateway_bwrap_argv(hermes, home, workspace)
 		argv[0] = bwrap
-		exec = argv.join(' ')
+		exec = argv.map(systemd_escape_exec_arg(it)).join(' ')
 		isolation = 'bubblewrap'
 		suid_and_caps = ''
 	}

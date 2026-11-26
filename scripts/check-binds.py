@@ -227,22 +227,6 @@ def chains_in_file(path: Path) -> set:
         return chains_in_lua(text)
     found = set()
     suffix = path.suffix
-    for line in text.splitlines():
-        if suffix in CONF_SUFFIXES:
-            if not CONF_GATE_RE.search(line):
-                continue
-        elif suffix in SCRIPT_SUFFIXES:
-            if suffix == ".desktop":
-                if not DESKTOP_GATE_RE.search(line):
-                    continue
-            elif not SH_GATE_RE.search(line):
-                continue
-        else:
-            continue
-        for m in BARE_RE.finditer(line):
-            chain = chain_of(m.group(1).split())
-            if chain:
-                found.add(chain)
     if path.suffix in QML_SUFFIXES:
         for line in text.splitlines():
             for m in ARRAY_RE.finditer(line):
@@ -269,6 +253,8 @@ def chains_in_file(path: Path) -> set:
                     continue
             elif not SH_GATE_RE.search(line):
                 continue
+        else:
+            continue
         for m in BARE_RE.finditer(line):
             chain = chain_of(m.group(1).split())
             if chain:

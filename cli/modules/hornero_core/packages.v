@@ -162,9 +162,16 @@ fn run_checkupdates(opts PackageCheckOptions) !ExecReport {
 }
 
 fn run_package_update_snapshot(opts PackageCheckOptions) !PackageUpdateSnapshot {
-	repository := run_checkupdates(opts)!
+	mut repository := run_checkupdates(opts)!
 	if !repository.ok {
-		return error('repository update check failed (exit ${repository.exit_code}):\n${repository.output}')
+		if repository.exit_code == 2 && repository.output.trim_space().len == 0 {
+			repository = ExecReport{
+				...repository
+				ok: true
+			}
+		} else {
+			return error('repository update check failed (exit ${repository.exit_code}):\n${repository.output}')
+		}
 	}
 	aur_helper := if opts.aur_helper.len > 0 {
 		opts.aur_helper
@@ -189,13 +196,20 @@ fn run_package_update_snapshot(opts PackageCheckOptions) !PackageUpdateSnapshot 
 			policy:     read_pacman_policy_snapshot(opts.dry_run)
 		}
 	}
-	aur := run_exec(ExecSpec{
+	mut aur := run_exec(ExecSpec{
 		prog:        aur_helper
 		args:        ['-Qua']
 		timeout_sec: 30
 	})
 	if !aur.ok {
-		return error('AUR update check failed via ${aur_helper} (exit ${aur.exit_code}):\n${aur.output}')
+		if aur.exit_code == 1 && aur.output.trim_space().len == 0 {
+			aur = ExecReport{
+				...aur
+				ok: true
+			}
+		} else {
+			return error('AUR update check failed via ${aur_helper} (exit ${aur.exit_code}):\n${aur.output}')
+		}
 	}
 	return PackageUpdateSnapshot{
 		repository: repository
@@ -382,10 +396,17 @@ pub fn hornero_owned_package_names() []string {
 		'hornero-shell-debug',
 		'hornero-config',
 		'hornero-greeter',
+		'hornero-greeter-greetd',
 		'hornero-greeter-media-base',
 		'horneroctl-bin',
 		'horneroctl',
 	]
+}
+
+// is_hornero_owned_package reports whether a pacman/AUR package name belongs
+// to the HorneroOS package lane (including generated hornero-profile-* packages).
+pub fn is_hornero_owned_package(name string) bool {
+	return name in hornero_owned_package_names() || name.starts_with('hornero-profile-')
 }
 
 // parse_pending_update_names extracts package names from checkupdates
@@ -408,18 +429,17 @@ pub fn parse_pending_update_names(output string) []string {
 // classify_update_lanes splits pending updates into Hornero-owned and
 // system lanes. Pure function: unit-tested without a live pacman.
 pub fn classify_update_lanes(repository_output string, aur_output string) ([]string, []string) {
-	owned := hornero_owned_package_names()
 	mut hornero_pending := []string{}
 	mut system_pending := []string{}
 	for name in parse_pending_update_names(repository_output) {
-		if name in owned {
+		if is_hornero_owned_package(name) {
 			hornero_pending << name
 		} else {
 			system_pending << name
 		}
 	}
 	for name in parse_pending_update_names(aur_output) {
-		if name in owned {
+		if is_hornero_owned_package(name) {
 			if name !in hornero_pending {
 				hornero_pending << name
 			}

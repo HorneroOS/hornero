@@ -1137,7 +1137,7 @@ pub fn assistant_usage_report_at(db_path string) CommandResult {
 	if !os.exists(db_path) {
 		return fail_result('assistant usage', 'No Hermes state database at ${db_path}. Is Hermes installed?')
 	}
-	mut db := sqlite.connect(db_path) or {
+	mut db := sqlite.connect_full(db_path, [.readonly], '') or {
 		return fail_result('assistant usage', 'Cannot open Hermes state database: ${err.msg()}')
 	}
 	defer {

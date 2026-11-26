@@ -2,7 +2,7 @@
 
 // horneroctl build tasks (agent-toolkit make.vsh pattern).
 // Usage: ./make.vsh [--tasks] [help|fmt|fmt-check|vet|test|build|build-cli|install-cli]
-// Optional: ./make.vsh build-cli && ./build/horneroctl version
+// Optional: ./make.vsh build-cli && ./out/horneroctl version
 
 import build
 import os
@@ -129,10 +129,10 @@ context.task(
 
 context.task(
 	name: 'build-cli'
-	help: 'Build build/horneroctl'
+	help: 'Build out/horneroctl (uses -prod when HX_RELEASE is set or --prod is passed)'
 	run:  fn (_ build.Task) ! {
 		r := root()
-		mkdir_all(join_path(r, 'build')) or {}
+		mkdir_all(join_path(r, 'out')) or {}
 		mut ver := 'dev'
 		vres := execute('git -C ${r} describe --tags --always --dirty 2>/dev/null')
 		if vres.exit_code == 0 && vres.output.trim_space().len > 0 {
@@ -162,8 +162,14 @@ context.task(
 		if release.len == 0 {
 			release = 'unknown'
 		}
-		out := join_path(r, 'build', 'horneroctl')
-		rc := vcmd('-d version=${ver} -d commit=${commit} -d hx_shell_sha=${shell_sha} -d hx_config_sha=${config_sha} -d hx_manifest=${manifest} -d hx_release=${release} -o ${out} ${join_path(r, 'cmd', 'horneroctl')}')
+		prod_flag := if release != 'unknown' || '--prod' in os.args
+			|| os.getenv('HORNERO_PROD') == '1' {
+			'-prod '
+		} else {
+			''
+		}
+		out := join_path(r, 'out', 'horneroctl')
+		rc := vcmd('${prod_flag}-d version=${ver} -d commit=${commit} -d hx_shell_sha=${shell_sha} -d hx_config_sha=${config_sha} -d hx_manifest=${manifest} -d hx_release=${release} -o ${out} ${join_path(r, 'cmd', 'horneroctl')}')
 		if rc != 0 {
 			exit(rc)
 		}
@@ -178,7 +184,7 @@ context.task(
 		r := root()
 		bin := join_path(install_prefix(), 'bin')
 		mkdir_all(bin) or { panic(err) }
-		cp(join_path(r, 'build', 'horneroctl'), join_path(bin, 'horneroctl')) or { panic(err) }
+		cp(join_path(r, 'out', 'horneroctl'), join_path(bin, 'horneroctl')) or { panic(err) }
 		println('installed to ${join_path(bin, 'horneroctl')}')
 	}
 )
