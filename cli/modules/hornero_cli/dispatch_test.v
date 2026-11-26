@@ -486,7 +486,12 @@ fn test_plugin_lifecycle_verbs_have_stable_exit_codes() {
 		['plugin', 'catalog', 'update', 'hornero-x'], ['plugin', 'catalog', 'rollback', 'hornero-x'],
 		['plugin', 'remove', 'hornero-x'], ['plugin', 'enable', 'hornero-x'],
 		['plugin', 'disable', 'hornero-x']] {
-		assert dispatch(['horneroctl', '--quiet', ...args]) == 1, args.str()
-		assert dispatch(['horneroctl', '--quiet', ...args, '--bogus']) == 2, args.str()
+		mut cmd := ['horneroctl', '--quiet']
+		cmd << args
+		assert dispatch(cmd) == 1, args.str()
+		mut bogus_cmd := ['horneroctl', '--quiet']
+		bogus_cmd << args
+		bogus_cmd << '--bogus'
+		assert dispatch(bogus_cmd) == 2, args.str()
 	}
 }

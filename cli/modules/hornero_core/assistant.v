@@ -1,7 +1,6 @@
 module hornero_core
 
 import crypto.rand
-import crypto.sha256
 import db.sqlite
 import encoding.base64
 import net.http

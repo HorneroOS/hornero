@@ -117,9 +117,11 @@ pub fn community_plugin_validator_candidates() []string {
 
 fn community_plugin_validator_spec(validator string, args []string, timeout_sec int) ExecSpec {
 	if validator.ends_with('.py') && !os.is_executable(validator) {
+		mut full_args := [validator]
+		full_args << args
 		return ExecSpec{
 			prog:        'python3'
-			args:        [validator, ...args]
+			args:        full_args
 			timeout_sec: timeout_sec
 		}
 	}
