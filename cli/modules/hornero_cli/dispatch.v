@@ -1916,7 +1916,7 @@ fn run_hardware(args []string, mode hornero_core.RenderMode) int {
 			mode)
 	}
 	group := args[0]
-	if group !in ['brightness', 'battery', 'mic', 'keyboard', 'network', 'bluetooth'] {
+	if group !in ['brightness', 'battery', 'mic', 'keyboard', 'network', 'bluetooth', 'rollcall'] {
 		return render_error(hornero_core.err_usage('hardware.usage', 'unknown hardware group: ${group}.\nRun: horneroctl hardware --help'),
 			mode)
 	}
@@ -1940,10 +1940,26 @@ fn run_hardware(args []string, mode hornero_core.RenderMode) int {
 		'bluetooth' {
 			return run_hardware_bluetooth(args[1..], mode)
 		}
+		'rollcall' {
+			return run_hardware_rollcall(args[1..], mode)
+		}
 		else {
 			return run_hardware_network(args[1..], mode)
 		}
 	}
+}
+
+fn run_hardware_rollcall(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_hardware_rollcall(args) or {
+		return render_error(hornero_core.err_usage('hardware.rollcall.usage', err.msg()),
+			mode)
+	}
+	return render(hornero_core.hardware_rollcall_result(hornero_core.RollcallOptions{
+		categories: opts.categories
+		list_only:  opts.list_only
+		markdown:   opts.markdown
+		json_mode:  opts.json_mode || mode == .json
+	}), mode)
 }
 
 fn run_bluetooth(args []string, mode hornero_core.RenderMode) int {
@@ -2365,6 +2381,102 @@ fn run_apps(args []string, mode hornero_core.RenderMode) int {
 				dry_run: sopts.dry_run
 				yes:     sopts.yes
 			}), mode)
+		}
+		'webapp' {
+			wopts := parse_apps_webapp(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.webapp.usage', err.msg()),
+					mode)
+			}
+			match wopts.leaf {
+				'add' {
+					entry := hornero_core.webapp_add(hornero_core.WebAppSpec{
+						id:      wopts.id
+						name:    wopts.name
+						url:     wopts.url
+						icon:    wopts.icon
+						browser: wopts.browser
+					}) or {
+						return render(hornero_core.fail_result('apps webapp add', err.msg()),
+							mode)
+					}
+					return render(hornero_core.ok_result('apps webapp add', 'created ${entry.file_path}',
+						{
+						'id':        entry.id
+						'file_path': entry.file_path
+						'wm_class':  entry.wm_class
+					}), mode)
+				}
+				'remove' {
+					removed := hornero_core.webapp_remove(wopts.id) or {
+						return render(hornero_core.fail_result('apps webapp remove', err.msg()),
+							mode)
+					}
+					return render(hornero_core.ok_result('apps webapp remove', 'removed ${removed}',
+						{
+						'id':        wopts.id
+						'file_path': removed
+					}), mode)
+				}
+				else {
+					items := hornero_core.webapp_list()
+					mut lines := []string{}
+					for item in items {
+						lines << '${item.id}\t${item.name}\t${item.wm_class}'
+					}
+					msg := if lines.len > 0 { lines.join('\n') } else { 'no webapps installed' }
+					return render(hornero_core.ok_result('apps webapp list', msg, {
+						'count': items.len.str()
+					}), mode)
+				}
+			}
+		}
+		'tui' {
+			topts := parse_apps_tui(opts.rest) or {
+				return render_error(hornero_core.err_usage('apps.tui.usage', err.msg()),
+					mode)
+			}
+			match topts.leaf {
+				'add' {
+					entry := hornero_core.tui_app_add(hornero_core.TuiAppSpec{
+						id:       topts.id
+						name:     topts.name
+						command:  topts.command
+						icon:     topts.icon
+						terminal: topts.terminal
+					}) or {
+						return render(hornero_core.fail_result('apps tui add', err.msg()),
+							mode)
+					}
+					return render(hornero_core.ok_result('apps tui add', 'created ${entry.file_path}',
+						{
+						'id':        entry.id
+						'file_path': entry.file_path
+						'wm_class':  entry.wm_class
+					}), mode)
+				}
+				'remove' {
+					removed := hornero_core.tui_app_remove(topts.id) or {
+						return render(hornero_core.fail_result('apps tui remove', err.msg()),
+							mode)
+					}
+					return render(hornero_core.ok_result('apps tui remove', 'removed ${removed}',
+						{
+						'id':        topts.id
+						'file_path': removed
+					}), mode)
+				}
+				else {
+					items := hornero_core.tui_app_list()
+					mut lines := []string{}
+					for item in items {
+						lines << '${item.id}\t${item.name}\t${item.wm_class}'
+					}
+					msg := if lines.len > 0 { lines.join('\n') } else { 'no tui apps installed' }
+					return render(hornero_core.ok_result('apps tui list', msg, {
+						'count': items.len.str()
+					}), mode)
+				}
+			}
 		}
 		else {
 			popts := parse_apps_performance(opts.rest) or {
