@@ -94,7 +94,11 @@ pub fn webapp_add(spec WebAppSpec) !DesktopAppEntry {
 	validate_desktop_field('url', spec.url)!
 	validate_desktop_field('icon', spec.icon)!
 
-	browser := if spec.browser.trim_space().len > 0 { spec.browser.trim_space() } else { 'chromium' }
+	browser := if spec.browser.trim_space().len > 0 {
+		spec.browser.trim_space()
+	} else {
+		'chromium'
+	}
 	validate_desktop_field('browser', browser)!
 	cats := if spec.categories.trim_space().len > 0 {
 		spec.categories.trim_space()
