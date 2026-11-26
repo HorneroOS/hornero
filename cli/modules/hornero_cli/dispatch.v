@@ -2401,10 +2401,10 @@ fn run_apps(args []string, mode hornero_core.RenderMode) int {
 					}
 					return render(hornero_core.ok_result('apps webapp add', 'created ${entry.file_path}',
 						{
-						'id':        entry.id
-						'file_path': entry.file_path
-						'wm_class':  entry.wm_class
-					}), mode)
+							'id':        entry.id
+							'file_path': entry.file_path
+							'wm_class':  entry.wm_class
+						}), mode)
 				}
 				'remove' {
 					removed := hornero_core.webapp_remove(wopts.id) or {
@@ -2413,9 +2413,9 @@ fn run_apps(args []string, mode hornero_core.RenderMode) int {
 					}
 					return render(hornero_core.ok_result('apps webapp remove', 'removed ${removed}',
 						{
-						'id':        wopts.id
-						'file_path': removed
-					}), mode)
+							'id':        wopts.id
+							'file_path': removed
+						}), mode)
 				}
 				else {
 					items := hornero_core.webapp_list()
@@ -2449,10 +2449,10 @@ fn run_apps(args []string, mode hornero_core.RenderMode) int {
 					}
 					return render(hornero_core.ok_result('apps tui add', 'created ${entry.file_path}',
 						{
-						'id':        entry.id
-						'file_path': entry.file_path
-						'wm_class':  entry.wm_class
-					}), mode)
+							'id':        entry.id
+							'file_path': entry.file_path
+							'wm_class':  entry.wm_class
+						}), mode)
 				}
 				'remove' {
 					removed := hornero_core.tui_app_remove(topts.id) or {
@@ -2461,9 +2461,9 @@ fn run_apps(args []string, mode hornero_core.RenderMode) int {
 					}
 					return render(hornero_core.ok_result('apps tui remove', 'removed ${removed}',
 						{
-						'id':        topts.id
-						'file_path': removed
-					}), mode)
+							'id':        topts.id
+							'file_path': removed
+						}), mode)
 				}
 				else {
 					items := hornero_core.tui_app_list()
