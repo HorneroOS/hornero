@@ -223,9 +223,11 @@ fn assistant_gateway_ensure_unit_locked(hermes string) !bool {
 }
 
 fn assistant_gateway_systemctl(args []string) ExecReport {
+	mut full_args := ['--user']
+	full_args << args
 	return run_exec(ExecSpec{
 		prog:        'systemctl'
-		args:        ['--user', ...args]
+		args:        full_args
 		timeout_sec: 30
 	})
 }
