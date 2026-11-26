@@ -73,9 +73,11 @@ def test_unknown_and_reference_only_selections_fail_actionably():
 
 
 def test_experimental_apps_are_flagged_not_silent():
-    plan = resolver.resolve_studio_selection(catalogue(), [], ["graphite"])
-    assert plan["experimental"] == ["graphite"]
-    assert "graphite" in plan["packages"]
+    catalogue_doc = catalogue()
+    assert "graphite" not in catalogue_doc["studioApplications"]
+    assert "graphite" not in catalogue_doc["studioSpecializations"]["graphic-design-illustration"]["applications"]
+    plan = resolver.resolve_studio_selection(catalogue_doc, [], ["artcraft-launcher"])
+    assert plan["experimental"] == ["artcraft-launcher"]
 
 
 def test_artcraft_is_single_manual_opt_in_never_in_packages():

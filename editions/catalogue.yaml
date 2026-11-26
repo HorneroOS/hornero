@@ -18,6 +18,7 @@ base:
     - e2fsprogs
     - grub
     - lvm2
+    - zram-generator
 packageSets:
   desktop:
     packages:
@@ -47,6 +48,23 @@ packageSets:
       - pipewire-alsa
       - pipewire-pulse
       - wireplumber
+      - git
+      - curl
+      - wl-clipboard
+      - cliphist
+      - grim
+      - slurp
+      - brightnessctl
+      - power-profiles-daemon
+      - upower
+      - libnotify
+      - xdg-user-dirs
+      - noto-fonts
+      - noto-fonts-emoji
+      - bubblewrap
+      - gvfs
+      - tumbler
+      - flatpak
   compositor:hyprland:
     packages:
       - hyprland
@@ -94,6 +112,8 @@ packageSets:
       - ffmpeg
       - blender
       - krita
+      - realtime-privileges
+      - lsp-plugins
   gaming:
     packages:
       - vulkan-icd-loader
@@ -106,6 +126,14 @@ packageSets:
       - gamescope
       - mangohud
       - lib32-mangohud
+      - mesa
+      - lib32-mesa
+      - vulkan-radeon
+      - lib32-vulkan-radeon
+      - vulkan-intel
+      - lib32-vulkan-intel
+      - lib32-pipewire
+      - ttf-liberation
 compositors:
   hyprland:
     maturity: supported
@@ -448,6 +476,22 @@ studioProvenance:
     installMethod: pacman-repository
     optional: false
     support: planned
+  realtime-privileges:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/realtime-privileges/
+    licenses: [GPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  lsp-plugins:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/lsp-plugins/
+    licenses: [LGPL-3.0-or-later]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
   reaper:
     source: arch-extra
     sourceUrl: https://archlinux.org/packages/extra/x86_64/reaper/
@@ -555,14 +599,6 @@ studioProvenance:
     installMethod: pacman-repository-opt-in
     optional: true
     support: planned
-  graphite:
-    source: arch-extra
-    sourceUrl: https://archlinux.org/packages/extra/x86_64/graphite/
-    licenses: [LGPL-2.1-or-later, MPL-2.0, GPL-2.0-or-later]
-    licenseClass: open-source
-    installMethod: pacman-repository-opt-in
-    optional: true
-    support: planned
   ai.storyteller.artcraft-launcher:
     source: vendor
     sourceUrl: https://github.com/storytold/craft-launcher/releases/tag/v0.19.0
@@ -603,7 +639,6 @@ studioApplications:
   inkscape: {title: Inkscape, packages: [inkscape]}
   darktable: {title: darktable, packages: [darktable]}
   rawtherapee: {title: RawTherapee, packages: [rawtherapee]}
-  graphite: {title: Graphite, packages: [graphite], experimental: true}
   penpot: {title: Penpot, packages: [], availability: reference-only, notes: "Browser-based design tool; use the hosted service or a self-hosted instance. No Arch package is installed."}
   scribus: {title: Scribus, packages: [scribus]}
   freecad: {title: FreeCAD, packages: [freecad]}
@@ -629,7 +664,7 @@ studioSpecializations:
     applications: [obs-studio]
   graphic-design-illustration:
     title: Graphic Design & Illustration
-    applications: [krita, gimp, inkscape, scribus, graphite]
+    applications: [krita, gimp, inkscape, scribus]
   photography-raw-processing:
     title: Photography & RAW Processing
     applications: [darktable, rawtherapee, gimp]
@@ -644,7 +679,7 @@ studioSpecializations:
     applications: [freecad, blender, inkscape]
   complete-creative-workstation:
     title: Complete Creative Workstation
-    applications: [ardour, guitarix, carla, audacity, reaper, yabridge, kdenlive, blender, obs-studio, krita, gimp, inkscape, scribus, graphite, darktable, rawtherapee, godot, freecad]
+    applications: [ardour, guitarix, carla, audacity, reaper, yabridge, kdenlive, blender, obs-studio, krita, gimp, inkscape, scribus, darktable, rawtherapee, godot, freecad]
   custom-selection:
     title: Custom Selection
     applications: []
@@ -785,6 +820,70 @@ gamingProvenance:
     source: arch-multilib
     sourceUrl: https://archlinux.org/packages/multilib/x86_64/lib32-mangohud/
     licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  mesa:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/mesa/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  lib32-mesa:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/lib32-mesa/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  vulkan-radeon:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/vulkan-radeon/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  lib32-vulkan-radeon:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/lib32-vulkan-radeon/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  vulkan-intel:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/vulkan-intel/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  lib32-vulkan-intel:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/lib32-vulkan-intel/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  lib32-pipewire:
+    source: arch-multilib
+    sourceUrl: https://archlinux.org/packages/multilib/x86_64/lib32-pipewire/
+    licenses: [MIT]
+    licenseClass: open-source
+    installMethod: pacman-repository
+    optional: false
+    support: planned
+  ttf-liberation:
+    source: arch-extra
+    sourceUrl: https://archlinux.org/packages/extra/x86_64/ttf-liberation/
+    licenses: [OFL-1.1]
     licenseClass: open-source
     installMethod: pacman-repository
     optional: false

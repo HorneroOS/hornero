@@ -10,6 +10,8 @@ profiles:
   - base
   - desktop
   - developer
+  - studio
+  - gaming
 checklist: releases/v0.2.0-preview41-checklist.md
 summary: >-
   Product-readiness package release through the AUR (no ISO):
