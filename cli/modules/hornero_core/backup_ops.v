@@ -175,7 +175,7 @@ pub fn backup_restore_report(opts BackupRestoreOptions) CommandResult {
 		args: ['-xzf', archive, '-C', source]
 	})
 	if rep.ok {
-		return ok_result('backup restore', 'Rollback complete: restored ${archive} into ${source}',
+		return ok_result('backup restore', 'Restore complete: restored ${archive} into ${source}',
 			{
 				'command_line': rep.command_line
 				'archive':      archive

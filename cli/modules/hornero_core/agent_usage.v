@@ -743,7 +743,7 @@ pub fn collect_opencode_usage_at(db_path string) AgentUsageRecord {
 		r.errors << 'No OpenCode database (OpenCode not used on this machine?).'
 		return r
 	}
-	mut db := sqlite.connect(db_path) or {
+	mut db := sqlite.connect_full(db_path, [.readonly], '') or {
 		r.status = 'error'
 		r.errors << 'Cannot open OpenCode database: ${err.msg()}'
 		return r

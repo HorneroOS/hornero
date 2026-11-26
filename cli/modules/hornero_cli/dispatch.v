@@ -81,7 +81,7 @@ pub fn dispatch(args []string) int {
 			return render_error(hornero_core.err_usage('${first}.unknown', "unknown command: ${first}.\nRun 'horneroctl help' for usage."), mode)
 		}
 		eprintln_human("Unknown command: ${first}\nRun 'horneroctl help' for usage.")
-		return 1
+		return 2
 	}
 	if wants_help(rest) {
 		// Prefer the nested help (`config snapshot --help` prints the

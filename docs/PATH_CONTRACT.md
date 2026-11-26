@@ -49,5 +49,5 @@ sources can provide user overrides, but system packages remain unchanged.
 
 See [CLI architecture](cli-architecture.md),
 [theme architecture](theme-split-plan.md), and
-[configuration defaults](FACTORY_DEFAULTS.md) for the corresponding runtime
+[editions and defaults](../editions/README.md) for the corresponding runtime
 and package responsibilities.

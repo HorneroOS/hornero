@@ -14,8 +14,8 @@
 - Non-interactive: flags/positionals only, no prompts, no menus.
 - Every subcommand owns `--help` with an `Examples:` section; add a
   dispatch test asserting it stays present.
-- Exit codes: `0` ok · `1` user/env/external/unknown-command ·
-  `2` unknown-flag/usage. Unknown flags must print a correct example.
+- Exit codes: `0` ok · `1` user/env/external ·
+  `2` unknown-command/unknown-flag/usage. Unknown flags must print a correct example.
 - `--json` / `--quiet` work on every command. `--dry-run` previews any
   external execution; mutating actions ALSO require `--yes`.
 - Never shell out with interpolated user input. `execx.v` passes program names
@@ -24,8 +24,8 @@
 
 ## V specifics
 
-- Toolchain: always latest V master (CI builds master HEAD from source;
-  keep local `v` current with `v up`). No version pin exists on purpose.
+- Toolchain: pinned V commit in `toolchain/` (shared via `.github/actions/setup-v`;
+  see `docs/TOOLCHAIN.md`). Keep local `v` current with the pinned commit.
 - `VMODULES` points at `cli/modules` (see `make.vsh`); never use relative
   imports.
 - `v fmt -w` before commit; `fmt-check`, `vet`, `test` must all pass.

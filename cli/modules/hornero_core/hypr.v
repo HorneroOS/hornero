@@ -74,7 +74,7 @@ fn hypr_lua_config_enabled() bool {
 }
 
 fn hypr_lua_string(value string) string {
-	return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') + '"'
+	return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t').replace('\0', '\\0') + '"'
 }
 
 fn hypr_lua_eval(bin string, expression string, dry_run bool) !ExecReport {

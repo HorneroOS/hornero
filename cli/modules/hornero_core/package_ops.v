@@ -40,14 +40,14 @@ pub fn resolve_pacman_bin() string {
 	return find_on_path('pacman')
 }
 
-// resolve_paru_bin locates paru (AUR helper, user-level).
-// Override with HORNERO_PARU_BIN.
+// resolve_paru_bin locates the AUR helper (unified with resolve_aur_helper_bin:
+// HORNERO_PARU_BIN -> HORNERO_AUR_HELPER_BIN -> yay -> paru).
 pub fn resolve_paru_bin() string {
 	env := os.getenv('HORNERO_PARU_BIN')
 	if env.len > 0 {
 		return env
 	}
-	return find_on_path('paru')
+	return resolve_aur_helper_bin()
 }
 
 fn pkexec_or_fail(leaf string, dry_run bool) !string {
@@ -92,6 +92,9 @@ pub fn package_upgrade_report(opts PackageUpgradeOptions) CommandResult {
 		return fail_result('package upgrade', err.msg())
 	}
 	if !opts.dry_run {
+		if os.getenv('HORNERO_PKEXEC_BIN').len == 0 && os.is_atty(0) == 0 {
+			return fail_result('package upgrade', 'interactive terminal required for `pkexec pacman -Syu`: run `horneroctl package upgrade --yes` inside a terminal.')
+		}
 		blocker := upgrade_preflight_blocker()
 		if blocker.len > 0 {
 			return fail_result('package upgrade', 'preflight refused: ${blocker}')
@@ -304,20 +307,13 @@ pub fn package_deps_install_report(opts PackageDepsOptions) CommandResult {
 		step << repo
 		steps << step
 	}
+	mut aur_manual := ''
 	if aur.len > 0 {
-		paru := resolve_paru_bin()
-		if paru.len == 0 {
-			if !opts.dry_run {
-				return fail_result('package deps', 'paru not found: cannot install AUR packages (${aur.join(', ')}). Install paru or yay, then retry.\nExample: horneroctl package deps --install --dry-run')
-			}
-			mut step := ['paru', '-S', '--needed']
-			step << aur
-			steps << step
-		} else {
-			mut step := [paru, '-S', '--needed']
-			step << aur
-			steps << step
-		}
+		helper := resolve_paru_bin()
+		helper_name := if helper.len > 0 { helper } else { 'yay' }
+		mut aur_args := ['-S', '--needed']
+		aur_args << aur
+		aur_manual = command_line(helper_name, aur_args)
 	}
 	mut previews := []string{}
 	for s in steps {
@@ -328,12 +324,19 @@ pub fn package_deps_install_report(opts PackageDepsOptions) CommandResult {
 		for p in previews {
 			lines << 'would run: ${p}'
 		}
-		return ok_result('package deps', lines.join('\n'), {
+		if aur_manual.len > 0 {
+			lines << 'AUR packages stay manual: ${aur_manual}'
+		}
+		mut data := {
 			'command_line': previews.join('; ')
 			'missing':      missing.map(it.check).join(',')
 			'dry_run':      'true'
 			'compositor':   compositor
-		})
+		}
+		if aur_manual.len > 0 {
+			data['aur_manual_command'] = aur_manual
+		}
+		return ok_result('package deps', lines.join('\n'), data)
 	}
 	for s in steps {
 		rep := run_exec(ExecSpec{
@@ -344,10 +347,17 @@ pub fn package_deps_install_report(opts PackageDepsOptions) CommandResult {
 			return fail_result('package deps', 'backend failed (exit ${rep.exit_code}):\n${rep.output}')
 		}
 	}
-	return ok_result('package deps', 'installed ${missing.len} missing dependencies',
-		{
-			'command_line': previews.join('; ')
-			'missing':      missing.map(it.check).join(',')
-			'compositor':   compositor
-		})
+	mut msg := 'installed ${repo.len} repository dependencies'
+	if aur_manual.len > 0 {
+		msg += '; AUR packages stay manual: ${aur_manual}'
+	}
+	mut data := {
+		'command_line': previews.join('; ')
+		'missing':      missing.map(it.check).join(',')
+		'compositor':   compositor
+	}
+	if aur_manual.len > 0 {
+		data['aur_manual_command'] = aur_manual
+	}
+	return ok_result('package deps', msg, data)
 }

@@ -70,11 +70,14 @@ pub fn free_space_kb(path string) i64 {
 	if df.len == 0 {
 		return -1
 	}
-	result := os.execute('${df} -Pk ${path}')
-	if result.exit_code != 0 {
+	rep := run_exec(ExecSpec{
+		prog: df
+		args: ['-Pk', path]
+	})
+	if !rep.ok {
 		return -1
 	}
-	return parse_df_available_kb(result.output)
+	return parse_df_available_kb(rep.output)
 }
 
 // parse_df_available_kb extracts the Available column (KiB) from
@@ -136,7 +139,48 @@ pub fn reboot_required() (bool, string) {
 }
 
 fn json_escape(value string) string {
-	return value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ')
+	mut out := []u8{cap: value.len}
+	for b in value.bytes() {
+		match b {
+			`\\` {
+				out << `\\`
+				out << `\\`
+			}
+			`"` {
+				out << `\\`
+				out << `"`
+			}
+			`\n` {
+				out << `\\`
+				out << `n`
+			}
+			`\r` {
+				out << `\\`
+				out << `r`
+			}
+			`\t` {
+				out << `\\`
+				out << `t`
+			}
+			0x08 {
+				out << `\\`
+				out << `b`
+			}
+			0x0c {
+				out << `\\`
+				out << `f`
+			}
+			else {
+				if b < 0x20 {
+					hex := '\\u00${b:02x}'
+					out << hex.bytes()
+				} else {
+					out << b
+				}
+			}
+		}
+	}
+	return out.bytestr()
 }
 
 // update_history_line renders one history record as a JSON object.

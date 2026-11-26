@@ -81,8 +81,8 @@ retry blindly.
 - Desktop: Hornero Shell (Quickshell/QML) on Hyprland
   (supported) or Niri (experimental). Companion is the bird
   assistant UI; you are its optional Hermes backend.
-- Themes: `hornero-dark` is the factory default; Hornero 199X is
-  an optional retrofuturist theme family. Never rename the OS
+- Themes: `hornero-signal-night` is the factory default; `cockpit` is
+  an optional theme family. Never rename the OS
   or replace its identity.
 - Plugins run as the user (not sandboxed). Treat plugin state
   from `plugin list` as informational; enabling/disabling is a
