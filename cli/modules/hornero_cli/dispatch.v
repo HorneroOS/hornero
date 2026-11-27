@@ -477,7 +477,7 @@ fn run_github(args []string, mode hornero_core.RenderMode) int {
 fn run_agent(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('agent.usage',
-			'expected a subcommand: list, status, doctor, usage, default, launch, config.\nExample: horneroctl agent list --json'),
+			'expected a subcommand: list, status, doctor, usage, default, launch, run, config.\nExample: horneroctl agent list --json'),
 			mode)
 	}
 	match args[0] {
@@ -537,6 +537,20 @@ fn run_agent(args []string, mode hornero_core.RenderMode) int {
 					'expected exactly one agent id.\nExample: horneroctl agent launch codex'), mode)
 			}
 			return render(hornero_core.agent_launch_result(args[1]), mode)
+		}
+		'run' {
+			opts := parse_agent_run(args[1..]) or {
+				return render_error(hornero_core.err_usage('agent.usage', err.msg()), mode)
+			}
+			return render(hornero_core.agent_run_result(hornero_core.AgentRunOptions{
+				id:             opts.id
+				sandbox:        opts.sandbox
+				workspace:      opts.workspace
+				no_net:         opts.no_net
+				allow_git_auth: opts.allow_git_auth
+				dry_run:        opts.dry_run
+				extra_args:     opts.passthrough
+			}), mode)
 		}
 		'usage' {
 			mut id := ''
@@ -614,7 +628,7 @@ fn run_agent(args []string, mode hornero_core.RenderMode) int {
 		}
 		else {
 			return render_error(hornero_core.err_usage('agent.usage',
-				'unknown subcommand: ${args[0]} (expected: list, status, doctor, usage, default, launch, config).\nExample: horneroctl agent list'),
+				'unknown subcommand: ${args[0]} (expected: list, status, doctor, usage, default, launch, run, config).\nExample: horneroctl agent list'),
 				mode)
 		}
 	}
