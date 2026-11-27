@@ -210,6 +210,12 @@ pub fn agent_ids() []string {
 // agent_expand resolves a '~/...' registry path against the real home
 // (or the agent's home env override when set). Non-'~' paths pass through.
 pub fn agent_expand(spec AgentSpec, path string) string {
+	return agent_expand_for_home(spec, path, os.home_dir())
+}
+
+// agent_expand_for_home resolves a '~/...' registry path against `home_dir`
+// (or the agent's home env override when set). Non-'~' paths pass through.
+pub fn agent_expand_for_home(spec AgentSpec, path string, home_dir string) string {
 	if !path.starts_with('~/') {
 		return path
 	}
@@ -227,7 +233,7 @@ pub fn agent_expand(spec AgentSpec, path string) string {
 				}
 				// A mismatched prefix is a registry error; keep using the normal
 				// home-relative path rather than rewriting an unrelated location.
-				return os.join_path(os.home_dir(), rest)
+				return os.join_path(home_dir, rest)
 			}
 			// auth/config paths are recorded relative to the agent home.
 			parts := rest.split('/')
@@ -237,7 +243,16 @@ pub fn agent_expand(spec AgentSpec, path string) string {
 			return override
 		}
 	}
-	return os.join_path(os.home_dir(), rest)
+	return os.join_path(home_dir, rest)
+}
+
+// agent_config_dir_for_home returns the directory owning `spec.config_path`
+// relative to `home_dir` (or '' when the spec declares no config_path).
+pub fn agent_config_dir_for_home(spec AgentSpec, home_dir string) string {
+	if spec.config_path.len == 0 {
+		return ''
+	}
+	return os.dir(agent_expand_for_home(spec, spec.config_path, home_dir))
 }
 
 pub struct AgentStatus {

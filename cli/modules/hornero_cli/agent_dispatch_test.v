@@ -16,8 +16,11 @@ fn test_agent_help_is_discoverable() {
 	assert command_help('agent list').contains('Read-only')
 	assert command_help('agent doctor').contains('Read-only')
 	assert command_help('agent launch').contains('Dry-run proposal only')
+	assert command_help('agent run').contains('--sandbox')
+	assert command_help('agent run').contains('Examples:')
 	assert command_help('agent default').contains('agent-default.json')
 	assert dispatch(['horneroctl', 'agent', 'list', '--help']) == 0
+	assert dispatch(['horneroctl', 'agent', 'run', '--help']) == 0
 	assert dispatch(['horneroctl', 'agent', '--help']) == 0
 	assert root_help().contains('agent')
 }
@@ -150,4 +153,26 @@ fn test_agent_config_help_and_read_only_commands() {
 	// check fails closed on a registry that cannot be parsed.
 	os.write_file(cfg, 'not json') or { assert false }
 	assert dispatch(['horneroctl', 'agent', 'config', 'check']) != 0
+}
+
+fn test_agent_run_dispatch_dry_run_and_validation() {
+	// Usage errors return exit code 2 (fail closed when --sandbox is omitted or id is invalid).
+	assert dispatch(['horneroctl', 'agent', 'run']) == 2
+	assert dispatch(['horneroctl', 'agent', 'run', 'codex']) == 2
+	assert dispatch(['horneroctl', 'agent', 'run', 'codex', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'agent', 'run', 'nope', '--sandbox', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'agent', 'run', 'codex', '--sandbox', '--bogus', '--dry-run']) == 2
+	assert dispatch(['horneroctl', 'agent', 'run', 'codex', '--sandbox', '--workspace']) == 2
+	assert dispatch(['horneroctl', 'agent', 'run', 'codex', '--sandbox', '--workspace=']) == 2
+
+	// Dry-run succeeds in human and JSON modes, preserving passthrough args after '--'.
+	assert dispatch(['horneroctl', 'agent', 'run', 'codex', '--sandbox', '--workspace', '/tmp/hx ws "q"',
+		'--no-net', '--allow-git-auth', '--dry-run', '--', '--help', 'say "hi"']) == 0
+	assert dispatch(['horneroctl', 'agent', 'run', 'claude-code', '--sandbox', '--workspace=/tmp/hx-ws',
+		'--no-net', '--dry-run', '--json', '--', 'exec', '--model', 'sonnet']) == 0
+
+	// Credential workspace fails even with --dry-run (exit code 1).
+	cred_ws := os.join_path(os.home_dir(), '.ssh')
+	assert dispatch(['horneroctl', 'agent', 'run', 'codex', '--sandbox', '--workspace', cred_ws,
+		'--dry-run']) == 1
 }

@@ -139,6 +139,104 @@ pub fn parse_shell_cmd(args []string) !ShellCmdOptions {
 	}
 }
 
+pub struct AgentRunCmdOptions {
+pub:
+	id             string
+	sandbox        bool
+	workspace      string
+	no_net         bool
+	allow_git_auth bool
+	dry_run        bool
+	passthrough    []string
+}
+
+pub fn parse_agent_run(args []string) !AgentRunCmdOptions {
+	mut id := ''
+	mut sandbox := false
+	mut workspace := ''
+	mut no_net := false
+	mut allow_git_auth := false
+	mut dry_run := false
+	mut passthrough := []string{}
+	mut sep := false
+	mut i := 0
+	for i < args.len {
+		a := args[i]
+		if sep {
+			passthrough << a
+			i++
+			continue
+		}
+		if a == '--' {
+			sep = true
+			i++
+			continue
+		}
+		if a == '--sandbox' {
+			sandbox = true
+			i++
+			continue
+		}
+		if a == '--no-net' {
+			no_net = true
+			i++
+			continue
+		}
+		if a == '--allow-git-auth' {
+			allow_git_auth = true
+			i++
+			continue
+		}
+		if a == '--dry-run' {
+			dry_run = true
+			i++
+			continue
+		}
+		if a == '--workspace' {
+			if i + 1 >= args.len || args[i + 1].len == 0 {
+				return error('missing value for --workspace.\nExample: horneroctl agent run codex --sandbox --workspace . --dry-run')
+			}
+			workspace = args[i + 1]
+			i += 2
+			continue
+		}
+		if a.starts_with('--workspace=') {
+			workspace = a.all_after('=')
+			if workspace.len == 0 {
+				return error('missing value for --workspace.\nExample: horneroctl agent run codex --sandbox --workspace . --dry-run')
+			}
+			i++
+			continue
+		}
+		if a.starts_with('-') {
+			return error('unknown flag: ${a}.\nExample: horneroctl agent run codex --sandbox --dry-run')
+		}
+		if id.len > 0 {
+			return error('unexpected argument: ${a}.\nExample: horneroctl agent run codex --sandbox --dry-run')
+		}
+		id = a
+		i++
+	}
+	if id.len == 0 {
+		return error('expected an agent id.\nExample: horneroctl agent run codex --sandbox --dry-run')
+	}
+	hornero_core.agent_by_id(id) or {
+		return error('unknown agent id: ${id}.\nExample: horneroctl agent run codex --sandbox --dry-run')
+	}
+	if !sandbox {
+		return error('agent run requires --sandbox.\nExample: horneroctl agent run ${id} --sandbox --dry-run')
+	}
+	return AgentRunCmdOptions{
+		id:             id
+		sandbox:        sandbox
+		workspace:      workspace
+		no_net:         no_net
+		allow_git_auth: allow_git_auth
+		dry_run:        dry_run
+		passthrough:    passthrough
+	}
+}
+
 pub struct AppearanceCmdOptions {
 pub:
 	sub     string
