@@ -100,7 +100,7 @@ PY
   export HX_MANIFEST
   export HX_CONFIG_PIN="$CONFIG_REPO $CONFIG_SHA"
   export HX_MATERIALIZE_BIN="$COMPOSE_WORK/config/scripts/materialize.sh"
-  export HX_HOREROCTL_BIN="$ROOT/cli/build/horneroctl"
+  export HX_HOREROCTL_BIN="$ROOT/cli/out/horneroctl"
 }
 
 # --- shell harness resolution -------------------------------------------------
@@ -199,7 +199,7 @@ case "$CMD" in
     "$ROOT/scripts/compose.sh" --manifest "$MANIFEST" \
       --work "$COMPOSE_WORK" --dest "$COMPOSE_DEST" --yes \
       || fail "compose.sh --yes"
-    [[ -x $ROOT/cli/build/horneroctl ]] || fail "horneroctl missing after compose"
+    [[ -x $ROOT/cli/out/horneroctl ]] || fail "horneroctl missing after compose"
     pass "host composition built"
     hx_composed_env
     hx_harness

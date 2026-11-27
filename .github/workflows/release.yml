@@ -131,13 +131,13 @@ jobs:
       - name: Smoke test
         working-directory: cli
         run: |
-          ./build/horneroctl version
+          ./out/horneroctl version
           # A release binary must name its tag (never -dirty) and its pins.
-          if ./build/horneroctl version | grep -q -- '-dirty'; then
+          if ./out/horneroctl version | grep -q -- '-dirty'; then
             echo "release build is dirty" >&2
             exit 1
           fi
-          ./build/horneroctl version --json > /tmp/hx-version.json
+          ./out/horneroctl version --json > /tmp/hx-version.json
           python3 - <<'PY'
           import json, os
           d = json.load(open("/tmp/hx-version.json"))["data"]
@@ -145,15 +145,15 @@ jobs:
           assert d["config_sha"] == os.environ["HX_CONFIG_SHA"], d
           assert d["manifest"] == os.environ["HX_MANIFEST"], d
           PY
-          ./build/horneroctl --help | head -n 12
-          cp -f build/horneroctl "build/${{ matrix.asset }}"
+          ./out/horneroctl --help | head -n 12
+          cp -f out/horneroctl "out/${{ matrix.asset }}"
       - name: Upload release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
         run: |
           gh release upload "${RELEASE_TAG}" \
-            "cli/build/${{ matrix.asset }}" --clobber
+            "cli/out/${{ matrix.asset }}" --clobber
       - name: Sign release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -189,7 +189,7 @@ jobs:
             echo "No private key in the release secret matches the committed public key." >&2
             exit 1
           fi
-          asset="cli/build/${{ matrix.asset }}"
+          asset="cli/out/${{ matrix.asset }}"
           HORNERO_RELEASE_KEY_ID="${key_id}" \
             HORNERO_RELEASE_PASSPHRASE="${SIGNING_PASSPHRASE}" \
             scripts/sign-release.sh "${asset}"

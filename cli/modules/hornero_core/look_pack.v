@@ -43,9 +43,8 @@ fn look_pack_flatten(m map[string]json2.Any, prefix string, mut out map[string]j
 	for k, v in m {
 		path := if prefix.len > 0 { '${prefix}.${k}' } else { k }
 		if v is map[string]json2.Any {
-			sub := v.as_map()
-			if sub.len > 0 {
-				look_pack_flatten(sub, path, mut out)
+			if v.len > 0 {
+				look_pack_flatten(v, path, mut out)
 				continue
 			}
 		}

@@ -92,6 +92,15 @@ fn test_arrow_rows_keep_versions() {
 }
 
 fn test_caps_respect_no_color_and_pipes() {
+	old_term := os.getenv('TERM')
+	os.setenv('TERM', 'xterm-256color', true)
+	defer {
+		if old_term.len == 0 {
+			os.unsetenv('TERM')
+		} else {
+			os.setenv('TERM', old_term, true)
+		}
+	}
 	os.setenv('NO_COLOR', '1', true)
 	os.setenv('CLICOLOR_FORCE', '1', true)
 	assert !caps_for(1).color
@@ -115,6 +124,15 @@ fn test_error_marker_has_glyph_and_word_and_plain_is_identity() {
 }
 
 fn test_json_and_quiet_invocations_disable_styling_and_clean_up() {
+	old_term := os.getenv('TERM')
+	os.setenv('TERM', 'xterm-256color', true)
+	defer {
+		if old_term.len == 0 {
+			os.unsetenv('TERM')
+		} else {
+			os.setenv('TERM', old_term, true)
+		}
+	}
 	os.setenv('CLICOLOR_FORCE', '1', true)
 	assert caps_for(1).color
 	assert dispatch(['horneroctl', '--json', 'help']) == 0

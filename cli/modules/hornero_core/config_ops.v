@@ -28,7 +28,12 @@ pub fn resolve_materialize_bin() string {
 	if on_path.len > 0 {
 		return on_path
 	}
-	packaged_seed := '/usr/share/hornero/seed-user.sh'
+	seed_override := os.getenv('HORNERO_PACKAGED_SEED_BIN')
+	packaged_seed := if seed_override.len > 0 {
+		seed_override
+	} else {
+		'/usr/share/hornero/seed-user.sh'
+	}
 	if os.is_file(packaged_seed) {
 		return packaged_seed
 	}
