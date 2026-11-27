@@ -100,7 +100,7 @@ fn test_fixtures_parse_as_signal_themes() {
 		assert t.terminal.len == 16
 	}
 	assert sg_fixture('hornero-signal-day').mode == 'light'
-	assert sg_fixture('hornero-signal-night').role('signal') == '#F2A33A'
+	assert sg_fixture('hornero-signal-night').role('signal') == '#F2AC52'
 }
 
 fn test_parse_rejects_non_contract_documents() {
@@ -214,7 +214,7 @@ fn test_hyprlock_conf_is_variables_only() {
 	for line in lines {
 		assert line.starts_with('$' + 'hs_'), line
 	}
-	assert conf.contains('$' + 'hs_ground = rgba(0c0f13ff)')
+	assert conf.contains('$' + 'hs_ground = rgba(0c1016ff)')
 	glow := night.palette['glow'] or { '' }
 	assert conf.contains('$' + 'hs_glow = rgba(${glow.trim_left('#').to_lower()}ff)')
 	assert !conf.contains('{')
@@ -336,8 +336,8 @@ fn test_theme_apply_writes_scheme_and_outputs() {
 	assert out.hyprland_lua == '${sg_root}/cache/hornero/smart-colors/colors-hyprland.lua'
 	assert out.hyprlock_conf == '${sg_root}/cache/hornero/smart-colors/colors-hyprlock.conf'
 	assert out.btop_theme == '${sg_root}/config/btop/themes/Hornero Dynamic.theme'
-	assert (os.read_file(out.hyprland_lua) or { '' }).contains('rgba(8f4b00ee)')
-	assert (os.read_file(out.hyprlock_conf) or { '' }).contains('$' + 'hs_ground = rgba(e6e1d5ff)')
+	assert (os.read_file(out.hyprland_lua) or { '' }).contains('rgba(864700ee)')
+	assert (os.read_file(out.hyprlock_conf) or { '' }).contains('$' + 'hs_ground = rgba(e8edf4ff)')
 	for path in [out.alacritty_toml, out.ghostty_theme, out.btop_theme, out.cava_theme] {
 		assert os.is_file(path), path
 	}

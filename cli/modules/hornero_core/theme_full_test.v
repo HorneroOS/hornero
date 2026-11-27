@@ -82,7 +82,7 @@ fn test_theme_list_full_is_manifest_array() {
 	assert a['colorOnly'].bool() == false
 	swatch := a['swatch'].as_map()
 	assert swatch.len == 5
-	assert swatch['signal'].str() == '#F2A33A'
+	assert swatch['signal'].str() == '#F2AC52'
 	assert a['gtkColorScheme'].str() == 'prefer-dark'
 	assert a['wallpaperDir'].str() == 'hx-full-a'
 	assert a['defaultWallpaper'].str() == 'a.jpg'

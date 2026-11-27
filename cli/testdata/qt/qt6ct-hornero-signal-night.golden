@@ -3,6 +3,6 @@
 ; Default wallpaper: hornero-signal-night-01.png.
 ; Roles follow QPalette::ColorRole order. Selection = cue, Accent = signal.
 [ColorScheme]
-active_colors=#ffece6da, #ff1f252e, #ff283039, #ff242a34, #ff101419, #ff707a85, #ffece6da, #ffffffff, #ffece6da, #ff101419, #ff13171d, #ff000000, #ff7ec1ea, #ff06151f, #ff7ec1ea, #ffa8abad, #ff181d24, #ff000000, #ff283039, #ffece6da, #ffa8abad, #fff2a33a
-inactive_colors=#ffece6da, #ff1f252e, #ff283039, #ff242a34, #ff101419, #ff707a85, #ffece6da, #ffffffff, #ffece6da, #ff101419, #ff13171d, #ff000000, #ff7ec1ea, #ff06151f, #ff7ec1ea, #ffa8abad, #ff181d24, #ff000000, #ff283039, #ffece6da, #ffa8abad, #fff2a33a
-disabled_colors=#ff737980, #ff1f252e, #ff283039, #ff242a34, #ff101419, #ff707a85, #ff737980, #ffffffff, #ff737980, #ff101419, #ff13171d, #ff000000, #ff16303f, #ff737980, #ff7ec1ea, #ffa8abad, #ff181d24, #ff000000, #ff283039, #ffece6da, #ff737980, #ff3a2a12
+active_colors=#ffe6ebf1, #ff24303d, #ff2c3947, #ff283442, #ff10151c, #ff8393a6, #ffe6ebf1, #ffffffff, #ffe6ebf1, #ff10151c, #ff141b24, #ff000000, #ff8bcef0, #ff071a26, #ff8bcef0, #ffa9b7c6, #ff1b2430, #ff000000, #ff2c3947, #ffe6ebf1, #ffa9b7c6, #fff2ac52
+inactive_colors=#ffe6ebf1, #ff24303d, #ff2c3947, #ff283442, #ff10151c, #ff8393a6, #ffe6ebf1, #ffffffff, #ffe6ebf1, #ff10151c, #ff141b24, #ff000000, #ff8bcef0, #ff071a26, #ff8bcef0, #ffa9b7c6, #ff1b2430, #ff000000, #ff2c3947, #ffe6ebf1, #ffa9b7c6, #fff2ac52
+disabled_colors=#ff8999ab, #ff24303d, #ff2c3947, #ff283442, #ff10151c, #ff8393a6, #ff8999ab, #ffffffff, #ff8999ab, #ff10151c, #ff141b24, #ff000000, #ff163345, #ff8999ab, #ff8bcef0, #ffa9b7c6, #ff1b2430, #ff000000, #ff2c3947, #ffe6ebf1, #ff8999ab, #ff3d2b12

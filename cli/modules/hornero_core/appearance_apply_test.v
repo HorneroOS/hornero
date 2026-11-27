@@ -135,13 +135,13 @@ fn test_regenerate_hyprland_and_hyprlock_from_scheme() {
 		lua := os.read_file(os.join_path(tmp, 'cache', 'hornero', 'smart-colors', 'colors-hyprland.lua')) or {
 			''
 		}
-		assert lua.contains('active_border = "rgba(f2a33aee)"')
+		assert lua.contains('active_border = "rgba(f2ac52ee)"')
 		lock_rep := regenerate_hyprlock_native('', false)
 		assert lock_rep.ok, lock_rep.message
 		conf := os.read_file(os.join_path(tmp, 'cache', 'hornero', 'smart-colors', 'colors-hyprlock.conf')) or {
 			''
 		}
-		assert conf.contains('$' + 'hs_signal = rgba(f2a33aff)')
+		assert conf.contains('$' + 'hs_signal = rgba(f2ac52ff)')
 	})
 	os.rmdir_all(tmp) or {}
 }
@@ -173,7 +173,7 @@ fn test_colors_generate_writes_smart_files_from_scheme() {
 			assert os.is_file(os.join_path(dir, name)), name
 		}
 		css := os.read_file(os.join_path(dir, 'colors.css')) or { '' }
-		assert css.contains('--smart-error: #F0705A;')
+		assert css.contains('--smart-error: #FF8494;')
 	})
 	os.rmdir_all(tmp) or {}
 }
@@ -194,7 +194,7 @@ fn test_sync_kitty_include_points_at_pack_conf() {
 		os.write_file(os.join_path(kitty, 'kitty.conf'), 'font_size 11\ninclude hornero-signal-night.conf\ninclude fonts.conf\n') or {
 			panic(err)
 		}
-		os.write_file(os.join_path(kitty, 'hornero-signal-day.conf'), 'background #F2EEE5\n') or {
+		os.write_file(os.join_path(kitty, 'hornero-signal-day.conf'), 'background #EEF2F7\n') or {
 			panic(err)
 		}
 		sync_kitty_include('hornero-signal-day')

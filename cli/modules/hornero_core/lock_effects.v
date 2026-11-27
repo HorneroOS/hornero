@@ -352,10 +352,10 @@ pub fn lock_colors() LockColors {
 		}
 	}
 	return LockColors{
-		bg:      '0c0f13'
-		fg:      'ece6da'
-		primary: 'f2a33a'
-		error:   'f0705a'
+		bg:      '0c1016'
+		fg:      'e6ebf1'
+		primary: 'f2ac52'
+		error:   'ff8494'
 	}
 }
 

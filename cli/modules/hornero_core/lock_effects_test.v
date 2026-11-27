@@ -183,20 +183,20 @@ fn test_lock_colors_prefers_signal_scheme() {
 	day := load_signal_theme_fixture('hornero-signal-day')
 	write_signal_scheme(day) or { assert false, err.msg() }
 	c := lock_colors()
-	assert c.bg == 'e6e1d5'
-	assert c.fg == '1b1e22'
-	assert c.primary == '8f4b00'
-	assert c.error == 'a8341c'
+	assert c.bg == 'e8edf4'
+	assert c.fg == '283344'
+	assert c.primary == '864700'
+	assert c.error == '9c293e'
 	lock_tteardown()
 }
 
 fn test_lock_colors_default_to_signal_night_without_scheme() {
 	lock_tsetup()
 	c := lock_colors()
-	assert c.bg == '0c0f13'
-	assert c.fg == 'ece6da'
-	assert c.primary == 'f2a33a'
-	assert c.error == 'f0705a'
+	assert c.bg == '0c1016'
+	assert c.fg == 'e6ebf1'
+	assert c.primary == 'f2ac52'
+	assert c.error == 'ff8494'
 	lock_tteardown()
 }
 
