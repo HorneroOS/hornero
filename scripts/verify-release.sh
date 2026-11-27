@@ -27,11 +27,12 @@ chmod 700 "${GNUPGHOME}"
 
 gpg --batch --quiet --import "${pubkey}"
 status_out="$(gpg --batch --status-fd 1 --verify "${sig}" "${file}" 2>/dev/null || true)"
-if printf '%s\n' "${status_out}" | grep -qE '^\[GNUPG:\] (EXPKEYSIG|REVKEYSIG) '; then
-  echo "FAIL: signing key is expired or revoked for ${file}" >&2
+if printf '%s\n' "${status_out}" | grep -qE '^\[GNUPG:\] (EXPKEYSIG|REVKEYSIG|BADSIG|ERRSIG) '; then
+  echo "FAIL: signature verification failed (expired, revoked, bad, or errored key) for ${file}" >&2
   exit 1
 fi
-if printf '%s\n' "${status_out}" | grep -q '^\[GNUPG:\] VALIDSIG '; then
+if printf '%s\n' "${status_out}" | grep -q '^\[GNUPG:\] GOODSIG ' \
+  && printf '%s\n' "${status_out}" | grep -q '^\[GNUPG:\] VALIDSIG '; then
   echo "OK: ${file} verifies against the in-repo HorneroOS release key"
 else
   echo "FAIL: signature verification failed for ${file}" >&2

@@ -54,6 +54,29 @@ if bash "${repo}/scripts/verify-release.sh" "${work}/asset" >/dev/null 2>&1; the
 fi
 echo "PASS: tampered asset rejected"
 
+# Expired signing key must fail (even when signed while valid).
+exp_home="${work}/gnupg-expired"
+mkdir -p "${exp_home}"
+chmod 700 "${exp_home}"
+echo "horneroctl expired-key asset" > "${work}/expired-asset"
+GNUPGHOME="${exp_home}" gpg --batch --quiet --faked-system-time "20200101T000000" \
+  --pinentry-mode loopback --passphrase 'smoke-passphrase' \
+  --quick-generate-key "HorneroOS expired smoke <expired@invalid>" ed25519 sign 1d
+exp_fpr="$(GNUPGHOME="${exp_home}" gpg --batch --with-colons --list-keys | awk -F: '/^fpr:/{print $10; exit}')"
+printf '%s' 'smoke-passphrase' \
+  | GNUPGHOME="${exp_home}" gpg --batch --yes --faked-system-time "20200101T120000" \
+    --pinentry-mode loopback --passphrase-fd 0 \
+    --local-user "${exp_fpr}" \
+    --detach-sign --armor --output "${work}/expired-asset.asc" "${work}/expired-asset"
+cp "${repo}/packaging/keys/hornero-release.pub.asc" "${work}/clean-pub.asc"
+GNUPGHOME="${exp_home}" gpg --batch --armor --export "${exp_fpr}" > "${repo}/packaging/keys/hornero-release.pub.asc"
+if bash "${repo}/scripts/verify-release.sh" "${work}/expired-asset" >/dev/null 2>&1; then
+  echo "FAIL: expired signing key was accepted" >&2
+  exit 1
+fi
+mv "${work}/clean-pub.asc" "${repo}/packaging/keys/hornero-release.pub.asc"
+echo "PASS: expired signing key rejected"
+
 # The verifier must fail closed when either trust input is missing.
 if bash "${repo}/scripts/verify-release.sh" "${work}/asset" "${work}/missing.asc" >/dev/null 2>&1; then
   echo "FAIL: missing signature was accepted" >&2
