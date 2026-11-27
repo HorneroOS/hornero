@@ -28,7 +28,8 @@ Commands:
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard, status)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
   system        Installed edition and active compositor information
-  studio        Studio selection state and read-only diagnostics (doctor, selection)
+  profile       Universal 5-domain workspace profiles & snapshots (list, show, capture, diff, apply, revert, delete, launch-apps, export, import)
+  studio        Studio selection state and read-only diagnostics (doctor, selection, routing)
   gaming        Gaming readiness diagnostics (doctor, launch-options)
   recovery      OS recovery readiness diagnostics (doctor)
   assistant     Optional Hermes AI assistant (status, enable, disable, tools, knowledge, ask, stop)
@@ -93,8 +94,43 @@ Examples:
 			return 'Usage: horneroctl studio mode <show|audio|performance|restore> [options]\n\nAudio modes follow the HorneroOS/hornero#287 contract: Balanced\nis the device-default, Low Latency and Advanced are explicit\nopt-ins that require --yes. horneroctl records the mode and the\nprevious mode for exact restore; PipeWire values stay owned by\nHorneroOS/config desktop/studio-audio drop-ins, so nothing writes\nPipeWire config or restarts services here, and quantum is never\npresented as physical latency. Temporary Performance switches via\npower-profiles-daemon only, records the exact previous profile,\nand restores it with mode restore. No RT kernel, IRQ, governor,\nGPU, I/O scheduler, or privilege change is ever made.\n\nExamples:\n  horneroctl studio mode\n  horneroctl studio mode audio low-latency --yes\n  horneroctl studio mode performance --yes --timeout-minutes 120\n  horneroctl studio mode restore\n'
 		}
 		'studio' {
-			return 'Usage: horneroctl studio <doctor|selection|jobs|mode|audio|app> [options]\n\nStudio workload selection state and diagnostics. The canonical\nspecialization/application model lives in editions/catalogue.yaml;\nthis command validates stable IDs and records user selection intent.\nIt never installs packages: recording a selection is not an install,\nand package lifecycle is a separate, later step.\n\n  doctor              Read-only Studio health checks
-  jobs                Render jobs: submit, list, status, run, cancel, log\n  mode                Audio mode + Temporary Performance: show, audio, performance, restore\n  audio               PipeWire Low Latency profile: status, apply, revert\n  selection show      Show the recorded selection (default)\n  selection set       Record a selection (--specialization/--application, --dry-run)\n  app show <id>       Read-only install state for a manual opt-in application\n\nExamples:\n  horneroctl studio doctor\n  horneroctl studio selection show --json\n  horneroctl studio selection set --specialization audio-music-production --application reaper\n  horneroctl studio app show artcraft-launcher --json\n'
+			return 'Usage: horneroctl studio <doctor|selection|jobs|mode|audio|routing|app> [options]\n\nStudio workload selection state, audio routing kits, and diagnostics.\nThe canonical specialization/application model lives in\neditions/catalogue.yaml; this command validates stable IDs and\nrecords user selection intent. It never installs packages: recording\na selection is not an install, and package lifecycle is a separate,\nlater step.\n\n  doctor              Read-only Studio health checks\n  jobs                Render jobs: submit, list, status, run, cancel, log\n  mode                Audio mode + Temporary Performance: show, audio, performance, restore\n  audio               PipeWire Low Latency profile: status, apply, revert\n  routing             Reversible virtual audio kits & live stream routing: status, enable, disable, move-stream, fix-volume\n  selection show      Show the recorded selection (default)\n  selection set       Record a selection (--specialization/--application, --dry-run)\n  app show <id>       Read-only install state for a manual opt-in application\n\nExamples:\n  horneroctl studio doctor\n  horneroctl studio routing status --json\n  horneroctl studio routing enable live-call --dry-run\n  horneroctl studio selection show --json\n  horneroctl studio selection set --specialization audio-music-production --application reaper\n  horneroctl studio app show artcraft-launcher --json\n'
+		}
+		'studio routing' {
+			return 'Usage: horneroctl studio routing <status|enable|disable|move-stream|fix-volume> [options]\n\nReversible Hornero-managed PipeWire/JACK virtual routing kits plus\nlive stream routing and volume recovery. Kits write opt-in drop-ins\nmarked with `# Managed by horneroctl studio routing` so personal\ndotfiles are never overwritten or deleted; external user-owned\ndrop-ins are detected honestly in status.\n\n  status              Show kit status, sinks, and active streams (default)\n  enable <kit>        Enable kit (live-call | browser-backing | reaper-low-latency) [--no-restart] [--dry-run] [--yes]\n  disable <kit>       Disable Hornero-managed kit [--no-restart] [--dry-run] [--yes]\n  move-stream <id> <sink>\n                      Move an active stream to a target sink [--dry-run] [--yes]\n  fix-volume <id> [percent]\n                      Unmute stream and set volume (default 100, clamped 0..150) [--dry-run] [--yes]\n\nExamples:\n  horneroctl studio routing status --json\n  horneroctl studio routing enable live-call --dry-run\n  horneroctl studio routing enable browser-backing --yes\n  horneroctl studio routing disable reaper-low-latency --yes\n  horneroctl studio routing move-stream 42 discord_call --yes\n  horneroctl studio routing fix-volume 42 100 --yes\n'
+		}
+		'profile' {
+			return 'Usage: horneroctl profile <list|show|capture|diff|apply|revert|delete|launch-apps|export|import> [options]\n\nUniversal 5-domain workspace profiles and snapshots covering\nexperience, audio, power, extensions, and companion apps. First\ncapture or apply automatically records an immutable `baseline`\nsnapshot; every apply or revert saves `previous` first.\n\n  list                List all profiles and baseline/previous status\n  show <id>           Show full profile details + live hardware and app state\n  capture <id>        Capture live workspace [--name NAME] [--description DESC] [--domains D] [--app CMD] [--no-apps] [--activate] [--dry-run] [--yes]\n  diff <id>           Compare profile against live system state\n  apply <id>          Apply profile domains best-effort [--domains D] [--no-restart-pipewire] [--launch-apps] [--dry-run] [--yes]\n  revert              Revert to previous (default) or baseline [--to previous|baseline] [--no-restart-pipewire] [--dry-run] [--yes]\n  delete <id>         Delete a user profile (refuses baseline) [--dry-run] [--yes]\n  launch-apps <id>    Launch missing installed companion apps detached [--app ID] [--dry-run] [--yes]\n  export <id> <file>  Export self-contained JSON bundle [--portable] [--dry-run] [--yes]\n  import <file>       Import a JSON bundle [--id NEW_ID] [--dry-run] [--yes]\n\nExamples:\n  horneroctl profile list --json\n  horneroctl profile capture music-prod --name "Music Production" --yes\n  horneroctl profile show music-prod --json\n  horneroctl profile diff music-prod --json\n  horneroctl profile apply music-prod --dry-run\n  horneroctl profile apply music-prod --yes\n  horneroctl profile revert --to previous --yes\n  horneroctl profile launch-apps music-prod --dry-run\n  horneroctl profile export music-prod ./music-prod.json --portable --yes\n  horneroctl profile import ./music-prod.json --id studio-rig --yes\n'
+		}
+		'profile list' {
+			return 'Usage: horneroctl profile list [--json|--quiet]\n\nList all captured workspace profiles (including baseline when present)\nwith active state, domains, companion app counts, and hardware status.\n\nExamples:\n  horneroctl profile list\n  horneroctl profile list --json\n'
+		}
+		'profile show' {
+			return 'Usage: horneroctl profile show <id> [--json|--quiet]\n\nShow full details of a profile or snapshot (`baseline`, `previous`) plus\nlive hardware presence and companion app installed/running state.\n\nExamples:\n  horneroctl profile show music-prod\n  horneroctl profile show baseline --json\n'
+		}
+		'profile capture' {
+			return 'Usage: horneroctl profile capture <id> [--name NAME] [--description DESC] [--domains DOMAINS] [--app CMD] [--no-apps] [--activate] [--dry-run] [--yes]\n\nCapture live workspace state into a profile. Auto-creates an immutable\n`baseline` snapshot first if none exists yet.\n\nExamples:\n  horneroctl profile capture music-prod --dry-run\n  horneroctl profile capture music-prod --name "Music" --domains experience,audio,apps --yes\n'
+		}
+		'profile diff' {
+			return 'Usage: horneroctl profile diff <id> [--json|--quiet]\n\nCompare a saved profile against live system state across its domains\nand report whether PipeWire will restart and any missing hardware/apps.\n\nExamples:\n  horneroctl profile diff music-prod\n  horneroctl profile diff music-prod --json\n'
+		}
+		'profile apply' {
+			return 'Usage: horneroctl profile apply <id> [--domains DOMAINS] [--no-restart-pipewire] [--launch-apps] [--dry-run] [--yes]\n\nSave live state to `previous` (and `baseline` if missing), then apply\nprofile domains best-effort.\n\nExamples:\n  horneroctl profile apply music-prod --dry-run\n  horneroctl profile apply music-prod --yes\n  horneroctl profile apply music-prod --launch-apps --yes\n'
+		}
+		'profile revert' {
+			return 'Usage: horneroctl profile revert [--to previous|baseline] [--no-restart-pipewire] [--dry-run] [--yes]\n\nRestore the `previous` (default) or `baseline` snapshot.\n\nExamples:\n  horneroctl profile revert --dry-run\n  horneroctl profile revert --to baseline --yes\n'
+		}
+		'profile delete' {
+			return 'Usage: horneroctl profile delete <id> [--dry-run] [--yes]\n\nDelete a user workspace profile. Refuses to delete `baseline`.\n\nExamples:\n  horneroctl profile delete music-prod --dry-run\n  horneroctl profile delete music-prod --yes\n'
+		}
+		'profile launch-apps' {
+			return 'Usage: horneroctl profile launch-apps <id> [--app APP_ID] [--dry-run] [--yes]\n\nLaunch missing installed companion applications detached.\n\nExamples:\n  horneroctl profile launch-apps music-prod --dry-run\n  horneroctl profile launch-apps music-prod --app reaper --yes\n'
+		}
+		'profile export' {
+			return 'Usage: horneroctl profile export <id> <file> [--portable] [--dry-run] [--yes]\n\nExport a profile and its PipeWire/JACK drop-ins into one self-contained\nJSON bundle. Use --portable to strip machine hostname.\n\nExamples:\n  horneroctl profile export music-prod ./music-prod.json --dry-run\n  horneroctl profile export music-prod ./music-prod.json --portable --yes\n'
+		}
+		'profile import' {
+			return 'Usage: horneroctl profile import <file> [--id NEW_ID] [--dry-run] [--yes]\n\nImport a self-contained JSON profile bundle and materialize its\nPipeWire/JACK drop-ins into the profile directory.\n\nExamples:\n  horneroctl profile import ./music-prod.json --dry-run\n  horneroctl profile import ./music-prod.json --id studio-rig --yes\n'
 		}
 		'gaming' {
 			return 'Usage: horneroctl gaming <doctor|selection|launch-options> [options]\n\nGaming readiness diagnostics and selection state. The canonical\nspecialization and application model lives in\neditions/catalogue.yaml; this command validates stable IDs and\nrecords user selection intent. It never installs packages, never\nreports game compatibility, hardware qualification, or measured\nperformance. Gaming remains planned.\n\n  doctor              Read-only Gaming readiness checks\n  selection show      Show the recorded selection (default)\n  selection set       Record a selection (--specialization/--application, --dry-run)\n  launch-options      Print a Steam launch-options string for the installed tools\n\nExamples:\n  horneroctl gaming doctor\n  horneroctl gaming launch-options --gamemode --mangohud\n  horneroctl gaming doctor --json\n  horneroctl gaming selection set --specialization desktop-gaming --application steam\n'
@@ -1815,7 +1851,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent github help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent github profile help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1829,7 +1865,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent github help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent github profile help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1861,6 +1897,7 @@ complete -c horneroctl -f -n __fish_use_subcommand -a gaming -d "Gaming readines
 complete -c horneroctl -f -n __fish_use_subcommand -a recovery -d "OS recovery readiness diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a agent -d "Agent registry"
 complete -c horneroctl -f -n __fish_use_subcommand -a github -d "GitHub activity via gh"
+complete -c horneroctl -f -n __fish_use_subcommand -a profile -d "Workspace profiles and snapshots"
 complete -c horneroctl -f -n __fish_use_subcommand -a plugin -d "Plugins"
 complete -c horneroctl -f -n __fish_use_subcommand -a assistant -d "Assistant"
 complete -c horneroctl -f -n __fish_use_subcommand -a bluetooth -d "Bluetooth"

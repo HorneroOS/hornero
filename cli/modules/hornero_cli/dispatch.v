@@ -23,7 +23,7 @@ import os
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'mode', 'wallpaper',
 	'capture', 'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery', 'agent',
-	'github', 'help']
+	'github', 'profile', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -173,6 +173,9 @@ pub fn dispatch(args []string) int {
 		}
 		'github' {
 			run_github(rest[1..], mode)
+		}
+		'profile' {
+			run_profile(rest[1..], mode)
 		}
 		'help' {
 			print_human(root_help())
@@ -470,6 +473,73 @@ fn run_github(args []string, mode hornero_core.RenderMode) int {
 		else {
 			render_error(hornero_core.err_usage('github', 'unknown github subcommand.\nExample: horneroctl github status --json'),
 				mode)
+		}
+	}
+}
+
+fn run_profile(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_profile_cmd(args) or {
+		return render_error(hornero_core.err_usage('profile.usage', err.msg()), mode)
+	}
+	return match opts.verb {
+		'list' {
+			render(hornero_core.profile_list_result(), mode)
+		}
+		'show' {
+			render(hornero_core.profile_show_result(opts.id), mode)
+		}
+		'capture' {
+			render(hornero_core.profile_capture_result(hornero_core.ProfileCaptureOptions{
+				id:          opts.id
+				name:        opts.name
+				description: opts.description
+				domains:     opts.domains
+				apps:        opts.apps
+				no_apps:     opts.no_apps
+				activate:    opts.activate
+				dry_run:     opts.dry_run
+				yes:         opts.yes
+			}), mode)
+		}
+		'diff' {
+			render(hornero_core.profile_diff_result(opts.id), mode)
+		}
+		'apply' {
+			render(hornero_core.profile_apply_result(hornero_core.ProfileApplyOptions{
+				id:                  opts.id
+				domains:             opts.domains
+				no_restart_pipewire: opts.no_restart_pipewire
+				launch_apps:         opts.launch_apps
+				dry_run:             opts.dry_run
+				yes:                 opts.yes
+			}), mode)
+		}
+		'revert' {
+			render(hornero_core.profile_revert_result(hornero_core.ProfileRevertOptions{
+				to:                  opts.to
+				no_restart_pipewire: opts.no_restart_pipewire
+				dry_run:             opts.dry_run
+				yes:                 opts.yes
+			}), mode)
+		}
+		'delete' {
+			render(hornero_core.profile_delete_result(opts.id, opts.dry_run, opts.yes), mode)
+		}
+		'launch-apps' {
+			render(hornero_core.profile_launch_apps_result(opts.id, opts.app_filter,
+				opts.dry_run, opts.yes), mode)
+		}
+		'export' {
+			render(hornero_core.profile_export_result(opts.id, opts.file, opts.portable,
+				opts.dry_run, opts.yes), mode)
+		}
+		'import' {
+			render(hornero_core.profile_import_result(opts.file, opts.id, opts.dry_run,
+				opts.yes), mode)
+		}
+		else {
+			render_error(hornero_core.err_usage('profile.usage',
+				'unknown profile subcommand.\nExample: horneroctl profile list --json'), mode)
 		}
 	}
 }
@@ -781,7 +851,7 @@ fn run_gaming(args []string, mode hornero_core.RenderMode) int {
 fn run_studio(args []string, mode hornero_core.RenderMode) int {
 	if args.len == 0 {
 		return render_error(hornero_core.err_usage('studio.usage',
-			'expected a subcommand: doctor, selection, jobs, mode, audio.\nExample: horneroctl studio doctor --json'),
+			'expected a subcommand: doctor, selection, jobs, mode, audio, routing.\nExample: horneroctl studio doctor --json'),
 			mode)
 	}
 	match args[0] {
@@ -859,6 +929,9 @@ fn run_studio(args []string, mode hornero_core.RenderMode) int {
 						mode)
 				}
 			}
+		}
+		'routing' {
+			return run_studio_routing(args[1..], mode)
 		}
 		'jobs' {
 			if args.len == 1 {
@@ -965,6 +1038,129 @@ fn run_studio(args []string, mode hornero_core.RenderMode) int {
 		else {
 			return render_error(hornero_core.err_usage('studio.usage',
 				'unknown studio subcommand: ${args[0]}.\nExample: horneroctl studio doctor'), mode)
+		}
+	}
+}
+
+fn run_studio_routing(args []string, mode hornero_core.RenderMode) int {
+	if args.len == 0 || args[0] == 'status' {
+		if args.len > 1 {
+			return render_error(hornero_core.err_usage('studio.usage',
+				'unexpected argument: ${args[1]}.\nExample: horneroctl studio routing status --json'),
+				mode)
+		}
+		return render(hornero_core.studio_routing_status_result(), mode)
+	}
+	sub := args[0]
+	match sub {
+		'enable', 'disable' {
+			mut kit := ''
+			mut no_restart := false
+			mut dry_run := false
+			mut yes := false
+			for a in args[1..] {
+				match a {
+					'--no-restart' {
+						no_restart = true
+					}
+					'--dry-run' {
+						dry_run = true
+					}
+					'--yes' {
+						yes = true
+					}
+					else {
+						if a.starts_with('-') {
+							return render_error(hornero_core.err_usage('studio.usage',
+								'unknown flag for studio routing ${sub}: ${a}.\nExample: horneroctl studio routing ${sub} live-call --dry-run'),
+								mode)
+						}
+						if kit.len > 0 {
+							return render_error(hornero_core.err_usage('studio.usage',
+								'unexpected argument: ${a}.\nExample: horneroctl studio routing ${sub} live-call --dry-run'),
+								mode)
+						}
+						kit = a
+					}
+				}
+			}
+			if kit.len == 0 {
+				return render_error(hornero_core.err_usage('studio.usage',
+					'expected a routing kit id (live-call, browser-backing, reaper-low-latency).\nExample: horneroctl studio routing ${sub} live-call --dry-run'),
+					mode)
+			}
+			if sub == 'enable' {
+				return render(hornero_core.studio_routing_enable_result(kit, no_restart,
+					dry_run, yes), mode)
+			}
+			return render(hornero_core.studio_routing_disable_result(kit, no_restart,
+				dry_run, yes), mode)
+		}
+		'move-stream' {
+			mut dry_run := false
+			mut yes := false
+			mut pos := []string{}
+			for a in args[1..] {
+				if a == '--dry-run' {
+					dry_run = true
+				} else if a == '--yes' {
+					yes = true
+				} else if a.starts_with('-') {
+					return render_error(hornero_core.err_usage('studio.usage',
+						'unknown flag for studio routing move-stream: ${a}.\nExample: horneroctl studio routing move-stream 42 discord_call --dry-run'),
+						mode)
+				} else {
+					pos << a
+				}
+			}
+			if pos.len != 2 {
+				return render_error(hornero_core.err_usage('studio.usage',
+					'expected <stream-id> <sink-name>.\nExample: horneroctl studio routing move-stream 42 discord_call --dry-run'),
+					mode)
+			}
+			return render(hornero_core.studio_routing_move_stream_result(pos[0], pos[1],
+				dry_run, yes), mode)
+		}
+		'fix-volume' {
+			mut dry_run := false
+			mut yes := false
+			mut pos := []string{}
+			for a in args[1..] {
+				if a == '--dry-run' {
+					dry_run = true
+				} else if a == '--yes' {
+					yes = true
+				} else if a.starts_with('-') {
+					return render_error(hornero_core.err_usage('studio.usage',
+						'unknown flag for studio routing fix-volume: ${a}.\nExample: horneroctl studio routing fix-volume 42 100 --dry-run'),
+						mode)
+				} else {
+					pos << a
+				}
+			}
+			if pos.len < 1 || pos.len > 2 {
+				return render_error(hornero_core.err_usage('studio.usage',
+					'expected <stream-id> [percent].\nExample: horneroctl studio routing fix-volume 42 100 --dry-run'),
+					mode)
+			}
+			mut pct := 100
+			if pos.len == 2 {
+				raw_pct := pos[1]
+				stripped := if raw_pct.starts_with('-') { raw_pct[1..] } else { raw_pct }
+				if stripped.len == 0 || !stripped.bytes().all(it.is_digit()) {
+					return render_error(hornero_core.err_usage('studio.usage',
+						'volume percent must be an integer: ${raw_pct}.\nExample: horneroctl studio routing fix-volume 42 100 --dry-run'),
+						mode)
+				}
+				pct = raw_pct.int()
+			}
+			return render(hornero_core.studio_routing_fix_volume_result(pos[0], pct, dry_run,
+				yes), mode)
+		}
+		else {
+			return render_error(hornero_core.err_usage('studio.usage',
+				'unknown studio routing subcommand: ${sub} (expected: status, enable, disable, move-stream, fix-volume).\nExample: horneroctl studio routing status --json'),
+				mode)
 		}
 	}
 }
