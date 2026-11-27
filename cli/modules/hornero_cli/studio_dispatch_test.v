@@ -1,5 +1,7 @@
 module hornero_cli
 
+import os
+
 fn test_studio_help_is_discoverable() {
 	assert command_help('studio').contains('horneroctl studio selection set')
 	assert command_help('studio doctor').contains('Read-only')
@@ -54,4 +56,38 @@ fn test_studio_audio_usage_errors() {
 	assert dispatch(['horneroctl', 'studio', 'audio', 'apply', '--bogus']) != 0
 	// apply without --yes is refused before touching anything.
 	assert dispatch(['horneroctl', 'studio', 'audio', 'apply']) != 0
+}
+
+fn test_studio_routing_help_and_dispatch() {
+	root := '/tmp/hx-studio-routing-dtest'
+	if os.exists(root) {
+		os.rmdir_all(root) or {}
+	}
+	os.mkdir_all('${root}/pw.conf.d') or { assert false }
+	os.mkdir_all('${root}/jack.conf.d') or { assert false }
+	os.setenv('HORNERO_PIPEWIRE_CONF_DIR', '${root}/pw.conf.d', true)
+	os.setenv('HORNERO_JACK_CONF_DIR', '${root}/jack.conf.d', true)
+	os.setenv('HORNERO_PACTL_BIN', '/nonexistent-pactl-dtest', true)
+	defer {
+		os.unsetenv('HORNERO_PIPEWIRE_CONF_DIR')
+		os.unsetenv('HORNERO_JACK_CONF_DIR')
+		os.unsetenv('HORNERO_PACTL_BIN')
+	}
+	h := command_help('studio routing')
+	assert h.contains('Examples:')
+	assert h.contains('live-call')
+	assert h.contains('browser-backing')
+	assert h.contains('reaper-low-latency')
+	assert command_help('studio').contains('routing')
+	assert dispatch(['horneroctl', 'studio', 'routing', '--help']) == 0
+	assert dispatch(['horneroctl', '--json', 'studio', 'routing', 'status']) == 0
+	assert dispatch(['horneroctl', 'studio', 'routing', 'nope']) == 2
+	assert dispatch(['horneroctl', 'studio', 'routing', 'enable']) == 2
+	assert dispatch(['horneroctl', 'studio', 'routing', 'enable', 'live-call', '--bogus']) == 2
+	assert dispatch(['horneroctl', 'studio', 'routing', 'fix-volume', '42', 'notanumber']) == 2
+	assert dispatch(['horneroctl', 'studio', 'routing', 'enable', 'live-call']) == 1
+	assert dispatch(['horneroctl', 'studio', 'routing', 'enable', 'live-call', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'studio', 'routing', 'disable', 'live-call', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'studio', 'routing', 'move-stream', '42', 'discord_call', '--dry-run']) == 0
+	assert dispatch(['horneroctl', 'studio', 'routing', 'fix-volume', '42', '100', '--dry-run']) == 0
 }
