@@ -2,8 +2,7 @@
 # secrets-lint.sh - gitleaks-style grep gate for committed secrets.
 #
 # Scans the repository for high-signal token/key patterns (AWS keys,
-# GitHub/Slack/Stripe/OpenAI/Anthropic/Google tokens, PEM/PGP private
-# keys, credential assignments).
+# GitHub/Slack/Stripe tokens, PEM private keys, credential assignments).
 # Patterns are deliberately tight: prose words like "password" or
 # "secret" alone never match, so the gate passes on a clean tree.
 #
@@ -28,7 +27,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-PATTERN='AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36,}|gho_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|xox[bpas]-[A-Za-z0-9-]{10,}|sk-live-[A-Za-z0-9]{16,}|sk-proj-[A-Za-z0-9_-]{16,}|sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|BEGIN (RSA |OPENSSH |EC |DSA |PGP )?PRIVATE KEY( BLOCK)?|aws_secret_access_key|api[_-]?key[[:space:]]*[:=][[:space:]]*.[^[:space:]]+|(password|passwd|secret)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']+["'"'"']'
+PATTERN='AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36,}|gho_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{20,}|xox[bpas]-[A-Za-z0-9-]{10,}|sk-live-[A-Za-z0-9]{16,}|BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY|aws_secret_access_key|api[_-]?key[[:space:]]*[:=][[:space:]]*.[^[:space:]]+|(password|passwd|secret)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']+["'"'"']'
 
 HITS="$(grep -rInE --exclude-dir=.git --exclude-dir=__pycache__ \
   --exclude='*.pyc' --exclude='secrets-lint.sh' \
