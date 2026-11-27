@@ -139,7 +139,94 @@ pub fn run_doctor() []DoctorCheck {
 		}
 	}
 	checks << appearance_doctor_checks()
+	checks << grub_boot_menu_doctor_checks('/usr/lib/modules', '/boot', '/boot/grub/grub.cfg')
 	return checks
+}
+
+// grub_boot_menu_doctor_checks detects a stale GRUB menu where an installed
+// Arch kernel package (/usr/lib/modules/<ver>/pkgbase with a matching
+// /boot/vmlinuz-<pkgbase>) is absent from grub.cfg (hornero#465).
+// Returns no checks on systems without GRUB (e.g., systemd-boot, Limine, containers).
+pub fn grub_boot_menu_doctor_checks(modules_dir string, boot_dir string, grub_cfg string) []DoctorCheck {
+	if !os.is_file(grub_cfg) {
+		return []DoctorCheck{}
+	}
+	cfg_content := os.read_file(grub_cfg) or {
+		return [
+			DoctorCheck{
+				name:   'grub-boot-menu'
+				ok:     true
+				warn:   true
+				detail: '${grub_cfg} exists but is not readable (${err.msg()}); verify installed kernels are listed in the GRUB menu'
+			},
+		]
+	}
+	if !os.is_dir(modules_dir) {
+		return []DoctorCheck{}
+	}
+	entries := os.ls(modules_dir) or { return []DoctorCheck{} }
+	mut installed := []string{}
+	for entry in entries {
+		pkgbase_path := os.join_path(modules_dir, entry, 'pkgbase')
+		if !os.is_file(pkgbase_path) {
+			continue
+		}
+		pkgbase := (os.read_file(pkgbase_path) or { continue }).trim_space()
+		if pkgbase.len == 0 {
+			continue
+		}
+		img := 'vmlinuz-${pkgbase}'
+		if os.is_file(os.join_path(boot_dir, img)) && img !in installed {
+			installed << img
+		}
+	}
+	installed.sort()
+	if installed.len == 0 {
+		return []DoctorCheck{}
+	}
+	mut listed := map[string]bool{}
+	for raw_line in cfg_content.split_into_lines() {
+		line := raw_line.trim_space()
+		if line.starts_with('#') {
+			continue
+		}
+		if !line.starts_with('linux ') && !line.starts_with('linux\t')
+			&& !line.starts_with('linuxefi ') && !line.starts_with('linuxefi\t') {
+			continue
+		}
+		fields := line.fields()
+		if fields.len < 2 {
+			continue
+		}
+		kernel_path := fields[1]
+		base := os.base(kernel_path)
+		if base.starts_with('vmlinuz-') {
+			listed[base] = true
+		}
+	}
+	mut missing := []string{}
+	for img in installed {
+		if img !in listed {
+			missing << img
+		}
+	}
+	if missing.len > 0 {
+		return [
+			DoctorCheck{
+				name:   'grub-boot-menu'
+				ok:     true
+				warn:   true
+				detail: 'installed kernel(s) missing from ${grub_cfg}: ${missing.join(', ')} — run: sudo grub-mkconfig -o ${grub_cfg}'
+			},
+		]
+	}
+	return [
+		DoctorCheck{
+			name:   'grub-boot-menu'
+			ok:     true
+			detail: 'all ${installed.len} installed kernel(s) present in ${grub_cfg} (${installed.join(', ')})'
+		},
+	]
 }
 
 // doctor_result renders checks for display. Every detail passes through

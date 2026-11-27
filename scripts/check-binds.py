@@ -310,7 +310,7 @@ def write_manifest(manifest: Path, chains: set) -> None:
              "# from keybinds, autostart, .desktop launchers, first-boot",
              "# scripts, shell QML, and Lua config. One verb chain per line, sorted.",
              "# Refresh: python3 scripts/check-binds.py --refresh \\",
-             "#   --binary cli/build/horneroctl --shell-dir <shell> --config-dir <config>",
+             "#   --binary cli/out/horneroctl --shell-dir <shell> --config-dir <config>",
              "# The gate fails on unhandled chains and on drift vs this file.",
              ""]
     lines += sorted(chains)

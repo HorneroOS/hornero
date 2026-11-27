@@ -33,12 +33,14 @@ fn b2_isolate_resolution() (string, string) {
 	os.setenv('PATH', '/nonexistent-path-hornero-test', true)
 	os.unsetenv('HORNERO_DEFAULT_APPS_BIN')
 	os.unsetenv('HORNERO_MATERIALIZE_BIN')
+	os.setenv('HORNERO_PACKAGED_SEED_BIN', '/nonexistent-seed-hornero-test', true)
 	return old_home, old_path
 }
 
 fn b2_restore_resolution(old_home string, old_path string) {
 	os.setenv('HOME', old_home, true)
 	os.setenv('PATH', old_path, true)
+	os.unsetenv('HORNERO_PACKAGED_SEED_BIN')
 }
 
 fn test_default_apps_list_runs_native() {

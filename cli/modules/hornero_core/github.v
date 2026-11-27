@@ -153,8 +153,8 @@ fn github_graphql(query string, vars map[string]string) (map[string]json2.Any, s
 		return map[string]json2.Any{}, 'GitHub GraphQL returned invalid JSON'
 	}
 	root := agent_usage_map(decoded)
-	if 'errors' in root {
-		return map[string]json2.Any{}, 'GitHub GraphQL error: ${root['errors'].str()}'
+	if errs := root['errors'] {
+		return map[string]json2.Any{}, 'GitHub GraphQL error: ${errs.str()}'
 	}
 	return agent_usage_child(root, 'data'), ''
 }
@@ -253,16 +253,20 @@ fn github_collect_stats(o GithubOptions) []map[string]json2.Any {
 	cal['totalPullRequestReviewContributions'] = json2.Any(agent_usage_i64(coll, 'totalPullRequestReviewContributions'))
 	mut daily := map[string]i64{}
 	mut day_list := []map[string]json2.Any{}
-	if 'weeks' in calendar && calendar['weeks'] is []json2.Any {
-		for w in calendar['weeks'] as []json2.Any {
-			week := agent_usage_map(w)
-			if 'contributionDays' in week && week['contributionDays'] is []json2.Any {
-				for d in week['contributionDays'] as []json2.Any {
-					day := agent_usage_map(d)
-					day_list << day
-					date := json_str(day, 'date')
-					if date.len == 10 {
-						daily[date] = agent_usage_i64(day, 'contributionCount')
+	if weeks_val := calendar['weeks'] {
+		if weeks_val is []json2.Any {
+			for w in weeks_val {
+				week := agent_usage_map(w)
+				if days_val := week['contributionDays'] {
+					if days_val is []json2.Any {
+						for d in days_val {
+							day := agent_usage_map(d)
+							day_list << day
+							date := json_str(day, 'date')
+							if date.len == 10 {
+								daily[date] = agent_usage_i64(day, 'contributionCount')
+							}
+						}
 					}
 				}
 			}
@@ -275,30 +279,32 @@ fn github_collect_stats(o GithubOptions) []map[string]json2.Any {
 	cal['recentDays'] = agent_usage_daily_encode(daily)
 	records << cal
 	// Per-repo commit contribution records
-	if 'commitContributionsByRepository' in coll
-		&& coll['commitContributionsByRepository'] is []json2.Any {
-		for entry in coll['commitContributionsByRepository'] as []json2.Any {
-			e := agent_usage_map(entry)
-			repo := agent_usage_child(e, 'repository')
-			name := json_str(repo, 'nameWithOwner')
-			if o.repo.len > 0 && name != o.repo {
-				continue
+	if by_repo_val := coll['commitContributionsByRepository'] {
+		if by_repo_val is []json2.Any {
+			for entry in by_repo_val {
+				e := agent_usage_map(entry)
+				repo := agent_usage_child(e, 'repository')
+				name := json_str(repo, 'nameWithOwner')
+				if o.repo.len > 0 && name != o.repo {
+					continue
+				}
+				if o.org.len > 0 && !name.starts_with('${o.org}/') {
+					continue
+				}
+				mut r := github_base_record('stats-repo')
+				r['status'] = 'ok'
+				r['account'] = login
+				r['repo'] = name
+				is_priv := if priv_val := repo['isPrivate'] { priv_val.bool() } else { false }
+				r['visibility'] = if is_priv {
+					'private'
+				} else {
+					'public'
+				}
+				contribs := agent_usage_child(e, 'contributions')
+				r['commitContributions'] = json2.Any(agent_usage_i64(contribs, 'totalCount'))
+				records << r
 			}
-			if o.org.len > 0 && !name.starts_with('${o.org}/') {
-				continue
-			}
-			mut r := github_base_record('stats-repo')
-			r['status'] = 'ok'
-			r['account'] = login
-			r['repo'] = name
-			r['visibility'] = if 'isPrivate' in repo && repo['isPrivate'].bool() {
-				'private'
-			} else {
-				'public'
-			}
-			contribs := agent_usage_child(e, 'contributions')
-			r['commitContributions'] = json2.Any(agent_usage_i64(contribs, 'totalCount'))
-			records << r
 		}
 	}
 	// Search-partitioned PR/issue totals (total_count is authoritative;
@@ -346,7 +352,8 @@ fn github_inbox_items(mut records []map[string]json2.Any, node map[string]json2.
 	r['account'] = login
 	r['category'] = category
 	r['repo'] = json_str(repo, 'nameWithOwner')
-	r['visibility'] = if 'isPrivate' in repo && repo['isPrivate'].bool() {
+	is_priv := if priv_val := repo['isPrivate'] { priv_val.bool() } else { false }
+	r['visibility'] = if is_priv {
 		'private'
 	} else {
 		'public'
@@ -355,8 +362,8 @@ fn github_inbox_items(mut records []map[string]json2.Any, node map[string]json2.
 	r['url'] = json_str(node, 'url')
 	r['createdAt'] = json_str(node, 'createdAt')
 	r['updatedAt'] = json_str(node, 'updatedAt')
-	if 'isDraft' in node {
-		r['draft'] = json2.Any((node['isDraft']).bool())
+	if draft_val := node['isDraft'] {
+		r['draft'] = json2.Any(draft_val.bool())
 	}
 	review_decision := json_str(node, 'reviewDecision')
 	if review_decision.len > 0 && review_decision != 'null' {
@@ -366,10 +373,9 @@ fn github_inbox_items(mut records []map[string]json2.Any, node map[string]json2.
 	// rollup additionally yields an actionable 'failing' record.
 	if category == 'mine' {
 		commits := agent_usage_child(node, 'commits')
-		if 'nodes' in commits && commits['nodes'] is []json2.Any {
-			nodes := commits['nodes'] as []json2.Any
-			if nodes.len > 0 {
-				c := agent_usage_map(nodes[0])
+		if nodes_val := commits['nodes'] {
+			if nodes_val is []json2.Any && nodes_val.len > 0 {
+				c := agent_usage_map(nodes_val[0])
 				commit := agent_usage_child(c, 'commit')
 				rollup := agent_usage_child(commit, 'statusCheckRollup')
 				state := json_str(rollup, 'state')

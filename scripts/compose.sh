@@ -8,7 +8,7 @@
 # `horneroctl config paths/show/validate` against that root.
 #
 # Hermetic: nothing is written outside --work/--dest (plus the local
-# cli/build/ binary output). Idempotent: re-runs skip fetches and rebuilds
+# cli/out/ binary output). Idempotent: re-runs skip fetches and rebuilds
 # that are already at the pinned state.
 #
 # Usage:
