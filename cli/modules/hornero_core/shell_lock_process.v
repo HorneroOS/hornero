@@ -63,13 +63,17 @@ fn lock_process_systemctl(args []string) ExecReport {
 // lock_process_probe returns an is-enabled/is-active fact or 'unknown'
 // when systemctl cannot answer (fail-open reporting, never a guess).
 fn lock_process_probe(verb string) string {
-	if resolve_systemctl_bin().len == 0 {
+	bin := resolve_systemctl_bin()
+	if bin.len == 0 || !os.is_file(bin) {
 		return 'unknown'
 	}
 	rep := lock_process_systemctl(['--user', verb, lock_process_unit_name])
 	if rep.ok {
 		out := rep.output.trim_space()
 		return if out.len > 0 { out } else { 'unknown' }
+	}
+	if rep.exit_code == 127 || rep.exit_code < 0 {
+		return 'unknown'
 	}
 	// is-enabled/is-active exit non-zero for disabled/inactive units
 	// while still printing the fact on stdout.

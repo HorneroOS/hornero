@@ -34,6 +34,8 @@ jobs:
         run: ./make.vsh vet
       - name: Test
         working-directory: cli
+        env:
+          VJOBS: "2"
         run: ./make.vsh test
       - name: Community registry signature integration
         working-directory: cli

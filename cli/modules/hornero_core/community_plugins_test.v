@@ -592,8 +592,8 @@ fn test_official_plugin_metadata_comes_from_catalog_and_payload_changes_break_of
 		source:               plugin_catalog_source
 		catalog_sha256:       current_hash
 		catalog_capabilities: json2.Any({
-			'processCommands': json2.Any(['notify-send'])
-			'networkHosts':    json2.Any(['api.example.com'])
+			'processCommands': json2.Any([json2.Any('notify-send')])
+			'networkHosts':    json2.Any([json2.Any('api.example.com')])
 			'settings':        json2.Any(map[string]json2.Any{})
 		})
 	}
