@@ -164,7 +164,11 @@ context.task(
 		}
 		prod_flag := if release != 'unknown' || '--prod' in os.args
 			|| os.getenv('HORNERO_PROD') == '1' {
-			'-prod '
+			// Pinned V (a27079a) sets -DUSE_MUNMAP=1 without -DUSE_MMAP=1 when
+			// compiling bundled thirdparty/libgc/gc.c with gcc on arm64/musl
+			// Linux (fixed upstream in vlang/v#30792). Defining USE_MMAP=1
+			// matches libgc's configure and upstream V's fix with no warning.
+			'-prod -cflags -DUSE_MMAP=1 '
 		} else {
 			''
 		}
