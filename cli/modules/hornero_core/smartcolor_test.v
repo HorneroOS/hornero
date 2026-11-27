@@ -58,12 +58,12 @@ fn test_gtk_policy_vectors() {
 
 fn test_signal_concepts_map_to_roles() {
 	t := sc_fixture('hornero-signal-night')
-	assert (signal_concept(t, 'background') or { '' }) == '#13171D'
-	assert (signal_concept(t, 'foreground') or { '' }) == '#ECE6DA'
-	assert (signal_concept(t, 'error') or { '' }) == '#F0705A'
-	assert (signal_concept(t, 'accent') or { '' }) == '#F2A33A'
-	assert (signal_concept(t, 'info') or { '' }) == '#7EC1EA'
-	assert (signal_concept(t, 'success') or { '' }) == '#8BD49A'
+	assert (signal_concept(t, 'background') or { '' }) == '#141B24'
+	assert (signal_concept(t, 'foreground') or { '' }) == '#E6EBF1'
+	assert (signal_concept(t, 'error') or { '' }) == '#FF8494'
+	assert (signal_concept(t, 'accent') or { '' }) == '#F2AC52'
+	assert (signal_concept(t, 'info') or { '' }) == '#8BCEF0'
+	assert (signal_concept(t, 'success') or { '' }) == '#8DDBAF'
 	assert (signal_concept(t, 'red') or { '' }) == t.terminal[1]
 	assert (signal_concept(t, 'pink') or { '' }) == t.terminal[13]
 	if _ := signal_concept(t, 'bogus') {
@@ -77,20 +77,20 @@ fn test_render_smart_files_from_signal() {
 	assert p.light
 	scss := render_scss(p)
 	assert scss.contains('\$wallpaper: "/pic/wall.jpg";')
-	assert scss.contains('\$background: #F2EEE5;')
-	assert scss.contains('\$error: #A8341C;')
+	assert scss.contains('\$background: #EEF2F7;')
+	assert scss.contains('\$error: #9C293E;')
 	assert scss.contains('\$color0: ${t.terminal[0]};')
-	assert render_shell_colors(p).contains("color_accent='#8F4B00'")
+	assert render_shell_colors(p).contains("color_accent='#864700'")
 	env := render_env_colors(p, '/x/colors.env')
-	assert env.contains("export COLOR_ERROR='#A8341C'")
+	assert env.contains("export COLOR_ERROR='#9C293E'")
 	assert env.contains('source /x/colors.env')
-	assert render_waybar(p).contains('@define-color smart-info #1A5F88;')
-	assert render_mako(p).contains('background-color=#F2EEE5')
-	assert render_wlogout(p).contains('@define-color wlogout-fg #1B1E22;')
+	assert render_waybar(p).contains('@define-color smart-info #145D86;')
+	assert render_mako(p).contains('background-color=#EEF2F7')
+	assert render_wlogout(p).contains('@define-color wlogout-fg #283344;')
 	henv := render_hyprlock_env(p)
-	assert henv.contains('SMART_ERROR="#A8341C"')
+	assert henv.contains('SMART_ERROR="#9C293E"')
 	assert henv.contains('SMART_THEME_TYPE="light"')
-	assert render_css_vars(p).contains('--smart-success: #256A3B;')
+	assert render_css_vars(p).contains('--smart-success: #1E6448;')
 	copyq := render_copyq(p)
 	assert copyq.contains('# Theme type: light')
 	assert copyq.contains('IBM Plex Mono')
