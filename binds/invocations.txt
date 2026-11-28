@@ -2,8 +2,9 @@
 # from keybinds, autostart, .desktop launchers, first-boot
 # scripts, shell QML, and Lua config. One verb chain per line, sorted.
 # Refresh: python3 scripts/check-binds.py --refresh \
-#   --binary cli/build/horneroctl --shell-dir <shell> --config-dir <config>
+#   --binary cli/out/horneroctl --shell-dir <shell> --config-dir <config>
 # The gate fails on unhandled chains and on drift vs this file.
+
 appearance gtk apply
 appearance gtk color-scheme
 appearance gtk current
@@ -86,8 +87,6 @@ hardware keyboard rebind set
 hardware keyboard rebind status
 hardware keyboard rebind undo
 hardware keyboard settings
-horneroctl store appimage import
-horneroctl store gui
 hypr cursor restore
 hypr cursor set
 hypr cursor status
@@ -116,6 +115,8 @@ shell preset apply
 shell preset list
 shell restart
 shell start
+store appimage import
+store gui
 wallpaper current
 welcome mark-seen
 welcome open
