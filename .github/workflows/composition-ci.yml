@@ -11,6 +11,7 @@ on:
       - 'manifests/**'
       - 'profiles/**'
       - 'editions/**'
+      - 'catalog/**'
       - 'releases/**'
       - 'scripts/**'
       - 'tests/**'
@@ -35,6 +36,8 @@ jobs:
         run: pip install pyyaml jsonschema pytest
       - name: Validate composition
         run: python3 scripts/check-manifests.py
+      - name: Validate app catalog
+        run: python3 scripts/validate-app-catalog.py
       - name: Run composition tests
         run: python3 -m pytest tests/ -q
       - name: Lint composition docs

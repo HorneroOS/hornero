@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://horneroos.org/schemas/apps.v1.schema.json",
+  "title": "HorneroOS Canonical Application Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "schemaVersion",
+    "verifiedAt",
+    "categories",
+    "collections",
+    "profiles",
+    "apps"
+  ],
+  "properties": {
+    "apiVersion": { "const": "hornero.os/v1" },
+    "kind": { "const": "ApplicationCatalog" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "verifiedAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "categories": {
+      "type": "array",
+      "minItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "name_es", "description", "description_es", "icon", "order"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "name_es": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "description_es": { "type": "string", "minLength": 1 },
+          "icon": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "collections": {
+      "type": "array",
+      "minItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "name_es", "description", "description_es", "icon", "apps"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "name_es": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "description_es": { "type": "string", "minLength": 1 },
+          "icon": { "type": "string", "minLength": 1 },
+          "apps": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 9,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "name_es", "description", "description_es", "apps", "proprietaryOptIn"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "name_es": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "description_es": { "type": "string", "minLength": 1 },
+          "apps": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "proprietaryOptIn": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "apps": {
+      "type": "array",
+      "minItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id", "name", "aliases", "summary", "summary_es", "description", "description_es",
+          "category", "tags", "collections", "profiles", "featured", "priority",
+          "publisher", "homepage", "repository", "support_url", "icon", "license",
+          "is_open_source", "pricing", "requires_account", "architectures",
+          "wayland_support", "gpu_requirement", "hardware_notes", "stability",
+          "status", "recommended_source", "sources", "permissions_note",
+          "known_limitations", "last_verified", "deprecated"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "summary": { "type": "string", "minLength": 1 },
+          "summary_es": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "description_es": { "type": "string", "minLength": 1 },
+          "category": {
+            "type": "string",
+            "enum": [
+              "ai-assistants", "ai-coding", "browsers", "productivity",
+              "communication", "development", "creative-studio", "gaming",
+              "multimedia", "utilities", "security", "education"
+            ]
+          },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "collections": { "type": "array", "items": { "type": "string" } },
+          "profiles": { "type": "array", "items": { "type": "string" } },
+          "featured": { "type": "boolean" },
+          "priority": { "type": "integer", "minimum": 0 },
+          "publisher": { "type": "string", "minLength": 1 },
+          "homepage": { "type": "string" },
+          "repository": { "type": "string" },
+          "support_url": { "type": "string" },
+          "icon": { "type": "string" },
+          "license": { "type": "string", "minLength": 1 },
+          "is_open_source": { "type": "boolean" },
+          "pricing": { "type": "string", "enum": ["free", "freemium", "paid"] },
+          "requires_account": { "type": "boolean" },
+          "architectures": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "wayland_support": { "type": "string", "enum": ["native", "xwayland", "web", "cli", "unknown"] },
+          "gpu_requirement": { "type": "string", "enum": ["none", "optional", "recommended", "required"] },
+          "hardware_notes": { "type": "string" },
+          "stability": { "type": "string", "enum": ["stable", "beta", "alpha", "preview", "deprecated"] },
+          "status": {
+            "type": "string",
+            "enum": [
+              "installable_validated", "installable_with_limitations", "official_web_app",
+              "community_maintained", "guided_setup_required", "deprecated",
+              "pending_verification", "unsupported"
+            ]
+          },
+          "recommended_source": { "type": "string" },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "backend", "provenance", "package_id", "remote", "verified",
+                "maintainer", "signature_available", "update_mechanism",
+                "scope", "sandboxed", "recommended_reason", "recommended_reason_es"
+              ],
+              "properties": {
+                "backend": {
+                  "type": "string",
+                  "enum": ["arch_native", "flatpak", "aur", "webapp", "vendor_repo", "appimage", "guided"]
+                },
+                "provenance": {
+                  "type": "string",
+                  "enum": [
+                    "arch_official", "flathub_verified", "flathub_community",
+                    "vendor_official", "hornero_official", "official_web_app",
+                    "community_package"
+                  ]
+                },
+                "package_id": { "type": "string", "minLength": 1 },
+                "remote": { "type": "string" },
+                "verified": { "type": "boolean" },
+                "maintainer": { "type": "string", "minLength": 1 },
+                "signature_available": { "type": "boolean" },
+                "update_mechanism": { "type": "string", "minLength": 1 },
+                "scope": { "type": "string", "enum": ["user", "system"] },
+                "sandboxed": { "type": "boolean" },
+                "recommended_reason": { "type": "string", "minLength": 1 },
+                "recommended_reason_es": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "permissions_note": { "type": "string" },
+          "known_limitations": { "type": "string" },
+          "last_verified": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "deprecated": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

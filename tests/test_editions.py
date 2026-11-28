@@ -31,7 +31,8 @@ def test_desktop_uses_one_selected_compositor_backend():
     assert default["compositor"] == "hyprland"
     assert "hyprland" in default["packages"]
     assert "niri" not in default["packages"]
-    assert not {"xdg-desktop-portal-gtk", "xdg-desktop-portal-gnome"} & set(default["packages"])
+    assert "xdg-desktop-portal-gtk" in default["packages"]
+    assert "xdg-desktop-portal-gnome" not in default["packages"]
     assert niri["compositor"] == "niri"
     assert niri["compositorMaturity"] == "experimental"
     assert "niri" in niri["packages"]
@@ -331,3 +332,9 @@ def test_desktop_composition_contains_bluetooth_stack():
         entry = catalogue["desktopProvenance"][pkg]
         assert entry["licenses"] == ["GPL-2.0-or-later"]
         assert entry["sourceUrl"].startswith("https://archlinux.org/packages/")
+
+
+def test_desktop_composition_contains_app_store_runtimes():
+    packages = set(resolver.resolve_edition(resolver.load_catalogue(), "desktop")["packages"])
+    required = {"flatpak", "appstream", "fuse2", "xdg-desktop-portal", "xdg-desktop-portal-gtk"}
+    assert required <= packages

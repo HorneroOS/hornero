@@ -6,23 +6,25 @@ import strings
 // DesktopAppEntry represents a Hornero-managed XDG .desktop entry.
 pub struct DesktopAppEntry {
 pub:
-	id        string
-	kind      string // webapp | tui
-	name      string
-	exec      string
-	wm_class  string
-	file_path string
+	id          string
+	kind        string // webapp | tui | appimage
+	name        string
+	exec        string
+	wm_class    string
+	profile_dir string
+	file_path   string
 }
 
 // WebAppSpec configures a new XDG WebApp .desktop entry.
 pub struct WebAppSpec {
 pub:
-	id         string
-	name       string
-	url        string
-	icon       string
-	browser    string
-	categories string
+	id          string
+	name        string
+	url         string
+	icon        string
+	browser     string
+	categories  string
+	profile_dir string
 }
 
 // TuiAppSpec configures a new XDG TUI App .desktop entry.
@@ -105,8 +107,20 @@ pub fn webapp_add(spec WebAppSpec) !DesktopAppEntry {
 	} else {
 		'Network;WebBrowser;'
 	}
+	profile_dir := spec.profile_dir.trim_space()
+	if profile_dir.len > 0 {
+		validate_desktop_field('profile_dir', profile_dir)!
+		if profile_dir.contains('..') || profile_dir.contains(' ') || profile_dir.contains(';')
+			|| profile_dir.contains('&') || profile_dir.contains('|') {
+			return error('invalid profile_dir: unsafe path or shell characters are forbidden')
+		}
+	}
 	wm_class := 'hornero-webapp-${safe_id}'
-	exec_cmd := '${browser} --app=${spec.url}'
+	exec_cmd := if profile_dir.len > 0 {
+		'${browser} --user-data-dir=${profile_dir} --app=${spec.url}'
+	} else {
+		'${browser} --app=${spec.url}'
+	}
 
 	dir := applications_dir()
 	os.mkdir_all(dir)!
@@ -127,15 +141,19 @@ pub fn webapp_add(spec WebAppSpec) !DesktopAppEntry {
 	sb.write_string('StartupWMClass=${wm_class}\n')
 	sb.write_string('X-Hornero-Kind=webapp\n')
 	sb.write_string('X-Hornero-Id=${safe_id}\n')
+	if profile_dir.len > 0 {
+		sb.write_string('X-Hornero-Profile-Dir=${profile_dir}\n')
+	}
 
 	os.write_file(path, sb.str())!
 	return DesktopAppEntry{
-		id:        safe_id
-		kind:      'webapp'
-		name:      spec.name.trim_space()
-		exec:      exec_cmd
-		wm_class:  wm_class
-		file_path: path
+		id:          safe_id
+		kind:        'webapp'
+		name:        spec.name.trim_space()
+		exec:        exec_cmd
+		wm_class:    wm_class
+		profile_dir: profile_dir
+		file_path:   path
 	}
 }
 
@@ -223,6 +241,7 @@ fn parse_desktop_entry(path string, kind string) DesktopAppEntry {
 	mut name := ''
 	mut exec := ''
 	mut wm_class := ''
+	mut profile_dir := ''
 	for line in raw.split_into_lines() {
 		if line.starts_with('Name=') {
 			name = line['Name='.len..]
@@ -232,15 +251,18 @@ fn parse_desktop_entry(path string, kind string) DesktopAppEntry {
 			wm_class = line['StartupWMClass='.len..]
 		} else if line.starts_with('X-Hornero-Id=') {
 			id = line['X-Hornero-Id='.len..]
+		} else if line.starts_with('X-Hornero-Profile-Dir=') {
+			profile_dir = line['X-Hornero-Profile-Dir='.len..]
 		}
 	}
 	return DesktopAppEntry{
-		id:        id
-		kind:      kind
-		name:      name
-		exec:      exec
-		wm_class:  wm_class
-		file_path: path
+		id:          id
+		kind:        kind
+		name:        name
+		exec:        exec
+		wm_class:    wm_class
+		profile_dir: profile_dir
+		file_path:   path
 	}
 }
 

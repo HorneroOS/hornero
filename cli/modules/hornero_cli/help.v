@@ -27,6 +27,7 @@ Commands:
   wallpaper     Wallpaper image (set, current)
   capture       Screenshot, recording, clipboard (screenshot, record, clipboard, status)
   apps          Everyday apps (files, terminal-file, git-status, audit, launch, toggle, switcher, performance)
+  store         Verified Application Store (search, list, show, categories, collections, profiles, install, remove, update, policy, manifest, queue, doctor)
   system        Installed edition and active compositor information
   profile       Universal 5-domain workspace profiles & snapshots (list, show, capture, diff, apply, revert, delete, launch-apps, export, import)
   studio        Studio selection state and read-only diagnostics (doctor, selection, routing)
@@ -1842,6 +1843,212 @@ Examples:
   horneroctl welcome reset --yes
 '
 		}
+		'store' {
+			return 'Usage: horneroctl store <subcommand> [options]
+
+Canonical Verified Application Store engine backed by catalog/apps.v1.json
+(arch_native, flatpak, appimage, webapp, vendor_repo, aur, guided).
+
+  search <query>      Search verified catalog [--category C] [--backend B] [--verified-only] [--open-source-only]
+  list                List apps [--category C] [--collection COL] [--profile P] [--featured] [--limit N]
+  show <id>           Inspect app metadata, provenance, policy, and install status
+  categories          List all 12 catalog categories with counts
+  collections         List all 10 curated collections
+  profiles            List all 9 optional application profiles
+  profile-show <id>   Inspect a profile and its open-source vs proprietaryOptIn apps
+  installed           List installed catalog and external apps [--backend B]
+  install <id>        Install app [--source B] [--scope user|system] [--accept-proprietary] [--allow-aur] [--dry-run] [--yes]
+  remove <id>         Remove installed app (preserves user config) [--source B] [--dry-run] [--yes]
+  update [id]         Update Flatpak apps or full pacman system [--all] [--backend B] [--dry-run] [--yes]
+  launch <id>         Launch an installed app detached [--dry-run]
+  sources             Show backend capability matrix
+  permissions <id>    Inspect Flatpak permissions [--open-flatseal] [--dry-run]
+  appimage            Manage user-space AppImages (list|import|remove)
+  webapp              Manage isolated WebApps via webapp.v (list|add|remove)
+  policy              Inspect or update store policy (show|set|reset)
+  manifest            Declarative app manifests (export|import|apply)
+  queue               Onboarding install queue (list|add|remove|run|clear)
+  gui [app-id]        Open Hornero Apps UI via Quickshell IPC [--dry-run]
+  doctor              Verify catalog, Flatpak, Flathub, AppStream, FUSE2, polkit, and portals
+
+Examples:
+  horneroctl store categories --json
+  horneroctl store search chatgpt --json
+  horneroctl store show claude-desktop --json
+  horneroctl store install firefox --dry-run
+  horneroctl store doctor --json
+'
+		}
+		'store search' {
+			return 'Usage: horneroctl store search <query> [--category C] [--backend B] [--verified-only] [--open-source-only] [--json]
+
+Examples:
+  horneroctl store search firefox --json
+  horneroctl store search chatgpt --verified-only --json
+'
+		}
+		'store list' {
+			return 'Usage: horneroctl store list [--category C] [--collection COL] [--profile P] [--featured] [--limit N] [--json]
+
+Examples:
+  horneroctl store list --featured --limit 10 --json
+  horneroctl store list --collection ai-workstation --json
+'
+		}
+		'store show' {
+			return 'Usage: horneroctl store show <id> [--json]
+
+Examples:
+  horneroctl store show claude-desktop --json
+  horneroctl store show firefox
+'
+		}
+		'store categories' {
+			return 'Usage: horneroctl store categories [--json]
+
+Examples:
+  horneroctl store categories --json
+'
+		}
+		'store collections' {
+			return 'Usage: horneroctl store collections [--json]
+
+Examples:
+  horneroctl store collections --json
+'
+		}
+		'store profiles' {
+			return 'Usage: horneroctl store profiles [--json]
+
+Examples:
+  horneroctl store profiles --json
+'
+		}
+		'store profile-show' {
+			return 'Usage: horneroctl store profile-show <id> [--json]
+
+Examples:
+  horneroctl store profile-show ai-native-workstation --json
+'
+		}
+		'store installed' {
+			return 'Usage: horneroctl store installed [--backend B] [--json]
+
+Examples:
+  horneroctl store installed --json
+  horneroctl store installed --backend flatpak --json
+'
+		}
+		'store install' {
+			return 'Usage: horneroctl store install <id> [--source BACKEND] [--scope user|system] [--accept-proprietary] [--allow-aur] [--dry-run] [--yes] [--json]
+
+Examples:
+  horneroctl store install firefox --dry-run
+  horneroctl store install firefox --yes
+  horneroctl store install spotify --accept-proprietary --yes
+'
+		}
+		'store remove' {
+			return 'Usage: horneroctl store remove <id> [--source BACKEND] [--dry-run] [--yes] [--json]
+
+Examples:
+  horneroctl store remove firefox --dry-run
+  horneroctl store remove firefox --yes
+'
+		}
+		'store update' {
+			return 'Usage: horneroctl store update [id] [--all] [--backend B] [--dry-run] [--yes] [--json]
+
+Examples:
+  horneroctl store update --all --dry-run
+  horneroctl store update --backend flatpak --yes
+'
+		}
+		'store launch' {
+			return 'Usage: horneroctl store launch <id> [--dry-run] [--json]
+
+Examples:
+  horneroctl store launch firefox --dry-run
+'
+		}
+		'store sources' {
+			return 'Usage: horneroctl store sources [--json]
+
+Examples:
+  horneroctl store sources --json
+'
+		}
+		'store permissions' {
+			return 'Usage: horneroctl store permissions <id> [--open-flatseal] [--dry-run] [--json]
+
+Examples:
+  horneroctl store permissions org.mozilla.firefox --dry-run
+  horneroctl store permissions flatseal --open-flatseal --dry-run
+'
+		}
+		'store appimage' {
+			return 'Usage: horneroctl store appimage <list|import|remove> ... [--dry-run] [--yes] [--json]
+
+Manage user-space AppImages under \$XDG_DATA_HOME/hornero/appimages/.
+
+Examples:
+  horneroctl store appimage list --json
+  horneroctl store appimage import ./MyApp.AppImage --id my-app --dry-run
+  horneroctl store appimage remove my-app --yes
+'
+		}
+		'store webapp' {
+			return 'Usage: horneroctl store webapp <list|add|remove> ... [--profile-dir DIR] [--dry-run] [--yes] [--json]
+
+Examples:
+  horneroctl store webapp list --json
+  horneroctl store webapp add claude-web --name Claude --url https://claude.ai --dry-run
+  horneroctl store webapp remove claude-web --yes
+'
+		}
+		'store policy' {
+			return 'Usage: horneroctl store policy <show|set|reset> [--verified-only BOOL] [--open-source-only BOOL] [--aur-policy MODE] [--allowed-sources CSV] [--proprietary-policy MODE] [--dry-run] [--yes] [--json]
+
+Examples:
+  horneroctl store policy show --json
+  horneroctl store policy set --verified-only true --yes
+  horneroctl store policy reset --yes
+'
+		}
+		'store manifest' {
+			return 'Usage: horneroctl store manifest <export|import|apply> <file> [--accept-proprietary] [--dry-run] [--yes] [--json]
+
+Examples:
+  horneroctl store manifest export ./apps.json --dry-run
+  horneroctl store manifest import ./apps.json --json
+  horneroctl store manifest apply ./apps.json --dry-run
+'
+		}
+		'store queue' {
+			return 'Usage: horneroctl store queue <list|add|remove|run|clear> [id] [--dry-run] [--yes] [--json]
+
+Examples:
+  horneroctl store queue list --json
+  horneroctl store queue add firefox --yes
+  horneroctl store queue run --dry-run
+'
+		}
+		'store gui' {
+			return 'Usage: horneroctl store gui [app-id] [--dry-run]
+
+Examples:
+  horneroctl store gui --dry-run
+  horneroctl store gui firefox --dry-run
+'
+		}
+		'store doctor' {
+			return 'Usage: horneroctl store doctor [--json]
+
+Examples:
+  horneroctl store doctor
+  horneroctl store doctor --json
+'
+		}
 		else {
 			return ''
 		}
@@ -1851,7 +2058,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent github profile help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps store system assistant studio gaming recovery agent github profile help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -1865,7 +2072,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps system assistant studio gaming recovery agent github profile help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps store system assistant studio gaming recovery agent github profile help)
   _describe "command" cmds
 }
 _horneroctl
@@ -1891,6 +2098,7 @@ complete -c horneroctl -f -n __fish_use_subcommand -a mode -d "Experience modes"
 complete -c horneroctl -f -n __fish_use_subcommand -a wallpaper -d "Wallpaper image"
 complete -c horneroctl -f -n __fish_use_subcommand -a capture -d "Screenshot, recording, clipboard"
 complete -c horneroctl -f -n __fish_use_subcommand -a apps -d "Everyday apps"
+complete -c horneroctl -f -n __fish_use_subcommand -a store -d "Verified application store"
 complete -c horneroctl -f -n __fish_use_subcommand -a system -d "Installed edition and compositor"
 complete -c horneroctl -f -n __fish_use_subcommand -a studio -d "Studio selection and diagnostics"
 complete -c horneroctl -f -n __fish_use_subcommand -a gaming -d "Gaming readiness diagnostics"

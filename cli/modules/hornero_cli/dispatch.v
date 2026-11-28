@@ -22,8 +22,8 @@ import os
 // --json/--quiet/--dry-run semantics per cli/AGENTS.md.
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'mode', 'wallpaper',
-	'capture', 'apps', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery', 'agent',
-	'github', 'profile', 'help']
+	'capture', 'apps', 'store', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery',
+	'agent', 'github', 'profile', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -149,6 +149,9 @@ pub fn dispatch(args []string) int {
 		}
 		'apps' {
 			run_apps(rest[1..], mode)
+		}
+		'store' {
+			run_store(rest[1..], mode)
 		}
 		'system' {
 			run_system(rest[1..], mode)
@@ -473,6 +476,195 @@ fn run_github(args []string, mode hornero_core.RenderMode) int {
 		else {
 			render_error(hornero_core.err_usage('github', 'unknown github subcommand.\nExample: horneroctl github status --json'),
 				mode)
+		}
+	}
+}
+
+fn run_store(args []string, mode hornero_core.RenderMode) int {
+	opts := parse_store_cmd(args) or {
+		return render_error(hornero_core.err_usage('store.usage', err.msg()), mode)
+	}
+	return match opts.verb {
+		'search' {
+			render(hornero_core.store_search_result(hornero_core.StoreSearchOptions{
+				query:            opts.query
+				category:         opts.category
+				backend:          opts.backend
+				verified_only:    opts.verified_only
+				open_source_only: opts.open_source_only
+			}), mode)
+		}
+		'list' {
+			render(hornero_core.store_list_result(hornero_core.StoreListOptions{
+				category:   opts.category
+				collection: opts.collection
+				profile:    opts.profile
+				featured:   opts.featured
+				limit:      opts.limit
+			}), mode)
+		}
+		'show' {
+			render(hornero_core.store_show_result(opts.id), mode)
+		}
+		'categories' {
+			render(hornero_core.store_categories_result(), mode)
+		}
+		'collections' {
+			render(hornero_core.store_collections_result(), mode)
+		}
+		'profiles' {
+			render(hornero_core.store_profiles_result(), mode)
+		}
+		'profile-show' {
+			render(hornero_core.store_profile_show_result(opts.id), mode)
+		}
+		'installed' {
+			render(hornero_core.store_installed_result(opts.backend), mode)
+		}
+		'install' {
+			render(hornero_core.store_install_result(hornero_core.StoreInstallOptions{
+				id:                 opts.id
+				source:             opts.source
+				scope:              opts.scope
+				accept_proprietary: opts.accept_proprietary
+				allow_aur:          opts.allow_aur
+				dry_run:            opts.dry_run
+				yes:                opts.yes
+			}), mode)
+		}
+		'remove' {
+			render(hornero_core.store_remove_result(hornero_core.StoreRemoveOptions{
+				id:      opts.id
+				source:  opts.source
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}), mode)
+		}
+		'update' {
+			render(hornero_core.store_update_result(hornero_core.StoreUpdateOptions{
+				id:      opts.id
+				all:     opts.all
+				backend: opts.backend
+				dry_run: opts.dry_run
+				yes:     opts.yes
+			}), mode)
+		}
+		'launch' {
+			render(hornero_core.store_launch_result(opts.id, opts.dry_run), mode)
+		}
+		'sources' {
+			render(hornero_core.store_sources_result(), mode)
+		}
+		'permissions' {
+			render(hornero_core.store_permissions_result(opts.id, opts.open_flatseal, opts.dry_run),
+				mode)
+		}
+		'appimage' {
+			match opts.action {
+				'list' {
+					render(hornero_core.store_appimage_list_result(), mode)
+				}
+				'import' {
+					render(hornero_core.store_appimage_import_result(opts.file, opts.id, opts.name,
+						opts.icon, opts.sha256, opts.dry_run, opts.yes), mode)
+				}
+				else {
+					render(hornero_core.store_appimage_remove_result(opts.id, opts.dry_run, opts.yes),
+						mode)
+				}
+			}
+		}
+		'webapp' {
+			match opts.action {
+				'list' {
+					render(hornero_core.store_webapp_list_result(), mode)
+				}
+				'add' {
+					render(hornero_core.store_webapp_add_result(hornero_core.WebAppSpec{
+						id:          opts.id
+						name:        opts.name
+						url:         opts.url
+						icon:        opts.icon
+						browser:     opts.browser
+						profile_dir: opts.profile_dir
+					}, opts.dry_run, opts.yes), mode)
+				}
+				else {
+					render(hornero_core.store_webapp_remove_result(opts.id, opts.dry_run, opts.yes),
+						mode)
+				}
+			}
+		}
+		'policy' {
+			match opts.action {
+				'show' {
+					render(hornero_core.store_policy_show_result(), mode)
+				}
+				'set' {
+					render(hornero_core.store_policy_set_result(hornero_core.StorePolicySetOptions{
+						has_verified_only:    opts.has_verified_only
+						verified_only:        opts.verified_val
+						has_open_source_only: opts.has_oss_only
+						open_source_only:     opts.oss_val
+						aur_policy:           opts.aur_policy
+						proprietary_policy:   opts.proprietary_policy
+						has_allowed_sources:  opts.has_allowed_srcs
+						allowed_sources:      opts.allowed_sources
+						dry_run:              opts.dry_run
+						yes:                  opts.yes
+					}), mode)
+				}
+				else {
+					render(hornero_core.store_policy_reset_result(opts.dry_run, opts.yes), mode)
+				}
+			}
+		}
+		'manifest' {
+			match opts.action {
+				'export' {
+					render(hornero_core.store_manifest_export_result(opts.file, opts.dry_run,
+						opts.yes), mode)
+				}
+				'import' {
+					render(hornero_core.store_manifest_import_result(opts.file), mode)
+				}
+				else {
+					render(hornero_core.store_manifest_apply_result(opts.file, opts.accept_proprietary,
+						opts.allow_aur, opts.dry_run, opts.yes), mode)
+				}
+			}
+		}
+		'queue' {
+			match opts.action {
+				'list' {
+					render(hornero_core.store_queue_list_result(), mode)
+				}
+				'add' {
+					render(hornero_core.store_queue_add_result(opts.id, opts.source, opts.dry_run,
+						opts.yes), mode)
+				}
+				'remove' {
+					render(hornero_core.store_queue_remove_result(opts.id, opts.dry_run, opts.yes),
+						mode)
+				}
+				'clear' {
+					render(hornero_core.store_queue_clear_result(opts.dry_run, opts.yes), mode)
+				}
+				else {
+					render(hornero_core.store_queue_run_result(opts.accept_proprietary, opts.allow_aur,
+						opts.dry_run, opts.yes), mode)
+				}
+			}
+		}
+		'gui' {
+			render(hornero_core.store_gui_result(opts.id, opts.dry_run), mode)
+		}
+		'doctor' {
+			render(hornero_core.store_doctor_result(), mode)
+		}
+		else {
+			render_error(hornero_core.err_usage('store.usage',
+				'unknown store subcommand.\nExample: horneroctl store categories --json'), mode)
 		}
 	}
 }

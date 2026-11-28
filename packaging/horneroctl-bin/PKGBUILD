@@ -23,6 +23,10 @@ optdepends=(
   'git: install community Shell plugin packages from HTTPS repositories'
   'minisign: verify signed HorneroOS community plugin registry indexes'
   'hornero-shell: validate community plugin packages with the Shell-owned contract checker'
+  'flatpak: install and run sandboxed desktop applications via horneroctl store'
+  'appstream: AppStream metadata support for Flatpak applications'
+  'fuse2: run user-space AppImage packages via horneroctl store appimage'
+  'xdg-desktop-portal-gtk: GTK desktop portal integration for Flatpak apps'
 )
 # The release public key ships AS A PACKAGE SOURCE on purpose: AUR
 # snapshot tarballs only include the PKGBUILD, .SRCINFO and declared

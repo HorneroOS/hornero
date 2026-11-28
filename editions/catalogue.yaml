@@ -65,6 +65,9 @@ packageSets:
       - gvfs
       - tumbler
       - flatpak
+      - appstream
+      - fuse2
+      - xdg-desktop-portal-gtk
   compositor:hyprland:
     packages:
       - hyprland
