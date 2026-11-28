@@ -36,6 +36,8 @@ Commands:
   assistant     Optional Hermes AI assistant (status, enable, disable, tools, knowledge, ask, stop)
   agent         Agent registry (list, status, doctor, default, launch proposal)
   github        GitHub activity via gh (status, stats, inbox, refresh, export)
+  playground    Playground VM diagnostics, profiles, scenarios, and local session control (doctor, profiles, scenarios, status, up, down)
+  presenter     Presenter mode & YouTube recording studio (status, start, stop, record, stop-recording, export)
   completion    Print shell completions
   help          Show help for a command
 
@@ -2049,6 +2051,192 @@ Examples:
   horneroctl store doctor --json
 '
 		}
+		'playground' {
+			return 'Usage: horneroctl playground <doctor|profiles|scenarios|status|up|down> [options]
+
+Hornero Playground host diagnostics, canonical Display/Image profiles,
+Demo Studio scenarios, and local VM lifecycle orchestration
+(HorneroOS/playground#1).
+
+  doctor              Read-only host KVM/VirGL/OVMF/FFmpeg/Kdenlive/RAM/CPU checks
+  profiles            List the 7 Display Profiles and 6 Image Profiles
+  scenarios           List the 10 Demo Studio / YouTube Scenarios
+  status              Read-only playground & presenter state summary
+  up                  Launch a local ephemeral VM (--provider local [--dry-run] [--yes])
+  down                Stop an active local playground session ([--dry-run] [--yes])
+
+Non-local paid cloud providers (hetzner, gcp, aws) are refused by default and
+point to HorneroOS/playground Terraform IaC docs.
+
+Examples:
+  horneroctl playground doctor --json
+  horneroctl playground profiles --json
+  horneroctl playground scenarios --json
+  horneroctl playground status --json
+  horneroctl playground up --provider local --dry-run
+  horneroctl playground down --dry-run
+'
+		}
+		'playground doctor' {
+			return 'Usage: horneroctl playground doctor [--json|--quiet]
+
+Strictly read-only checks with zero external calls: /dev/kvm,
+/dev/dri/renderD*, qemu-system-x86_64, qemu-img, ffmpeg, ffprobe,
+kdenlive, systemd-run, OVMF 4M firmware paths, and host RAM/CPU.
+
+Examples:
+  horneroctl playground doctor
+  horneroctl playground doctor --json
+'
+		}
+		'playground profiles' {
+			return 'Usage: horneroctl playground profiles [--kind all|display|image] [--json|--quiet]
+
+List the 7 Display Profiles (hd 1280x720, fhd 1920x1080 [default],
+qhd 2560x1440, uhd4k 3840x2160, ultrawide 3440x1440, vertical 1080x1920,
+custom) and 6 Image Profiles (standard-vm, public-playground, presenter,
+qa, screenshot, video).
+
+Examples:
+  horneroctl playground profiles
+  horneroctl playground profiles --json
+  horneroctl playground profiles --kind display --json
+'
+		}
+		'playground scenarios' {
+			return 'Usage: horneroctl playground scenarios [--json|--quiet]
+
+List the 10 canonical Demo Studio / YouTube Scenarios:
+introducing-horneroos, installing-and-exploring, first-flight,
+personalize-desktop, hornero-apps, ai-native-workstation,
+meet-companion, creative-studio, extensions-marketplace,
+release-highlights.
+
+Examples:
+  horneroctl playground scenarios
+  horneroctl playground scenarios --json
+'
+		}
+		'playground status' {
+			return 'Usage: horneroctl playground status [--json|--quiet]
+
+Read-only summary of local playground state, active presenter status,
+and host KVM/VirGL readiness.
+
+Examples:
+  horneroctl playground status
+  horneroctl playground status --json
+'
+		}
+		'playground up' {
+			return 'Usage: horneroctl playground up [--provider local] [--profile <id>] [--resolution <WxH|profile>] [--image <qcow2>] [--iso <iso>] [--ram <size>] [--cpus <n>] [--dry-run] [--yes] [--json]
+
+Preview or launch a local ephemeral QEMU/KVM Playground VM. Non-local paid
+cloud providers (e.g. hetzner, gcp, aws) are refused with a pointer to
+HorneroOS/playground Terraform IaC docs.
+
+Examples:
+  horneroctl playground up --provider local --dry-run
+  horneroctl playground up --provider local --profile presenter --resolution 1920x1080 --dry-run
+  horneroctl playground up --provider local --image ./horneroos.qcow2 --yes
+'
+		}
+		'playground down' {
+			return 'Usage: horneroctl playground down [--dry-run] [--yes] [--json]
+
+Preview or stop an active local Playground VM session.
+
+Examples:
+  horneroctl playground down --dry-run
+  horneroctl playground down --yes
+'
+		}
+		'presenter' {
+			return 'Usage: horneroctl presenter <status|start|stop|record|stop-recording|export> [--resolution 1920x1080] [--scenario <id>] [--fps <30|60>] [--output <dir>] [--dry-run] [--yes] [--json]
+
+Presenter mode and YouTube studio workflow. Reads/writes
+\$XDG_STATE_HOME/hornero-presenter/state.json safely (refusing symlinks)
+and delegates live DND control to hornero-presenter / qs ipc call notifs.
+
+Canonical YouTube export bundle structure:
+  hornero-<scenario>/{recordings/{desktop-master.mkv,desktop-preview.mp4},audio/{system.flac,narration.flac},screenshots/,thumbnails/,chapters.json,subtitles.srt,project.kdenlive,manifest.json}
+
+Examples:
+  horneroctl presenter status --json
+  horneroctl presenter start --resolution 1920x1080 --dry-run
+  horneroctl presenter start --scenario first-flight --resolution 3840x2160 --fps 60 --dry-run
+  horneroctl presenter record --scenario first-flight --resolution 1920x1080 --fps 60 --dry-run
+  horneroctl presenter stop-recording --dry-run
+  horneroctl presenter export --scenario first-flight --resolution 3840x2160 --fps 60 --dry-run
+  horneroctl presenter stop --dry-run
+'
+		}
+		'presenter status' {
+			return 'Usage: horneroctl presenter status [--json|--quiet]
+
+Read-only presenter status from \$XDG_STATE_HOME/hornero-presenter/state.json
+(refusing symlinks) plus live Quickshell DND probe when available.
+
+Examples:
+  horneroctl presenter status
+  horneroctl presenter status --json
+'
+		}
+		'presenter start' {
+			return 'Usage: horneroctl presenter start [--resolution <WxH|profile>] [--scenario <id>] [--fps <30|60>] [--dry-run] [--yes] [--json]
+
+Validate display resolution (hd|fhd|qhd|uhd4k|ultrawide|vertical or WxH),
+FPS (30|60), and optional scenario ID, then build/execute the presenter
+startup plan (delegating to hornero-presenter / qs ipc call notifs enableDnd).
+
+Examples:
+  horneroctl presenter start --resolution 1920x1080 --dry-run
+  horneroctl presenter start --scenario first-flight --resolution 3840x2160 --fps 60 --dry-run
+  horneroctl presenter start --resolution fhd --yes
+'
+		}
+		'presenter stop' {
+			return 'Usage: horneroctl presenter stop [--dry-run] [--yes] [--json]
+
+Disable Presenter Mode and restore prior Quickshell notification DND state.
+
+Examples:
+  horneroctl presenter stop --dry-run
+  horneroctl presenter stop --yes
+'
+		}
+		'presenter record' {
+			return 'Usage: horneroctl presenter record [--resolution <WxH|profile>] [--scenario <id>] [--fps <30|60>] [--output <dir>] [--dry-run] [--yes] [--json]
+
+Plan or start presenter screen + PipeWire audio capture targeting the
+canonical recordings/desktop-master.mkv path.
+
+Examples:
+  horneroctl presenter record --scenario first-flight --resolution 1920x1080 --fps 60 --dry-run
+  horneroctl presenter record --scenario introducing-horneroos --resolution uhd4k --yes
+'
+		}
+		'presenter stop-recording' {
+			return 'Usage: horneroctl presenter stop-recording [--resolution <WxH|profile>] [--scenario <id>] [--fps <30|60>] [--dry-run] [--yes] [--json]
+
+Plan or finalize an active presenter recording and generate preview MP4.
+
+Examples:
+  horneroctl presenter stop-recording --dry-run
+  horneroctl presenter stop-recording --yes
+'
+		}
+		'presenter export' {
+			return 'Usage: horneroctl presenter export [--scenario <id>] [--resolution <WxH|profile>] [--fps <30|60>] [--output <dir>] [--dry-run] [--yes] [--json]
+
+Emit or scaffold the canonical YouTube bundle structure:
+  hornero-<scenario>/{recordings/{desktop-master.mkv,desktop-preview.mp4},audio/{system.flac,narration.flac},screenshots/,thumbnails/,chapters.json,subtitles.srt,project.kdenlive,manifest.json}
+
+Examples:
+  horneroctl presenter export --scenario first-flight --resolution 3840x2160 --fps 60 --dry-run
+  horneroctl presenter export --scenario introducing-horneroos --output ./bundles --yes
+'
+		}
 		else {
 			return ''
 		}
@@ -2058,7 +2246,7 @@ Examples:
 pub fn bash_completion() string {
 	return '# horneroctl bash completion
 _horneroctl_completions() {
-  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps store system assistant studio gaming recovery agent github profile help"
+  local cur cmds="version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps store system assistant studio gaming recovery agent github profile playground presenter help"
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ \$COMP_CWORD -eq 1 ]; then
     COMPREPLY=(\$(compgen -W "\$cmds" -- "\$cur"))
@@ -2072,7 +2260,7 @@ pub fn zsh_completion() string {
 	return '#compdef horneroctl
 _horneroctl() {
   local -a cmds
-	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps store system assistant studio gaming recovery agent github profile help)
+	cmds=(version doctor shell appearance config package backup power lock hypr plugin hardware bluetooth completion welcome mode wallpaper capture apps store system assistant studio gaming recovery agent github profile playground presenter help)
   _describe "command" cmds
 }
 _horneroctl
@@ -2106,6 +2294,8 @@ complete -c horneroctl -f -n __fish_use_subcommand -a recovery -d "OS recovery r
 complete -c horneroctl -f -n __fish_use_subcommand -a agent -d "Agent registry"
 complete -c horneroctl -f -n __fish_use_subcommand -a github -d "GitHub activity via gh"
 complete -c horneroctl -f -n __fish_use_subcommand -a profile -d "Workspace profiles and snapshots"
+complete -c horneroctl -f -n __fish_use_subcommand -a playground -d "Playground VM diagnostics, profiles, scenarios, and local sessions"
+complete -c horneroctl -f -n __fish_use_subcommand -a presenter -d "Presenter mode and YouTube bundle studio"
 complete -c horneroctl -f -n __fish_use_subcommand -a plugin -d "Plugins"
 complete -c horneroctl -f -n __fish_use_subcommand -a assistant -d "Assistant"
 complete -c horneroctl -f -n __fish_use_subcommand -a bluetooth -d "Bluetooth"

@@ -23,7 +23,7 @@ import os
 const known_commands = ['version', 'doctor', 'shell', 'appearance', 'config', 'package', 'backup',
 	'power', 'lock', 'hypr', 'plugin', 'hardware', 'completion', 'welcome', 'mode', 'wallpaper',
 	'capture', 'apps', 'store', 'system', 'assistant', 'studio', 'gaming', 'bluetooth', 'recovery',
-	'agent', 'github', 'profile', 'help']
+	'agent', 'github', 'profile', 'playground', 'presenter', 'help']
 
 // dispatch is the testable entry point: it returns the process exit code and
 // never calls exit() itself. cmd/agent entry maps the return to exit(code).
@@ -179,6 +179,12 @@ pub fn dispatch(args []string) int {
 		}
 		'profile' {
 			run_profile(rest[1..], mode)
+		}
+		'playground' {
+			run_playground(rest[1..], mode)
+		}
+		'presenter' {
+			run_presenter(rest[1..], mode)
 		}
 		'help' {
 			print_human(root_help())
