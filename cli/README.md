@@ -85,8 +85,8 @@ create a system snapshot or provide OS rollback. `config snapshot` and
 selected compositor runtime, and its portal backends. It selects the compositor from the
 installed Hornero profile, then the active Wayland session; an unprofiled
 system without an active session retains Hyprland as the compatibility default.
-Use `--compositor hyprland` or `--compositor niri` to choose explicitly. Niri's
-dependency check is marked experimental. Portal service binaries are checked
+Use `--compositor hyprland` or `--compositor niri` to choose explicitly; both
+Hyprland and Niri are supported compositors. Portal service binaries are checked
 in Arch's `/usr/lib` service path as well as checking normal commands on `PATH`.
 
 `horneroctl config gui --pane <id>` asks the running Hornero Shell to open a

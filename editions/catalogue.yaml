@@ -149,7 +149,7 @@ compositors:
       - screenshot
       - screencast
   niri:
-    maturity: experimental
+    maturity: supported
     packageSet: compositor:niri
     capabilities:
       - workspaces
@@ -289,7 +289,7 @@ installationProvenance:
 editions:
   desktop:
     title: HorneroOS Desktop
-    maturity: preview
+    maturity: supported
     role: desktop
     packageSets: [desktop]
     compositor:
@@ -321,7 +321,7 @@ editions:
       secretsInImage: forbidden
   studio:
     title: HorneroOS Studio
-    maturity: preview
+    maturity: supported
     role: creative-workstation
     extends: desktop
     packageSets: [studio]
@@ -336,7 +336,7 @@ editions:
         licensing: user-supplied-windows-vst
   gaming:
     title: HorneroOS Gaming
-    maturity: preview
+    maturity: supported
     role: gaming-workstation
     extends: desktop
     packageSets: [gaming]
@@ -350,7 +350,7 @@ desktopProvenance:
     licenseClass: open-source
     installMethod: pacman-repository
     optional: false
-    support: preview
+    support: supported
   bluez-utils:
     source: arch-extra
     sourceUrl: https://archlinux.org/packages/extra/x86_64/bluez-utils/
@@ -358,7 +358,7 @@ desktopProvenance:
     licenseClass: open-source
     installMethod: pacman-repository
     optional: false
-    support: preview
+    support: supported
 # Provenance and licensing metadata for every package in the Studio set and
 # for the optional Studio integrations above. Verified against the Arch
 # package index on 2026-10-25; package presence never implies HorneroOS

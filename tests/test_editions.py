@@ -17,11 +17,11 @@ SPEC.loader.exec_module(resolver)
 def test_catalogue_has_the_five_user_facing_editions():
     catalogue = resolver.load_catalogue()
     assert set(catalogue["editions"]) == {"desktop", "server", "agents", "studio", "gaming"}
-    assert catalogue["editions"]["desktop"]["maturity"] == "preview"
+    assert catalogue["editions"]["desktop"]["maturity"] == "supported"
     assert catalogue["editions"]["server"]["maturity"] == "planned"
     assert catalogue["editions"]["agents"]["maturity"] == "planned"
-    assert catalogue["editions"]["studio"]["maturity"] == "preview"
-    assert catalogue["editions"]["gaming"]["maturity"] == "preview"
+    assert catalogue["editions"]["studio"]["maturity"] == "supported"
+    assert catalogue["editions"]["gaming"]["maturity"] == "supported"
 
 
 def test_desktop_uses_one_selected_compositor_backend():
@@ -34,7 +34,7 @@ def test_desktop_uses_one_selected_compositor_backend():
     assert "xdg-desktop-portal-gtk" in default["packages"]
     assert "xdg-desktop-portal-gnome" not in default["packages"]
     assert niri["compositor"] == "niri"
-    assert niri["compositorMaturity"] == "experimental"
+    assert niri["compositorMaturity"] == "supported"
     assert "niri" in niri["packages"]
     assert "hyprland" not in niri["packages"]
     assert {"xdg-desktop-portal-gtk", "xdg-desktop-portal-gnome"} <= set(niri["packages"])

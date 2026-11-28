@@ -259,7 +259,7 @@ pub fn package_deps_check_report(opts PackageDepsOptions) CommandResult {
 		lines << '${d.check} (${d.group}, missing)'
 		names << d.check
 	}
-	lines << 'Compositor: ${compositor}${if compositor == 'niri' { ' (experimental)' } else { '' }}'
+	lines << 'Compositor: ${compositor}'
 	lines << '${missing.len} missing dependencies (install with: horneroctl package deps --compositor ${compositor} --install --yes)'
 	return ok_result('package deps', lines.join('\n'), {
 		'missing':    names.join(',')
