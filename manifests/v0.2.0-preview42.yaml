@@ -1,0 +1,56 @@
+# Hornero OS composition manifest: hornero-0.2.0-preview42
+#
+# Hornero Signal Amendment 3 + Chromatic v3 + Hornero Apps AUR package release;
+# ISO/QCOW2 RC validation is tracked separately.
+
+apiVersion: hornero.os/v1
+kind: CompositionManifest
+name: hornero-0.2.0-preview42
+date: "2026-11-28"
+description: >-
+  Hornero Signal Amendment 3, Chromatic v3, and Hornero Apps package
+  release. Ships hornero-shell 1.6.0-2 (reimagined Hornero Welcome with
+  First Flight, Explore hub, and What's New; native Hornero Apps store;
+  Control Center universal Profiles, Studio routing kits, and Audio
+  stream router; Chromatic v3 and Niri parity), hornero-config 0.6.0-1
+  (Signal Day/Night renaissance, Flathub bootstrap, portals, AppImage
+  entry, and Hornero Apps policy), and horneroctl-bin 0.2.0_preview63-1
+  (verified canonical app catalog, store engine, universal profiles,
+  snapshots, studio routing kits, and playground/presenter commands).
+  Greeter packages hornero-greeter 1.3.0-1 and hornero-greeter-greetd
+  0.2.0-1 are also live on the AUR. AUR packages are published; ISO and
+  QCOW2 release-candidate validation in HorneroOS/installer is tracked
+  separately and no ISO is uploaded for this record yet.
+
+components:
+  shell:
+    repo: https://github.com/HorneroOS/shell
+    ref: main
+    sha: 908215f3ef254cbbb5caa5c81663f6b27ad36f24
+    status: pinned
+    subject: "feat(welcome): reimagine Hornero Welcome with First Flight, Explore hub, and What's New (#753)"
+    notes: Frozen Signal shell main; tagged pkg/hornero-shell-v1.6.0 and published on AUR as hornero-shell 1.6.0-2 (AUR commit ceaa50f3297a358772e8c9d2339c22296f0a99b1).
+  config:
+    repo: https://github.com/HorneroOS/config
+    ref: main
+    sha: 22ec9499b25544795f164839f9ceba6781a577bd
+    status: pinned
+    subject: "feat(apps): add Flathub bootstrap, portals, AppImage entry, and Hornero Apps policy (#199)"
+    notes: Frozen Signal config main; tagged pkg/hornero-config-v0.6.0 and published on AUR as hornero-config 0.6.0-1 (AUR commit 8ead37654258a55432801a3ec73d79728e9e4738).
+  horneroctl:
+    repo: https://github.com/HorneroOS/hornero
+    path: cli/
+    status: local
+    notes: >-
+      Tagged horneroctl-v0.2.0-preview63 (88723e5526e7c8b8391912b1762b7746c99610bc)
+      and published on AUR as signed horneroctl-bin 0.2.0_preview63-1
+      (AUR commit 98fa9224a3b2f465495dd4be6aee0e01d5328bd8).
+  installer:
+    repo: https://github.com/HorneroOS/installer
+    status: future
+    notes: Reserved slot. Lock convergence for v0.2.0-preview42 is tracked in HorneroOS/installer; no signed ISO build yet.
+  iso:
+    repo: https://github.com/HorneroOS/hornero
+    path: releases/
+    status: future
+    notes: Reserved slot. AUR packages are published; ISO/QCOW2 RC validation is tracked separately and preview32 remains the current signed Preview ISO until RC validation completes.
