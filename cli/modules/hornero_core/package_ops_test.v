@@ -104,7 +104,8 @@ fn test_package_deps_niri_checks_niri_runtime_instead_of_hyprland() {
 	assert r.data['missing'].contains('xdg-desktop-portal-gnome')
 	assert r.data['missing'].contains('xdg-desktop-portal-gtk')
 	assert !r.data['missing'].contains('hyprland')
-	assert r.message.contains('Compositor: niri (experimental)')
+	assert r.message.contains('Compositor: niri')
+	assert !r.message.contains('experimental')
 	package_ops_test_restore_env(saved)
 }
 
@@ -123,7 +124,7 @@ fn test_package_deps_follows_installed_profile_compositor() {
 	os.setenv('HORNERO_SYSTEM_PROFILE_FILE', path, true)
 	os.unsetenv('NIRI_SOCKET')
 	os.setenv('HYPRLAND_INSTANCE_SIGNATURE', 'inherited-parent-session', true)
-	profile_json := '{"apiVersion":"hornero.os/v1","kind":"InstalledProfile","sourceRevision":"0123456789abcdef0123456789abcdef01234567","profilePackage":"hornero-profile-desktop-niri","edition":{"edition":"desktop","title":"HorneroOS Desktop","role":"desktop","maturity":"preview","compositor":"niri","compositorMaturity":"experimental","packageSets":["base","desktop","compositor:niri"]}}'
+	profile_json := '{"apiVersion":"hornero.os/v1","kind":"InstalledProfile","sourceRevision":"0123456789abcdef0123456789abcdef01234567","profilePackage":"hornero-profile-desktop-niri","edition":{"edition":"desktop","title":"HorneroOS Desktop","role":"desktop","maturity":"supported","compositor":"niri","compositorMaturity":"supported","packageSets":["base","desktop","compositor:niri"]}}'
 	os.write_file(path, profile_json) or {
 		assert false, err.msg()
 	}

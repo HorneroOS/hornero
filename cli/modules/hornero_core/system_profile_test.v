@@ -26,7 +26,7 @@ fn test_system_profile_reports_installed_edition_and_active_compositor_separatel
 	os.setenv('HORNERO_SYSTEM_PROFILE_FILE', path, true)
 	os.setenv('NIRI_SOCKET', '/run/user/test/niri.sock', true)
 	os.setenv('HYPRLAND_INSTANCE_SIGNATURE', 'inherited-parent-session', true)
-	os.write_file(path, '{"apiVersion":"hornero.os/v1","kind":"InstalledProfile","sourceRevision":"0123456789abcdef0123456789abcdef01234567","profilePackage":"hornero-profile-desktop-niri","edition":{"edition":"desktop","title":"HorneroOS Desktop","role":"desktop","maturity":"preview","compositor":"niri","compositorMaturity":"experimental","packageSets":["base","desktop","compositor:niri"]}}') or {
+	os.write_file(path, '{"apiVersion":"hornero.os/v1","kind":"InstalledProfile","sourceRevision":"0123456789abcdef0123456789abcdef01234567","profilePackage":"hornero-profile-desktop-niri","edition":{"edition":"desktop","title":"HorneroOS Desktop","role":"desktop","maturity":"supported","compositor":"niri","compositorMaturity":"supported","packageSets":["base","desktop","compositor:niri"]}}') or {
 		assert false, err.msg()
 	}
 
@@ -34,11 +34,11 @@ fn test_system_profile_reports_installed_edition_and_active_compositor_separatel
 	assert result.ok
 	assert result.data['edition'] == 'desktop'
 	assert result.data['compositor'] == 'niri'
-	assert result.data['compositorMaturity'] == 'experimental'
+	assert result.data['compositorMaturity'] == 'supported'
 	assert result.data['activeCompositor'] == 'niri'
 	assert result.data['packageSets'] == 'base,desktop,compositor:niri'
 	assert result.data['sourceRevision'] == '0123456789abcdef0123456789abcdef01234567'
-	assert result.message.contains('Configured compositor: niri (experimental)')
+	assert result.message.contains('Configured compositor: niri (supported)')
 	os.rm(path) or {}
 	system_profile_test_restore_env(saved)
 }

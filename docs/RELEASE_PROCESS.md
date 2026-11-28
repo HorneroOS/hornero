@@ -41,8 +41,8 @@ Composition manifests are immutable release records:
 2. Update `sha` / `subject` ONLY in the candidate manifest named by
    `manifests/candidate`. Never pin a SHA you have not resolved
    yourself; never touch a historical manifest. The `installer` and
-   `iso` slots are no longer future: the provisional Calamares
-   installer builds the Preview ISO, which is signed with the
+   `iso` slots are no longer future: the Calamares installer
+   builds the release ISO, which is signed with the
    HorneroOS releases key and published out-of-band (the 2 GB GitHub
    asset limit); record its checksum and signature in the checklist
    instead of skipping the slot.
@@ -104,8 +104,8 @@ already-built one below it:
 1. `horneroctl` from `cli/` in this repository.
 2. `config` (`HorneroOS/config`) at its pinned SHA.
 3. `shell` (`HorneroOS/shell`) at its pinned SHA.
-4. `installer` — the provisional Calamares installer (HorneroOS/installer).
-5. `iso` — the signed Preview ISO it builds, published out-of-band.
+4. `installer` — the Calamares installer (`HorneroOS/installer`).
+5. `iso` — the signed live/installable ISO it builds, published out-of-band.
 
 Record the ISO checksum, signature and distribution URL in the release
 checklist, so the next release can audit exactly what was published.

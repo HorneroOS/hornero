@@ -17,5 +17,6 @@ components:
   - name: horneroctl
     role: System CLI built from this repository.
 notes: >-
-  Desktop is a Preview edition: it installs from the signed Preview
-  ISO (VM-validated, not Supported).
+  Desktop is a supported edition, daily-driven on physical hardware and
+  validated on UEFI and BIOS KVM; it installs from the signed ISO,
+  preinstalled QCOW2 VM image, or Arch/AUR paths.

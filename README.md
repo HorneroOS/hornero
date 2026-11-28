@@ -5,16 +5,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 HorneroOS is an Arch-based workstation operating-system family with a
-composable product model: **Desktop**, **Studio** and **Gaming**, all in
-Preview. Every edition shares a Wayland-first desktop powered by Hornero
-Shell and the
+composable product model: **Desktop**, **Studio** and **Gaming**, all
+supported and daily-driven across physical hardware as well as UEFI and BIOS
+KVM. Every edition shares a Wayland-first desktop powered by Hornero Shell and
+the
 [Hornero Signal](https://github.com/HorneroOS/docs/blob/main/development/rfc-0001-hornero-signal.md)
-visual language; Hyprland is the validated compositor backend, not the
-identity of the operating system. One edition catalogue defines the shared
-base, desktop compositor choices, the Studio and Gaming compositions, and
-the planned server and agent-host compositions, each with explicit maturity.
-Its factory appearance is the Cockpit layout with the Hornero Signal Night
-theme.
+visual language; both **Hyprland** (default) and **Niri** are supported
+compositor backends, while **labwc** remains planned. One edition catalogue
+defines the shared base, desktop compositor choices, the Studio and Gaming
+compositions, and the planned server and agent-host compositions, each with
+explicit maturity. Its factory appearance is the Cockpit layout with the
+Hornero Signal Night theme.
 
 This repository defines **HorneroOS as a composed product**: which components
 make up the operating system, how editions combine package sets and what gets
@@ -75,10 +76,13 @@ repository that owns it:
 Composition is live: `horneroctl` builds from `cli/`, release manifests pin
 the shell/config sources, and `scripts/compose.sh` materializes and validates
 the pinned composition. The edition catalogue resolves five products from a
-shared base and role package sets. Desktop, Studio and Gaming are in Preview;
-Hyprland is supported and Niri is experimental. Server and Agents are planned, not
-installable editions yet. Package resolution alone does not claim that an
-edition is bootable or validated, and this repository does not produce images.
+shared base and role package sets. **Desktop**, **Studio** and **Gaming** are
+supported editions, daily-driven on physical machines and validated on UEFI and
+BIOS KVM; **Hyprland** (default) and **Niri** are both supported compositors,
+while **labwc** remains planned. **Server** and **Agents** remain planned and
+are not installable editions yet. Package resolution in this repository defines
+composition; signed live/installable ISOs and preinstalled QCOW2 VM images are
+built and published through [HorneroOS/installer](https://github.com/HorneroOS/installer).
 
 ## License
 

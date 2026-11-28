@@ -9,13 +9,13 @@ python3 scripts/resolve-edition.py desktop --compositor niri --json
 python3 scripts/resolve-edition.py server --json
 ```
 
-The resolver produces a deterministic Arch package list. A package list is not
-an image or proof of a working system. Desktop is in Preview, Hyprland is
-supported, and Niri is experimental. Desktop and Studio are in Preview:
-Studio installs from the signed v0.2.0-preview30 ISO, is not Supported,
-and its hardware evidence is still pending. Server and Agents remain
-planned until their install, runtime, security, and acceptance work is
-complete.
+The resolver produces a deterministic Arch package list. **Desktop**, **Studio**,
+and **Gaming** are **supported** editions, daily-driven across physical
+workstations and validated on UEFI and BIOS KVM; they install from the signed
+ISO, preinstalled QCOW2 VM image, and Arch/AUR paths. Both **Hyprland**
+(default) and **Niri** are **supported** compositors; `labwc` remains planned.
+**Server** and **Agents** remain planned until their install, runtime,
+security, and acceptance work is complete.
 
 Agents inherit Server and use a rootless Podman/systemd direction. The
 catalogue explicitly forbids the host Docker socket and secrets in images.
@@ -59,8 +59,9 @@ Launcher) are reported under `manualOptInRequired` with their full
 selected explicitly, because no HorneroOS consumer installs them.
 See `docs/studio-artcraft.md` for that entry's lifecycle.
 
-Gaming extends Desktop and is a Preview edition: it installs from the
-same signed Preview ISO (VM-validated only, not Supported).
+Gaming extends Desktop and is a **supported** edition: it installs from the
+signed ISO and Arch/AUR paths and is validated across physical workstations as
+well as UEFI and BIOS KVM.
 Its package layer carries the cross-vendor Mesa/Vulkan baseline, 32-bit
 compat, GameMode and MangoHud; compositor choice and graphics experience
 match Desktop. Steam is not in the gaming package set: it only enters

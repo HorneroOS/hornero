@@ -79,7 +79,7 @@ retry blindly.
 ## Desktop facts worth knowing
 
 - Desktop: Hornero Shell (Quickshell/QML) on Hyprland
-  (supported) or Niri (experimental). Companion is the bird
+  or Niri (both supported). Companion is the bird
   assistant UI; you are its optional Hermes backend.
 - Themes: `hornero-signal-night` is the factory default; `cockpit` is
   an optional theme family. Never rename the OS
