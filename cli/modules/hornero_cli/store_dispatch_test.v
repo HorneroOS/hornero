@@ -116,4 +116,20 @@ fn test_store_dispatch_reads_dry_runs_and_yes_gates() {
 	assert dispatch(['horneroctl', '--json', 'store', 'queue', 'add', 'firefox', '--yes']) == 0
 	assert dispatch(['horneroctl', '--json', 'store', 'queue', 'list']) == 0
 	assert dispatch(['horneroctl', '--json', 'store', 'queue', 'clear', '--yes']) == 0
+
+	// AppImage auto-slugification and traversal/explicit-id rejection via CLI dispatch
+	sample_appimg := '${root}/SampleTool-1.0.AppImage'
+	os.write_file(sample_appimg, 'fake-appimage-payload') or { assert false }
+	parsed_auto := parse_store_cmd(['appimage', 'import', sample_appimg, '--dry-run']) or {
+		assert false, 'parse_store_cmd failed: ${err}'
+		return
+	}
+	assert parsed_auto.id == 'sampletool-1-0'
+	assert dispatch(['horneroctl', '--json', 'store', 'appimage', 'import', sample_appimg, '--dry-run']) == 0
+	assert dispatch(['horneroctl', '--quiet', 'store', 'appimage', 'import', '../evil.AppImage',
+		'--dry-run']) == 1
+	assert dispatch(['horneroctl', '--quiet', 'store', 'appimage', 'import', sample_appimg, '--id',
+		'../evil', '--dry-run']) == 1
+	assert dispatch(['horneroctl', '--quiet', 'store', 'appimage', 'import', sample_appimg, '--id',
+		'Bad.Id', '--dry-run']) == 1
 }

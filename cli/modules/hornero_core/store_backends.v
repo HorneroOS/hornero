@@ -146,6 +146,24 @@ pub fn appimage_desktop_path(id string) !string {
 	return os.join_path(applications_dir(), 'hornero-appimage-${safe}.desktop')
 }
 
+// slugify_appimage_id derives a lowercase [a-z0-9-] app id from an AppImage filename or path.
+pub fn slugify_appimage_id(path string) string {
+	base := path.trim_space().all_after_last('/').all_after_last('\\')
+	stem := if base.contains('.') { base.all_before_last('.') } else { base }
+	mut sb := strings.new_builder(stem.len)
+	mut last_dash := true
+	for c in stem.to_lower() {
+		if (c >= `a` && c <= `z`) || (c >= `0` && c <= `9`) {
+			sb.write_u8(c)
+			last_dash = false
+		} else if !last_dash {
+			sb.write_u8(`-`)
+			last_dash = true
+		}
+	}
+	return sb.str().trim('-')
+}
+
 pub fn store_appimage_list_entries() []StoreAppImageEntry {
 	dir := applications_dir()
 	entries := os.ls(dir) or { return []StoreAppImageEntry{} }
@@ -364,13 +382,15 @@ pub fn store_appimage_import_result(src_path string, id string, name string, ico
 	if !yes && !dry_run {
 		return fail_result(cmd, 'refusing to import AppImage without --yes (preview with --dry-run).\nExample: horneroctl store appimage import ./MyApp.AppImage --id my-app --dry-run')
 	}
-	safe_id := validate_app_id(id) or {
-		return fail_result(cmd, err.msg())
+	if id.len > 0 {
+		_ = validate_app_id(id) or { return fail_result(cmd, err.msg()) }
 	}
 	src := src_path.trim_space()
 	if src.len == 0 || src.contains('..') || src.contains('\0') {
 		return fail_result(cmd, 'invalid AppImage source path (path traversal is forbidden)')
 	}
+	resolved_id := if id.len > 0 { id } else { slugify_appimage_id(src) }
+	safe_id := validate_app_id(resolved_id) or { return fail_result(cmd, err.msg()) }
 	if os.is_link(src) {
 		return fail_result(cmd, 'refusing symlink AppImage source: ${src}')
 	}

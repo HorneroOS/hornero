@@ -122,6 +122,7 @@ pub:
 	category           string
 	featured           bool
 	publisher          string
+	icon               string
 	license            string
 	is_open_source     bool
 	status             string
@@ -477,6 +478,7 @@ fn build_app_view(app StoreApp, snap StoreInstalledSnapshot, pol StorePolicy) St
 		category:           app.category
 		featured:           app.featured
 		publisher:          app.publisher
+		icon:               app.icon
 		license:            app.license
 		is_open_source:     app.is_open_source
 		status:             app.status

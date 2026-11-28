@@ -81,6 +81,13 @@ fn test_store_search_show_categories_collections_profiles_and_installed() {
 	assert sres.ok
 	assert sres.data['count'].int() >= 1
 	assert sres.data['apps'].contains('"installed":true')
+	assert sres.data['apps'].contains('"icon":')
+
+	lres := store_list_result(StoreListOptions{
+		limit: 5
+	})
+	assert lres.ok
+	assert lres.data['apps'].contains('"icon":')
 
 	show := store_show_result('claude-desktop')
 	assert show.ok
@@ -217,6 +224,25 @@ fn test_store_webapp_profile_dir_and_appimage_lifecycle() {
 	arm := store_appimage_remove_result('demo-app', false, true)
 	assert arm.ok
 	assert !os.exists(imp.data['binary_path'])
+
+	// Auto-derived AppImage ID slugification & path traversal rejection
+	assert slugify_appimage_id('SampleTool-1.0.AppImage') == 'sampletool-1-0'
+	assert slugify_appimage_id('./downloads/My.Cool_App+2.3.AppImage') == 'my-cool-app-2-3'
+
+	dotted := os.join_path(root, 'SampleTool-1.0.AppImage')
+	os.write_file(dotted, 'fake-sample-tool') or { assert false }
+	auto_imp := store_appimage_import_result(dotted, '', 'Sample Tool', '', '', true, false)
+	assert auto_imp.ok
+	assert auto_imp.data['id'] == 'sampletool-1-0'
+
+	bad_trav := store_appimage_import_result('../evil.AppImage', '', 'Evil', '', '', true, false)
+	assert !bad_trav.ok
+
+	bad_id_trav := store_appimage_import_result(dotted, '../evil', 'Evil', '', '', true, false)
+	assert !bad_id_trav.ok
+
+	bad_id_chars := store_appimage_import_result(dotted, 'SampleTool-1.0', 'Bad', '', '', true, false)
+	assert !bad_id_chars.ok
 }
 
 fn test_store_manifest_queue_sources_and_doctor() {

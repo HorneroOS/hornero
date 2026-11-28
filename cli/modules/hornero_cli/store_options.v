@@ -1,5 +1,7 @@
 module hornero_cli
 
+import hornero_core
+
 pub const store_verbs = ['search', 'list', 'show', 'categories', 'collections', 'profiles',
 	'profile-show', 'installed', 'install', 'remove', 'update', 'launch', 'sources', 'permissions',
 	'appimage', 'webapp', 'policy', 'manifest', 'queue', 'gui', 'doctor']
@@ -324,7 +326,7 @@ pub fn parse_store_cmd(args []string) !StoreCmdOptions {
 				}
 				file = positionals[1]
 				if id.len == 0 {
-					id = file.all_after_last('/').all_before_last('.').to_lower()
+					id = hornero_core.slugify_appimage_id(file)
 				}
 			} else if action == 'remove' {
 				if positionals.len < 2 && id.len == 0 {
