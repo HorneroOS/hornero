@@ -4,7 +4,6 @@
 # Refresh: python3 scripts/check-binds.py --refresh \
 #   --binary cli/build/horneroctl --shell-dir <shell> --config-dir <config>
 # The gate fails on unhandled chains and on drift vs this file.
-
 appearance gtk apply
 appearance gtk color-scheme
 appearance gtk current
@@ -87,6 +86,8 @@ hardware keyboard rebind set
 hardware keyboard rebind status
 hardware keyboard rebind undo
 hardware keyboard settings
+horneroctl store appimage import
+horneroctl store gui
 hypr cursor restore
 hypr cursor set
 hypr cursor status
